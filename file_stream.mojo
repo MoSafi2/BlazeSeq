@@ -54,9 +54,9 @@ fn main() raises:
     let KB = 1024
     let MB = 1024 * KB
     let GB = 1024 * MB
-    let CHUNK = 30*MB
+    let CHUNK = 50*MB
 
-    let f =  open("M_abscessus_HiSeq.fq", "r")
+    let f =  open("102_20.fq", "r")
     let pos: String
     var pos_int: Int = 0
     var vec: DynamicVector[String]
@@ -72,6 +72,6 @@ fn main() raises:
         n_reads = n_reads + len(vec)
     let t2 = time.now()
 
-    print((n_reads/4) == 5682010.0)
+    print((n_reads/4) == 13834326.0)
     print(n_reads/4)
     print((t2-t1)/1e9)

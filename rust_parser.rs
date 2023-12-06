@@ -2,7 +2,7 @@ use std::{env, array::from_ref};
 use needletail::parse_fastx_file;
 
 fn main() {
-    if let path = String::from("M_abscessus_HiSeq.fq") {
+    if let path = String::from("102_20.fq") {
         let mut n: u32 = 0;
         let mut slen: u64 = 0;
         let mut qlen: u64 = 0;
