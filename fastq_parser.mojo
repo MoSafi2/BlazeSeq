@@ -11,7 +11,9 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
     fn __init__(inout self, SH: String, SS: String, QH: String, QS: String) raises -> None:
 
         if SH[0] != "@":
-            print("Sequence Header is corrput")
+            pass
+            #print("Sequence Header is corrput")
+            #print(SH)
 
         if QH[0] != "+":
             print("Quality Header is corrput")
@@ -22,11 +24,12 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         if len(self.QuHeader) > 0:
             if self.QuHeader != self.SeqHeader:
                 print("Quality Header is corrupt")
+                pass
 
         self.SeqStr = SS
         self.QuStr = QS
         self.QuInt = DynamicVector[Int8](capacity =len(SS))
-        #self.infer_qualities()
+        self.infer_qualities()
 
     fn infer_qualities(inout self):
         for i in range(len(self.SeqStr)):
@@ -78,39 +81,39 @@ struct FastqParser:
 
         self._file_handle = file_handle^
         self._parsed_records = DynamicVector[FastqRecord]()
-        print("intialized")
 
-    fn parse_records(inout self, chunk: Int) raises -> None:
+    fn parse_records(inout self, chunk: Int) raises -> Int:
 
         var pos: Int = 0
         let record: FastqRecord
-
         self._header_parser()
 
         while True:
+
             var reads_vec = self._read_lines_chunk(chunk, pos)
             pos = int(intable_string(reads_vec.pop_back()))
-
             if len(reads_vec) < 2:
                 break
 
-            print(len(reads_vec))
+            var i = 0
+            while i  < len(reads_vec):
+                try:
+                    record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
+                    self._parsed_records.append(record)
+                except:
+                    pass
 
-            # var i = 0
-            # while i  < len(reads_vec):
-            #     i = i + 4
-            #     record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
-            #     self._parsed_records.append(record)
-        
+                i = i + 4
                 
                 
         #print(String("The number of parser records is ")+len(self._parsed_records))
-        return None
+        return len(self._parsed_records)
 
 
     fn _header_parser(self) raises -> None:
         let header: String = self._file_handle.read(1)
         _ = self._file_handle.seek(0)
+        print("header verified")
         if header != "@":
             raise Error("Fastq file should start with valid header '@'")
         return None
@@ -173,11 +176,12 @@ fn main() raises:
     import time 
     from math import math
 
-    let f = open("data/", "r")
+    let f = open("data/SRR16012060.fastq", "r")
     var parser = FastqParser(f^)
+    
     let t1 = time.now()
-    let num = 5000
-    _ = parser.parse_records(chunk= 1024*1024*100)
+    let num = parser.parse_records(chunk= 1024*1024*100)
+    print(String("number of reads is: ")+num)
     let t2 = time.now()
     let t_sec = ((t2-t1) / 1e9)
     let s_per_r = t_sec/num
