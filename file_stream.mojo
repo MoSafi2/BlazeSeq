@@ -14,7 +14,6 @@ struct intable_string(Intable, Stringable):
             n = n + chr * (10**(data_n-(i+1)))
         return n
 
-#sddsddsd
 
 
 fn read_linkes_chunk(borrowed file_handle: FileHandle, chunk_size: Int = -1,  current_pos: UInt64 = 0) raises -> DynamicVector[String]:
