@@ -23,11 +23,9 @@ fn read_linkes_chunk(borrowed file_handle: FileHandle, chunk_size: Int = -1,  cu
     let vec_n = len(vec)
 
     if vec_n < 4:
-        print("the readed chunk is less than 1 Fastq record.")
         let pos = file_handle.seek(current_pos)
         vec.push_back(pos)
         return vec
-
 
     var rem = vec_n % 4
     var retreat = 0    
@@ -44,7 +42,6 @@ fn read_linkes_chunk(borrowed file_handle: FileHandle, chunk_size: Int = -1,  cu
         for i in range(rem):
             _ = vec.pop_back()
 
-    print(retreat)
     let pos = file_handle.seek((current_pos+chunk_size)-retreat)
     vec.push_back(pos)
     return vec
@@ -52,15 +49,29 @@ fn read_linkes_chunk(borrowed file_handle: FileHandle, chunk_size: Int = -1,  cu
 
 fn main() raises:
 
-    let f =  open("small.fastq", "r")
+    import time
+
+    let KB = 1024
+    let MB = 1024 * KB
+    let GB = 1024 * MB
+    let CHUNK = 30*MB
+
+    let f =  open("M_abscessus_HiSeq.fq", "r")
     let pos: String
     var pos_int: Int = 0
     var vec: DynamicVector[String]
+    var n_reads = 0
+
+    let t1 = time.now()
     for i in range(100):
-        vec = read_linkes_chunk(f, 100_000, pos_int)
+        vec = read_linkes_chunk(f, CHUNK, pos_int)
         pos = vec.pop_back()
         pos_int = int(intable_string(pos))
         if len(vec) == 1:
             break
-        print(vec[len(vec) - 1])
-    
+        n_reads = n_reads + len(vec)
+    let t2 = time.now()
+
+    print((n_reads/4) == 5682010.0)
+    print(n_reads/4)
+    print((t2-t1)/1e9)
