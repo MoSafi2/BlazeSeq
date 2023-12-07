@@ -1,6 +1,5 @@
 @value
 struct FastqRecord(CollectionElement, Stringable, Sized):
-
     """Struct that represent a single FastaQ record."""
     var SeqHeader: String
     var SeqStr: String
@@ -70,8 +69,6 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         return len(self.SeqStr)
  
 
-
-
 struct FastqParser:
 
     var _file_handle: FileHandle
@@ -83,7 +80,8 @@ struct FastqParser:
         self._parsed_records = DynamicVector[FastqRecord]()
 
     fn parse_records(inout self, chunk: Int) raises -> Int:
-
+        var count: Int = 0
+        var bases: Int = 0
         var pos: Int = 0
         let record: FastqRecord
         self._header_parser()
@@ -92,22 +90,28 @@ struct FastqParser:
 
             var reads_vec = self._read_lines_chunk(chunk, pos)
             pos = int(intable_string(reads_vec.pop_back()))
+
             if len(reads_vec) < 2:
                 break
 
             var i = 0
+
             while i  < len(reads_vec):
                 try:
-                    record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
-                    self._parsed_records.append(record)
+                    #record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
+                    #self._parsed_records.append(record)
+                    count = count +1
+                    bases = bases + len(reads_vec[i])
+
                 except:
                     pass
 
                 i = i + 4
                 
-                
         #print(String("The number of parser records is ")+len(self._parsed_records))
-        return len(self._parsed_records)
+        #return len(self._parsed_records)
+        print(String("number of bases is: ")+bases)
+        return count
 
 
     fn _header_parser(self) raises -> None:
@@ -136,16 +140,11 @@ struct FastqParser:
         if rem == 0: # The whole last record is untrustworthy remove the last 4 elements.
             rem = 4
 
-        if rem == 1: # Go back only one step 
-            retreat = len(vec[vec_n - 1])
+        for i in range(rem):
+            retreat = retreat + len(vec[vec_n - (i+1)])
             _ = vec.pop_back()
-        else:
-            for i in range(rem):
-                retreat = retreat + len(vec[vec_n - (i+1)])
-            for i in range(rem):  
-                _ = vec.pop_back()
 
-        let pos = self._file_handle.seek((current_pos+chunk_size)-retreat)
+        let pos = self._file_handle.seek(current_pos+chunk_size-retreat)
         vec.push_back(pos)
         return vec
 
@@ -176,7 +175,7 @@ fn main() raises:
     import time 
     from math import math
 
-    let f = open("data/SRR16012060.fastq", "r")
+    let f = open("102_20.fq", "r")
     var parser = FastqParser(f^)
     
     let t1 = time.now()
@@ -193,7 +192,7 @@ fn main() raises:
         String(math.round[DType.float32, 1](1/s_per_r))+
         String(" reads/second")
         )
-    print(parser._parsed_records[len(parser._parsed_records)-1])
+    #print(parser._parsed_records[len(parser._parsed_records)-1])
 
 
 
