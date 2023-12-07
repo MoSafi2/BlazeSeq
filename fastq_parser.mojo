@@ -1,3 +1,7 @@
+
+#TODO: Implement a quality trimming algorithm as by Cutadapt.
+#TODO: Implement 
+
 @value
 struct FastqRecord(CollectionElement, Stringable, Sized):
     """Struct that represent a single FastaQ record."""
@@ -34,6 +38,8 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         for i in range(len(self.SeqStr)):
             self.QuInt.push_back(ord(self.QuStr[i]) - 33)
 
+    fn trim_record(inout self, quality_threshold: Int = 20):
+        pass
 
     fn wirte_record(self) -> String:
         var s = String()
@@ -69,6 +75,30 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         return len(self.SeqStr)
  
 
+struct FastqCollection(Stringable, Sized):
+
+    """
+    Struct represents a collecion of FastqRecord. 
+    it is backed by a dynamic vector and can be passed around or multi-core processing.
+    it provides convience methods for starting trimming and writing of the contained records.
+    """
+
+    var data: DynamicVector[FastqRecord]
+
+    fn __init__(inout self):
+        self.data = DynamicVector[FastqRecord]()
+
+    fn write_collection(self, borrowed file_handle: FileHandle) raises -> None:
+        pass
+
+    fn __str__(self) -> String:
+        return ""
+
+    fn __len__(self) -> Int:
+        return 1
+
+
+
 struct FastqParser:
 
     var _file_handle: FileHandle
@@ -87,7 +117,7 @@ struct FastqParser:
         self._header_parser()
 
         while True:
-
+            
             var reads_vec = self._read_lines_chunk(chunk, pos)
             pos = int(intable_string(reads_vec.pop_back()))
 
@@ -98,7 +128,7 @@ struct FastqParser:
 
             while i  < len(reads_vec):
                 try:
-                    #record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
+                    record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
                     #self._parsed_records.append(record)
                     count = count +1
                     bases = bases + len(reads_vec[i])
