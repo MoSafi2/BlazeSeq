@@ -53,12 +53,22 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         if direction == "end":
             self.qu_int.lf_rolling_sum(threshold = quality_threshold)
             let end = self.qu_int.min_val("left").get[0, Int]()
+
+            if end < 1:
+                self._empty_record()
+                return
+
             self.SeqStr = self.SeqStr[0:end]
             self.QuStr = self.QuStr[0:end]
 
         if direction == "start":
             self.qu_int.rt_rolling_sum(threshold = quality_threshold)
             let start = self.qu_int.min_val("right").get[0, Int]()
+
+            if start > len(self) - 2:
+                self._empty_record()
+                return
+
             self.SeqStr = self.SeqStr[start+1: len(self)-1]
             self.QuStr = self.QuStr[start+1:len(self)-1]
             
@@ -70,11 +80,17 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
             let start = self.qu_int.min_val("right").get[0, Int]()
             let end = self.qu_int.min_val("left").get[0, Int]()
 
+
+            if start >= end:
+                self._empty_record()
+                return
+
+
             self.SeqStr = self.SeqStr[start+1: end]
             self.QuStr = self.QuStr[start+1:end]
 
         self._trimmed_record = True
-        self._infer_qualities()
+        #self._infer_qualities()
 
 
 
@@ -83,9 +99,8 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         s += "@"+self.SeqHeader +"\n"
         s += self.SeqStr + "\n"
         s += "+"+self.QuHeader+"\n"
-        s += self.QuStr
+        s += self.QuStr+"\n"
 
-        print(s)
         return s
 
 
@@ -94,6 +109,11 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         for i in range(len(self.SeqStr)):
             self.qu_int[i] = (ord(self.QuStr[i]) - 33)
 
+
+    fn _empty_record(inout self):
+        self.SeqStr = ""
+        self.QuStr = ""
+        self.qu_int = QuInt(0)
 
     fn __str__(self) -> String:
 
@@ -159,7 +179,8 @@ struct QuInt(Sized):
         let shape = self.data.shape()[0]
         for i in range(2, shape + 1):
             self.lf_rolling[shape - i] = self.lf_rolling[shape - i ] + self.lf_rolling[shape - (i-1)]
-
+            if self.lf_rolling[shape - i] > 0:
+                break
 
     fn rt_rolling_sum(inout self, threshold: Int32 = 20):
 
@@ -167,6 +188,8 @@ struct QuInt(Sized):
         let shape = self.data.shape()[0]
         for i in range(1, shape):
             self.rt_rolling[i] = self.rt_rolling[i] + self.rt_rolling[i-1]
+            if self.rt_rolling[i] > 0:
+                break
 
     fn __setitem__(inout self, index: Int,  value: Int32):
         self.data[index] = value
@@ -187,7 +210,7 @@ fn main() raises -> None:
     print(r)
     print(len(r))
 
-    r.trim_record(direction = "both")
+    r.trim_record(direction = "both", quality_threshold = 0)
     
     print(r)
     print(len(r))

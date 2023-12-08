@@ -6,13 +6,24 @@ from helpers import IntableString
 struct FastqParser:
 
     var _file_handle: FileHandle
+    var _out_path: String
 
-    fn __init__(inout self, owned file_handle: FileHandle) raises -> None:
-        self._file_handle = file_handle^
+    fn __init__(inout self, path: String) raises -> None:
 
+        self._file_handle = open(path, "r")
+        let in_path = Path(path)
+        let suffix = in_path.suffix()
+        self._out_path = path.replace(suffix, "")+"_out"+suffix  
+        
+        
 
+    fn parse_records(inout self,
+     chunk: Int, 
+     infer_quality: Bool = True, 
+     trim: Bool = True, 
+     min_quality: Int = 20, 
+     direction: String = "end") raises -> Int:
 
-    fn parse_records(inout self, chunk: Int, infer_quality: Bool = False, trim: Bool = False) raises -> Int:
 
         var count: Int = 0
         var bases: Int = 0
@@ -24,22 +35,27 @@ struct FastqParser:
 
         if not self._header_parser():
             return 0
-
-
+        let out = open(self._out_path, "w")
 
         while True:
-            
             var reads_vec = self._read_lines_chunk(chunk, pos)
             pos = int(IntableString(reads_vec.pop_back()))
+            var collection = FastqCollection()
 
             if len(reads_vec) < 2:
                 break
 
             var i = 0
-
             while i  < len(reads_vec):
                 try:
-                    record = FastqRecord(reads_vec[i],reads_vec[i+1], reads_vec[i+2], reads_vec[i+3])
+                    record = FastqRecord(reads_vec[i],
+                    reads_vec[i+1],
+                    reads_vec[i+2],
+                    reads_vec[i+3],
+                    infer_quality = infer_quality
+                    )
+
+                    collection.add(record)
                     count = count + 1
                     bases = bases + len(record)
                     qu = qu + len(record)
@@ -47,6 +63,12 @@ struct FastqParser:
                     pass
 
                 i = i + 4
+
+                    
+            if trim:
+                collection.trim_collection(direction, min_quality)
+                collection.write_collection(out)
+
                 
         print(String("number of bases is: ")+bases)
         print(String("number of quality strings is: ")+qu)
@@ -93,12 +115,12 @@ fn main() raises:
     import time 
     from math import math
 
-    let f = open("102_20.fq", "r")
-    var parser = FastqParser(f^)
-    
+    let KB = 1024
+    let MB = 1024*KB
+
     let t1 = time.now()
-    let num = parser.parse_records(chunk= 1024*1024*50)
-    print(String("number of reads is: ")+num)
+    var parser = FastqParser("data/SRR16012060.fastq")
+    let num = parser.parse_records(chunk = 100*MB, min_quality = 28)
     let t2 = time.now()
     let t_sec = ((t2-t1) / 1e9)
     let s_per_r = t_sec/num
@@ -110,4 +132,3 @@ fn main() raises:
         String(math.round[DType.float32, 1](1/s_per_r))+
         String(" reads/second")
         )
-    #print(parser._parsed_records[len(parser._parsed_records)-1])
