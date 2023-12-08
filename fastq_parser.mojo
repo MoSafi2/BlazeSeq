@@ -1,5 +1,6 @@
 
-from fastq_record import FastqRecord, FastqCollection
+from fastq_record import FastqRecord
+from fastq_collection import FastqCollection
 from helpers import IntableString 
 
 struct FastqParser:
@@ -7,10 +8,11 @@ struct FastqParser:
     var _file_handle: FileHandle
 
     fn __init__(inout self, owned file_handle: FileHandle) raises -> None:
-
         self._file_handle = file_handle^
 
-    fn parse_records(inout self, chunk: Int, trim: Bool = False) raises -> Int:
+
+
+    fn parse_records(inout self, chunk: Int, infer_quality: Bool = False, trim: Bool = False) raises -> Int:
 
         var count: Int = 0
         var bases: Int = 0
@@ -109,6 +111,3 @@ fn main() raises:
         String(" reads/second")
         )
     #print(parser._parsed_records[len(parser._parsed_records)-1])
-
-
-
