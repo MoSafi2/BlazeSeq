@@ -1,7 +1,7 @@
 
 from fastq_record import FastqRecord
-from fastq_collection import FastqCollection
 from helpers import IntableString 
+
 
 struct FastqParser:
 
@@ -14,8 +14,6 @@ struct FastqParser:
         let in_path = Path(path)
         let suffix = in_path.suffix()
         self._out_path = path.replace(suffix, "")+"_out"+suffix  
-        
-        
 
     fn parse_records(inout self,
      chunk: Int, 
@@ -29,8 +27,7 @@ struct FastqParser:
         var bases: Int = 0
         var qu: Int = 0
         var pos: Int = 0
-        let record: FastqRecord
-        let collection: FastqCollection
+        var record: FastqRecord
 
 
         if not self._header_parser():
@@ -40,7 +37,6 @@ struct FastqParser:
         while True:
             var reads_vec = self._read_lines_chunk(chunk, pos)
             pos = int(IntableString(reads_vec.pop_back()))
-            var collection = FastqCollection()
 
             if len(reads_vec) < 2:
                 break
@@ -52,24 +48,20 @@ struct FastqParser:
                     reads_vec[i+1],
                     reads_vec[i+2],
                     reads_vec[i+3],
-                    infer_quality = infer_quality
                     )
 
-                    collection.add(record)
+                    record.trim_record()
+                    _ = record.wirte_record()
+
                     count = count + 1
                     bases = bases + len(record)
                     qu = qu + len(record)
                 except:
                     pass
-
                 i = i + 4
-
                     
-            if trim:
-                collection.trim_collection(direction, min_quality)
-                collection.write_collection(out)
 
-                
+
         print(String("number of bases is: ")+bases)
         print(String("number of quality strings is: ")+qu)
         
