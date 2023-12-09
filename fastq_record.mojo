@@ -70,8 +70,19 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
             self._empty_record()
             return
         
-        self.SeqStr = self.SeqStr[start:stop]
-        self.QuStr = self.QuStr[start:stop]
+        if direction == "end":
+            self.SeqStr = self.SeqStr[0:stop]
+            self.QuStr = self.QuStr[0:stop]
+
+
+        if direction == "start":
+            self.SeqStr = self.SeqStr[start:n]
+            self.QuStr = self.QuStr[start:n]
+
+
+        if direction == "both":
+            self.SeqStr = self.SeqStr[start:stop]
+            self.QuStr = self.QuStr[start:stop]
 
 
     fn wirte_record(self) -> String:
@@ -82,9 +93,9 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         s += self.QuStr+"\n"
         return s
 
-
     fn _empty_record(inout self):
         self.SeqStr = ""
+
 
     fn __str__(self) -> String:
 
@@ -104,12 +115,3 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         return len(self.SeqStr)
  
 
-
-fn main() raises -> None:
-    let f = open("data/single_read.fastq", "r")
-    let s = f.read()
-    let v = s.split("\n")
-    var r = FastqRecord(v[0], v[1], v[2], v[3])
-
-    r.trim_record(direction = "both", quality_threshold = 15)
-    print(r.wirte_record())
