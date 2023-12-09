@@ -111,7 +111,7 @@ fn main() raises:
 
     let t1 = time.now()
     var parser = FastqParser(vars[1])
-    let num = parser.parse_records(chunk = 10 * MB, trim = False, min_quality=28 )
+    let num = parser.parse_records(chunk = 10 * MB, trim = True, min_quality=28 )
     let t2 = time.now()
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num

@@ -15,8 +15,8 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
      QH: String,
      QS: String) raises -> None:
 
-        if SH[0] != "@":
-            print("Sequence Header is corrput")
+        # if SH[0] != "@":
+        #     print("Sequence Header is corrput")
 
         if QH[0] != "+":
             print("Quality Header is corrput")
@@ -35,8 +35,8 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt."""
 
 
-        var s: Int = 0
-        var min_qual: Int = 0
+        var s: Int16 = 0
+        var min_qual: Int16 = 0
         let n = len(self.QuStr)
         var stop: Int = n
         var start: Int = 0
