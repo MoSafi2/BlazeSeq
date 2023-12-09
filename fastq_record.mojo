@@ -16,9 +16,7 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
      QS: String) raises -> None:
 
         if SH[0] != "@":
-            pass
-            #print("Sequence Header is corrput")
-            #print(SH)
+            print("Sequence Header is corrput")
 
         if QH[0] != "+":
             print("Quality Header is corrput")
@@ -44,7 +42,7 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         var start: Int = 0
         let i: Int
 
-        
+        ## minimum of Rolling sum algorithm used by Cutadapt and BWA
         #Find trim position in 5' end
         for i in range(n):
             s +=  (ord(self.QuStr[i]) - 33) - quality_threshold
