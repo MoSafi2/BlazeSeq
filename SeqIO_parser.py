@@ -1,10 +1,13 @@
 from Bio import SeqIO
 from time import time_ns
+import sys
+
+
 
 count = 0
 bases = 0
 t1 = time_ns()
-for record in SeqIO.parse("data/9_Swamp_S2B_rbcLa_2019_minq7.fastq", "fastq"):
+for record in SeqIO.parse(sys.argv[1], "fastq"):
     list(record)
     count = count + 1
     bases = bases + len(record)
