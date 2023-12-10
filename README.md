@@ -6,7 +6,7 @@
 
 Modern Next-generation sequencing (NGS) produced tens or hunderds of GBs of FASTQ files per run which should be first, parsed, and trimmed.   
 ```MojoFastTrim🔥``` is naive implementation of a parser and trimmer in mojo. it already achieves ***8x*** faster performance than ```SeqIO``` and have similair speed to  rust's ```Needletail``` in FASTQ parsing. 
- <br> it is on overage within 80% of industry-standard ```Cutadapt``` performancefor FASTQ quality trimming prior to any optimization.
+ it is on overage within 80% of industry-standard ```Cutadapt``` performancefor FASTQ quality trimming prior to any optimization.
 
 ```MojoFastTrim🔥``` source code is readable to average python users but ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement offered by mojo modern featues including optimized I/O, using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively. <br>
 
@@ -15,8 +15,8 @@ Modern Next-generation sequencing (NGS) produced tens or hunderds of GBs of FAST
 
 # Benchmarking
 ### Setup 
-All tests were carried out on a personal PC with Intel core-i7 13700-K processor, 32 GB of memory running Ubuntu 22.04. Mojo 0.6, Python 3.12, and Rust 1.74.
-```Cutadapt``` was run in single-core modewith the following command:  ``` cutadapt <in.fq> -q 28 --report full -j 1 > /dev/null ```
+All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of memory, and running Ubuntu 22.04. Mojo 0.6, Python 3.12, and Rust 1.74 were used.
+```Cutadapt``` was run in single-core modewith the following command:  ``` cutadapt <in.fq> -q 28,28 --report full -j 1 > /dev/null ```
 
 ### Benchmarks 
 
