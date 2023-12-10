@@ -8,7 +8,7 @@ Modern Next-generation sequencing (NGS) produced tens or hunderds of GBs of FAST
 ```MojoFastTrim🔥``` is naive implementation of a parser and trimmer in mojo. it already achieves ***8x*** faster performance than ```SeqIO``` and have similair speed to  rust's ```Needletail``` in FASTQ parsing. 
  <br> it is on overage within 80% of industry-standard ```Cutadapt``` performancefor FASTQ quality trimming prior to any optimization.
 
-```MojoFastTrim🔥``` source code is readable to average python users but ```struct``` instead of ```class``` and employing variable types. <br> There is a lot of room form improvement offered by mojo modern featues including optimized I/O, using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively. <br>
+```MojoFastTrim🔥``` source code is readable to average python users but ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement offered by mojo modern featues including optimized I/O, using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively. <br>
 
 
 
