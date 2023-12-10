@@ -53,13 +53,12 @@ FASTQ trimming was carried out with minimum Phred quality of ```28```.
 |   reads  | Cutadapt <br>  (cython)  | MojoFastqTrim <br> (Mojo🔥)|
 |----------|--------------------------|----------------------------|
 |    40k   |          0.075s          |           0.65s            |
-|   5.5M   |          4.4s            |           5.9s             |
-|  12.2M   |          10s             |           15.1s            |
-|  27.7M   |          20.7s           |           20.5s            |
-| 169.8M   |          144.5s          |           218.5s           |
+|   5.5M   |          4.4s            |           5.7s             |
+|  12.2M   |          10.1s           |           13.5s            |
+|  27.7M   |          20.7s           |           18.6s            |
+| 169.8M   |          144.5s          |           192.7s           |
 
 
 
 ## Personal experience
-For me, this was a test of the productivity of Mojo🔥 and its ergnomics at this young age. I was absolutly surprised by how easy it was to write in a few hours a high-performance parser and to implement quality trimming in less 200 lines of code (with some workarounds needed). This can be achieved by an average bioinformatician working with python with minimal needs to change his/her way of thinking, problem approach and with minimal changes to the syntax. 
-I think Mojo🔥 will have a bright future ahead.
+For me, this was a test of the productivity of Mojo🔥 and its ergnomics at this young age. I was absolutly surprised by how easy it was to write in a few hours a high-performance parser and to implement quality trimming in less 200 lines of code (with some workarounds needed). This can be achieved by an average bioinformatician working with python with minimal needs to change his/her way of thinking, problem approach and with minimal changes to the syntax. I think Mojo🔥 will have a bright future ahead.

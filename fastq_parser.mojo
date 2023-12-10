@@ -1,7 +1,4 @@
 from fastq_record import FastqRecord
-from helpers import IntableString
-
-
 
 struct FastqParser:
     var _file_handle: FileHandle
@@ -32,7 +29,7 @@ struct FastqParser:
 
         while True:
             var reads_vec = self._read_lines_chunk(chunk, pos)
-            pos = int(IntableString(reads_vec.pop_back()))
+            pos = atol(reads_vec.pop_back())
 
             if len(reads_vec) < 2:
                 break
@@ -66,7 +63,6 @@ struct FastqParser:
     fn _header_parser(self) raises -> Bool:
         let header: String = self._file_handle.read(1)
         _ = self._file_handle.seek(0)
-        print("header verified")
         if header != "@":
             raise Error("Fastq file should start with valid header '@'")
         return True
@@ -108,10 +104,9 @@ fn main() raises:
     let KB = 1024
     let MB = 1024 * KB
     let vars = argv()
-
-    let t1 = time.now()
     var parser = FastqParser(vars[1])
-    let num = parser.parse_records(chunk = 10 * MB, trim = True, min_quality=28 )
+    let t1 = time.now()
+    let num = parser.parse_records(chunk = 1024 * KB, trim = True, min_quality=28, direction = "both")
     let t2 = time.now()
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num

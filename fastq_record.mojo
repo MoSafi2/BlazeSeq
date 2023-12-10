@@ -1,4 +1,4 @@
-
+from utils import static_tuple
 
 @value
 struct FastqRecord(CollectionElement, Stringable, Sized):
@@ -21,10 +21,10 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         if QH[0] != "+":
             print("Quality Header is corrput")
 
-        self.SeqHeader = SH[1:]
-        self.QuHeader = QH[1:]
+        self.SeqHeader = SH
+        self.QuHeader = QH
 
-        if len(self.QuHeader) > 0:
+        if len(self.QuHeader) > 1:
             if self.QuHeader != self.SeqHeader:
                 print("Quality Header is corrupt")
 
@@ -33,7 +33,6 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
 
     fn trim_record(inout self, direction: String = "end", quality_threshold: Int = 20):
         """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt."""
-
 
         var s: Int16 = 0
         var min_qual: Int16 = 0
@@ -83,12 +82,10 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
             self.QuStr = self.QuStr[start:stop]
 
 
+    @always_inline
     fn wirte_record(self) -> String:
-        var s = String()
-        s += "@"+self.SeqHeader +"\n"
-        s += self.SeqStr + "\n"
-        s += "+"+self.QuHeader+"\n"
-        s += self.QuStr+"\n"
+        var s: String = "\n" 
+        s = s.join(self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr)
         return s
 
     fn _empty_record(inout self):
