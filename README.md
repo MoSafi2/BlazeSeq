@@ -10,7 +10,7 @@ Modern Next-generation sequencing (NGS) produced tens or hunderds of GBs of FAST
 
 ```MojoFastTrim🔥``` source code is readable to average python users but ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement offered by mojo modern featues including optimized I/O, using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively. <br>
 
-
+### Disclaimer: MojoFastTrim🔥 is for demonstration purposes only and shouldn't be used as part of bioinformatic pipelines.
 
 
 # Benchmarking
