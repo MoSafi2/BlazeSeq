@@ -4,25 +4,25 @@
 
 **This is a 'proof-of-principle' FASTQ file format parser and quality trimmer.** <br>
 
-Modern Next-generation sequencing (NGS) produced tens or hunderds of GBs of FASTQ files per run which should be first, parsed, and trimmed.   
-```MojoFastTrim🔥``` is naive implementation of a parser and trimmer in mojo. it already achieves ***8x*** faster performance than ```SeqIO``` and have similair speed to  rust's ```Needletail``` in FASTQ parsing. 
+Modern Next-generation sequencing (NGS) produces tens or hunderds of GBs of FASTQ files per run which should be first, parsed, and preprocessing before further use.   
+```MojoFastTrim🔥``` is naive implementation of a parser and quality trimmer in mojo. it already achieves ***8x*** faster performance than best-performing python parser ```SeqIO``` and have similair speed to  rust's ```Needletail``` in FASTQ parsing. 
  it is on overage within 80% of industry-standard ```Cutadapt``` performancefor FASTQ quality trimming prior to any optimization.
 
-```MojoFastTrim🔥``` source code is readable to average python users but ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement offered by mojo modern featues including optimized I/O, using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively. <br>
+```MojoFastTrim🔥``` source code is readable to average python users but using ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement offered by mojo modern featues including optimized I/O, using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively as mojo matures. <br>
 
 ### Disclaimer: MojoFastTrim🔥 is for demonstration purposes only and shouldn't be used as part of bioinformatic pipelines.
 
 
 # Benchmarking
 ### Setup 
-All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of memory, and running Ubuntu 22.04. Mojo 0.6, Python 3.12, and Rust 1.74 were used.
+All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of memory, running Ubuntu 22.04. Mojo 0.6, Python 3.12, and Rust 1.74 were used.
 ```Cutadapt``` was run in single-core modewith the following command:  ``` cutadapt <in.fq> -q 28,28 --report full -j 1 > /dev/null ```
 
 ### Benchmarks 
 
 ```MojoFastTrim🔥``` was benchmarked in two tasks:
 * FASTQ record parsing, including header verification, tracking total nucleotide and record counts.
-* FASTQ quality trimming of both 3´ and 5´ ends.
+* FASTQ quality trimming of both 3´ and 5´ ends using Phred quality scores.
 
 
 FASTQ parsing was done according to [Biofast benchmark](https://github.com/lh3/biofast/tree/) for ```SeqIO``` (Biopython), the rust parser ```Needletail``` and ```MojoFastTrim🔥```  
