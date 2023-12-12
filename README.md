@@ -50,7 +50,7 @@ FASTQ trimming was carried out with minimum Phred quality of ```28```.
 
 
 ### FASTQ quality Trimming
-|   reads  | Cutadapt <br>  (cython)  | MojoFastqTrim <br> (Mojo🔥)|
+|   reads  | Cutadapt <br>  (cython, C)  | MojoFastqTrim <br> (Mojo🔥)|
 |----------|--------------------------|----------------------------|
 |    40k   |          0.075s          |           0.65s            |
 |   5.5M   |          4.4s            |           5.7s             |
