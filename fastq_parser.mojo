@@ -25,7 +25,7 @@ struct FastqParser:
 
         if not self._header_parser():
             return 0
-        #let out = open(self._out_path, "w")
+        let out = open(self._out_path, "w")
 
         while True:
             var reads_vec = self._read_lines_chunk(chunk, pos)
@@ -48,8 +48,7 @@ struct FastqParser:
                     if trim:
                         record.trim_record()
                         _ = record.wirte_record()
-
-                    # out.write(record.wirte_record())
+                        #out.write(record.wirte_record())
 
                     count = count + 1
                     bases = bases + len(record)
@@ -106,7 +105,7 @@ fn main() raises:
     let vars = argv()
     var parser = FastqParser(vars[1])
     let t1 = time.now()
-    let num = parser.parse_records(chunk = 16 * KB, trim = False, min_quality=28, direction = "both")
+    let num = parser.parse_records(chunk = 16 * KB, trim = True, min_quality=28, direction = "both")
     let t2 = time.now()
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num
