@@ -1,5 +1,6 @@
 from fastq_record import FastqRecord
 
+
 struct FastqParser:
     var _file_handle: FileHandle
     var _out_path: String
@@ -44,11 +45,10 @@ struct FastqParser:
                         reads_vec[i + 3],
                     )
 
-                    
                     if trim:
                         record.trim_record()
                         _ = record.wirte_record()
-                        #out.write(record.wirte_record())
+                        # out.write(record.wirte_record())
 
                     count = count + 1
                     bases = bases + len(record)
@@ -103,9 +103,14 @@ fn main() raises:
     let KB = 1024
     let MB = 1024 * KB
     let vars = argv()
-    var parser = FastqParser(vars[1])
+    # var parser = FastqParser(vars[1])
+    var parser = FastqParser(
+        "/home/mohamed/Documents/Projects/fastq_parser_mojo/data/M_abscessus_HiSeq.fq"
+    )
     let t1 = time.now()
-    let num = parser.parse_records(chunk = 16 * KB, trim = True, min_quality=28, direction = "both")
+    let num = parser.parse_records(
+        chunk=50 * MB, trim=False, min_quality=28, direction="both"
+    )
     let t2 = time.now()
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num
@@ -113,8 +118,7 @@ fn main() raises:
         String(t_sec)
         + "S spend in parsing: "
         + num
-        + " records. \n"
-         "euqaling "
+        + " records. \neuqaling "
         + String((s_per_r) * 1e6)
         + " microseconds/read or "
         + math.round[DType.float32, 1](1 / s_per_r) * 60

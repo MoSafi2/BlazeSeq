@@ -1,18 +1,18 @@
+from helpers import slice_tensor
+
+
 @value
 struct FastqRecord(CollectionElement, Stringable, Sized):
     """Struct that represent a single FastaQ record."""
+
     var SeqHeader: String
     var SeqStr: String
     var QuHeader: String
     var QuStr: String
 
     fn __init__(
-    inout self,
-     SH: String,
-     SS: String,
-     QH: String,
-     QS: String) raises -> None:
-
+        inout self, SH: String, SS: String, QH: String, QS: String
+    ) raises -> None:
         # if SH[0] != "@":
         #     print("Sequence Header is corrput")
 
@@ -30,7 +30,8 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         self.QuStr = QS
 
     fn trim_record(inout self, direction: String = "end", quality_threshold: Int = 20):
-        """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt."""
+        """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt.
+        """
 
         var s: Int16 = 0
         var min_qual: Int16 = 0
@@ -40,15 +41,15 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         let i: Int
 
         ## minimum of Rolling sum algorithm used by Cutadapt and BWA
-        #Find trim position in 5' end
+        # Find trim position in 5' end
         for i in range(n):
-            s +=  (ord(self.QuStr[i]) - 33) - quality_threshold
+            s += (ord(self.QuStr[i]) - 33) - quality_threshold
             if s > 0:
                 break
             if s < min_qual:
                 min_qual = s
-                start = i +1
-            
+                start = i + 1
+
         # Find trim position in 3' end
         min_qual = 0
         s = 0
@@ -60,38 +61,32 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
                 min_qual = s
                 stop = stop - 1
 
-
         if start >= stop:
             self._empty_record()
             return
-        
+
         if direction == "end":
             self.SeqStr = self.SeqStr[0:stop]
             self.QuStr = self.QuStr[0:stop]
-
 
         if direction == "start":
             self.SeqStr = self.SeqStr[start:n]
             self.QuStr = self.QuStr[start:n]
 
-
         if direction == "both":
             self.SeqStr = self.SeqStr[start:stop]
             self.QuStr = self.QuStr[start:stop]
 
-
     @always_inline
     fn wirte_record(self) -> String:
-        var s: String = "\n" 
+        var s: String = "\n"
         s = s.join(self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr)
         return s
 
     fn _empty_record(inout self):
         self.SeqStr = ""
 
-
     fn __str__(self) -> String:
-
         var str_repr = String()
         str_repr += "Record:"
         str_repr += self.SeqHeader
@@ -103,28 +98,26 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
         str_repr += "\nInfered Quality: "
         return str_repr
 
-
     fn __len__(self) -> Int:
         return len(self.SeqStr)
- 
-
 
 
 @value
-struct FastqRecord_Tensor(CollectionElement):
+struct FastqRecord_Tensor(CollectionElement, Sized):
     """Struct that represent a single FastaQ record."""
+
     var SeqHeader: Tensor[DType.int8]
     var SeqStr: Tensor[DType.int8]
     var QuHeader: Tensor[DType.int8]
     var QuStr: Tensor[DType.int8]
 
     fn __init__(
-    inout self,
-     SH: Tensor[DType.int8],
-     SS: Tensor[DType.int8],
-     QH: Tensor[DType.int8],
-     QS: Tensor[DType.int8]) raises -> None:
-
+        inout self,
+        SH: Tensor[DType.int8],
+        SS: Tensor[DType.int8],
+        QH: Tensor[DType.int8],
+        QS: Tensor[DType.int8],
+    ) raises -> None:
         if SH[0] != ord("@"):
             print("Sequence Header is corrput")
 
@@ -142,7 +135,8 @@ struct FastqRecord_Tensor(CollectionElement):
         self.QuStr = QS
 
     fn trim_record(inout self, direction: String = "end", quality_threshold: Int = 20):
-        """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt."""
+        """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt.
+        """
 
         var s: Int8 = 0
         var min_qual: Int8 = 0
@@ -152,15 +146,15 @@ struct FastqRecord_Tensor(CollectionElement):
         let i: Int
 
         ## minimum of Rolling sum algorithm used by Cutadapt and BWA
-        #Find trim position in 5' end
+        # Find trim position in 5' end
         for i in range(n):
-            s +=  (self.QuStr[i] - 33) - quality_threshold
+            s += (self.QuStr[i] - 33) - quality_threshold
             if s > 0:
                 break
             if s < min_qual:
                 min_qual = s
-                start = i +1
-            
+                start = i + 1
+
         # Find trim position in 3' end
         min_qual = 0
         s = 0
@@ -172,35 +166,30 @@ struct FastqRecord_Tensor(CollectionElement):
                 min_qual = s
                 stop = stop - 1
 
+        if start >= stop:
+            self._empty_record()
+            return
 
-        # if start >= stop:
-        #     self._empty_record()
-        #     return
-        
-        # if direction == "end":
-        #     self.SeqStr = self.SeqStr[0:stop]
-        #     self.QuStr = self.QuStr[0:stop]
+        if direction == "end":
+            self.SeqStr = slice_tensor(self.SeqStr, 0, stop)
+            self.QuStr = slice_tensor(self.QuStr, 0, stop)
 
+        if direction == "start":
+            self.SeqStr = slice_tensor(self.SeqStr, start, n)
+            self.QuStr = slice_tensor(self.QuStr, start, n)
 
-        # if direction == "start":
-        #     self.SeqStr = self.SeqStr[start:n]
-        #     self.QuStr = self.QuStr[start:n]
-
-
-        # if direction == "both":
-        #     self.SeqStr = self.SeqStr[start:stop]
-        #     self.QuStr = self.QuStr[start:stop]
-
+        if direction == "both":
+            self.SeqStr = slice_tensor(self.SeqStr, start, stop)
+            self.QuStr = slice_tensor(self.QuStr, start, stop)
 
     # @always_inline
     # fn wirte_record(self) -> String:
-    #     var s: String = "\n" 
+    #     var s: String = "\n"
     #     s = s.join(self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr)
     #     return s
 
-    # fn _empty_record(inout self):
-    #     self.SeqStr = ""
-
+    fn _empty_record(inout self):
+        self.SeqStr = Tensor[DType.int8](0)
 
     # fn __str__(self) -> String:
 
@@ -215,8 +204,5 @@ struct FastqRecord_Tensor(CollectionElement):
     #     str_repr += "\nInfered Quality: "
     #     return str_repr
 
-
-    # fn __len__(self) -> Int:
-    #     return len(self.SeqStr)
- 
-
+    fn __len__(self) -> Int:
+        return self.SeqStr.num_elements()
