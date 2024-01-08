@@ -11,7 +11,7 @@ import benchmark
 fn main() raises:
     
     alias simd_width = simdwidthof[DType.int8]()
-    let width: Int = 2 * 1024 * 1024 * 1024
+    let width: Int = 4 * 1024 * 1024
     let handle = open("data/SRR4381933_1.fastq", "r")
 
     var x: FastqRecord_Tensor
@@ -44,9 +44,9 @@ fn main() raises:
                 break
 
             x  = FastqRecord_Tensor(line1, line2, line3, line4)
+            _ = x.wirte_record()
             last_valid_pos = last_valid_pos + line1.num_elements() + line2.num_elements() + line3.num_elements() + line4.num_elements() + 4
         previous = previous + last_valid_pos
-
     let t2 = now()
     print((t2 - t1) / 1e9)
 

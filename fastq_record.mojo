@@ -1,4 +1,6 @@
 from helpers import slice_tensor
+from memory.unsafe import DTypePointer
+from memory.memory import memcpy
 
 
 @value
@@ -103,7 +105,7 @@ struct FastqRecord(CollectionElement, Stringable, Sized):
 
 
 @value
-struct FastqRecord_Tensor(CollectionElement, Sized):
+struct FastqRecord_Tensor(CollectionElement, Sized, Stringable):
     """Struct that represent a single FastaQ record."""
 
     var SeqHeader: Tensor[DType.int8]
@@ -118,15 +120,12 @@ struct FastqRecord_Tensor(CollectionElement, Sized):
         QH: Tensor[DType.int8],
         QS: Tensor[DType.int8],
     ) raises -> None:
-
-
         if SH[0] != ord("@"):
             print(SH)
             raise Error("Sequence Header is corrput")
         if QH[0] != ord("+"):
             print(QH)
             raise Error("Quality Header is corrput")
-            
 
         if SS.num_elements() != QS.num_elements():
             raise Error("Corrput Lengths")
@@ -137,7 +136,6 @@ struct FastqRecord_Tensor(CollectionElement, Sized):
         if self.QuHeader.num_elements() > 1:
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
                 raise Error("Quality Header is corrupt")
-                
 
         self.SeqStr = SS
         self.QuStr = QS
@@ -190,27 +188,33 @@ struct FastqRecord_Tensor(CollectionElement, Sized):
             self.SeqStr = slice_tensor(self.SeqStr, start, stop)
             self.QuStr = slice_tensor(self.QuStr, start, stop)
 
-    # @always_inline
-    # fn wirte_record(self) -> String:
-    #     var s: String = "\n"
-    #     s = s.join(self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr)
-    #     return s
+    @always_inline
+    fn wirte_record(self) -> String:
+        return self.__str__()
 
     fn _empty_record(inout self):
         self.SeqStr = Tensor[DType.int8](0)
 
-    # fn __str__(self) -> String:
+    fn __str__(self) -> String:
+        var str_repr = String()
+        for i in range(self.SeqHeader.num_elements()):
+            str_repr._buffer.push_back(self.SeqHeader[i])
+        str_repr._buffer.push_back(10)
 
-    #     var str_repr = String()
-    #     str_repr += "Record:"
-    #     str_repr += self.SeqHeader
-    #     str_repr += "\nSeq:"
-    #     str_repr += self.SeqStr
-    #     str_repr += " \n"
-    #     str_repr += "Quality: "
-    #     str_repr += self.QuStr
-    #     str_repr += "\nInfered Quality: "
-    #     return str_repr
+        for i in range(self.SeqStr.num_elements()):
+            str_repr._buffer.push_back(self.SeqStr[i])
+        str_repr._buffer.push_back(10)
+
+        for i in range(self.QuHeader.num_elements()):
+            str_repr._buffer.push_back(self.QuHeader[i])
+        str_repr._buffer.push_back(10)
+
+        for i in range(self.QuStr.num_elements()):
+            str_repr._buffer.push_back(self.QuStr[i])
+        str_repr._buffer.push_back(10)
+
+        return str_repr
+
 
     fn __len__(self) -> Int:
         return self.SeqStr.num_elements()
