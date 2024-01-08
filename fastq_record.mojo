@@ -195,6 +195,7 @@ struct FastqRecord_Tensor(CollectionElement, Sized, Stringable):
     fn _empty_record(inout self):
         self.SeqStr = Tensor[DType.int8](0)
 
+    @always_inline
     fn __str__(self) -> String:
         var str_repr = String()
         for i in range(self.SeqHeader.num_elements()):

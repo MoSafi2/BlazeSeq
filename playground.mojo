@@ -11,10 +11,10 @@ import benchmark
 fn main() raises:
     
     alias simd_width = simdwidthof[DType.int8]()
-    let width: Int = 4 * 1024 * 1024
+    let width: Int = 2 * 1024 * 1024 * 1024
     let handle = open("data/SRR4381933_1.fastq", "r")
 
-    var x: FastqRecord_Tensor
+    let x: FastqRecord_Tensor
     let t1 = now()
     var previous: Int = 0
     
@@ -28,16 +28,16 @@ fn main() raises:
         # let x = chunk.split("\n") #58s for 50GB
         while True:
 
-            let line1 = next_line_iter_tesnor(chunk, temp)  #42s for 50 GB
+            let line1 = next_line_simd(chunk, temp)  #42s for 50 GB
             temp = temp + line1.num_elements() + 1 
 
-            let line2 = next_line_iter_tesnor(chunk, temp)
+            let line2 = next_line_simd(chunk, temp)
             temp = temp + line2.num_elements() + 1 
 
-            let line3 = next_line_iter_tesnor(chunk, temp)
+            let line3 = next_line_simd(chunk, temp)
             temp = temp + line3.num_elements() + 1 
 
-            let line4 = next_line_iter_tesnor(chunk, temp)
+            let line4 = next_line_simd(chunk, temp)
             temp = temp + line4.num_elements() + 1 
 
             if line4.num_elements() == 0:
@@ -45,10 +45,11 @@ fn main() raises:
 
             x  = FastqRecord_Tensor(line1, line2, line3, line4)
             _ = x.wirte_record()
+            
             last_valid_pos = last_valid_pos + line1.num_elements() + line2.num_elements() + line3.num_elements() + line4.num_elements() + 4
         previous = previous + last_valid_pos
-    let t2 = now()
-    print((t2 - t1) / 1e9)
+        let t2 = now()
+        print((t2 - t1) / 1e9)
 
 
 @always_inline
@@ -68,21 +69,19 @@ fn next_line_iter_tesnor(borrowed s: Tensor[DType.int8], start: Int = -1) -> Ten
 
 
 
-
-
 @parameter
 @always_inline
 fn next_line_simd(borrowed s: Tensor[DType.int8], start: Int = 0) -> Tensor[DType.int8]:
 
     alias simd_width: Int = simdwidthof[DType.int8]()
-    
+
     for nv in range(start, s.num_elements(), simd_width):
         let simd_vec = s.simd_load[simd_width](nv)
         let bool_vec = simd_vec == 10
         if bool_vec.reduce_or():
             for i in range(len(bool_vec)):
                 if bool_vec[i]:
-                    return slice_tensor(s, start, i)
+                    return slice_tensor(s, start, nv+i)
 
     for n in range(simd_width*(s.num_elements()//simd_width), s.num_elements()):
         let simd_vec = s.simd_load[simd_width](n)
@@ -90,7 +89,7 @@ fn next_line_simd(borrowed s: Tensor[DType.int8], start: Int = 0) -> Tensor[DTyp
         if bool_vec.reduce_or():
             for i in range(len(bool_vec)):
                 if bool_vec[i]:
-                    return slice_tensor(s, start, i)
+                    return slice_tensor(s, start, n+i)
                 
     return Tensor[DType.int8](0)
 
@@ -101,10 +100,6 @@ fn slice_tensor[T: DType](borrowed t: Tensor[T], start: Int, end: Int) -> Tensor
     for i in range(start, end):
         x[i - start] = t[i]
     return x
-
-
-
-    
 
 
 @always_inline
