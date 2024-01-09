@@ -46,6 +46,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
             + SS.num_elements()
             + QH.num_elements()
             + QS.num_elements()
+            + 4  # Addition of 4 \n again
         )
 
     fn trim_record(inout self, direction: String = "end", quality_threshold: Int = 20):
@@ -96,10 +97,16 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
             self.SeqStr = slice_tensor(self.SeqStr, start, stop)
             self.QuStr = slice_tensor(self.QuStr, start, stop)
 
+        self.total_length = (
+            self.SeqHeader.num_elements()
+            + self.SeqStr.num_elements()
+            + self.QuHeader.num_elements()
+            + self.QuStr.num_elements()
+        )
+
     @always_inline
     fn wirte_record(self) -> Tensor[DType.int8]:
         return self.__concat_record()
-        # return  8
 
     @always_inline
     fn _empty_record(inout self):
@@ -112,19 +119,23 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
         for i in range(self.SeqHeader.num_elements()):
             t[i] = self.SeqHeader[i]
-        offset = offset + self.SeqHeader.num_elements()
+        offset = offset + self.SeqHeader.num_elements() + 1
+        t[offset - 1] = 10
 
         for i in range(self.SeqStr.num_elements()):
             t[i + offset] = self.SeqStr[i]
-        offset = offset + self.SeqStr.num_elements()
+        offset = offset + self.SeqStr.num_elements() + 1
+        t[offset - 1] = 10
 
         for i in range(self.QuHeader.num_elements()):
             t[i + offset] = self.QuHeader[i]
-        offset = offset + self.QuHeader.num_elements()
+        offset = offset + self.QuHeader.num_elements() + 1
+        t[offset - 1] = 10
 
         for i in range(self.QuStr.num_elements()):
             t[i + offset] = self.QuStr[i]
-        offset = offset + self.QuStr.num_elements()
+        offset = offset + self.QuStr.num_elements() + 1
+        t[offset - 1] = 10
 
         return t
 
@@ -133,8 +144,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         let s = DTypePointer[DType.int8]().alloc(self.total_length)
         memcpy[DType.int8](s, concat._steal_ptr(), self.total_length)
         return String(s, self.total_length)
-            
 
     fn __len__(self) -> Int:
         return self.SeqStr.num_elements()
-

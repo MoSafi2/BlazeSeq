@@ -1,19 +1,23 @@
 from fastq_record import FastqRecord
+from helpers import slice_tensor, read_bytes, next_line_simd
 
 
 struct FastqParser:
     var _file_handle: FileHandle
     var _out_path: String
+    var _BUF_SIZE: Int
 
-    fn __init__(inout self, path: String) raises -> None:
+    fn __init__(
+        inout self, path: String, BUF_SIZE: Int = 4 * 1024 * 1024
+    ) raises -> None:
         self._file_handle = open(path, "r")
         let in_path = Path(path)
         let suffix = in_path.suffix()
         self._out_path = path.replace(suffix, "") + "_out" + suffix
+        self._BUF_SIZE = BUF_SIZE
 
     fn parse_records(
         inout self,
-        chunk: Int,
         trim: Bool = True,
         min_quality: Int = 20,
         direction: String = "end",
@@ -22,41 +26,16 @@ struct FastqParser:
         var bases: Int = 0
         var qu: Int = 0
         var pos: Int = 0
-        var record: FastqRecord
 
         if not self._header_parser():
             return 0
         let out = open(self._out_path, "w")
 
+        var last_valid_pos: UInt64 = 0
+
         while True:
-            var reads_vec = self._read_lines_chunk(chunk, pos)
-            pos = atol(reads_vec.pop_back())
-
-            if len(reads_vec) < 2:
-                break
-
-            var i = 0
-            while i < len(reads_vec):
-                try:
-                    record = FastqRecord(
-                        reads_vec[i],
-                        reads_vec[i + 1],
-                        reads_vec[i + 2],
-                        reads_vec[i + 3],
-                    )
-
-                    if trim:
-                        record.trim_record()
-                        _ = record.wirte_record()
-                        # out.write(record.wirte_record())
-
-                    count = count + 1
-                    bases = bases + len(record)
-                    qu = qu + len(record)
-
-                except:
-                    pass
-                i = i + 4
+            let chunk = read_bytes(self._file_handle, last_valid_pos, self._BUF_SIZE)
+            last_valid_pos += self._parse_chunk(chunk)
         return count
 
     fn _header_parser(self) raises -> Bool:
@@ -66,33 +45,44 @@ struct FastqParser:
             raise Error("Fastq file should start with valid header '@'")
         return True
 
-    fn _read_lines_chunk(
-        self, chunk_size: Int = -1, current_pos: UInt64 = 0
-    ) raises -> DynamicVector[String]:
-        let s = self._file_handle.read(chunk_size)
-        var vec = s.split("\n")
-        let vec_n = len(vec)
+    fn _parse_chunk(self, chunk: Tensor[DType.int8]) raises -> UInt64:
+        var temp = 0
+        var last_valid_pos: UInt64 = 0
+        var x: FastqRecord
+        while True:
 
-        if vec_n < 4:
-            let pos = self._file_handle.seek(current_pos)
-            vec.push_back(pos)
-            return vec
 
-        var rem = vec_n % 4
-        var retreat = 0
+            let line1 = next_line_simd(
+                chunk, temp
+            )  # 42s for 50 GB for tensor readinvsg in general
+            temp = temp + line1.num_elements() + 1
+            if line1.num_elements() == 0:
+                break
 
-        if (
-            rem == 0
-        ):  # The whole last record is untrustworthy remove the last 4 elements.
-            rem = 4
+            let line2 = next_line_simd(chunk, temp)
+            temp = temp + line2.num_elements() + 1
+            if line2.num_elements() == 0:
+                break
 
-        for i in range(rem):
-            retreat = retreat + len(vec[vec_n - (i + 1)])
-            _ = vec.pop_back()
+            let line3 = next_line_simd(chunk, temp)
+            temp = temp + line3.num_elements() + 1
+            if line3.num_elements() == 0:
+                break
 
-        let pos = self._file_handle.seek(current_pos + chunk_size - retreat)
-        vec.push_back(pos)
-        return vec
+            let line4 = next_line_simd(chunk, temp)
+            temp = temp + line4.num_elements() + 1
+            if line4.num_elements() == 0:
+                break
+
+            x = FastqRecord(line1, line2, line3, line4)
+            last_valid_pos = (
+                last_valid_pos + x.total_length
+            )  # Should be update before any mutating operations on the Record that can change the length
+
+            x.trim_record()
+            _ = x.wirte_record()
+
+            return last_valid_pos
 
 
 fn main() raises:
@@ -109,7 +99,7 @@ fn main() raises:
     )
     let t1 = time.now()
     let num = parser.parse_records(
-        chunk=50 * MB, trim=False, min_quality=28, direction="both"
+        trim=False, min_quality=28, direction="both"
     )
     let t2 = time.now()
     let t_sec = ((t2 - t1) / 1e9)
