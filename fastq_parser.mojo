@@ -8,7 +8,7 @@ struct FastqParser:
     var _BUF_SIZE: Int
 
     fn __init__(
-        inout self, path: String, BUF_SIZE: Int = 4 * 1024 * 1024
+        inout self, path: String, BUF_SIZE: Int = 16 * 1024 * 1024
     ) raises -> None:
 
 
