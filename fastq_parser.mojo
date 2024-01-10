@@ -17,6 +17,8 @@ struct FastqParser:
     var _BUF_SIZE: Int
     var _current_chunk: Tensor[DType.int8]
     var _current_pos: UInt64
+    var _trim_records: Bool
+    var _min_quality: Int
 
     fn __init__(
         inout self, path: String, BUF_SIZE: Int = 16 * 1024 * 1024
@@ -29,6 +31,8 @@ struct FastqParser:
         let in_path = Path(path)
         let suffix = in_path.suffix()
         self._out_path = path.replace(suffix, "") + "_out" + suffix
+        self._trim_records = False
+        self._min_quality = 0
         self._current_pos = 0
         self._current_chunk = read_bytes(
             self._file_handle, self._current_pos, self._BUF_SIZE
@@ -38,12 +42,15 @@ struct FastqParser:
         inout self,
         trim: Bool = True,
         min_quality: Int = 20,
-        direction: String = "end",
     ) raises -> Tuple[Int, Int]:
         if not self._header_parser():
             return Tuple[Int, Int](0, 0)
 
         let out = open(self._out_path, "w")
+
+        if trim:
+            self._trim_records = True
+            self._min_quality = min_quality
 
         var total_reads: Int = 0
         var total_bases: Int = 0
@@ -54,6 +61,7 @@ struct FastqParser:
         while True:
             # Potenial BUG if the final chunk has the buffer size exactly, could be rare occurancce
             # Needs to flag EOF somehow?
+
             if self._current_chunk.num_elements() == self._BUF_SIZE:
                 index_last_read = find_chr_last_occurance(self._current_chunk)
             else:
@@ -62,13 +70,17 @@ struct FastqParser:
             temp, temp2 = self._parse_chunk(
                 slice_tensor(self._current_chunk, 0, index_last_read.to_int()), out
             )
+
+            
             total_reads += temp
             total_bases += temp2
 
             self._current_pos += index_last_read
+
             self._current_chunk = read_bytes(
                 self._file_handle, self._current_pos, self._BUF_SIZE
             )
+
 
             if self._current_chunk.num_elements() == 0:
                 break
@@ -87,19 +99,28 @@ struct FastqParser:
         var read: FastqRecord
         var reads: Int = 0
         var total_length: Int = 0
-        var write_buffer = Tensor[DType.int8](chunk.num_elements() + 500)
+        var write_buffer = Tensor[DType.int8](chunk.num_elements())
+        var write_pos: Int = 0
+
         while True:
             read = self._parse_read(pos, chunk)
             reads += 1
             total_length += len(read)
 
-            # print(pos, ":", write_buffer.num_elements())
-            write_to_buff[DType.int8](
-                read.wirte_record(), write_buffer, pos - len(read)
-            )
-            read.trim_record()
+            print(read)
+
+            if self._trim_records:
+                read.trim_record(quality_threshold=self._min_quality)
+
+            write_to_buff[DType.int8](read.wirte_record(), write_buffer, write_pos)
+
+            write_pos += read.total_length
+
             if pos >= chunk.num_elements():
                 break
+
+        if write_pos < write_buffer.num_elements():
+            write_buffer = slice_tensor(write_buffer, 0, write_pos)
 
         let ele = write_buffer.num_elements()
         out_handle.write(String(write_buffer._steal_ptr(), ele))
@@ -107,7 +128,8 @@ struct FastqParser:
         return Tuple[Int, Int](reads, total_length)
 
     fn _parse_read(
-        self, inout pos: Int, borrowed chunk: Tensor[DType.int8]
+
+        self, inout pos: Int, chunk: Tensor[DType.int8]
     ) raises -> FastqRecord:
         let line1 = next_line_simd(chunk, pos)
         pos += line1.num_elements() + 1
@@ -120,6 +142,10 @@ struct FastqParser:
 
         let line4 = next_line_simd(chunk, pos)
         pos += line4.num_elements() + 1
+
+        print(line4)
+
+        let read = FastqRecord(line1, line2, line3, line4)
 
         return FastqRecord(line1, line2, line3, line4)
 
@@ -137,9 +163,7 @@ fn main() raises:
     let t1 = time.now()
     let num: Int
     let total_bases: Int
-    num, total_bases = parser.parse_all_records(
-        trim=False, min_quality=28, direction="both"
-    )
+    num, total_bases = parser.parse_all_records(trim=False, min_quality=28)
     let t2 = time.now()
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num

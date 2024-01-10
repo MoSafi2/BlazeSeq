@@ -7,8 +7,7 @@ alias simd_width: Int = simdwidthof[DType.int8]()
 
 @always_inline
 fn next_line_simd(borrowed s: Tensor[DType.int8], start: Int = 0) -> Tensor[DType.int8]:
-
-    let rem = simd_width*(s.num_elements()//simd_width)
+    let rem = simd_width * (s.num_elements() // simd_width)
 
     for nv in range(start, s.num_elements(), simd_width):
         let simd_vec = s.simd_load[simd_width](nv)
@@ -27,11 +26,21 @@ fn next_line_simd(borrowed s: Tensor[DType.int8], start: Int = 0) -> Tensor[DTyp
 
 
 @always_inline
-fn slice_tensor[T: DType](borrowed t: Tensor[T], start: Int, end: Int) -> Tensor[T]:
-    var x = Tensor[T](end - start)
-    for i in range(start, end):
-        x[i - start] = t[i]
-    return x
+fn slice_tensor[
+    T: DType
+](borrowed in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
+    var out_tesnor = Tensor[T](end - start)
+
+    for i in range(start, end, simd_width):
+        let in_ = in_tensor.simd_load[simd_width](i)
+        out_tesnor.simd_store[simd_width](i - start, in_)
+
+    for i in range(
+        simd_width * (in_tensor.num_elements() // simd_width), in_tensor.num_elements()
+    ):
+        out_tesnor[i - start] = in_tensor[i]
+
+    return out_tesnor
 
 
 @always_inline
@@ -50,11 +59,10 @@ fn read_text(
     return handle.read(length)
 
 
-
-
 @always_inline
-fn find_chr_first_occurance(borrowed in_tensor: Tensor[DType.int8], chr: String = "@", start: Int = 0) -> Int:
-    
+fn find_chr_first_occurance(
+    borrowed in_tensor: Tensor[DType.int8], chr: String = "@", start: Int = 0
+) -> Int:
     let in_chr = ord(chr)
 
     alias simd_width: Int = simdwidthof[DType.int8]()
@@ -66,10 +74,12 @@ fn find_chr_first_occurance(borrowed in_tensor: Tensor[DType.int8], chr: String 
                 if bool_vec[i]:
                     return i
 
-    for n in range(simd_width*(in_tensor.num_elements()//simd_width), in_tensor.num_elements()):
+    for n in range(
+        simd_width * (in_tensor.num_elements() // simd_width), in_tensor.num_elements()
+    ):
         let simd_vec = in_tensor.simd_load[1](n)
         if simd_vec == in_chr:
-                return n
+            return n
     return -1
 
 
@@ -86,19 +96,18 @@ fn find_chr_last_occurance(in_tensor: Tensor[DType.int8], chr: String = "@") -> 
                 if bool_vec[ele]:
                     return ele + i
 
-
     for n in range((in_tensor.num_elements() % simd_width) - 1, -1, -1):
         let simd_vec = in_tensor.simd_load[1](n)
         if simd_vec == in_chr:
-                return n
+            return n
     return -1
-
-        
 
 
 @always_inline
-fn find_chr_all_occurances(t: Tensor[DType.int8], chr: String = "@") -> DynamicVector[Int]:
-    var holder = DynamicVector[Int](capacity = (t.num_elements() / 200).to_int())
+fn find_chr_all_occurances(
+    t: Tensor[DType.int8], chr: String = "@"
+) -> DynamicVector[Int]:
+    var holder = DynamicVector[Int](capacity=(t.num_elements() / 200).to_int())
     let in_chr = ord(chr)
 
     @parameter
@@ -109,10 +118,9 @@ fn find_chr_all_occurances(t: Tensor[DType.int8], chr: String = "@") -> DynamicV
             for i in range(len(bool_vec)):
                 if bool_vec[i]:
                     holder.push_back(i)
-                    
+
     vectorize[simd_width, inner](t.num_elements())
     return holder
-    
 
 
 @always_inline
@@ -121,4 +129,3 @@ fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
     #TODO: Add bound and sanity checks."""
     for i in range(src.num_elements()):
         dest[start + i] = src[i]
-
