@@ -40,23 +40,23 @@ FASTQ trimming was carried out with minimum Phred quality of ```28```.
 
 ## Results
 ### FASTQ parsing
-| reads   | SeqIO <br> (Python) | Needletail <br> (Rust)| MojoFastqTrim <br> (Mojo🔥)   |
-|-------|---------------------|-------------------------|-------------------------------|
-| 40k   |      0.57s          |          0.043s         |          0.083s               |
-| 5.5M  |      27.1s          |          3.24s          |            3.3s               |
-| 12.2M |      58.7s          |          7.3s           |            7.3s               |
-| 27.7M |      87.4s          |          12.7s          |           10.1s               | 
-| 169.8M|        -            |          100.5s         |           111.8s              |
+| reads  | SeqIO <br> (Python) | Needletail <br> (Rust) | MojoFastqTrim <br> (Mojo🔥) |
+| ------ | ------------------- | ---------------------- | -------------------------- |
+| 40k    | 0.57s               | 0.043s                 | 0.083s                     |
+| 5.5M   | 27.1s               | 3.24s                  | 1.14s                      |
+| 12.2M  | 58.7s               | 7.3s                   | 2.6s                       |
+| 27.7M  | 87.4s               | 12.7s                  | 4.2s                       |
+| 169.8M | -                   | 100.5s                 | 47.0s                      |
 
 
 ### FASTQ quality Trimming
-|   reads  | Cutadapt <br>  (Cython, C)  | MojoFastqTrim <br> (Mojo🔥)|
-|----------|--------------------------|----------------------------|
-|    40k   |          0.075s          |           0.65s            |
-|   5.5M   |          4.4s            |           5.7s             |
-|  12.2M   |          10.1s           |           13.5s            |
-|  27.7M   |          20.7s           |           18.6s            |
-| 169.8M   |          144.5s          |           192.7s           |
+| reads  | Cutadapt <br>  (Cython, C) | MojoFastqTrim <br> (Mojo🔥) |
+| ------ | -------------------------- | -------------------------- |
+| 40k    | 0.075s                     | 0.65s                      |
+| 5.5M   | 4.4s                       | 5.7s                       |
+| 12.2M  | 10.1s                      | 13.5s                      |
+| 27.7M  | 20.7s                      | 18.6s                      |
+| 169.8M | 144.5s                     | 192.7s                     |
 
 
 

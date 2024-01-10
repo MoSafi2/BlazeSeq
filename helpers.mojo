@@ -73,6 +73,23 @@ fn find_chr_first_occurance(borrowed in_tensor: Tensor[DType.int8], chr: String 
     return -1
 
 
+
+fn find_last_read(in_tensor: Tensor[DType.int8]) -> Int:
+
+    let last_chr = find_chr_last_occurance(in_tensor)
+    if in_tensor[last_chr - 1] == 10:
+        return last_chr
+    else:
+        let in_again = slice_tensor(in_tensor, 0, last_chr)
+        
+        if in_again.num_elements() < 3:
+            return -1
+
+        find_last_read(in_again)
+
+    return -1
+
+
 @always_inline
 fn find_chr_last_occurance(in_tensor: Tensor[DType.int8], chr: String = "@") -> Int:
     let in_chr: SIMD[DType.int8, 1] = ord(chr)
