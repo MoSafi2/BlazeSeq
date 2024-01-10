@@ -114,3 +114,11 @@ fn find_chr_all_occurances(t: Tensor[DType.int8], chr: String = "@") -> DynamicV
     return holder
     
 
+
+@always_inline
+fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
+    """Copy a small tensor into a larger tensor given an index at the large tensor.
+    #TODO: Add bound and sanity checks."""
+    for i in range(src.num_elements()):
+        dest[start + i] = src[i]
+
