@@ -42,11 +42,11 @@ FASTQ trimming was carried out with minimum Phred quality of ```28```.
 ### FASTQ parsing
 | reads  | SeqIO <br> (Python) | Needletail <br> (Rust) | MojoFastqTrim <br> (Mojo🔥) |
 | ------ | ------------------- | ---------------------- | -------------------------- |
-| 40k    | 0.57s               | 0.043s                 | 0.083s                     |
-| 5.5M   | 27.1s               | 3.24s                  | 1.14s                      |
-| 12.2M  | 58.7s               | 7.3s                   | 2.6s                       |
-| 27.7M  | 87.4s               | 12.7s                  | 4.2s                       |
-| 169.8M | -                   | 100.5s                 | 47.0s                      |
+| 40k    | 0.57s               | 0.043s                 | 0.020s                      |
+| 5.5M   | 27.1s               | 3.24s                  | 0.81s                      |
+| 12.2M  | 58.7s               | 7.3s                   | 2.1s                       |
+| 27.7M  | 87.4s               | 12.7s                  | 4.6s                       |
+| 169.8M | -                   | 100.5s                 | 36.8s                      |
 
 
 ### FASTQ quality Trimming

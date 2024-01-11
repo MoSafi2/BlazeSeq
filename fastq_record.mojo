@@ -3,6 +3,8 @@ from memory.unsafe import DTypePointer
 from memory.memory import memcpy
 from tensor import Tensor
 
+alias USE_SIMD = True
+
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable):
@@ -22,11 +24,15 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         QS: Tensor[DType.int8],
     ) raises -> None:
         if SH[0] != ord("@"):
+            #print(SH, "Sequence Header is corrput")
             raise Error("Sequence Header is corrput")
+
         if QH[0] != ord("+"):
+            #print(QH, "Quality Header is corrput")
             raise Error("Quality Header is corrput")
 
         if SS.num_elements() != QS.num_elements():
+            #print(SS, QS, "Corrput Lengths")
             raise Error("Corrput Lengths")
 
         self.SeqHeader = SH
@@ -34,6 +40,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
         if self.QuHeader.num_elements() > 1:
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
+                #print(QH, "Quality Header is corrupt")
                 raise Error("Quality Header is corrupt")
 
         self.SeqStr = SS
@@ -84,16 +91,16 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
             return
 
         if direction == "end":
-            self.SeqStr = slice_tensor(self.SeqStr, 0, stop)
-            self.QuStr = slice_tensor(self.QuStr, 0, stop)
+            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, 0, stop)
+            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, 0, stop)
 
         if direction == "start":
-            self.SeqStr = slice_tensor(self.SeqStr, start, n)
-            self.QuStr = slice_tensor(self.QuStr, start, n)
+            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, start, n)
+            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, start, n)
 
         if direction == "both":
-            self.SeqStr = slice_tensor(self.SeqStr, start, stop)
-            self.QuStr = slice_tensor(self.QuStr, start, stop)
+            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, start, stop)
+            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, start, stop)
 
         self.total_length = (
             self.SeqHeader.num_elements()
