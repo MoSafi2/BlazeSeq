@@ -62,9 +62,27 @@ struct FastqParser:
 
         return total_reads, total_bases
 
-    fn next(self):
-        """Generic Next function."""
-        pass
+    # fn next(inout self) raises -> FastqRecord:
+    #     """Method that lazily returns the Next record in the file."""
+
+    #     var pos = 0
+    #     let read: FastqRecord
+
+    #     if pos >= self._chunk_last_index:
+    #         self._current_chunk = read_bytes(
+    #             self._file_handle, self._current_pos, self._BUF_SIZE
+    #         )
+    #         self._chunk_last_index = find_last_read_header(self._current_chunk)
+    #         self._chunk_pos = 0
+    #         self._current_pos += self._chunk_last_index
+
+    #     if self._current_chunk.num_elements() == 0:
+    #         raise Error("EOF")
+
+    #     read = self._parse_read(pos, self._current_chunk)
+    #     self._chunk_pos += pos
+
+    #     return read
 
     fn _header_parser(self) raises -> Bool:
         if self._current_chunk[0] != ord("@"):
