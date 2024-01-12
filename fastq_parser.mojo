@@ -28,7 +28,7 @@ struct FastqParser:
         self._current_chunk = read_bytes(
             self._file_handle, self._current_pos, self._BUF_SIZE
         )
-        _ = self._header_parser()
+       
         # Seems to be a recurring theme, Extract to a function
         if self._current_chunk.num_elements() == self._BUF_SIZE:
             self._chunk_last_index = find_last_read_header(self._current_chunk)
@@ -36,6 +36,8 @@ struct FastqParser:
             self._chunk_last_index = self._current_chunk.num_elements()
 
         self._current_pos += self._chunk_last_index
+
+        _ = self._header_parser()
 
     fn parse_all_records(inout self, trim: Bool = True) raises -> Tuple[Int, Int]:
 
