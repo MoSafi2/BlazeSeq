@@ -25,7 +25,7 @@ struct FastqWriter(Sized, Stringable):
         # Goind to town with the record applying all transformations
         in_read.trim_record()
 
-        if self._buffer_position + in_read.total_length + 4 > self._BUF_SIZE:
+        if self._buffer_position + in_read.total_length  > self._BUF_SIZE:
             ## Flushing out the write buffer, starting a new record
             print("Buffer Position end")
             print(self._write_buffer)
@@ -37,7 +37,7 @@ struct FastqWriter(Sized, Stringable):
             self._write_buffer,
             self._buffer_position - in_read.total_length,
         )
-        self._buffer_position += in_read.total_length + 4
+        self._buffer_position += in_read.total_length
 
     @always_inline
     fn flush_buffer(inout self, length: Int) raises:
