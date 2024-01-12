@@ -10,17 +10,31 @@ struct FastqParser:
     var _BUF_SIZE: Int
     var _current_chunk: Tensor[DType.int8]
     var _current_pos: Int
+    var _chunk_last_index: Int
+    var _chunk_pos: Int
 
-    fn __init__(inout self, path: String, BUF_SIZE: Int = 1024 * 1024) raises -> None:
+    fn __init__(
+        inout self, path: String, BUF_SIZE: Int = 1 * 1024 * 1024
+    ) raises -> None:
         # if not BUF_SIZE & (BUF_SIZE - 1):
         #     raise Error("The batch size should have a power of two.")
 
         self._BUF_SIZE = BUF_SIZE
         self._file_handle = open(path, "r")
         self._current_pos = 0
+        self._chunk_pos = 0
+
         self._current_chunk = read_bytes(
             self._file_handle, self._current_pos, self._BUF_SIZE
         )
+
+        # Seems to be a recurring theme, Extract to a function
+        if self._current_chunk.num_elements() == self._BUF_SIZE:
+            self._chunk_last_index = find_last_read_header(self._current_chunk)
+        else:
+            self._chunk_last_index = self._current_chunk.num_elements()
+
+        self._current_pos += self._chunk_last_index
 
     fn parse_all_records(inout self, trim: Bool = True) raises -> Tuple[Int, Int]:
         if not self._header_parser():
@@ -31,19 +45,13 @@ struct FastqParser:
         var temp: Int = 0
         var temp2: Int = 0
         var acutal_length: Int = 0
-        var index_last_read: Int = 0
 
         while True:
             # Potenial BUG if the final chunk has the buffer size exactly, could be rare occurancce
             # Needs to flag EOF somehow?
 
-            if self._current_chunk.num_elements() == self._BUF_SIZE:
-                index_last_read = find_last_read_header(self._current_chunk)
-            else:
-                index_last_read = self._current_chunk.num_elements()
-
             let chunk = slice_tensor[USE_SIMD=USE_SIMD](
-                self._current_chunk, 0, index_last_read
+                self._current_chunk, 0, self._chunk_last_index
             )
 
             temp, temp2, acutal_length = self._parse_chunk(chunk)
@@ -51,38 +59,48 @@ struct FastqParser:
             total_reads += temp
             total_bases += temp2
 
-            self._current_pos += index_last_read
-
             self._current_chunk = read_bytes(
                 self._file_handle, self._current_pos, self._BUF_SIZE
             )
+
+            if self._current_chunk.num_elements() == self._BUF_SIZE:
+                self._chunk_last_index = find_last_read_header(self._current_chunk)
+            else:
+                self._chunk_last_index = self._current_chunk.num_elements()
+
+            self._current_pos += self._chunk_last_index
 
             if self._current_chunk.num_elements() == 0:
                 break
 
         return total_reads, total_bases
 
-    # fn next(inout self) raises -> FastqRecord:
-    #     """Method that lazily returns the Next record in the file."""
+    fn next(inout self) raises -> FastqRecord:
+        """Method that lazily returns the Next record in the file."""
 
-    #     var pos = 0
-    #     let read: FastqRecord
+        let read: FastqRecord
 
-    #     if pos >= self._chunk_last_index:
-    #         self._current_chunk = read_bytes(
-    #             self._file_handle, self._current_pos, self._BUF_SIZE
-    #         )
-    #         self._chunk_last_index = find_last_read_header(self._current_chunk)
-    #         self._chunk_pos = 0
-    #         self._current_pos += self._chunk_last_index
+        if self._current_chunk.num_elements() == 0:
+            raise Error("EOF")
 
-    #     if self._current_chunk.num_elements() == 0:
-    #         raise Error("EOF")
+        if self._chunk_pos >= self._chunk_last_index:
+            self._current_chunk = read_bytes(
+                self._file_handle, self._current_pos, self._BUF_SIZE
+            )
 
-    #     read = self._parse_read(pos, self._current_chunk)
-    #     self._chunk_pos += pos
+            self._chunk_last_index = find_last_read_header(self._current_chunk)
 
-    #     return read
+            if self._current_chunk.num_elements() < self._BUF_SIZE:
+                self._chunk_last_index = self._current_chunk.num_elements()
+                if self._chunk_last_index <= 1:
+                    raise Error("EOF")
+
+            self._chunk_pos = 0
+            self._current_pos += self._chunk_last_index
+
+        read = self._parse_read(self._chunk_pos, self._current_chunk)
+
+        return read
 
     fn _header_parser(self) raises -> Bool:
         if self._current_chunk[0] != ord("@"):
@@ -136,12 +154,23 @@ fn main() raises:
 
     let vars = argv()
     # var parser = FastqParser(vars[1])
-    var parser = FastqParser("data/9_Swamp_S2B_rbcLa_2019_minq7.fastq")
+    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
     let t1 = time.now()
-    let num: Int
-    let total_bases: Int
-    num, total_bases = parser.parse_all_records()
+    var num: Int = 0
+    var total_bases: Int = 0
+
+    # num, total_bases = parser.parse_all_records()
+    while True:
+        try:
+            let x = parser.next()
+            num += 1
+            total_bases += len(x)
+        except:
+            break
+
     let t2 = time.now()
+
+    print(num)
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num
     print(

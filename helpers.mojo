@@ -129,6 +129,7 @@ fn slice_tensor[
     if start >= end:
         print("start:", start, "end:", end)
         print("Invalid tensor slice, start bigger than or equal to end")
+        print(in_tensor)
         return Tensor[T](0)
 
     if USE_SIMD:
