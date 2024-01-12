@@ -39,6 +39,7 @@ fn find_chr_next_occurance_simd[
     return -1
 
 
+@always_inline
 fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
     """
     Generic Function that returns a python-style tensor slice from start till end (not inclusive).
@@ -153,6 +154,7 @@ fn get_next_line[
 
 
 # TODO: Needs testing
+@always_inline
 fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
     var last_chr = find_chr_last_occurance(in_tensor, read_header)
     if in_tensor[last_chr - 1] == new_line:
