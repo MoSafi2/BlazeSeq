@@ -171,9 +171,9 @@ fn main() raises:
             let x = parser.next()
             num += 1
             total_bases += len(x)
-            writer.get_read(x)
+            #writer.get_read(x)
         except:
-            writer.flush_buffer(50)
+            #writer.flush_buffer(50)
             break
 
     let t2 = time.now()
