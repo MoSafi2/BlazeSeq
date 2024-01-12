@@ -24,15 +24,15 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         QS: Tensor[DType.int8],
     ) raises -> None:
         if SH[0] != ord("@"):
-            #print(SH, "Sequence Header is corrput")
+            # print(SH, "Sequence Header is corrput")
             raise Error("Sequence Header is corrput")
 
         if QH[0] != ord("+"):
-            #print(QH, "Quality Header is corrput")
+            # print(QH, "Quality Header is corrput")
             raise Error("Quality Header is corrput")
 
         if SS.num_elements() != QS.num_elements():
-            #print(SS, QS, "Corrput Lengths")
+            # print(SS, QS, "Corrput Lengths")
             raise Error("Corrput Lengths")
 
         self.SeqHeader = SH
@@ -40,7 +40,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
         if self.QuHeader.num_elements() > 1:
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
-                #print(QH, "Quality Header is corrupt")
+                # print(QH, "Quality Header is corrupt")
                 raise Error("Quality Header is corrupt")
 
         self.SeqStr = SS
@@ -107,6 +107,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
             + self.SeqStr.num_elements()
             + self.QuHeader.num_elements()
             + self.QuStr.num_elements()
+            + 4
         )
 
     @always_inline
@@ -117,11 +118,11 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
     fn _empty_record(inout self):
         self.SeqStr = Tensor[DType.int8](0)
 
-    #BUG in concat record, record does not end with 10
+    # BUG in concat record, record does not end with 10
     @always_inline
     fn __concat_record(self) -> Tensor[DType.int8]:
         var offset = 0
-        var t = Tensor[DType.int8](self.total_length + 4)
+        var t = Tensor[DType.int8](self.total_length)
 
         for i in range(self.SeqHeader.num_elements()):
             t[i] = self.SeqHeader[i]

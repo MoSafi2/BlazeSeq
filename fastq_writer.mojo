@@ -22,36 +22,33 @@ struct FastqWriter(Sized, Stringable):
     fn get_read(inout self, read: FastqRecord, end: Bool = False) raises:
         var in_read = read
 
-        # Goind to town with the record applying all transformations
+        # Goind to town with the record applying all kinds of transformations
+        #Transformation could be applied through a seperate entity which can read, organise, and schedule transformations
         in_read.trim_record()
 
-        if self._buffer_position + in_read.total_length  > self._BUF_SIZE:
+        if self._buffer_position + in_read.total_length > self._BUF_SIZE:
             ## Flushing out the write buffer, starting a new record
-            print("Buffer Position end")
-            print(self._write_buffer)
             self.flush_buffer(self._buffer_position)
 
-        print(in_read.wirte_record())
         write_to_buff(
             in_read.wirte_record(),
             self._write_buffer,
-            self._buffer_position - in_read.total_length,
+            self._buffer_position,
         )
         self._buffer_position += in_read.total_length
 
     @always_inline
     fn flush_buffer(inout self, length: Int) raises:
-        print("flushing")
-        let out_string: String
+
         var out = self._write_buffer
-        # let num = out.num_elements() # Will end up with zeros
-        out_string = String(out._steal_ptr(), length)
-        print(out_string)
+        let out_string = String(out._steal_ptr(), length)
         _ = self._out_handle.seek(self._file_position)
-        # self._out_handle.write(out_string)
-        print("Chunk written")
+        self._out_handle.write(out_string)
         self._file_position += length
-        self._write_buffer = Tensor[DType.int8](self._BUF_SIZE)
+        
+        #No new buffer is created, Just the _buff_pos is resetted
+        self._buffer_position = 0
+
 
     fn __len__(self) -> Int:
         return 15
