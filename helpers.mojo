@@ -1,6 +1,5 @@
-from algorithm import vectorize
+from algorithm import vectorize_unroll
 import time
-from testing import assert_equal, assert_true, assert_false, assert_not_equal
 
 alias simd_width: Int = simdwidthof[DType.int8]()
 alias new_line: Int = ord("\n")
@@ -12,13 +11,12 @@ alias quality_header: Int = ord("+")
 
 
 # BUG with reaching out to garbage
-
-
 @always_inline
 fn find_chr_next_occurance_simd[
     T: DType
 ](in_tensor: Tensor[T], chr: Int, start: Int = 0) -> Int:
-    """Generic Function to find the next occurance of character using SIMD instruction.
+    """
+    Generic Function to find the next occurance of character using SIMD instruction.
     """
 
     let t_slice = in_tensor.num_elements() - start
@@ -32,6 +30,7 @@ fn find_chr_next_occurance_simd[
                 for i in range(len(bool_vec)):
                     if bool_vec[i]:
                         return start + nv + i
+
     for n in range(max_iter * simd_width, t_slice):
         let simd_vec = in_tensor.simd_load[1](start + n)
         if simd_vec == chr:
@@ -41,7 +40,8 @@ fn find_chr_next_occurance_simd[
 
 
 fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
-    """Generic Function that returns a tensor slice from start till end (not inclusive).
+    """
+    Generic Function that returns a python-style tensor slice from start till end (not inclusive).
     """
 
     var out_tensor: Tensor[T] = Tensor[T](end - start)
@@ -51,7 +51,7 @@ fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Te
         let transfer = in_tensor.simd_load[simd_width](start + size)
         out_tensor.simd_store[simd_width](size, transfer)
 
-    vectorize[simd_width, inner](out_tensor.num_elements())
+    vectorize_unroll[simd_width, 5, inner](out_tensor.num_elements())
 
     return out_tensor
 
@@ -71,20 +71,9 @@ fn find_chr_next_occurance_iter[
     return -1
 
 
-# Done!
-# Implemented in Iterative way due to high probablity of small vector search sizes, No benefit of SIMD
-# @always_inline
-# fn find_chr_last_occurance(in_tensor: Tensor[DType.int8], chr: Int) -> Int:
-#     var index = -1
-#     for n in range(0, in_tensor.num_elements(), 1):
-#         if in_tensor[n] == chr:
-#             index = n
-#     return index
-
-
 @always_inline
 fn find_chr_last_occurance(in_tensor: Tensor[DType.int8], chr: Int) -> Int:
-    for n in range(in_tensor.num_elements() -1, -1, -1):
+    for n in range(in_tensor.num_elements() - 1, -1, -1):
         if in_tensor[n] == chr:
             return n
     return -1
@@ -147,7 +136,7 @@ fn get_next_line[
     """
 
     var in_start = start
-    while in_tensor[in_start] == 10:  # Skip leadin \n
+    while in_tensor[in_start] == new_line:  # Skip leadin \n
         print("skipping \n")
         in_start += 1
         if in_start >= in_tensor.num_elements():
@@ -155,21 +144,21 @@ fn get_next_line[
 
     # Temporary Fix for the BUG in the fint_next_chr_SIMD
     if in_tensor.num_elements() - start < 1000:
-        let next_line_pos = find_chr_next_occurance_iter(in_tensor, 10, in_start)
+        let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
         return slice_tensor_iter(in_tensor, in_start, next_line_pos)
 
     if USE_SIMD:
-        let next_line_pos = find_chr_next_occurance_simd(in_tensor, 10, in_start)
+        let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
         return slice_tensor_simd(in_tensor, in_start, next_line_pos)
     else:
-        let next_line_pos = find_chr_next_occurance_iter(in_tensor, 10, in_start)
+        let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
         return slice_tensor_iter(in_tensor, in_start, next_line_pos)
 
 
 # TODO: Needs testing
 fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
     var last_chr = find_chr_last_occurance(in_tensor, read_header)
-    if in_tensor[last_chr - 1] == 10:
+    if in_tensor[last_chr - 1] == new_line:
         return last_chr
     else:
         # print("in again")
@@ -199,13 +188,16 @@ fn find_chr_all_occurances(
                 if bool_vec[i]:
                     holder.push_back(i)
 
-    vectorize[simd_width, inner](t.num_elements())
+    vectorize_unroll[simd_width, 5, inner](t.num_elements())
     return holder
 
 
-# TODO: Add bound and sanity checks.
+# TODO: Add bounds and sanity checks.
 @always_inline
 fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
-    """Copy a small tensor into a larger tensor given an index at the large tensor."""
+    """
+    Copy a small tensor into a larger tensor given an index at the large tensor.
+    Implemented iteratively due to small gain from copying less then 1MB tensor using SIMD.
+    """
     for i in range(src.num_elements()):
         dest[start + i] = src[i]

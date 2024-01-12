@@ -1,11 +1,11 @@
 from fastq_record import FastqRecord
 from helpers import *
-from fastq_writer import FastqWriter
+
+
 
 alias USE_SIMD = True
 
 
-# TODO: Make FastQ Parser an Iterator that can return Fastq Records endlessly
 struct FastqParser:
     var _file_handle: FileHandle
     var _BUF_SIZE: Int
@@ -137,6 +137,7 @@ struct FastqParser:
     fn _parse_read(
         self, inout pos: Int, borrowed chunk: Tensor[DType.int8]
     ) raises -> FastqRecord:
+
         let line1 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
         pos += line1.num_elements() + 1
 
@@ -150,46 +151,3 @@ struct FastqParser:
         pos += line4.num_elements() + 1
 
         return FastqRecord(line1, line2, line3, line4)
-
-
-fn main() raises:
-    import time
-    from math import math
-    from sys import argv
-
-    let vars = argv()
-    # var parser = FastqParser(vars[1])
-    var parser = FastqParser("data/SRR16012060.fastq")
-    var writer = FastqWriter(String("data/out.fq"), 4 * 1024 * 1024)
-    let t1 = time.now()
-    var num: Int = 0
-    var total_bases: Int = 0
-
-    # num, total_bases = parser.parse_all_records()
-    while True:
-        try:
-            let x = parser.next()
-            num += 1
-            total_bases += len(x)
-            writer.get_read(x)
-        except:
-            writer.flush_buffer(50)
-            break
-
-    let t2 = time.now()
-
-    print(num)
-    let t_sec = ((t2 - t1) / 1e9)
-    let s_per_r = t_sec / num
-    print(
-        String(t_sec)
-        + "S spend in parsing: "
-        + num
-        + " records. \neuqaling "
-        + String((s_per_r) * 1e6)
-        + " microseconds/read or "
-        + math.round[DType.float32, 1](1 / s_per_r) * 60
-        + " reads/min"
-        + "total base count is:"
-        + total_bases
-    )

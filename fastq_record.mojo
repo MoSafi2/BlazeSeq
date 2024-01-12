@@ -24,15 +24,12 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         QS: Tensor[DType.int8],
     ) raises -> None:
         if SH[0] != ord("@"):
-            # print(SH, "Sequence Header is corrput")
             raise Error("Sequence Header is corrput")
 
         if QH[0] != ord("+"):
-            # print(QH, "Quality Header is corrput")
             raise Error("Quality Header is corrput")
 
         if SS.num_elements() != QS.num_elements():
-            # print(SS, QS, "Corrput Lengths")
             raise Error("Corrput Lengths")
 
         self.SeqHeader = SH
@@ -40,7 +37,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
         if self.QuHeader.num_elements() > 1:
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
-                # print(QH, "Quality Header is corrupt")
                 raise Error("Quality Header is corrupt")
 
         self.SeqStr = SS
@@ -54,6 +50,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
             + 4  # Addition of 4 \n again
         )
 
+    @always_inline
     fn trim_record(inout self, direction: String = "end", quality_threshold: Int = 20):
         """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt.
         """
@@ -118,7 +115,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
     fn _empty_record(inout self):
         self.SeqStr = Tensor[DType.int8](0)
 
-    # BUG in concat record, record does not end with 10
+
     @always_inline
     fn __concat_record(self) -> Tensor[DType.int8]:
         var offset = 0
@@ -146,11 +143,13 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
         return t
 
+    @always_inline
     fn __str__(self) -> String:
         var concat = self.__concat_record()
         let s = DTypePointer[DType.int8]().alloc(self.total_length)
         memcpy[DType.int8](s, concat._steal_ptr(), self.total_length)
         return String(s, self.total_length)
 
+    @always_inline
     fn __len__(self) -> Int:
         return self.SeqStr.num_elements()
