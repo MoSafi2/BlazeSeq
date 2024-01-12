@@ -5,6 +5,8 @@ from algorithm import unroll
 from fastq_parser import FastqParser
 from fastq_record import FastqRecord
 from fastq_writer import FastqWriter
+from math.math import round
+
 
 alias KB = 1024
 alias MB = 1024 * KB
@@ -34,8 +36,14 @@ fn main() raises:
 
             writer.ingest_read(record)
 
-            if num % 10_000_000 == 0:
+            if num % 1_000_000 == 0:
+                let t = time.now()
+                let reads_p_min: Float64 = (num / ((t - t1) / 1e9)) * 60
+                let rounded = int(round(reads_p_min))
+                print("\33[H")
+                print("\033[J")
                 print("Number of reads processed is :", num)
+                print("Speed:", rounded, " reads/min")
 
         except:
             writer.flush_buffer()
@@ -43,7 +51,6 @@ fn main() raises:
 
     let t2 = time.now()
 
-    print(num)
     let t_sec = ((t2 - t1) / 1e9)
     let s_per_r = t_sec / num
     print(
@@ -53,8 +60,8 @@ fn main() raises:
         + " records. \neuqaling "
         + String((s_per_r) * 1e6)
         + " microseconds/read or "
-        + math.round[DType.float32, 1](1 / s_per_r) * 60
-        + " reads/min"
+        + int(round[DType.float32, 1](1 / s_per_r) * 60)
+        + " reads/min\n"
         + "total base count is:"
         + total_bases
     )
