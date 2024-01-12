@@ -5,8 +5,8 @@
 **This is a 'proof-of-principle' FASTQ file format parser and quality trimmer.** <br>
 
 Modern Next-generation sequencing (NGS) produces tens or hunderds of GBs of FASTQ files per run which should be first, parsed, and preprocessing before further use.   
-```MojoFastTrim🔥``` is naive implementation of a parser and quality trimmer in mojo. it already achieves ***24x*** faster performance than best-performing python parser ```SeqIO``` and 3x speedup to  rust's ```Needletail``` in FASTQ parsing. 
-it is on overage 50% faster than the industry-standard ```Cutadapt``` performancefor FASTQ quality trimming pior to SIMD optimization.
+```MojoFastTrim🔥``` is an implementation of a parser and quality trimmer in [mojo](https://docs.modular.com/mojo/). it achieves ***24x*** faster performance than the best-performing python parser ```SeqIO``` and 3x speedup to  rust's ```Needletail``` in FASTQ parsing. 
+it is on overage 50% faster than the industry-standard ```Cutadapt``` performance for FASTQ quality trimming pior to SIMD optimization.
 
 ```MojoFastTrim🔥``` source code is readable to average python users but using ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively as mojo matures. <br>
 
@@ -57,7 +57,3 @@ FASTQ trimming was carried out with minimum Phred quality of ```20```.
 | 27.7M  | 23.6s                      | 12.95s                     |
 | 169.8M | 182.9s                     | 115.6s                     |
 
-
-
-## Personal experience
-For me, this was a test of the productivity of Mojo🔥 and its ergnomics at this young age. I was absolutly surprised by how easy it was to write in a few hours a high-performance parser and to implement quality trimming in less 200 lines of code (with some workarounds needed). This can be achieved by an average bioinformatician working with python with minimal needs to change his/her way of thinking, problem approach and with minimal changes to the syntax. I think Mojo🔥 will have a bright future ahead.
