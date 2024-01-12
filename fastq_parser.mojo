@@ -160,6 +160,7 @@ fn main() raises:
     let vars = argv()
     # var parser = FastqParser(vars[1])
     var parser = FastqParser("data/M_abscessus_HiSeq.fq")
+    var writer = FastqWriter(String("data/out.fq"), 4 * 1024)
     let t1 = time.now()
     var num: Int = 0
     var total_bases: Int = 0
@@ -170,7 +171,9 @@ fn main() raises:
             let x = parser.next()
             num += 1
             total_bases += len(x)
+            writer.get_read(x)
         except:
+            writer.flush_buffer(50)
             break
 
     let t2 = time.now()

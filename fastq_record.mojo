@@ -117,10 +117,11 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
     fn _empty_record(inout self):
         self.SeqStr = Tensor[DType.int8](0)
 
+    #BUG in concat record, record does not end with 10
     @always_inline
     fn __concat_record(self) -> Tensor[DType.int8]:
         var offset = 0
-        var t = Tensor[DType.int8](self.total_length)
+        var t = Tensor[DType.int8](self.total_length + 4)
 
         for i in range(self.SeqHeader.num_elements()):
             t[i] = self.SeqHeader[i]
