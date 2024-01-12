@@ -28,7 +28,7 @@ struct FastqParser:
         self._current_chunk = read_bytes(
             self._file_handle, self._current_pos, self._BUF_SIZE
         )
-
+        _ = self._header_parser()
         # Seems to be a recurring theme, Extract to a function
         if self._current_chunk.num_elements() == self._BUF_SIZE:
             self._chunk_last_index = find_last_read_header(self._current_chunk)
@@ -38,8 +38,6 @@ struct FastqParser:
         self._current_pos += self._chunk_last_index
 
     fn parse_all_records(inout self, trim: Bool = True) raises -> Tuple[Int, Int]:
-        if not self._header_parser():
-            return Tuple[Int, Int](0, 0)
 
         var total_reads: Int = 0
         var total_bases: Int = 0
@@ -139,7 +137,7 @@ struct FastqParser:
     ) raises -> FastqRecord:
 
         let line1 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
-        pos += line1.num_elements() + 1
+        pos += line1.num_elements() + 1 #Offseting for the trailing \n
 
         let line2 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
         pos += line2.num_elements() + 1
