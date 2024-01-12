@@ -1,5 +1,6 @@
 from fastq_record import FastqRecord
 from helpers import *
+from fastq_writer import FastqWriter
 
 alias USE_SIMD = True
 
@@ -75,6 +76,7 @@ struct FastqParser:
 
         return total_reads, total_bases
 
+    @always_inline
     fn next(inout self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
 
@@ -102,11 +104,13 @@ struct FastqParser:
 
         return read
 
+    @always_inline
     fn _header_parser(self) raises -> Bool:
         if self._current_chunk[0] != ord("@"):
             raise Error("Fastq file should start with valid header '@'")
         return True
 
+    @always_inline
     fn _parse_chunk(self, chunk: Tensor[DType.int8]) raises -> Tuple[Int, Int, Int]:
         var pos = 0
         let read: FastqRecord
@@ -129,6 +133,7 @@ struct FastqParser:
 
         return Tuple[Int, Int, Int](reads, total_length, acutal_length)
 
+    @always_inline
     fn _parse_read(
         self, inout pos: Int, borrowed chunk: Tensor[DType.int8]
     ) raises -> FastqRecord:
