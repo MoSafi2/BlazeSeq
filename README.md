@@ -6,7 +6,7 @@
 
 Modern Next-generation sequencing (NGS) produces tens or hunderds of GBs of FASTQ files per run which should be first, parsed, and preprocessing before further use.   
 ```MojoFastTrim🔥``` is an implementation of a parser and quality trimmer in [mojo](https://docs.modular.com/mojo/). it achieves ***24x*** faster performance than the best-performing python parser ```SeqIO``` and 3x speedup to  rust's ```Needletail``` in FASTQ parsing. 
-it is on overage 50% faster than the industry-standard ```Cutadapt``` performance for FASTQ quality trimming pior to SIMD optimization.
+it is on overage **2x** faster than the industry-standard ```Cutadapt``` performance for FASTQ quality trimming pior to SIMD optimization.
 
 ```MojoFastTrim🔥``` source code is readable to average python users but using ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively as mojo matures. <br>
 
@@ -51,9 +51,9 @@ FASTQ trimming was carried out with minimum Phred quality of ```20```.
 ### FASTQ quality Trimming
 | reads  | Cutadapt <br>  (Cython, C) | MojoFastqTrim <br> (Mojo🔥)|
 | ------ | -------------------------- | -------------------------- |
-| 40k    | 0.075s                     | 0.23s                      |
-| 5.5M   | 6.1s                       | 4.1s                       |
-| 12.2M  | 12.8s                      | 8.2s                       |
-| 27.7M  | 23.6s                      | 12.95s                     |
-| 169.8M | 182.9s                     | 115.6s                     |
+| 40k    | 0.075s                     | 0.74s                      |
+| 5.5M   | 6.1s                       | 2.8s                       |
+| 12.2M  | 12.8s                      | 6.9s                       |
+| 27.7M  | 23.6s                      | 10.4s                      |
+| 169.8M | 182.9s                     | 101.6s                     |
 

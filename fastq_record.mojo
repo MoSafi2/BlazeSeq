@@ -28,12 +28,15 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         QS: Tensor[DType.int8],
     ) raises -> None:
         if SH[0] != ord("@"):
+            print("Sequence Header is corrput")
             raise Error("Sequence Header is corrput")
 
         if QH[0] != ord("+"):
+            print("Quality Header is corrput")
             raise Error("Quality Header is corrput")
 
         if SS.num_elements() != QS.num_elements():
+            print("Corrput Lengths")
             raise Error("Corrput Lengths")
 
         self.SeqHeader = SH
@@ -41,6 +44,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
         if self.QuHeader.num_elements() > 1:
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
+                print("Quality Header is corrupt")
                 raise Error("Quality Header is corrupt")
 
         self.SeqStr = SS
