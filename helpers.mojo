@@ -19,7 +19,6 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
     return -1
 
 
-# BUG with reaching out to garbage
 @always_inline
 fn find_chr_next_occurance_simd[
     T: DType
@@ -42,8 +41,6 @@ fn find_chr_next_occurance_simd[
             return i
 
     return -1
-
-
 
 
 
@@ -150,10 +147,6 @@ fn get_next_line[
         if in_start >= in_tensor.num_elements():
             return Tensor[T]()
 
-    # # # Temporary Fix for the BUG in the fint_next_chr_SIMD
-    # if in_tensor.num_elements() - start < 1000:
-    #     let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
-    #     return slice_tensor_iter(in_tensor, in_start, next_line_pos)
 
     @parameter
     if USE_SIMD:

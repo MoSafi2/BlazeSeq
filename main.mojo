@@ -33,7 +33,7 @@ fn main() raises:
 
             # Going to town with the record applying all kinds of transformations
             # Transformation could be applied through a seperate entity which can read, organise, and schedule transformations
-            #record.trim_record(quality_threshold=20, direction="end")
+            record.trim_record(quality_threshold=20, direction="end")
             writer.ingest_read(record)
 
             if num % 1_000_000 == 0:
