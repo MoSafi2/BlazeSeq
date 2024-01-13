@@ -10,6 +10,7 @@ alias quality_header: Int = ord("+")
 
 ######################### Core functions ###################################
 
+
 @always_inline
 fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
     for i in range(simd_width):
@@ -41,6 +42,10 @@ fn find_chr_next_occurance_simd[
             return i
 
     return -1
+
+
+
+
 
 
 @always_inline
@@ -122,6 +127,7 @@ fn slice_tensor[
 ](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
     if start >= end:
         return Tensor[T](0)
+
     @parameter
     if USE_SIMD:
         return slice_tensor_simd(in_tensor, start, end)
@@ -144,10 +150,11 @@ fn get_next_line[
         if in_start >= in_tensor.num_elements():
             return Tensor[T]()
 
-    # Temporary Fix for the BUG in the fint_next_chr_SIMD
-    if in_tensor.num_elements() - start < 1000:
-        let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
-        return slice_tensor_iter(in_tensor, in_start, next_line_pos)
+    # # # Temporary Fix for the BUG in the fint_next_chr_SIMD
+    # if in_tensor.num_elements() - start < 1000:
+    #     let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+    #     return slice_tensor_iter(in_tensor, in_start, next_line_pos)
+
     @parameter
     if USE_SIMD:
         let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)

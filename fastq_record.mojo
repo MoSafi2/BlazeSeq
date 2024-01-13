@@ -9,7 +9,6 @@ alias read_header: Int = ord("@")
 alias quality_header: Int = ord("+")
 
 
-
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable):
     """Struct that represent a single FastaQ record."""
@@ -121,7 +120,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
     @always_inline
     fn _empty_record(inout self):
-
         self.SeqStr = Tensor[DType.int8](0)
         self.SeqHeader = Tensor[DType.int8](1)
         self.SeqHeader[0] = read_header
@@ -129,7 +127,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         self.QuHeader = Tensor[DType.int8](1)
         self.QuHeader[0] = quality_header
 
-        self.total_length = 6 #Minimum length of a valid empty single-line FASTQ 
+        self.total_length = 6  # Minimum length of a valid empty single-line FASTQ
 
     @always_inline
     fn __concat_record(self) -> Tensor[DType.int8]:
