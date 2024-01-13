@@ -15,7 +15,8 @@ alias GB = 1024 * MB
 
 fn main() raises:
     let vars = argv()
-    var parser = FastqParser(vars[1], 1 * MB)
+    #var parser = FastqParser(vars[1], 1 * MB)
+    var parser = FastqParser("data/M_abscessus_HiSeq.fq", 1 * MB)
     var writer = FastqWriter(String("data/out.fq"), 1 * MB)
     var num: Int = 0
     var total_bases: Int = 0

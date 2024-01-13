@@ -118,7 +118,7 @@ fn slice_tensor[
 ](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
     if start >= end:
         return Tensor[T](0)
-
+    @parameter
     if USE_SIMD:
         return slice_tensor_simd(in_tensor, start, end)
     else:
@@ -144,7 +144,7 @@ fn get_next_line[
     if in_tensor.num_elements() - start < 1000:
         let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
         return slice_tensor_iter(in_tensor, in_start, next_line_pos)
-
+    @parameter
     if USE_SIMD:
         let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
         return slice_tensor_simd(in_tensor, in_start, next_line_pos)
@@ -154,7 +154,6 @@ fn get_next_line[
 
 
 # TODO: Needs testing
-@always_inline
 fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
     var last_chr = find_chr_last_occurance(in_tensor, read_header)
     if in_tensor[last_chr - 1] == new_line:
