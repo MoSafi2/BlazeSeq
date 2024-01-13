@@ -1,5 +1,6 @@
-from algorithm import vectorize_unroll
+import math
 import time
+from algorithm import vectorize_unroll
 
 alias simd_width: Int = simdwidthof[DType.int8]()
 alias new_line: Int = ord("\n")
@@ -8,6 +9,13 @@ alias quality_header: Int = ord("+")
 
 
 ######################### Core functions ###################################
+
+@always_inline
+fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
+    for i in range(simd_width):
+        if v[i]:
+            return i
+    return -1
 
 
 # BUG with reaching out to garbage
@@ -19,22 +27,18 @@ fn find_chr_next_occurance_simd[
     Generic Function to find the next occurance of character using SIMD instruction.
     """
 
-    let t_slice = in_tensor.num_elements() - start
-    let max_iter = t_slice // simd_width
+    let len = in_tensor.num_elements() - start
+    let aligned = start + math.align_down(len, simd_width)
 
-    if max_iter > 0:
-        for nv in range(0, max_iter * simd_width, simd_width):
-            let simd_vec = in_tensor.simd_load[simd_width](start + nv)
-            let bool_vec = simd_vec == chr
-            if bool_vec.reduce_or():
-                for i in range(len(bool_vec)):
-                    if bool_vec[i]:
-                        return start + nv + i
+    for s in range(start, aligned, simd_width):
+        let v = in_tensor.simd_load[simd_width](s)
+        let mask = v == chr
+        if mask.reduce_or():
+            return s + arg_true(mask)
 
-    for n in range(max_iter * simd_width, t_slice):
-        let simd_vec = in_tensor.simd_load[1](start + n)
-        if simd_vec == chr:
-            return start + max_iter * simd_width + n
+    for i in range(aligned, in_tensor.num_elements()):
+        if in_tensor[i] == chr:
+            return i
 
     return -1
 
