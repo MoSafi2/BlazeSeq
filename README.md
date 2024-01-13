@@ -5,7 +5,7 @@
 **This is a 'proof-of-principle' FASTQ file format parser and quality trimmer.** <br>
 
 Modern Next-generation sequencing (NGS) produces tens or hunderds of GBs of FASTQ files per run which should be first, parsed, and preprocessing before further use.   
-```MojoFastTrim🔥``` is an implementation of a parser and quality trimmer in [mojo](https://docs.modular.com/mojo/). it achieves ***24x*** faster performance than the best-performing python parser ```SeqIO``` and 3x speedup to  rust's ```Needletail``` in FASTQ parsing. 
+```MojoFastTrim🔥``` is an implementation of a parser and quality trimmer in [mojo](https://docs.modular.com/mojo/). it achieves ***24x*** faster performance than the best-performing python parser ```SeqIO``` and **3x** speedup to  rust's ```Needletail``` in FASTQ parsing. 
 it is on overage **2x** faster than the industry-standard ```Cutadapt``` performance for FASTQ quality trimming pior to SIMD optimization.
 
 ```MojoFastTrim🔥``` source code is readable to average python users but using ```struct``` instead of ```class``` and employing variable types. There is a lot of room form improvement using SIMD quality windows instead of rolling sums, and  parallerism for record trimming to achieve everybit of performance and I may implement those progressively as mojo matures. <br>
