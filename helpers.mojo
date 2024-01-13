@@ -133,6 +133,29 @@ fn slice_tensor[
 
 
 # TODO: Test
+fn find_chr_first_occurance(
+    borrowed in_tensor: Tensor[DType.int8], chr: String = "@", start: Int = 0
+) -> Int:
+    let in_chr = ord(chr)
+
+    alias simd_width: Int = simdwidthof[DType.int8]()
+    for nv in range(start, in_tensor.num_elements(), simd_width):
+        let simd_vec = in_tensor.simd_load[simd_width](nv)
+        let bool_vec = simd_vec == in_chr
+        if bool_vec.reduce_or():
+            for i in range(len(bool_vec)):
+                if bool_vec[i]:
+                    return i
+
+    for n in range(
+        simd_width * (in_tensor.num_elements() // simd_width), in_tensor.num_elements()
+    ):
+        let simd_vec = in_tensor.simd_load[1](n)
+        if simd_vec == in_chr:
+            return n
+    return -1
+
+
 @always_inline
 fn get_next_line[
     T: DType, USE_SIMD: Bool = True
@@ -175,6 +198,10 @@ fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
 
 # TODO: Re-write in terms of find_next_chr
 @always_inline
+fn find_chr_all_occurances(
+    t: Tensor[DType.int8], chr: String = "@"
+) -> DynamicVector[Int]:
+    var holder = DynamicVector[Int](capacity=(t.num_elements() / 200).to_int())
 fn find_chr_all_occurances(
     t: Tensor[DType.int8], chr: String = "@"
 ) -> DynamicVector[Int]:

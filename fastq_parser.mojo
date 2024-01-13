@@ -133,7 +133,8 @@ struct FastqParser:
 
     @always_inline
     fn _parse_read(
-        self, inout pos: Int, borrowed chunk: Tensor[DType.int8]
+
+        self, inout pos: Int, chunk: Tensor[DType.int8]
     ) raises -> FastqRecord:
         let line1 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
         pos += line1.num_elements() + 1  # Offseting for the trailing \n
@@ -146,5 +147,9 @@ struct FastqParser:
 
         let line4 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
         pos += line4.num_elements() + 1
+
+        print(line4)
+
+        let read = FastqRecord(line1, line2, line3, line4)
 
         return FastqRecord(line1, line2, line3, line4)
