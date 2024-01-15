@@ -43,8 +43,6 @@ fn find_chr_next_occurance_simd[
     return -1
 
 
-
-
 @always_inline
 fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
     """
@@ -170,7 +168,6 @@ fn get_next_line[
         if in_start >= in_tensor.num_elements():
             return Tensor[T]()
 
-
     @parameter
     if USE_SIMD:
         let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
@@ -197,27 +194,27 @@ fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
 
 
 # TODO: Re-write in terms of find_next_chr
+# BUG: Buggy at current impl
 @always_inline
-fn find_chr_all_occurances(
-    t: Tensor[DType.int8], chr: String = "@"
-) -> DynamicVector[Int]:
-    var holder = DynamicVector[Int](capacity=(t.num_elements() / 200).to_int())
-fn find_chr_all_occurances(
-    t: Tensor[DType.int8], chr: String = "@"
-) -> DynamicVector[Int]:
-    var holder = DynamicVector[Int](capacity=(t.num_elements() / 200).to_int())
-    let in_chr = ord(chr)
+fn find_chr_all_occurances[
+    T: DType
+](in_tensor: Tensor[T], chr: Int, spacing: Int) -> DynamicVector[Int]:
+
+
+    var holder = DynamicVector[Int](
+        capacity=(in_tensor.num_elements() / spacing).to_int()
+    )
 
     @parameter
     fn inner[simd_width: Int](size: Int):
-        let simd_vec = t.simd_load[simd_width](size)
-        let bool_vec = simd_vec == in_chr
+        let simd_vec = in_tensor.simd_load[simd_width](size)
+        let bool_vec = simd_vec == chr
         if bool_vec.reduce_or():
             for i in range(len(bool_vec)):
                 if bool_vec[i]:
                     holder.push_back(i)
 
-    vectorize_unroll[simd_width, 5, inner](t.num_elements())
+    vectorize_unroll[simd_width, 5, inner](in_tensor.num_elements())
     return holder
 
 
