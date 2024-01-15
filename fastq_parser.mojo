@@ -74,6 +74,34 @@ struct FastqParser:
 
         return total_reads, total_bases
 
+    fn parse_parallel(inout self, num_workers: Int) raises:
+        self._current_chunk = read_bytes(
+            self._file_handle, self._current_pos, num_workers * self._BUF_SIZE
+        )
+
+        var last_read_vector = Tensor[DType.int32](num_workers + 1)
+        var bg_index = 0
+        var count = 1
+        for index in range(
+            self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
+        ):
+            let _slice = slice_tensor(self._current_chunk, bg_index, index)
+            let header = find_last_read_header(_slice) + bg_index
+            last_read_vector[count] = header
+            bg_index = index
+            count += 1
+
+        for i in range(last_read_vector.num_elements() - 1):
+            print(
+                slice_tensor(
+                    self._current_chunk,
+                    last_read_vector[i].to_int(),
+                    last_read_vector[i + 1].to_int(),
+                )
+            )
+
+        # Implement the function to parallerlized here
+
     @always_inline
     fn next(inout self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
@@ -148,3 +176,8 @@ struct FastqParser:
         pos += line4.num_elements() + 1
 
         return FastqRecord(line1, line2, line3, line4)
+
+
+fn main() raises:
+    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
+    parser.parse_parallel(5)
