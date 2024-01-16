@@ -1,5 +1,6 @@
 from fastq_record import FastqRecord
 from helpers import *
+from algorithm.functional import parallelize
 
 
 alias USE_SIMD = True
@@ -91,16 +92,29 @@ struct FastqParser:
             bg_index = index
             count += 1
 
-        for i in range(last_read_vector.num_elements() - 1):
-            print(
-                slice_tensor(
-                    self._current_chunk,
-                    last_read_vector[i].to_int(),
-                    last_read_vector[i + 1].to_int(),
-                )
-            )
+        # for i in range(last_read_vector.num_elements() - 1):
+        #     print(
+        #         slice_tensor(
+        #             self._current_chunk,
+        #             last_read_vector[i].to_int(),
+        #             last_read_vector[i + 1].to_int(),
+        #         )
+        #     )
 
-        # Implement the function to parallerlized here
+        let chunk = self._current_chunk
+
+        # print(last_read_vector)
+
+        var x = DynamicVector[Int](capacity=3)
+        x.push_back(5)
+
+        print(x[0])
+
+        @parameter
+        fn _parse_chunk_inner(thread: Int):
+            print(x[0])
+
+        parallelize[_parse_chunk_inner](1)
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
@@ -161,7 +175,6 @@ struct FastqParser:
 
     @always_inline
     fn _parse_read(
-
         self, inout pos: Int, chunk: Tensor[DType.int8]
     ) raises -> FastqRecord:
         let line1 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
