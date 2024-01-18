@@ -1,9 +1,14 @@
 from fastq_record import FastqRecord
 from helpers import *
 from algorithm.functional import parallelize
+from os.atomic import Atomic
 
 
-alias USE_SIMD = True
+"""Module to parse fastq. It has three functoins, Parse all records (single core), parse parallel (multi-core), next(lazy next read).
+Consider merge parse_all_records() to become parse_parallel(1)"""
+
+
+alias USE_SIMD = False
 
 
 struct FastqParser:
@@ -75,37 +80,68 @@ struct FastqParser:
 
         return total_reads, total_bases
 
-    fn parse_parallel(inout self, num_workers: Int) raises:
-        self._current_chunk = read_bytes(
-            self._file_handle, self._current_pos, num_workers * self._BUF_SIZE
-        )
+    # Simplify the structure of this things, its becoming un-mangeable
+    # BUG: in last chunk
+    fn parse_parallel(inout self, num_workers: Int) raises -> Tuple[Int64, Int64]:
+        let reads = Atomic[DType.int64](0)
+        let total_length = Atomic[DType.int64](0)
+        var break_: Bool = False
 
-        var last_read_vector = Tensor[DType.int32](num_workers + 1)
-        var bg_index = 0
-        var count = 1
-        for index in range(
-            self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
-        ):
-            let _slice = slice_tensor(self._current_chunk, bg_index, index)
-            let header = find_last_read_header(_slice) + bg_index
-            last_read_vector[count] = header
-            bg_index = index
-            count += 1
+        self._current_pos = 0
 
-        @parameter
-        fn _parse_chunk_inner(thread: Int):
-            print(
-                slice_tensor(
+        while True:
+            self._current_chunk = read_bytes(
+                self._file_handle, self._current_pos, num_workers * self._BUF_SIZE
+            )
+
+            var last_read_vector = Tensor[DType.int32](num_workers + 1)
+            var bg_index = 0
+            var count = 1
+            for index in range(
+                self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
+            ):
+                # Not really needed, right a function that finds last Header in a bounded range.
+                let _slice = slice_tensor(self._current_chunk, bg_index, index)
+                let header = find_last_read_header(_slice) + bg_index
+                last_read_vector[count] = header
+                bg_index = index
+                count += 1
+
+            @parameter
+            fn _parse_chunk_inner(thread: Int):
+                let t1: Int
+                let t2: Int
+                let t3: Int
+                let inner_chunk = slice_tensor(
                     self._current_chunk,
                     last_read_vector[thread].to_int(),
                     last_read_vector[thread + 1].to_int(),
                 )
-            )
+                try:
+                    t1, t2, t3 = self._parse_chunk(inner_chunk)
+                    reads += t1
+                    total_length += t2
 
-        parallelize[_parse_chunk_inner](num_workers)
+                except:
+                    break_ = True
 
-        _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
-        print(self._current_chunk)
+            parallelize[_parse_chunk_inner](num_workers)
+            _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
+
+            if self._current_chunk.num_elements() == self._BUF_SIZE * num_workers:
+                self._chunk_last_index = find_last_read_header(self._current_chunk)
+            else:
+                self._chunk_last_index = self._current_chunk.num_elements()
+
+            self._current_pos += self._chunk_last_index
+
+            if self._current_chunk.num_elements() == 0:
+                break
+
+            if break_:
+                break
+
+        return reads.value, total_length.value
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
@@ -157,7 +193,7 @@ struct FastqParser:
                 acutal_length += read.total_length
             except:
                 print("falied read")
-                pass
+                raise Error()
 
             if pos >= chunk.num_elements():
                 break
@@ -180,13 +216,14 @@ struct FastqParser:
         let line4 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
         pos += line4.num_elements() + 1
 
-        print(line4)
-
         let read = FastqRecord(line1, line2, line3, line4)
 
         return FastqRecord(line1, line2, line3, line4)
 
 
 fn main() raises:
-    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
-    parser.parse_parallel(5)
+    var parser = FastqParser("data/SRR4381933_1.fastq")
+    let t1: Int64
+    let t2: Int64
+    t1, t2 = parser.parse_parallel(16)
+    print(t1, t2)
