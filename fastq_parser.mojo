@@ -8,7 +8,7 @@ from os.atomic import Atomic
 Consider merge parse_all_records() to become parse_parallel(1)"""
 
 
-alias USE_SIMD = False
+alias USE_SIMD = True
 
 
 struct FastqParser:
