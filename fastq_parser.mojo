@@ -92,29 +92,20 @@ struct FastqParser:
             bg_index = index
             count += 1
 
-        # for i in range(last_read_vector.num_elements() - 1):
-        #     print(
-        #         slice_tensor(
-        #             self._current_chunk,
-        #             last_read_vector[i].to_int(),
-        #             last_read_vector[i + 1].to_int(),
-        #         )
-        #     )
-
-        let chunk = self._current_chunk
-
-        # print(last_read_vector)
-
-        var x = DynamicVector[Int](capacity=3)
-        x.push_back(5)
-
-        print(x[0])
-
         @parameter
         fn _parse_chunk_inner(thread: Int):
-            print(x[0])
+            print(
+                slice_tensor(
+                    self._current_chunk,
+                    last_read_vector[thread].to_int(),
+                    last_read_vector[thread + 1].to_int(),
+                )
+            )
 
-        parallelize[_parse_chunk_inner](1)
+        parallelize[_parse_chunk_inner](num_workers)
+
+        _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
+        print(self._current_chunk)
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
