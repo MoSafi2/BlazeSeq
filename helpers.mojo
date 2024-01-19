@@ -84,6 +84,15 @@ fn find_chr_last_occurance(in_tensor: Tensor[DType.int8], chr: Int) -> Int:
     return -1
 
 
+fn find_last_chr_bounded[
+    T: DType
+](in_tensor: Tensor[T], start: Int, end: Int, chr: Int = 64) -> Int:
+    for i in range(end - 1, start - 1, -1):
+        if in_tensor[i] == chr:
+            return i
+    return -1
+
+
 # Done!
 @always_inline
 fn slice_tensor_iter[
@@ -183,7 +192,6 @@ fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
     if in_tensor[last_chr - 1] == new_line:
         return last_chr
     else:
-        # print("in again")
         let in_again = slice_tensor(in_tensor, 0, last_chr - 1)
         if in_again.num_elements() < 3:
             return -1
@@ -193,14 +201,34 @@ fn find_last_read_header(in_tensor: Tensor[DType.int8]) -> Int:
     return last_chr
 
 
+fn find_last_read_header_bounded(
+    in_tensor: Tensor[DType.int8], start: Int = 0, end: Int = -1
+) -> Int:
+    var end_inner: Int
+    if end == -1:
+        end_inner = in_tensor.num_elements()
+    else:
+        end_inner = end
+
+    var last_chr = find_last_chr_bounded(in_tensor, start, end_inner)
+    if in_tensor[last_chr - 1] == 10:
+        return last_chr
+    else:
+        end_inner = end_inner - 1
+        if (end_inner - start) < 3:
+            return -1
+
+        print("in again")
+        last_chr = find_last_read_header_bounded(in_tensor, start, end_inner)
+    return last_chr
+
+
 # TODO: Re-write in terms of find_next_chr
 # BUG: Buggy at current impl
 @always_inline
 fn find_chr_all_occurances[
     T: DType
 ](in_tensor: Tensor[T], chr: Int, spacing: Int) -> DynamicVector[Int]:
-
-
     var holder = DynamicVector[Int](
         capacity=(in_tensor.num_elements() / spacing).to_int()
     )

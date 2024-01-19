@@ -80,13 +80,10 @@ struct FastqParser:
 
         return total_reads, total_bases
 
-    # Simplify the structure of this things, its becoming un-mangeable
-    # BUG: in last chunk
-    fn parse_parallel(inout self, num_workers: Int) raises -> Tuple[Int64, Int64]:
-        let reads = Atomic[DType.int64](0)
-        let total_length = Atomic[DType.int64](0)
-        var break_: Bool = False
-
+    #BUG: Over estimation of the number of reads with threads > 1
+    fn parse_parallel(inout self, num_workers: Int) raises -> Tensor[DType.int64]:
+        var reads = Tensor[DType.int64](num_workers)
+        var total_length = Tensor[DType.int64](num_workers)
         self._current_pos = 0
 
         while True:
@@ -94,54 +91,60 @@ struct FastqParser:
                 self._file_handle, self._current_pos, num_workers * self._BUF_SIZE
             )
 
-            var last_read_vector = Tensor[DType.int32](num_workers + 1)
-            var bg_index = 0
-            var count = 1
-            for index in range(
-                self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
-            ):
-                # Not really needed, right a function that finds last Header in a bounded range.
-                let _slice = slice_tensor(self._current_chunk, bg_index, index)
-                let header = find_last_read_header(_slice) + bg_index
-                last_read_vector[count] = header
-                bg_index = index
-                count += 1
+            if self._current_chunk.num_elements() == 0:
+                break
 
-            @parameter
-            fn _parse_chunk_inner(thread: Int):
-                let t1: Int
-                let t2: Int
-                let t3: Int
-                let inner_chunk = slice_tensor(
-                    self._current_chunk,
-                    last_read_vector[thread].to_int(),
-                    last_read_vector[thread + 1].to_int(),
-                )
-                try:
-                    t1, t2, t3 = self._parse_chunk(inner_chunk)
-                    reads += t1
-                    total_length += t2
+            if self._current_chunk.num_elements() == self._BUF_SIZE * num_workers:
+                var last_read_vector = Tensor[DType.int32](num_workers + 1)
+                var bg_index = 0
+                var count = 1
+                for index in range(
+                    self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
+                ):
+                    # Not really needed, right a function that finds last Header in a bounded range.
+                    let header = find_last_read_header_bounded(
+                        self._current_chunk, bg_index, bg_index + self._BUF_SIZE
+                    )
+                    last_read_vector[count] = header
+                    bg_index = header
+                    count += 1
 
-                except:
-                    break_ = True
+                @parameter
+                fn _parse_chunk_inner(thread: Int):
+                    let t1: Int
+                    let t2: Int
+                    let t3: Int
 
-            parallelize[_parse_chunk_inner](num_workers)
-            _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
+                    try:
+                        t1, t2, t3 = self._parse_chunk(
+                            self._current_chunk,
+                            last_read_vector[thread].to_int(),
+                            last_read_vector[thread + 1].to_int(),
+                        )
+                        reads[thread] += t1
+                        total_length[thread] += t2
+                    except:
+                        pass
 
+                parallelize[_parse_chunk_inner](num_workers)
+                _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
+
+            else:
+                var t1: Int = 0
+                var t2: Int = 0
+                var t3: Int = 0
+                t1, t2, t3 = self._parse_chunk(self._current_chunk)
+                reads[0] += t1
+                total_length[0] += t2
+
+            # Recussing theme, extract to a seperate function
             if self._current_chunk.num_elements() == self._BUF_SIZE * num_workers:
                 self._chunk_last_index = find_last_read_header(self._current_chunk)
             else:
                 self._chunk_last_index = self._current_chunk.num_elements()
-
             self._current_pos += self._chunk_last_index
 
-            if self._current_chunk.num_elements() == 0:
-                break
-
-            if break_:
-                break
-
-        return reads.value, total_length.value
+        return reads
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
@@ -178,7 +181,15 @@ struct FastqParser:
         return True
 
     @always_inline
-    fn _parse_chunk(self, chunk: Tensor[DType.int8]) raises -> Tuple[Int, Int, Int]:
+    fn _parse_chunk(
+        self, chunk: Tensor[DType.int8], start: Int = 0, end: Int = -1
+    ) raises -> Tuple[Int, Int, Int]:
+        let end_inner: Int
+        if end == -1:
+            end_inner = chunk.num_elements()
+        else:
+            end_inner = end
+
         var pos = 0
         let read: FastqRecord
         var reads: Int = 0
@@ -195,7 +206,7 @@ struct FastqParser:
                 print("falied read")
                 raise Error()
 
-            if pos >= chunk.num_elements():
+            if pos >= end_inner - start:
                 break
 
         return Tuple[Int, Int, Int](reads, total_length, acutal_length)
@@ -222,8 +233,18 @@ struct FastqParser:
 
 
 fn main() raises:
-    var parser = FastqParser("data/SRR4381933_1.fastq")
-    let t1: Int64
-    let t2: Int64
-    t1, t2 = parser.parse_parallel(16)
-    print(t1, t2)
+    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
+
+    var t1: Int64 = 0
+    let out: Tensor[DType.int64]
+    out = parser.parse_parallel(6)
+    for i in range(out.num_elements()):
+        t1 += out[i]
+    print(t1, out)
+
+
+    # let t1: Int
+    # let t2: Int
+    # t1, t2 = parser.parse_all_records()
+    # print(t1)
+

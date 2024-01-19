@@ -33,7 +33,6 @@ struct FastqWriter:
         )
         self._buffer_position += in_read.total_length
 
-
     @always_inline
     fn flush_buffer(inout self) raises:
         var out = self._write_buffer
