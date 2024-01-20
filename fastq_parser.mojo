@@ -3,9 +3,10 @@ from helpers import *
 from algorithm.functional import parallelize
 from os.atomic import Atomic
 
-
 """Module to parse fastq. It has three functoins, Parse all records (single core), parse parallel (multi-core), next(lazy next read).
 Consider merge parse_all_records() to become parse_parallel(1)"""
+
+
 
 
 alias USE_SIMD = True
@@ -191,7 +192,7 @@ struct FastqParser:
             end_inner = end
 
         var pos = 0
-        let read: FastqRecord
+        var read: FastqRecord
         var reads: Int = 0
         var total_length: Int = 0
         var acutal_length: Int = 0
@@ -199,6 +200,7 @@ struct FastqParser:
         while True:
             try:
                 read = self._parse_read(pos, chunk)
+                #read.trim_record()
                 reads += 1
                 total_length += len(read)
                 acutal_length += read.total_length
@@ -233,18 +235,18 @@ struct FastqParser:
 
 
 fn main() raises:
-    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
+    var parser = FastqParser("data/SRR4381933_1.fastq")
 
-    var t1: Int64 = 0
-    let out: Tensor[DType.int64]
-    out = parser.parse_parallel(6)
-    for i in range(out.num_elements()):
-        t1 += out[i]
-    print(t1, out)
-
-
-    # let t1: Int
-    # let t2: Int
-    # t1, t2 = parser.parse_all_records()
+    # var t1: Int64 = 0
+    # let out: Tensor[DType.int64]
+    # out = parser.parse_parallel(16)
+    # for i in range(out.num_elements()):
+    #     t1 += out[i]
     # print(t1)
+
+
+    let t1: Int
+    let t2: Int
+    t1, t2 = parser.parse_all_records()
+    print(t1)
 
