@@ -102,7 +102,7 @@ struct FastqParser:
                     self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
                 ):
                     # Not really needed, right a function that finds last Header in a bounded range.
-                    let header = find_last_read_header_bounded(
+                    let header = find_last_read_header(
                         self._current_chunk, bg_index, bg_index + self._BUF_SIZE
                     )
                     last_read_vector[count] = header
