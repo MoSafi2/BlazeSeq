@@ -171,8 +171,6 @@ fn get_next_line[
 ############################# Fastq recod-related Ops ################################
 
 
-# TODO: Test
-# BUG: It makes a lot of no needed calls
 fn find_last_read_header(
     in_tensor: Tensor[DType.int8], start: Int = 0, end: Int = -1
 ) -> Int:
@@ -186,10 +184,9 @@ fn find_last_read_header(
     if in_tensor[last_chr - 1] == new_line:
         return last_chr
     else:
-        end_inner = end_inner - 1
+        end_inner = last_chr
         if (end_inner - start) < 4:
             return -1
-        print("in again")
         last_chr = find_last_read_header(in_tensor, start, end_inner)
     return last_chr
 
