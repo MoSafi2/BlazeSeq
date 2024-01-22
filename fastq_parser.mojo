@@ -103,7 +103,7 @@ struct FastqParser:
                     self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
                 ):
                     # Not really needed, right a function that finds last Header in a bounded range.
-                    let header = find_last_read_header_bounded(
+                    let header = find_last_read_header(
                         self._current_chunk, bg_index, bg_index + self._BUF_SIZE
                     )
                     last_read_vector[count] = header
@@ -239,7 +239,7 @@ fn main() raises:
 
     # var t1: Int64 = 0
     # let out: Tensor[DType.int64]
-    # out = parser.parse_parallel(16)
+    # out = parser.parse_parallel(18)
     # for i in range(out.num_elements()):
     #     t1 += out[i]
     # print(t1)
