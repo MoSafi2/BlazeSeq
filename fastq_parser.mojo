@@ -237,7 +237,7 @@ fn main() raises:
 
     var t1: Int64 = 0
     let out: Tensor[DType.int64]
-    out = parser.parse_parallel(6)
+    out = parser.parse_parallel(8)
     for i in range(out.num_elements()):
         t1 += out[i]
     print(t1, out)
