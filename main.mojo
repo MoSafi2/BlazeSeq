@@ -15,9 +15,9 @@ alias GB = 1024 * MB
 
 fn main() raises:
     let vars = argv()
-    var parser = FastqParser(vars[1], 4 * MB)
-    #var parser = FastqParser("data/M_abscessus_HiSeq.fq", 4 * MB)
-    var writer = FastqWriter(String("data/out.fq"), 4 * MB)
+    #var parser = FastqParser(vars[1], 4 * MB)
+    var parser = FastqParser("data/M_abscessus_HiSeq.fq", 4 * MB)
+    #var writer = FastqWriter(String("data/out.fq"), 4 * MB)
     var num: Int = 0
     var total_bases: Int = 0
 
@@ -33,8 +33,8 @@ fn main() raises:
 
             # Going to town with the record applying all kinds of transformations
             # Transformation could be applied through a seperate entity which can read, organise, and schedule transformations
-            record.trim_record(quality_threshold=20, direction="end")
-            writer.ingest_read(record)
+            #record.trim_record(quality_threshold=20, direction="end")
+            #writer.ingest_read(record)
 
             if num % 1_000_000 == 0:
                 let t = time.now()
@@ -46,7 +46,7 @@ fn main() raises:
                 print("Speed:", rounded, " reads/min")
 
         except:
-            writer.flush_buffer()
+            #writer.flush_buffer()
             break
 
     let t2 = time.now()
