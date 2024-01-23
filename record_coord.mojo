@@ -3,7 +3,6 @@ The read can be as following, Start [U64], Header Offset, Read offset Int32, Qu 
 Prasing can be done on 
 """
 
-alias USE_SIMD = True
 alias new_line: Int = ord("\n")
 alias read_header: Int = ord("@")
 alias quality_header: Int = ord("+")

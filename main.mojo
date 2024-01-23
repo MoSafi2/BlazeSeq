@@ -13,11 +13,11 @@ alias GB = 1024 * MB
 
 fn main() raises:
     let vars = argv()
-    var parser = FastqParser(vars[1], 1024 * KB)
+    var parser = FastqParser(vars[1], 64 * KB)
     var num: Int = 0
     var total_bases: Int = 0
     let t1 = time.now()
-    
+
     while True:
         try:
             let record = parser.next()
