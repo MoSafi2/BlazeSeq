@@ -17,7 +17,7 @@ fn main() raises:
     let vars = argv()
     #var parser = FastqParser(vars[1], 4 * MB)
     var parser = FastqParser("data/M_abscessus_HiSeq.fq", 4 * MB)
-    var writer = FastqWriter(String("data/out.fq"), 4 * MB)
+    #var writer = FastqWriter(String("data/out.fq"), 4 * MB)
     var num: Int = 0
     var total_bases: Int = 0
 
