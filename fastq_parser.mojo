@@ -1,5 +1,5 @@
 from fastq_record import FastqRecord
-from helpers import slice_tensor, read_bytes, find_last_read_header, get_next_line
+from helpers import slice_tensor, read_bytes, find_last_read_header, get_next_line, find_chr_next_occurance_simd
 from algorithm.functional import parallelize
 from os.atomic import Atomic
 
@@ -146,10 +146,10 @@ struct FastqParser:
         return reads
 
     @always_inline
-    fn next(inout self) raises -> FastqRecord:
+    fn next(inout self) raises -> Int:
         """Method that lazily returns the Next record in the file."""
 
-        let read: FastqRecord
+        let read: Int
 
         if self._current_chunk.num_elements() == 0:
             raise Error("EOF")
@@ -169,7 +169,8 @@ struct FastqParser:
             self._chunk_pos = 0
             self._file_pos += self._chunk_last_index
 
-        read = self._parse_read(self._chunk_pos, self._current_chunk)
+
+        read = self._parse_read_fast(self._chunk_pos, self._current_chunk)
 
         return read
 
@@ -198,7 +199,6 @@ struct FastqParser:
         while True:
             try:
                 read = self._parse_read(pos, chunk)
-                # read.trim_record()
                 reads += 1
                 total_length += len(read)
                 acutal_length += read.total_length
@@ -227,9 +227,43 @@ struct FastqParser:
         let line4 = get_next_line[USE_SIMD=USE_SIMD](chunk, pos)
         pos += line4.num_elements() + 1
 
-        let read = FastqRecord(line1, line2, line3, line4)
 
         return FastqRecord(line1, line2, line3, line4)
+
+
+    
+    @always_inline
+    fn _parse_read_fast(
+        self, inout pos: Int, chunk: Tensor[DType.int8]
+    ) raises -> Int:
+
+        # print("Pos", pos)
+        let line1 = find_chr_next_occurance_simd(chunk, new_line, pos)
+        # print("line1", line1)
+        var temp = line1 - pos
+        # print("temp", temp)
+        pos += temp + 1
+        # print("Pos", pos)
+
+
+        let line2 = find_chr_next_occurance_simd(chunk, new_line, pos)
+        temp = line2 - pos
+        pos += temp + 1
+
+
+        let line3 = find_chr_next_occurance_simd(chunk, new_line, pos)
+        temp = line3 - pos
+        pos += temp + 1
+
+
+        let line4 = find_chr_next_occurance_simd(chunk, new_line, pos)
+        temp = line4 - pos
+        pos += temp + 1
+
+        return line2
+
+
+
 
     fn _get_last_index(inout self, num_elements: Int):
         if self._current_chunk.num_elements() == num_elements:
