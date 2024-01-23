@@ -7,8 +7,6 @@ from os.atomic import Atomic
 Consider merge parse_all_records() to become parse_parallel(1)"""
 
 
-
-
 alias USE_SIMD = True
 
 
@@ -235,7 +233,7 @@ struct FastqParser:
 
 
 fn main() raises:
-    var parser = FastqParser("data/SRR4381933_1.fastq")
+    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
 
     # var t1: Int64 = 0
     # let out: Tensor[DType.int64]

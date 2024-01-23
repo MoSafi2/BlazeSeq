@@ -1,6 +1,5 @@
-from helpers import slice_tensor
+from helpers import slice_tensor, write_to_buff
 from memory.unsafe import DTypePointer
-from memory.memory import memcpy
 from tensor import Tensor
 
 alias USE_SIMD = True
@@ -26,16 +25,21 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         QH: Tensor[DType.int8],
         QS: Tensor[DType.int8],
     ) raises -> None:
-        if SH[0] != ord("@"):
+        if SH[0] != read_header:
             print(SH)
             raise Error("Sequence Header is corrput")
 
-        if QH[0] != ord("+"):
+        if QH[0] != quality_header:
             print(QH)
             raise Error("Quality Header is corrput")
 
         if SS.num_elements() != QS.num_elements():
-            print("Corrput Lengths")
+            print(
+                "SeqStr_length:",
+                SS.num_elements(),
+                "QualityStr_Length:",
+                QS.num_elements(),
+            )
             raise Error("Corrput Lengths")
 
         self.SeqHeader = SH
@@ -120,37 +124,34 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
     @always_inline
     fn _empty_record(inout self):
-        self.SeqStr = Tensor[DType.int8](0)
-        self.SeqHeader = Tensor[DType.int8](1)
-        self.SeqHeader[0] = read_header
-        self.QuStr = Tensor[DType.int8](0)
-        self.QuHeader = Tensor[DType.int8](1)
-        self.QuHeader[0] = quality_header
-
-        self.total_length = 6  # Minimum length of a valid empty single-line FASTQ
+        let empty = Tensor[DType.int8](0)
+        self.SeqStr = empty
+        self.SeqHeader = empty
+        self.QuStr = empty
+        self.QuHeader = empty
+        self.total_length = 0
 
     @always_inline
     fn __concat_record(self) -> Tensor[DType.int8]:
+        if self.total_length == 0:
+            return Tensor[DType.int8](0)
+
         var offset = 0
         var t = Tensor[DType.int8](self.total_length)
 
-        for i in range(self.SeqHeader.num_elements()):
-            t[i] = self.SeqHeader[i]
+        write_to_buff(self.SeqHeader, t, offset)
         offset = offset + self.SeqHeader.num_elements() + 1
         t[offset - 1] = new_line
 
-        for i in range(self.SeqStr.num_elements()):
-            t[i + offset] = self.SeqStr[i]
+        write_to_buff(self.SeqStr, t, offset)
         offset = offset + self.SeqStr.num_elements() + 1
         t[offset - 1] = new_line
 
-        for i in range(self.QuHeader.num_elements()):
-            t[i + offset] = self.QuHeader[i]
+        write_to_buff(self.QuHeader, t, offset)
         offset = offset + self.QuHeader.num_elements() + 1
         t[offset - 1] = new_line
 
-        for i in range(self.QuStr.num_elements()):
-            t[i + offset] = self.QuStr[i]
+        write_to_buff(self.QuStr, t, offset)
         offset = offset + self.QuStr.num_elements() + 1
         t[offset - 1] = new_line
 
@@ -158,6 +159,8 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
 
     @always_inline
     fn __str__(self) -> String:
+        if self.total_length == 0:
+            return ""
         var concat = self.__concat_record()
         return String(concat._steal_ptr(), self.total_length)
 

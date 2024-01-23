@@ -46,7 +46,7 @@ fn main() raises:
                 print("Speed:", rounded, " reads/min")
 
         except:
-            writer.flush_buffer()
+            #writer.flush_buffer()
             break
 
     let t2 = time.now()

@@ -66,7 +66,6 @@ fn find_chr_last_occurance[
     return -1
 
 
-# TODO: Test
 @always_inline
 fn find_chr_all_occurances[
     T: DType
@@ -145,6 +144,10 @@ fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
 # The next line OPs is dependent on find_chr_next_occurance and slice_tensor
 
 
+# BUG: If there is no new line sperator, the function results in segmentation-fault
+# Desired behaviour? could be either returning the whole tensor or returning an empty Tensor.
+
+
 @always_inline
 fn get_next_line[
     T: DType, USE_SIMD: Bool = True
@@ -161,10 +164,18 @@ fn get_next_line[
 
     @parameter
     if USE_SIMD:
-        let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
+        if next_line_pos == -1:
+            next_line_pos = (
+                in_tensor.num_elements()
+            )  # If no line separator found, return the reminder of the string, behaviour subject to change
         return slice_tensor_simd(in_tensor, in_start, next_line_pos)
     else:
-        let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+        if next_line_pos == -1:
+            next_line_pos = (
+                in_tensor.num_elements()
+            )  # If no line separator found, return the reminder of the string, behaviour subject to change
         return slice_tensor_iter(in_tensor, in_start, next_line_pos)
 
 
@@ -190,22 +201,16 @@ fn find_last_read_header(
         last_chr = find_last_read_header(in_tensor, start, end_inner)
     return last_chr
 
+
 ################################### File read ops #############################################
 
 
-# TODO: Should signal EOF
 @always_inline
 fn read_bytes(
     handle: FileHandle, beginning: UInt64, length: Int64
 ) raises -> Tensor[DType.int8]:
+    """Function to read a file chunk given an offset to seek.
+    Returns empty tensor or under-sized tensor if reached EOF.
+    """
     _ = handle.seek(beginning)
     return handle.read_bytes(length)
-
-
-# TODO: Should signal EOF
-@always_inline
-fn read_text(
-    borrowed handle: FileHandle, beginning: UInt64, length: Int64
-) raises -> String:
-    _ = handle.seek(beginning)
-    return handle.read(length)

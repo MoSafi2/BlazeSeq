@@ -75,9 +75,19 @@ fn test_find_last_read_header() raises:
     assert_equal(last, 31)
 
 
+fn test_find_last_read_header_last() raises:
+    var in_tensor = Tensor[T](50)
+    in_tensor[49] = 64
+    in_tensor[48] = 10
+
+    let last = find_last_read_header(in_tensor)
+    assert_equal(last, 49)
+
+
 fn main() raises:
     test_find_chr_next_occurance_simd()
     test_find_chr_next_occurance_simd_short_tensor()
     test_find_chr_all_occurances_short_tensor()
     test_find_chr_all_occurances_long_tensor()
     test_find_last_read_header()
+    test_find_last_read_header_last()
