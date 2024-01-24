@@ -2,7 +2,7 @@ import time
 from math import math
 from sys import argv
 from algorithm import unroll
-from fast_parser import FastqParser
+from fast_parser import FastParser
 from math.math import round
 
 
@@ -13,9 +13,10 @@ alias GB = 1024 * MB
 
 fn main() raises:
     let vars = argv()
-    var parser = FastqParser(vars[1], 64 * KB)
+    var parser = FastParser(vars[1], 64 * KB)
     var num: Int = 0
     var total_bases: Int = 0
+    var total_qu: Int = 0
     let t1 = time.now()
 
     while True:
@@ -23,6 +24,7 @@ fn main() raises:
             let record = parser.next()
             num += 1
             total_bases += record.seq_len().to_int()
+            total_qu += record.qu_len().to_int()
         except:
             break
 

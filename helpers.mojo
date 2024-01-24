@@ -179,6 +179,30 @@ fn get_next_line[
         return slice_tensor_iter(in_tensor, in_start, next_line_pos)
 
 
+@always_inline
+fn get_next_line_index[
+    T: DType, USE_SIMD: Bool = True
+](in_tensor: Tensor[T], start: Int) -> Int:
+    var in_start = start
+    while in_tensor[in_start] == new_line:  # Skip leadin \n
+        print("skipping \n")
+        in_start += 1
+        if in_start >= in_tensor.num_elements():
+            return -1
+
+    @parameter
+    if USE_SIMD:
+        let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
+        if next_line_pos == -1:
+            return in_tensor.num_elements() # If no line separator found, return the reminder of the string, behaviour subject to change
+        return next_line_pos
+    else:
+        let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+        if next_line_pos == -1:
+            return in_tensor.num_elements()
+        return next_line_pos
+
+
 ############################# Fastq recod-related Ops ################################
 
 
