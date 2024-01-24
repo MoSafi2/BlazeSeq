@@ -25,6 +25,7 @@ fn main() raises:
             total_bases += record.seq_len().to_int()
             total_qu += record.qu_len().to_int()
         except:
+            parser._file_handle.close()
             break
 
     let t2 = time.now()
