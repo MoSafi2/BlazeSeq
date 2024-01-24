@@ -60,13 +60,9 @@ struct FastParser:
     @always_inline
     fn parse_read(self, chunk: Tensor[DType.int8], start: Int) -> RecordCoord:
         let line1 = get_next_line_index(chunk, start)
-
         let line2 = get_next_line_index(chunk, line1 + 1)
-
         let line3 = get_next_line_index(chunk, line2 + 1)
-
         let line4 = get_next_line_index(chunk, line3 + 1)
-
         return RecordCoord(start, line1, line2, line3, line4)
 
     @always_inline
