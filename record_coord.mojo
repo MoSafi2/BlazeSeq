@@ -3,9 +3,9 @@ The read can be as following, Start [U64], Header Offset, Read offset Int32, Qu 
 Prasing can be done on 
 """
 
-alias new_line: Int = ord("\n")
-alias read_header: Int = ord("@")
-alias quality_header: Int = ord("+")
+alias new_line: Int = 10
+alias read_header: Int = 64
+alias quality_header: Int = 43
 
 
 @value
@@ -37,10 +37,13 @@ struct RecordCoord(Stringable):
     @always_inline
     fn validate(self, chunk: Tensor[DType.int8]) raises:
         if chunk[self.SeqHeader.to_int()] != read_header:
-            raise Error("Quality Header is corrput.")
+            raise Error("Sequencing Header is corrput.")
 
         if self.seq_len() != self.qu_len():
             raise Error("Corrupt Lengths.")
+
+        if chunk[self.QuHeader.to_int() + 1] != quality_header:
+            raise Error("Quality Header is corrput.")
 
     @always_inline
     fn seq_len(self) -> Int32:
@@ -52,7 +55,7 @@ struct RecordCoord(Stringable):
 
     @always_inline
     fn qu_header_len(self) -> Int32:
-        return self.QuStr - self.QuHeader  - 1
+        return self.QuStr - self.QuHeader - 1
 
     fn __str__(self) -> String:
         return (

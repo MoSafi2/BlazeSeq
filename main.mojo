@@ -16,7 +16,7 @@ fn main() raises:
     var num: Int = 0
     var total_bases: Int = 0
     var total_qu: Int = 0
-    let t1 = time.now()
+    # let t1 = time.now()
 
     while True:
         try:
@@ -28,18 +28,20 @@ fn main() raises:
             parser._file_handle.close()
             break
 
-    let t2 = time.now()
-    let t_sec = ((t2 - t1) / 1e9)
-    let s_per_r = t_sec / num
-    print(
-        String(t_sec)
-        + "S spend in parsing: "
-        + (num - 1)
-        + " records. \neuqaling "
-        + String((s_per_r) * 1e6)
-        + " microseconds/read or "
-        + int(round[DType.float32, 1](1 / s_per_r) * 60)
-        + " reads/min\n"
-        + "total base count is:"
-        + (total_bases + 1)
-    )
+    # let t2 = time.now()
+    # let t_sec = ((t2 - t1) / 1e9)
+    # let s_per_r = t_sec / num
+    # print(
+    #     String(t_sec)
+    #     + "S spend in parsing: "
+    #     + (num - 1)
+    #     + " records. \neuqaling "
+    #     + String((s_per_r) * 1e6)
+    #     + " microseconds/read or "
+    #     + int(round[DType.float32, 1](1 / s_per_r) * 60)
+    #     + " reads/min\n"
+    #     + "total base count is: "
+    #     + (total_bases + 1)
+    # )
+
+    print(num, "    ", total_bases, "      ", total_qu)
