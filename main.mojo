@@ -34,12 +34,12 @@ fn main() raises:
     print(
         String(t_sec)
         + "S spend in parsing: "
-        + num
+        + (num - 1)
         + " records. \neuqaling "
         + String((s_per_r) * 1e6)
         + " microseconds/read or "
         + int(round[DType.float32, 1](1 / s_per_r) * 60)
         + " reads/min\n"
         + "total base count is:"
-        + total_bases
+        + (total_bases + 1)
     )

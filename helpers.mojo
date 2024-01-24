@@ -147,7 +147,6 @@ fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
 # BUG: If there is no new line sperator, the function results in segmentation-fault
 # Desired behaviour? could be either returning the whole tensor or returning an empty Tensor.
 
-
 @always_inline
 fn get_next_line[
     T: DType, USE_SIMD: Bool = True
@@ -204,7 +203,6 @@ fn get_next_line_index[
 
 
 ############################# Fastq recod-related Ops ################################
-
 
 fn find_last_read_header(
     in_tensor: Tensor[DType.int8], start: Int = 0, end: Int = -1
