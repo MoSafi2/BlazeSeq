@@ -28,7 +28,7 @@ struct FastParser:
             self._file_handle, self._file_pos, self._BUF_SIZE
         )
 
-        self.get_last_index(self._BUF_SIZE)
+        self.set_last_index(self._BUF_SIZE)
         self._file_pos += self._chunk_last_index
 
     fn next(inout self) raises -> RecordCoord:
@@ -41,7 +41,7 @@ struct FastParser:
 
         read = self.parse_read(self._current_chunk, self._chunk_pos)
         read.validate(self._current_chunk)
-        self._chunk_pos += (read.end - read.SeqHeader).to_int() + 1
+        self._chunk_pos = read.end.to_int() + 1
         return read
 
     @always_inline
@@ -53,7 +53,7 @@ struct FastParser:
         self._current_chunk = read_bytes(
             self._file_handle, self._file_pos, self._BUF_SIZE
         )
-        self.get_last_index(self._BUF_SIZE)
+        self.set_last_index(self._BUF_SIZE)
         self._chunk_pos = 0
         self._file_pos += self._chunk_last_index
 
@@ -70,7 +70,7 @@ struct FastParser:
         return RecordCoord(start, line1, line2, line3, line4)
 
     @always_inline
-    fn get_last_index(inout self, num_elements: Int):
+    fn set_last_index(inout self, num_elements: Int):
         if self._current_chunk.num_elements() == num_elements:
             self._chunk_last_index = find_last_read_header(self._current_chunk)
         else:
