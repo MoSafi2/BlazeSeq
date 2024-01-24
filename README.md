@@ -39,6 +39,7 @@ FASTQ trimming was carried out with minimum Phred quality of ```20```.
 
 ## Results
 ### FASTQ parsing
+Update: The Needletail benchmarks was carried accidently using 'Debug' build which greatly slows its execution. The updated benchmarks will be added soon.
 | reads  | SeqIO <br> (Python) | Needletail <br> (Rust) | MojoFastqTrim <br> (Mojo🔥) |
 | ------ | ------------------- | ---------------------- | -------------------------- |
 | 40k    | 0.57s               | 0.043s                 | 0.020s                     |
