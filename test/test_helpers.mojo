@@ -1,7 +1,7 @@
 from tensor import Tensor
 from random.random import rand
 from testing.testing import assert_true, assert_false, assert_equal, assert_not_equal
-from helpers import *
+from MojoFastTrim.helpers import *
 
 alias T = DType.int8
 

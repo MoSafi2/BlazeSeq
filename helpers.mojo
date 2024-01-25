@@ -1,11 +1,7 @@
 import math
 import time
 from algorithm import vectorize_unroll, vectorize
-
-alias simd_width: Int = simdwidthof[DType.int8]()
-alias new_line: Int = ord("\n")
-alias read_header: Int = ord("@")
-alias quality_header: Int = ord("+")
+from MojoFastTrim.CONSTS import *
 
 
 ######################### Character find functions ###################################
@@ -147,6 +143,7 @@ fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
 # BUG: If there is no new line sperator, the function results in segmentation-fault
 # Desired behaviour? could be either returning the whole tensor or returning an empty Tensor.
 
+
 @always_inline
 fn get_next_line[
     T: DType, USE_SIMD: Bool = True
@@ -193,7 +190,9 @@ fn get_next_line_index[
     if USE_SIMD:
         let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
         if next_line_pos == -1:
-            return in_tensor.num_elements() # If no line separator found, return the reminder of the string, behaviour subject to change
+            return (
+                in_tensor.num_elements()
+            )  # If no line separator found, return the reminder of the string, behaviour subject to change
         return next_line_pos
     else:
         let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
@@ -203,6 +202,7 @@ fn get_next_line_index[
 
 
 ############################# Fastq recod-related Ops ################################
+
 
 fn find_last_read_header(
     in_tensor: Tensor[DType.int8], start: Int = 0, end: Int = -1

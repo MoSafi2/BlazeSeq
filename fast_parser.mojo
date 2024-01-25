@@ -1,11 +1,5 @@
-from helpers import get_next_line_index, read_bytes, find_last_read_header
-from record_coord import RecordCoord
-
-
-alias new_line: Int = ord("\n")
-alias read_header: Int = ord("@")
-alias quality_header: Int = ord("+")
-
+from MojoFastTrim.helpers import get_next_line_index, read_bytes, find_last_read_header
+from MojoFastTrim import RecordCoord
 
 struct FastParser:
     var _file_handle: FileHandle

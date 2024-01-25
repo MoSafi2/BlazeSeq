@@ -1,5 +1,5 @@
-from fastq_record import FastqRecord
-from helpers import get_next_line
+from MojoFastTrim import FastqRecord
+from MojoFastTrim.helpers import get_next_line
 from testing import assert_equal, assert_false, assert_true
 
 
