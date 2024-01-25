@@ -1,6 +1,6 @@
-from MojoFastTrim.fastq_record import FastqRecord
+from MojoFastTrim import FastqRecord
 from MojoFastTrim.helpers import slice_tensor, read_bytes, find_last_read_header, get_next_line, find_chr_next_occurance_simd
-from algorithm.functional import parallelize
+from algorithm import parallelize
 from os.atomic import Atomic
 
 """Module to parse fastq. It has three functoins, Parse all records (single core), parse parallel (multi-core), next(lazy next read).
@@ -261,8 +261,6 @@ struct FastqParser:
         pos += temp + 1
 
         return line2
-
-
 
 
     fn _get_last_index(inout self, num_elements: Int):

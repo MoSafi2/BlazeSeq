@@ -1,6 +1,6 @@
 from tensor import Tensor
-from MojoFastTrim.fastq_record import FastqRecord
-from MojoFastTrim.helpers import *
+from MojoFastTrim import FastqRecord
+from MojoFastTrim.helpers import write_to_buff
 
 
 struct FastqWriter:
