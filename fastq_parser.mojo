@@ -8,7 +8,6 @@ from algorithm import parallelize
 from os.atomic import Atomic
 from MojoFastTrim.CONSTS import *
 
-
 alias T = DType.int8
 
 
@@ -20,7 +19,9 @@ struct FastqParser:
     var _chunk_last_index: Int
     var _chunk_pos: Int
 
-    fn __init__(inout self, path: String, num_workers: Int = 1, BUF_SIZE: Int = 64 * 1024) raises -> None:
+    fn __init__(
+        inout self, path: String, num_workers: Int = 1, BUF_SIZE: Int = 64 * 1024
+    ) raises -> None:
         self._BUF_SIZE = BUF_SIZE * num_workers
         self._file_pos = 0
         self._current_chunk = Tensor[T](0)
@@ -109,10 +110,8 @@ struct FastqParser:
         self._file_pos = 0
 
         while True:
-            
             self.fill_buffer()
             self.check_EOF()
-
 
             var last_read_vector = Tensor[DType.int32](num_workers + 1)
             var bg_index = 0
@@ -143,10 +142,7 @@ struct FastqParser:
             _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
 
         else:
-            var t1: Int = 0
-            var t2: Int = 0
-            var t3: Int = 0
-            self._parse_chunk(self._current_chunk)
+            self._parse_chunk(self._current_chunk, 0, self._chunk_last_index)
 
         # Recussing theme, extract to a seperate function
         if self._current_chunk.num_elements() == self._BUF_SIZE * num_workers:
@@ -154,7 +150,6 @@ struct FastqParser:
         else:
             self._chunk_last_index = self._current_chunk.num_elements()
         self._file_pos += self._chunk_last_index
-
 
 
 fn main() raises:
