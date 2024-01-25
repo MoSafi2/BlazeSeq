@@ -1,4 +1,4 @@
-from helpers import slice_tensor, write_to_buff
+from MojoFastTrim.helpers import slice_tensor, write_to_buff
 from memory.unsafe import DTypePointer
 from tensor import Tensor
 

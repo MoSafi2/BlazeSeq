@@ -1,7 +1,7 @@
 import time
 from math import math
 from sys import argv
-from fast_parser import FastParser
+from MojoFastTrim.fast_parser import FastParser
 from math.math import round
 
 

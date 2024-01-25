@@ -1,5 +1,5 @@
-from helpers import get_next_line_index, read_bytes, find_last_read_header
-from record_coord import RecordCoord
+from MojoFastTrim.helpers import get_next_line_index, read_bytes, find_last_read_header
+from MojoFastTrim.record_coord import RecordCoord
 
 
 alias new_line: Int = ord("\n")

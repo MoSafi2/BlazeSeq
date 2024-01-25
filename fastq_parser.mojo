@@ -1,5 +1,5 @@
-from fastq_record import FastqRecord
-from helpers import slice_tensor, read_bytes, find_last_read_header, get_next_line, find_chr_next_occurance_simd
+from MojoFastTrim.fastq_record import FastqRecord
+from MojoFastTrim.helpers import slice_tensor, read_bytes, find_last_read_header, get_next_line, find_chr_next_occurance_simd
 from algorithm.functional import parallelize
 from os.atomic import Atomic
 
