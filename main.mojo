@@ -1,7 +1,7 @@
 import time
 from math import math
 from sys import argv
-from MojoFastTrim.fast_parser import FastParser
+from MojoFastTrim import FastParser, FastqParser
 from math.math import round
 
 
@@ -12,7 +12,7 @@ alias GB = 1024 * MB
 
 fn main() raises:
     let vars = argv()
-    var parser = FastParser(vars[1], 64 * KB)
+    var parser = FastqParser(vars[1], 64 * KB)
     var num: Int = 0
     var total_bases: Int = 0
     var total_qu: Int = 0
@@ -22,8 +22,8 @@ fn main() raises:
         try:
             let record = parser.next()
             num += 1
-            total_bases += record.seq_len().to_int()
-            total_qu += record.qu_len().to_int()
+            # total_bases += record.seq_len().to_int()
+            # total_qu += record.qu_len().to_int()
         except:
             parser._file_handle.close()
             break

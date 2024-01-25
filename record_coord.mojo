@@ -2,10 +2,7 @@
 The read can be as following, Start [U64], Header Offset, Read offset Int32, Qu Header offser, Int32, QuStr Offset, Int32.
 Prasing can be done on 
 """
-
-alias new_line: Int = 10
-alias read_header: Int = 64
-alias quality_header: Int = 43
+from MojoFastTrim.CONSTS import *
 
 
 @value

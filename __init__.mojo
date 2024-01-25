@@ -4,4 +4,3 @@ from .record_coord import RecordCoord
 from .fastq_record import FastqRecord
 from .fastq_writer import FastqWriter
 
-

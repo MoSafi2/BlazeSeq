@@ -1,12 +1,7 @@
 from MojoFastTrim.helpers import slice_tensor, write_to_buff
 from memory.unsafe import DTypePointer
 from tensor import Tensor
-
-alias USE_SIMD = True
-alias new_line: Int = ord("\n")
-alias read_header: Int = ord("@")
-alias quality_header: Int = ord("+")
-
+from MojoFastTrim.CONSTS import *
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable):
@@ -62,63 +57,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
         )
 
     @always_inline
-    fn trim_record(inout self, direction: String = "end", quality_threshold: Int = 20):
-        """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt.
-        """
-
-        var s: Int8 = 0
-        var min_qual: Int8 = 0
-        let n = self.QuStr.num_elements()
-        var stop: Int = n
-        var start: Int = 0
-        let i: Int
-
-        ## minimum of Rolling sum algorithm used by Cutadapt and BWA
-        # Find trim position in 5' end
-        for i in range(n):
-            s += self.QuStr[i] - 33 - quality_threshold
-            if s > 0:
-                break
-            if s < min_qual:
-                min_qual = s
-                start = i + 1
-
-        # Find trim position in 3' end
-        min_qual = 0
-        s = 0
-        for i in range(1, n):
-            s += self.QuStr[n - i] - 33 - quality_threshold
-            if s > 0:
-                break
-            if s < min_qual:
-                min_qual = s
-                stop = stop - 1
-
-        if start >= stop:
-            self._empty_record()
-            return
-
-        if direction == "end":
-            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, 0, stop)
-            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, 0, stop)
-
-        if direction == "start":
-            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, start, n)
-            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, start, n)
-
-        if direction == "both":
-            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, start, stop)
-            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, start, stop)
-
-        self.total_length = (
-            self.SeqHeader.num_elements()
-            + self.SeqStr.num_elements()
-            + self.QuHeader.num_elements()
-            + self.QuStr.num_elements()
-            + 4
-        )
-
-    @always_inline
     fn wirte_record(self) -> Tensor[DType.int8]:
         return self.__concat_record()
 
@@ -167,3 +105,63 @@ struct FastqRecord(CollectionElement, Sized, Stringable):
     @always_inline
     fn __len__(self) -> Int:
         return self.SeqStr.num_elements()
+
+
+
+
+@always_inline
+fn trim_record(inout record: FastqRecord, direction: String = "end", quality_threshold: Int = 20):
+    """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt.
+    """
+
+    var s: Int8 = 0
+    var min_qual: Int8 = 0
+    let n = record.QuStr.num_elements()
+    var stop: Int = n
+    var start: Int = 0
+    let i: Int
+
+    ## minimum of Rolling sum algorithm used by Cutadapt and BWA
+    # Find trim position in 5' end
+    for i in range(n):
+        s += record.QuStr[i] - 33 - quality_threshold
+        if s > 0:
+            break
+        if s < min_qual:
+            min_qual = s
+            start = i + 1
+
+    # Find trim position in 3' end
+    min_qual = 0
+    s = 0
+    for i in range(1, n):
+        s += record.QuStr[n - i] - 33 - quality_threshold
+        if s > 0:
+            break
+        if s < min_qual:
+            min_qual = s
+            stop = stop - 1
+
+    if start >= stop:
+        record._empty_record()
+        return
+
+    if direction == "end":
+        record.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](record.SeqStr, 0, stop)
+        record.QuStr = slice_tensor[USE_SIMD=USE_SIMD](record.QuStr, 0, stop)
+
+    if direction == "start":
+        record.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](record.SeqStr, start, n)
+        record.QuStr = slice_tensor[USE_SIMD=USE_SIMD](record.QuStr, start, n)
+
+    if direction == "both":
+        record.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](record.SeqStr, start, stop)
+        record.QuStr = slice_tensor[USE_SIMD=USE_SIMD](record.QuStr, start, stop)
+
+    record.total_length = (
+        record.SeqHeader.num_elements()
+        + record.SeqStr.num_elements()
+        + record.QuHeader.num_elements()
+        + record.QuStr.num_elements()
+        + 4
+    )

@@ -1,6 +1,7 @@
-from MojoFastTrim.fastq_record import FastqRecord
-from helpers import get_next_line
+from MojoFastTrim import FastqRecord
+from MojoFastTrim.helpers import get_next_line
 from testing import assert_equal, assert_false, assert_true
+
 
 fn get_fastq_records() raises -> DynamicVector[Tensor[DType.int8]]:
     var vec = DynamicVector[Tensor[DType.int8]](capacity=4)

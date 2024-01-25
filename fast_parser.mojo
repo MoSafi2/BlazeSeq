@@ -1,12 +1,6 @@
 from MojoFastTrim.helpers import get_next_line_index, read_bytes, find_last_read_header
 from MojoFastTrim import RecordCoord
 
-
-alias new_line: Int = ord("\n")
-alias read_header: Int = ord("@")
-alias quality_header: Int = ord("+")
-
-
 struct FastParser:
     var _file_handle: FileHandle
     var _BUF_SIZE: Int

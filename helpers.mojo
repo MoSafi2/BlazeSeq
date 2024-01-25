@@ -1,11 +1,7 @@
 import math
 import time
 from algorithm import vectorize_unroll, vectorize
-
-alias simd_width: Int = simdwidthof[DType.int8]()
-alias new_line: Int = ord("\n")
-alias read_header: Int = ord("@")
-alias quality_header: Int = ord("+")
+from MojoFastTrim.CONSTS import *
 
 
 ######################### Character find functions ###################################
