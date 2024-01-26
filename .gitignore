@@ -2,6 +2,5 @@ data
 playground.ipynb
 fastq_parser
 MojoFastTrim
-main
 needletail_test/target
-needletail_test/target/*
+main
