@@ -7,6 +7,7 @@ from MojoFastTrim.helpers import (
 from algorithm import parallelize
 from os.atomic import Atomic
 from MojoFastTrim.CONSTS import *
+from MojoFastTrim import Stats
 
 alias T = DType.int8
 
@@ -18,6 +19,7 @@ struct FastqParser:
     var _file_pos: Int
     var _chunk_last_index: Int
     var _chunk_pos: Int
+    var parsing_stats: Stats
 
     fn __init__(
         inout self, path: String, num_workers: Int = 1, BUF_SIZE: Int = 64 * 1024
@@ -27,12 +29,14 @@ struct FastqParser:
         self._current_chunk = Tensor[T](0)
         self._chunk_last_index = 0
         self._chunk_pos = 0
+        self.parsing_stats = Stats()
 
         self._file_handle = open(path, "r")
         self.fill_buffer()
         _ = self._header_parser()
 
-    fn parse_all_records(inout self, trim: Bool = True) raises:
+
+    fn parse_all(inout self) raises:
         while True:
             self._parse_chunk(self._current_chunk, start=0, end=self._chunk_last_index)
             try:
@@ -48,7 +52,10 @@ struct FastqParser:
         self.check_EOF()
         if self._chunk_pos >= self._chunk_last_index:
             self.fill_buffer()
+            
         read = self._parse_read(self._chunk_pos, self._current_chunk)
+        self.parsing_stats.tally(read)
+
         return read
 
     @always_inline
@@ -63,12 +70,13 @@ struct FastqParser:
         return True
 
     @always_inline
-    fn _parse_chunk(self, chunk: Tensor[T], start: Int, end: Int) raises:
+    fn _parse_chunk(inout self, chunk: Tensor[T], start: Int, end: Int) raises:
         var pos = 0
         let read: FastqRecord
         while True:
             try:
                 read = self._parse_read(pos, chunk)
+                self.parsing_stats.tally(read)
             except:
                 raise Error("falied read")
             if pos >= end - start:
@@ -104,62 +112,49 @@ struct FastqParser:
         self._chunk_pos = 0
         self._file_pos += self._chunk_last_index
 
-    # BUG: Over estimation of the number of reads with threads > 1
-    # TODO: Make the number of workers Modifable
-    fn parse_parallel(inout self, num_workers: Int) raises:
-        self._file_pos = 0
+    # # BUG: Over estimation of the number of reads with threads > 1
+    # # TODO: Make the number of workers Modifable
+    # fn parse_parallel(inout self, num_workers: Int) raises:
+    #     self._file_pos = 0
 
-        while True:
-            self.fill_buffer()
-            self.check_EOF()
+    #     while True:
+    #         self.fill_buffer()
+    #         self.check_EOF()
 
-            var last_read_vector = Tensor[DType.int32](num_workers + 1)
-            var bg_index = 0
-            var count = 1
-            for index in range(
-                self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
-            ):
-                # Not really needed, right a function that finds last Header in a bounded range.
-                let header = find_last_read_header(
-                    self._current_chunk, bg_index, bg_index + self._BUF_SIZE
-                )
-                last_read_vector[count] = header
-                bg_index = header
-                count += 1
+    #         var last_read_vector = Tensor[DType.int32](num_workers + 1)
+    #         var bg_index = 0
+    #         var count = 1
+    #         for index in range(
+    #             self._BUF_SIZE, num_workers * self._BUF_SIZE + 1, self._BUF_SIZE
+    #         ):
+    #             # Not really needed, right a function that finds last Header in a bounded range.
+    #             let header = find_last_read_header(
+    #                 self._current_chunk, bg_index, bg_index + self._BUF_SIZE
+    #             )
+    #             last_read_vector[count] = header
+    #             bg_index = header
+    #             count += 1
 
-            @parameter
-            fn _parse_chunk_inner(thread: Int):
-                try:
-                    self._parse_chunk(
-                        self._current_chunk,
-                        last_read_vector[thread].to_int(),
-                        last_read_vector[thread + 1].to_int(),
-                    )
-                except:
-                    pass
+    #         @parameter
+    #         fn _parse_chunk_inner(thread: Int):
+    #             try:
+    #                 self._parse_chunk(
+    #                     self._current_chunk,
+    #                     last_read_vector[thread].to_int(),
+    #                     last_read_vector[thread + 1].to_int(),
+    #                 )
+    #             except:
+    #                 pass
 
-            parallelize[_parse_chunk_inner](num_workers)
-            _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
+    #         parallelize[_parse_chunk_inner](num_workers)
+    #         _ = last_read_vector  # Fix to retain the lifetime of last_read_vector
 
-        else:
-            self._parse_chunk(self._current_chunk, 0, self._chunk_last_index)
+    #     else:
+    #         self._parse_chunk(self._current_chunk, 0, self._chunk_last_index)
 
-        # Recussing theme, extract to a seperate function
-        if self._current_chunk.num_elements() == self._BUF_SIZE * num_workers:
-            self._chunk_last_index = find_last_read_header(self._current_chunk)
-        else:
-            self._chunk_last_index = self._current_chunk.num_elements()
-        self._file_pos += self._chunk_last_index
-
-
-fn main() raises:
-    var parser = FastqParser("data/M_abscessus_HiSeq.fq")
-
-    # var t1: Int64 = 0
-    # let out: Tensor[DType.int64]
-    # out = parser.parse_parallel(18)
-    # for i in range(out.num_elements()):
-    #     t1 += out[i]
-    # print(t1)
-
-    parser.parse_all_records()
+    #     # Recussing theme, extract to a seperate function
+    #     if self._current_chunk.num_elements() == self._BUF_SIZE * num_workers:
+    #         self._chunk_last_index = find_last_read_header(self._current_chunk)
+    #     else:
+    #         self._chunk_last_index = self._current_chunk.num_elements()
+    #     self._file_pos += self._chunk_last_index

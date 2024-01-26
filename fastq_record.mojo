@@ -1,7 +1,7 @@
 from MojoFastTrim.helpers import slice_tensor, write_to_buff
 from memory.unsafe import DTypePointer
 from tensor import Tensor
-from MojoFastTrim.CONSTS import *
+from MojoFastTrim.CONSTS import read_header, new_line, quality_header, USE_SIMD
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable):
