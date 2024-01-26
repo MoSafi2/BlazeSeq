@@ -1,5 +1,3 @@
-"""This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
-from MojoFastTrim import FastqRecord, RecordCoord
 from collections import Dict
 from tensor import Tensor
 

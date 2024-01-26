@@ -4,8 +4,8 @@ from tensor import Tensor
 from base64 import b64encode
 from collections import KeyElement
 from MojoFastTrim.CONSTS import read_header, new_line, quality_header, USE_SIMD
-from MojoFastTrim import fnv1a32, fnv1a64
 from math import min
+
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
@@ -118,9 +118,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     @always_inline
     fn __hash__(self) -> Int:
         return hash(self.SeqStr._ptr, min(self.SeqStr.num_elements(), 50))
-        #return fnv1a64(self.get_seq()[0:50]).to_int()
-        #return fnv1a32(self.get_seq()[0:50]).to_int()
-        
+
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
         return self.SeqStr == other.SeqStr
