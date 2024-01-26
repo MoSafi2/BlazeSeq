@@ -11,7 +11,7 @@ alias GB = 1024 * MB
 
 fn main() raises:
     let vars = argv()
-    var parser = FastqParser(vars[1], 64 * KB)
+    var parser = FastParser(vars[1], 64 * KB)
 
     # Parse all records in one pass, Fastest
     parser.parse_all()

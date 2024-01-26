@@ -1,5 +1,6 @@
 from collections import Dict
 from tensor import Tensor
+from MojoFastTrim import RecordCoord
 
 struct Stats(Stringable):
     var num_reads: Int64
