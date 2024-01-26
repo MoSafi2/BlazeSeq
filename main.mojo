@@ -13,65 +13,26 @@ fn main() raises:
     let vars = argv()
     var parser = FastParser(vars[1], 64 * KB)
 
-    # Parse all records in one pass
-    parser.parse_all()
-    print(parser.parsing_stats)
+    ## Parse all records in one pass, Fastest
+    # parser.parse_all()
+    # print(parser.parsing_stats)
 
     # Parse all records iterativly.
-    # while True:
-    #     try:
-    #         let record = parser.next()
-    #     except:
-    #         print(parser.parsing_stats)
-    #         parser._file_handle.close()
-    #         break
-    #var parser = FastqParser(vars[1], 4 * MB)
-    var parser = FastqParser("data/M_abscessus_HiSeq.fq", 4 * MB)
-    #var writer = FastqWriter(String("data/out.fq"), 4 * MB)
-    var num: Int = 0
-    var total_bases: Int = 0
-
-    # num, total_bases = parser.parse_all_records()
-
     let t1 = time.now()
-
     while True:
         try:
-            var record = parser.next()
-            num += 1
-            total_bases += len(record)
+            let record = parser.next()
 
-            # Going to town with the record applying all kinds of transformations
-            # Transformation could be applied through a seperate entity which can read, organise, and schedule transformations
-            #record.trim_record(quality_threshold=20, direction="end")
-            #writer.ingest_read(record)
-
-            if num % 1_000_000 == 0:
+            if parser.parsing_stats.num_reads % 1_000_000 == 0:
+                let num = parser.parsing_stats.num_reads
                 let t = time.now()
-                let reads_p_min: Float64 = (num / ((t - t1) / 1e9)) * 60
+                let reads_p_min: Float64 = num.to_int() / ((t - t1) / 1e9) * 60
                 let rounded = int(round(reads_p_min))
                 print("\33[H")
                 print("\033[J")
                 print("Number of reads processed is :", num)
                 print("Speed:", rounded, " reads/min")
-
         except:
-            #writer.flush_buffer()
+            print(parser.parsing_stats)
+            parser._file_handle.close()
             break
-
-    let t2 = time.now()
-
-    let t_sec = ((t2 - t1) / 1e9)
-    let s_per_r = t_sec / num
-    print(
-        String(t_sec)
-        + "S spend in parsing: "
-        + num
-        + " records. \neuqaling "
-        + String((s_per_r) * 1e6)
-        + " microseconds/read or "
-        + int(round[DType.float32, 1](1 / s_per_r) * 60)
-        + " reads/min\n"
-        + "total base count is:"
-        + total_bases
-    )
