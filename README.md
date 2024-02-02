@@ -12,6 +12,26 @@ it is on overage **2x** faster than the industry-standard ```Cutadapt``` perform
 
 ### Disclaimer: MojoFastTrim🔥 is for demonstration purposes only and shouldn't be used as part of bioinformatic pipelines
 
+## Usage 
+
+* to test ```MojoFastTrim🔥```, clone the repository  ```git clone https://github.com/MoSafi2/MojoFastTrim.git```  
+* ```MojoFastTrim🔥```provides two Fastq parser interface, `FastqParser`, a regular parser which returns `FastqRecord` objects containing all the reads components which can be further manipulated or stored for later use (Ex: in a `DynamicVector`). In addition you can use `FastParser` which returns `RecordCoord` object referencing the record coordinates instead (**3X** faster parsing).
+
+```python
+from MojoFastTrim import FastqParser, FastParser
+
+parser = FastqParser("/path/to/fastq_file.fa")
+#parser = FastParser("/path/to/fastq_file.fa")
+
+# Parse all records in one pass, Fastest
+parser.parse_all()
+print(parser.parsing_stats)
+
+```
+
+* In addition, the `main.mojo` provides a minimal CLI app.  
+  run ```mojo run main.mojo /path/to/fastq_file.fa```
+
 ## Benchmarking
 
 ### Setup
