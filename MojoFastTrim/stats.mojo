@@ -2,6 +2,7 @@ from collections import Dict
 from tensor import Tensor
 from MojoFastTrim import RecordCoord
 
+
 struct Stats(Stringable):
     var num_reads: Int64
     var total_bases: Int64
@@ -15,7 +16,6 @@ struct Stats(Stringable):
         self.num_reads += 1
         self.total_bases += record.SeqStr.num_elements()
 
-
     @always_inline
     fn tally(inout self, record: RecordCoord):
         self.num_reads += 1
@@ -28,6 +28,4 @@ struct Stats(Stringable):
             + ". \n"
             + "Number of bases: "
             + self.total_bases
-            + ".\n"
-            + "Number of Unique reads: "
         )

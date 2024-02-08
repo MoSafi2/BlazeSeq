@@ -11,7 +11,7 @@ struct FastParser:
     var _file_pos: Int
     var _chunk_last_index: Int
     var _chunk_pos: Int
-    var parsing_stats: Stats
+    # var parsing_stats: Stats
 
     fn __init__(inout self, path: String, BUF_SIZE: Int = 64 * 1024) raises -> None:
         # Initailizing starting conditions
@@ -20,7 +20,7 @@ struct FastParser:
         self._current_chunk = Tensor[T](0)
         self._chunk_last_index = 0
         self._chunk_pos = 0
-        self.parsing_stats = Stats()
+        # self.parsing_stats = Stats()
 
         self._file_handle = open(path, "r")
         self.fill_buffer()
@@ -45,7 +45,7 @@ struct FastParser:
 
         read = self.parse_read(self._chunk_pos, self._current_chunk)
         read.validate(self._current_chunk)
-        self.parsing_stats.tally(read)
+        # self.parsing_stats.tally(read)
         return read
 
     # Internal counter is used to enable Multi-threading later
@@ -56,7 +56,8 @@ struct FastParser:
         while True:
             try:
                 read = self.parse_read(pos, chunk)
-                self.parsing_stats.tally(read)
+                read.validate(self._current_chunk)
+                # self.parsing_stats.tally(read)
             except:
                 raise Error("failed read")
             if pos >= end - start:
