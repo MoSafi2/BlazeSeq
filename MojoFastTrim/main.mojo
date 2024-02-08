@@ -14,25 +14,23 @@ fn main() raises:
     var parser = FastParser(vars[1], 64 * KB)
 
     # Parse all records in one pass, Fastest
-    parser.parse_all()
-    print(parser.parsing_stats)
-    
-    ## Parse all records iterativly.
-    # let t1 = time.now()
-    # while True:
-    #     try:
-    #         let record = parser.next()
+    # parser.parse_all()
 
-    #         if parser.parsing_stats.num_reads % 1_000_000 == 0:
-    #             let num = parser.parsing_stats.num_reads
-    #             let t = time.now()
-    #             let reads_p_min: Float64 = num.to_int() / ((t - t1) / 1e9) * 60
-    #             let rounded = int(round(reads_p_min))
-    #             print("\33[H")
-    #             print("\033[J")
-    #             print("Number of reads processed is :", num)
-    #             print("Speed:", rounded, " reads/min")
-    #     except:
-    #         print(parser.parsing_stats)
-    #         parser._file_handle.close()
-    #         break
+    let t1 = time.now()
+    var reads = 0
+    while True:
+        try:
+            let record = parser.next()
+            reads += 1
+            if reads % 1_000_000 == 0:
+                let t = time.now()
+                let reads_p_min: Float64 = reads / ((t - t1) / 1e9) * 60
+                let rounded = int(round(reads_p_min))
+                print("\33[H")
+                print("\033[J")
+                print("Number of reads processed is :", reads)
+                print("Speed:", rounded, " reads/min")
+        except:
+            print(reads)
+            parser._file_handle.close()
+            break

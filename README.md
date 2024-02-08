@@ -23,14 +23,20 @@ from MojoFastTrim import FastqParser, FastParser
 parser = FastqParser("/path/to/fastq_file.fa")
 #parser = FastParser("/path/to/fastq_file.fa")
 
-# Parse all records in one pass, Fastest
+# Parse all records in one pass, fastest
 parser.parse_all()
-print(parser.parsing_stats)
+
+# Parse records lazily, will exit if corrupt read or EOF is encountered
+while True:
+  try:
+    parser.next()
+  except:
+    break
 
 ```
 
 * In addition, the `main.mojo` provides a minimal CLI app.  
-  run ```mojo run main.mojo /path/to/fastq_file.fa```
+  run ```mojo run main.mojo /path/to/fastq_file.fa``` or compile the file first using `mojo build` command and use the binary instead.
 
 ## Benchmarking
 
@@ -38,7 +44,9 @@ print(parser.parsing_stats)
 
 All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of memory equipped with 2TB NVME hardrive and running Ubuntu 22.04. Mojo 0.6.1, Python 3.12, and Rust 1.75 were used for the tests.
 
-* The snippet provided in the ```needletail_test``` folder was compiled using the command ```cargo build --release``` and ran using the following command ```./target/release/<binary> <path/to/file.fq>```.
+* The snippets provided in the `benchmark` folder was used for running the tests and can be used for replication.
+* ```needletail_benchmark``` folder was compiled using the command ```cargo build --release``` and ran using the following command ```./target/release/<binary> <path/to/file.fq>```.
+* `fast_parser.mojo` was compiled using `mojo build fast_parser.mojo` and ran using `./fast_parser <path/to/file.fq>`
 * ```Cutadapt``` was run in single-core mode with the following command:  ``` cutadapt <in.fq> -q 20 -j 1 -o out.fq ```
 
 ### Benchmarks
