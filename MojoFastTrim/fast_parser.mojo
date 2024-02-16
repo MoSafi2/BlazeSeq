@@ -24,13 +24,12 @@ struct FastParser:
         self._BUF_SIZE = BUF_SIZE
         self._file_pos = 0
         self._current_chunk = Tensor[T](BUF_SIZE)
-        self._chunk_last_index = 0
+        self._chunk_last_index = BUF_SIZE
         self._chunk_pos = 0
         self.parsing_stats = Stats()
 
         self._file_handle = open(path, "r")
         self.fill_buffer()
-        # _ = self._header_parser()
 
     fn parse_all(inout self) raises:
         while True:
@@ -63,7 +62,7 @@ struct FastParser:
             try:
                 read = self.parse_read(pos, chunk)
                 read.validate(self._current_chunk)
-                # self.parsing_stats.tally(read)
+                self.parsing_stats.tally(read)
             except:
                 raise Error("failed read")
             if pos >= end - start:
@@ -73,19 +72,6 @@ struct FastParser:
     fn check_EOF(self) raises:
         if self._current_chunk.num_elements() == 0:
             raise Error("EOF")
-
-    # @always_inline
-    # fn fill_buffer(inout self) raises:
-    #     self._current_chunk = read_bytes(
-    #         self._file_handle, self._file_pos, self._BUF_SIZE
-    #     )
-    #     self._chunk_last_index = find_last_read_header(self._current_chunk)
-    #     if self._current_chunk.num_elements() < self._BUF_SIZE:
-    #         self._chunk_last_index = self._current_chunk.num_elements()
-    #         if self._chunk_last_index <= 1:
-    #             raise Error("EOF")
-    #     self._chunk_pos = 0
-    #     self._file_pos += self._chunk_last_index
 
     @always_inline
     fn fill_buffer(inout self) raises:
@@ -140,4 +126,7 @@ fn main() raises:
         "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
     )
 
-    print(parser.next())
+    try:
+        parser.parse_all()
+    except:
+        print(parser.parsing_stats)
