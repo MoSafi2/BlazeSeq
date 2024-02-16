@@ -1,0 +1,4 @@
+data/*
+benchmark/fast_parser
+*.ipynb
+test_file.mojo
