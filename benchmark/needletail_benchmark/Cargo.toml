@@ -7,3 +7,14 @@ edition = "2021"
 
 [dependencies]
 needletail = "0.5.1"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[lib]
+name = "rust_parser"
+path = "src/lib.rs"
