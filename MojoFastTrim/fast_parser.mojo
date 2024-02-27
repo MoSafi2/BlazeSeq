@@ -50,7 +50,6 @@ struct FastParser:
 
         read = self.parse_read(self._chunk_pos, self._current_chunk)
         read.validate(self._current_chunk)
-        self.parsing_stats.tally(read)
         return read
 
     # Internal counter is used to enable Multi-threading later
@@ -62,7 +61,6 @@ struct FastParser:
             try:
                 read = self.parse_read(pos, chunk)
                 read.validate(self._current_chunk)
-                self.parsing_stats.tally(read)
             except:
                 raise Error("failed read")
             if pos >= end - start:

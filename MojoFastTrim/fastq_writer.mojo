@@ -25,11 +25,11 @@ struct FastqWriter:
             ## Flushing out the write buffer, starting a new record
             self.flush_buffer()
 
-        write_to_buff(
-            in_read.wirte_record(),
-            self._write_buffer,
-            self._buffer_position,
-        )
+        # write_to_buff(
+        #     in_read.wirte_record(),
+        #     self._write_buffer,
+        #     self._buffer_position,
+        # )
         self._buffer_position += in_read.total_length
 
     @always_inline

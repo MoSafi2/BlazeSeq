@@ -151,6 +151,7 @@ fn cpy_tensor[
         dest.simd_store[width](
             index + dest_strt, src.simd_load[width](index + src_strt)
         )
+
     vectorize[simd_width, vec_cpy](num_elements)
 
 
@@ -209,14 +210,12 @@ fn get_next_line_index[
     if USE_SIMD:
         let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
         if next_line_pos == -1:
-            return (
-                in_tensor.num_elements()
-            )  # If no line separator found, return the reminder of the string, behaviour subject to change
+            return -1
         return next_line_pos
     else:
         let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
         if next_line_pos == -1:
-            return in_tensor.num_elements()
+            return -1
         return next_line_pos
 
 
