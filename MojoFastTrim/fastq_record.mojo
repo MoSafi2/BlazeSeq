@@ -3,6 +3,7 @@ from memory.unsafe import DTypePointer
 from tensor import Tensor
 from base64 import b64encode
 from collections import KeyElement
+from math import min
 from MojoFastTrim.CONSTS import (
     read_header,
     new_line,
@@ -16,7 +17,6 @@ from MojoFastTrim.CONSTS import (
     illumina_1_8,
     solexa_schema,
 )
-from math import min
 
 """
 Validations:

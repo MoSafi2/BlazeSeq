@@ -21,7 +21,6 @@ struct FastqWriter:
 
     @always_inline
     fn ingest_read(inout self, in_read: FastqRecord, end: Bool = False) raises:
-
         if self._buffer_position + in_read.total_length > self._BUF_SIZE:
             ## Flushing out the write buffer, starting a new record
             self.flush_buffer()
@@ -40,6 +39,6 @@ struct FastqWriter:
         _ = self._out_handle.seek(self._file_position)
         self._out_handle.write(out_string)
         self._file_position += self._buffer_position
-        
-        #No new buffer is created, Just the _buff_pos is resetted
+
+        # No new buffer is created, Just the _buff_pos is resetted
         self._buffer_position = 0
