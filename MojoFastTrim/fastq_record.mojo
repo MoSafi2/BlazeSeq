@@ -3,8 +3,27 @@ from memory.unsafe import DTypePointer
 from tensor import Tensor
 from base64 import b64encode
 from collections import KeyElement
-from MojoFastTrim.CONSTS import read_header, new_line, quality_header, USE_SIMD
+from MojoFastTrim.CONSTS import (
+    read_header,
+    new_line,
+    quality_header,
+    USE_SIMD,
+    QualitySchema,
+    generic_schema,
+    sanger_schema,
+    illumina_1_3_schema,
+    illumina_1_5_schema,
+    illumina_1_8,
+    solexa_schema,
+)
 from math import min
+
+"""
+Validations:
+- Header validations [x]
+- All contents are ASCII [x]
+- Quality line are within the expected range (upper, lower, offset). [x]
+"""
 
 
 @value
@@ -16,6 +35,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     var QuHeader: Tensor[DType.int8]
     var QuStr: Tensor[DType.int8]
     var total_length: Int
+    var quality_schema: QualitySchema
 
     fn __init__(
         inout self,
@@ -23,35 +43,12 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         SS: Tensor[DType.int8],
         QH: Tensor[DType.int8],
         QS: Tensor[DType.int8],
+        quality_schema: QualitySchema = generic_schema,
     ) raises -> None:
-        if SH[0] != read_header:
-            print(SH)
-            raise Error("Sequence Header is corrput")
-
-        if QH[0] != quality_header:
-            print(QH)
-            raise Error("Quality Header is corrput")
-
-        if SS.num_elements() != QS.num_elements():
-            print(
-                "SeqStr_length:",
-                SS.num_elements(),
-                "QualityStr_Length:",
-                QS.num_elements(),
-            )
-            raise Error("Corrput Lengths")
-
         self.SeqHeader = SH
         self.QuHeader = QH
-
-        if self.QuHeader.num_elements() > 1:
-            if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
-                print(QH)
-                raise Error("Quality Header is corrupt")
-
         self.SeqStr = SS
         self.QuStr = QS
-
         self.total_length = (
             SH.num_elements()
             + SS.num_elements()
@@ -59,14 +56,82 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             + QS.num_elements()
             + 4  # Addition of 4 \n again
         )
-
-    fn get_seq(self) -> String:
-        var t = self.SeqStr
-        return String(t._steal_ptr(), t.num_elements())
+        self.quality_schema = quality_schema
+        self.validate_record()
 
     @always_inline
-    fn wirte_record(self) -> Tensor[DType.int8]:
-        return self.__concat_record()
+    fn get_seq(self) -> String:
+        var temp = self.SeqStr
+        return String(temp._steal_ptr(), temp.num_elements())
+
+    @always_inline
+    fn get_qulity(self) -> String:
+        var temp = self.QuStr
+        return String(temp._steal_ptr(), temp.num_elements())
+
+    @always_inline
+    fn get_qulity_scores(self, quality_format: String) -> Tensor[DType.int8]:
+        var schema: QualitySchema
+        if quality_format == "sanger":
+            schema = sanger_schema
+        elif quality_format == "solexa":
+            schema = solexa_schema
+        elif quality_format == "illumina_1.3":
+            schema = illumina_1_3_schema
+        elif quality_format == "illumina_1.5":
+            schema = illumina_1_5_schema
+        elif quality_format == "illumina_1.8":
+            schema = illumina_1_8
+        else:
+            print(
+                "Uknown quality schema please choose one of 'sanger', 'solexa',"
+                " 'illumina_1.3', 'illumina_1.5', or 'illumina_1.8'"
+            )
+
+    @always_inline
+    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[DType.int8]:
+        return self.QuStr - schema.OFFSET
+
+    @always_inline
+    fn get_qulity_scores(self, offset: Int8) -> Tensor[DType.int8]:
+        return self.QuStr - offset
+
+    @always_inline
+    fn get_header(self) -> String:
+        var temp = self.SeqHeader
+        return String(temp._steal_ptr(), temp.num_elements())
+
+    @always_inline
+    fn wirte_record(self) -> String:
+        var temp = self.__concat_record()
+        return String(temp._steal_ptr(), temp.num_elements())
+
+    @always_inline
+    fn validate_record(self) raises:
+        if self.SeqHeader[0] != read_header:
+            raise Error("Sequence Header is corrput")
+
+        if self.QuHeader[0] != quality_header:
+            raise Error("Quality Header is corrput")
+
+        if self.SeqStr.num_elements() != self.QuStr.num_elements():
+            raise Error("Corrput Lengths")
+
+        if self.QuHeader.num_elements() > 1:
+            if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
+                raise Error("Quality Header is corrupt")
+
+        if not self._validate_ascii(
+            self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr
+        ):
+            raise Error("read contain non-ASCII lettters")
+
+        for i in range(self.QuStr.num_elements()):
+            if (
+                self.QuStr[i] > self.quality_schema.UPPER
+                or self.QuStr[i] < self.quality_schema.LOWER
+            ):
+                raise Error("Corrput quality score according to proivded schema")
 
     @always_inline
     fn _empty_record(inout self):
@@ -115,71 +180,85 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return self.SeqStr.num_elements()
 
     # Consider changing hash function to another performant one.
+    # Document the Hashing algorithm used
     @always_inline
     fn __hash__(self) -> Int:
         return hash(self.SeqStr._ptr, min(self.SeqStr.num_elements(), 50))
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
-        return self.SeqStr == other.SeqStr
+        return self.__hash__() == other.__hash__()
+
+    @staticmethod
+    fn _validate_ascii(*tensors: Tensor[DType.int8]) -> Bool:
+        for tensor in tensors:
+            let t = tensor[]
+            for i in range(t.num_elements()):
+                if t[i] > 128 or t[i] < 0:
+                    return False
+            return True
+
+
+@value
+struct RecordCoord(Stringable):
+    """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
+    """
+
+    var SeqHeader: Int32
+    var SeqStr: Int32
+    var QuHeader: Int32
+    var QuStr: Int32
+    var end: Int32
+
+    fn __init__(
+        inout self,
+        SH: Int32,
+        SS: Int32,
+        QH: Int32,
+        QS: Int32,
+        end: Int32,
+    ):
+        """Coordinates of the FastqRecord inside a chunk including the start and the end of the record.
+        """
+        self.SeqHeader = SH
+        self.SeqStr = SS
+        self.QuHeader = QH
+        self.QuStr = QS
+        self.end = end
 
     @always_inline
-    fn trim_record(
-        inout self,
-        direction: String = "end",
-        quality_threshold: Int = 20,
-    ):
-        """Algorithm for record trimming replicating trimming method implemented by BWA and cutadapt.
-        """
+    fn validate(self, chunk: Tensor[DType.int8]) raises:
+        if chunk[self.SeqHeader.to_int()] != read_header:
+            raise Error("Sequencing Header is corrput.")
 
-        var s: Int8 = 0
-        var min_qual: Int8 = 0
-        let n = self.QuStr.num_elements()
-        var stop: Int = n
-        var start: Int = 0
-        let i: Int
+        if self.seq_len() != self.qu_len():
+            raise Error("Corrupt Lengths.")
 
-        ## minimum of Rolling sum algorithm used by Cutadapt and BWA
-        # Find trim position in 5' end
-        for i in range(n):
-            s += self.QuStr[i] - 33 - quality_threshold
-            if s > 0:
-                break
-            if s < min_qual:
-                min_qual = s
-                start = i + 1
+        if chunk[self.QuHeader.to_int() + 1] != quality_header:
+            raise Error("Quality Header is corrput.")
 
-        # Find trim position in 3' end
-        min_qual = 0
-        s = 0
-        for i in range(1, n):
-            s += self.QuStr[n - i] - 33 - quality_threshold
-            if s > 0:
-                break
-            if s < min_qual:
-                min_qual = s
-                stop = stop - 1
+    @always_inline
+    fn seq_len(self) -> Int32:
+        return self.QuHeader - self.SeqStr - 1
 
-        if start >= stop:
-            self._empty_record()
-            return
+    @always_inline
+    fn qu_len(self) -> Int32:
+        return self.end - self.QuStr - 1
 
-        if direction == "end":
-            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, 0, stop)
-            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, 0, stop)
+    @always_inline
+    fn qu_header_len(self) -> Int32:
+        return self.QuStr - self.QuHeader - 1
 
-        if direction == "start":
-            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, start, n)
-            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, start, n)
-
-        if direction == "both":
-            self.SeqStr = slice_tensor[USE_SIMD=USE_SIMD](self.SeqStr, start, stop)
-            self.QuStr = slice_tensor[USE_SIMD=USE_SIMD](self.QuStr, start, stop)
-
-        self.total_length = (
-            self.SeqHeader.num_elements()
-            + self.SeqStr.num_elements()
-            + self.QuHeader.num_elements()
-            + self.QuStr.num_elements()
-            + 4
+    fn __str__(self) -> String:
+        return (
+            String("SeqHeader: ")
+            + self.SeqHeader
+            + "\nSeqStr: "
+            + self.SeqStr
+            + "\nQuHeader: "
+            + self.QuHeader
+            + "\nQuStr: "
+            + self.QuStr
+            + "\nend: "
+            + self.end
         )
