@@ -5,6 +5,10 @@ from MojoFastTrim.CONSTS import simd_width
 
 alias DEFAULT_CAPACITY = 64 * 1024
 
+# Implement functionality from:
+# https://github.com/rust-lang/rust/blob/master/library/std/src/io/buffered/bufreader/buffer.rs
+# Also the Lines Iterator from Rust
+
 
 struct BufferedStream:
     """An IO stream buffer which begins can take an underlying resource an FileHandle, Path, Tensor.
