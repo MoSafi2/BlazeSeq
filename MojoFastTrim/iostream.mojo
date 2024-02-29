@@ -3,7 +3,8 @@ from memory.memory import memcpy
 from MojoFastTrim.helpers import get_next_line_index, slice_tensor, cpy_tensor
 from MojoFastTrim.CONSTS import simd_width
 from math.math import min
-
+from utils.variant import Variant
+from pathlib import Path
 
 alias DEFAULT_CAPACITY = 64 * 1024
 
@@ -51,9 +52,8 @@ struct InnerBuffer(Sized, Stringable):
         if self.pos == 0:
             return
 
-        # TODO: Test this
-        let no_items = len(self)
-        let ptr = self.buf._ptr + self.pos
+        var no_items = len(self)
+        var ptr = self.buf._ptr + self.pos
         memcpy[I8](self.buf._ptr, ptr, no_items)  # Would this work?
         self.pos = 0
         self.end = no_items
@@ -65,60 +65,51 @@ struct InnerBuffer(Sized, Stringable):
         return self.buf.__str__()
 
 
-# struct BufferedReader:
-#     """An IO stream buffer which begins can take an underlying resource an FileHandle, Path, Tensor.
-#     """
+struct BufferedReader(Sized):
+    """A BufferedReader that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
+    TODO: Implement the in-memory buffer.
+    """
 
-#     var buffer: Tensor[DType.int8]
-#     var reader: FileHandle
-#     var file_pos: Int
-#     var search_pos: Int
+    var buf: InnerBuffer
+    var source: FileHandle
 
-#     fn __init__(inout self, stream: Path, capacity: Int = DEFAULT_CAPACITY) raises:
-#         self.buffer = Tensor[DType.int8](capacity)
-#         self.file_pos = 0
-#         self.search_pos = 0
+    fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
+        if source.exists():
+            self.source = open(source, "r")
+        else:
+            raise Error("Provided file not found for read")
 
-#         if stream.exists():
-#             let f = open(stream.path, "r")
-#             self.reader = f ^
-#             let temp = self.reader.read_bytes(capacity)
-#             memcpy[DType.int8](self.buffer._ptr, temp._ptr, temp.num_elements())
-#             self.file_pos = temp.num_elements()
-#         else:
-#             raise Error("File does not exist")
+        self.buf = InnerBuffer(capacity)
 
-#     fn fill_buffer(inout self) raises:
-#         let temp = self.reader.read_bytes(self.buffer.num_elements())
-#         memcpy[DType.int8](self.buffer._ptr, temp._ptr, temp.num_elements())
-#         self.file_pos += temp.num_elements()
+    fn fill_buffer(inout self) -> Int:
+        """Returns the number of bytes read into the buffer."""
+        # Buffer is full
+        if len(self) == self.capacity():
+            return 0
+        
+        self.left_shift()
+        try:
+            self.source.read_bytes(self.usable_space())
+            
 
-#     fn grow_buffer(inout self, factor: Int = 2) raises:
-#         var temp = Tensor[DType.int8](self.buffer.num_elements() * factor)
-#         cpy_tensor[DType.int8, simd_width](
-#             temp, self.buffer, self.buffer.num_elements(), 0, 0
-#         )
-#         self.buffer = temp
+    fn consume(inout self, amt: Int):
+        var amt_inner = min(amt, len(self))
+        self.buf.consume(amt)
 
-#     fn get_buffer(self) -> Tensor[DType.int8]:
-#         return self.buffer
+    fn left_shift(inout self):
+        self.buf.left_shift()
 
-#     fn read_line(inout self) -> Tensor[DType.int8]:
-#         let index = get_next_line_index(self.buffer, self.search_pos)
-#         if index == -1:
-#             return Tensor[DType.int8](0)
-#         let t = slice_tensor(self.buffer, self.search_pos, index)
-#         self.search_pos = index + 1
-#         return t
+    fn capacity(self) -> Int:
+        return self.buf.capacity()
+
+    
+    fn usable_space(self) -> Int:
+        return self.buf.usable_space()
+
+    fn __len__(self) -> Int:
+        return len(self.buf)
 
 
 fn main() raises:
-    var buf = InnerBuffer()
-    buf.end = 550
-    buf.buf[501] = 5
-    buf.consume(500)
-    buf.left_shift()
-    print(buf)
-    print(len(buf))
-    print(buf.usable_space())
-    print(buf.capacity())
+    var b = "/home/mohamed/Documents/Projects/Fastq_Parser/data/fastq_test.fastq"
+    var buf = BufferedReader(b)
