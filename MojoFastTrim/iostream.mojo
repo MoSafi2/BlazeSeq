@@ -70,7 +70,7 @@ struct BufferedReader(Sized):
     TODO: Implement the in-memory buffer.
     """
 
-    var buf: InnerBuffer
+    var inner_buf: InnerBuffer
     var source: FileHandle
 
     fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
@@ -79,37 +79,41 @@ struct BufferedReader(Sized):
         else:
             raise Error("Provided file not found for read")
 
-        self.buf = InnerBuffer(capacity)
+        self.inner_buf = InnerBuffer(capacity)
+
 
     fn fill_buffer(inout self) -> Int:
         """Returns the number of bytes read into the buffer."""
         # Buffer is full
         if len(self) == self.capacity():
             return 0
-        
+
         self.left_shift()
         try:
-            self.source.read_bytes(self.usable_space())
-            
+            _ = self.source.read_bytes(self.usable_space())
+        except:
+            pass
+
+        return -1
 
     fn consume(inout self, amt: Int):
         var amt_inner = min(amt, len(self))
-        self.buf.consume(amt)
+        self.inner_buf.consume(amt)
 
     fn left_shift(inout self):
-        self.buf.left_shift()
+        self.inner_buf.left_shift()
 
     fn capacity(self) -> Int:
-        return self.buf.capacity()
+        return self.inner_buf.capacity()
 
-    
     fn usable_space(self) -> Int:
-        return self.buf.usable_space()
+        return self.inner_buf.usable_space()
 
     fn __len__(self) -> Int:
-        return len(self.buf)
+        return len(self.inner_buf)
 
 
 fn main() raises:
     var b = "/home/mohamed/Documents/Projects/Fastq_Parser/data/fastq_test.fastq"
     var buf = BufferedReader(b)
+    print("done!")

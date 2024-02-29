@@ -1,6 +1,6 @@
 import math
 import time
-from algorithm import vectorize_unroll, vectorize
+from algorithm import vectorize
 from MojoFastTrim.CONSTS import *
 
 
@@ -23,12 +23,12 @@ fn find_chr_next_occurance_simd[
     Function to find the next occurance of character using SIMD instruction.
     The function assumes that the tensor is always in-bounds. any bound checks should be in the calling function.
     """
-    let len = in_tensor.num_elements() - start
-    let aligned = start + math.align_down(len, simd_width)
+    var len = in_tensor.num_elements() - start
+    var aligned = start + math.align_down(len, simd_width)
 
     for s in range(start, aligned, simd_width):
-        let v = in_tensor.simd_load[simd_width](s)
-        let mask = v == chr
+        var v = in_tensor.simd_load[simd_width](s)
+        var mask = v == chr
         if mask.reduce_or():
             return s + arg_true(mask)
 
@@ -70,14 +70,14 @@ fn find_chr_all_occurances[
 
     @parameter
     fn inner[simd_width: Int](size: Int):
-        let simd_vec = in_tensor.simd_load[simd_width](size)
-        let bool_vec = simd_vec == chr
+        var simd_vec = in_tensor.simd_load[simd_width](size)
+        var bool_vec = simd_vec == chr
         if bool_vec.reduce_or():
             for i in range(len(bool_vec)):
                 if bool_vec[i]:
                     holder.push_back(size + i)
 
-    vectorize[simd_width, inner](in_tensor.num_elements())
+    vectorize[inner, simd_width](in_tensor.num_elements())
     return holder
 
 
@@ -108,10 +108,10 @@ fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Te
 
     @parameter
     fn inner[simd_width: Int](size: Int):
-        let transfer = in_tensor.simd_load[simd_width](start + size)
+        var transfer = in_tensor.simd_load[simd_width](start + size)
         out_tensor.simd_store[simd_width](size, transfer)
 
-    vectorize[simd_width, inner](out_tensor.num_elements())
+    vectorize[inner, simd_width](out_tensor.num_elements())
 
     return out_tensor
 
@@ -152,7 +152,7 @@ fn cpy_tensor[
             index + dest_strt, src.simd_load[width](index + src_strt)
         )
 
-    vectorize[simd_width, vec_cpy](num_elements)
+    vectorize[vec_cpy, simd_width](num_elements)
 
 
 ################################ Next line Ops ##############################
@@ -208,12 +208,12 @@ fn get_next_line_index[
 
     @parameter
     if USE_SIMD:
-        let next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
         if next_line_pos == -1:
             return -1
         return next_line_pos
     else:
-        let next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
         if next_line_pos == -1:
             return -1
         return next_line_pos
