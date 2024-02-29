@@ -145,7 +145,7 @@ fn cpy_tensor[
     num_elements: Int,
     dest_strt: Int = 0,
     src_strt: Int = 0,
-) raises:
+):
     @parameter
     fn vec_cpy[width: Int](index: Int):
         dest.simd_store[width](

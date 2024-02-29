@@ -6,6 +6,7 @@ from math.math import min
 from utils.variant import Variant
 from pathlib import Path
 
+
 alias DEFAULT_CAPACITY = 64 * 1024
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
@@ -18,25 +19,37 @@ alias I8 = DType.int8
 
 struct InnerBuffer(Sized, Stringable):
     var buf: Tensor[I8]
-    var pos: Int
+    var head: Int
     var end: Int
 
     fn __init__(inout self, capacity: Int = DEFAULT_CAPACITY):
         self.buf = Tensor[I8](capacity)
-        self.pos = 0
+        self.head = 0
         self.end = 0
 
+    fn __getitem__(self, index: Int) raises -> Int8:
+        if index <= self.end:
+            return self.buf[index]
+        else:
+            raise Error("out of bounds")
+
+    fn __getitem__(self, slice: Slice) raises -> Tensor[I8]:
+        if slice.start >= self.head and slice.end <= self.end:
+            var temp = Tensor[I8](slice.end - slice.start)
+            cpy_tensor[I8, simd_width](
+                temp, self.buf, temp.num_elements(), 0, slice.start
+            )
+            return temp
+        else:
+            raise Error("out of bounds")
+
     fn check_buf_state(inout self) -> Bool:
-        if self.pos == self.end:
-            self.pos = 0
+        if self.head == self.end:
+            self.head = 0
             self.end = 0
             return True
         else:
             return False
-
-    fn consume(inout self, amt: Int):
-        self.pos = min(self.pos + amt, self.end)
-        _ = self.check_buf_state()
 
     fn capacity(self) -> Int:
         return self.buf.num_elements()
@@ -44,22 +57,40 @@ struct InnerBuffer(Sized, Stringable):
     fn usable_space(self) -> Int:
         return self.capacity() - self.end
 
+    fn consume(inout self, amt: Int):
+        self.head = min(self.head + amt, self.end)
+        _ = self.check_buf_state()
+
     fn left_shift(inout self):
         """Checks if there is remaining elements in the buffer and copys them to the beginning of buffer to allow for partial reading of new data.
         """
         # The buffer head is still at the beginning
         _ = self.check_buf_state()
-        if self.pos == 0:
+        if self.head == 0:
             return
 
         var no_items = len(self)
-        var ptr = self.buf._ptr + self.pos
+        var ptr = self.buf._ptr + self.head
         memcpy[I8](self.buf._ptr, ptr, no_items)  # Would this work?
-        self.pos = 0
+        self.head = 0
         self.end = no_items
 
+    fn store(inout self, data: Tensor[I8]):
+        if data.num_elements() <= self.usable_space():
+            # TODO: Test if end + 1 is needed
+            cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
+        elif data.num_elements():
+            self.left_shift()
+            cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
+
+    fn get_buffer(self, index: Int = 0) -> Buffer[I8]:
+        if index < len(self):
+            return Buffer[I8](self.buf._ptr + self.head + index, self.end - index)
+        else:
+            return Buffer[I8]()
+
     fn __len__(self) -> Int:
-        return self.end - self.pos
+        return self.end - self.head
 
     fn __str__(self) -> String:
         return self.buf.__str__()
@@ -80,7 +111,6 @@ struct BufferedReader(Sized):
             raise Error("Provided file not found for read")
 
         self.inner_buf = InnerBuffer(capacity)
-
 
     fn fill_buffer(inout self) -> Int:
         """Returns the number of bytes read into the buffer."""
@@ -114,6 +144,5 @@ struct BufferedReader(Sized):
 
 
 fn main() raises:
-    var b = "/home/mohamed/Documents/Projects/Fastq_Parser/data/fastq_test.fastq"
-    var buf = BufferedReader(b)
-    print("done!")
+    var b = InnerBuffer()
+    print(b[1:2])
