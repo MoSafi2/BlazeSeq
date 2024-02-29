@@ -55,6 +55,9 @@ struct InnerBuffer(Sized, Stringable):
         return self.buf.num_elements()
 
     fn usable_space(self) -> Int:
+        return self.uninatialized_space() + self.head
+
+    fn uninatialized_space(self) -> Int:
         return self.capacity() - self.end
 
     fn consume(inout self, amt: Int):
@@ -75,17 +78,25 @@ struct InnerBuffer(Sized, Stringable):
         self.head = 0
         self.end = no_items
 
-    fn store(inout self, data: Tensor[I8]):
-        if data.num_elements() <= self.usable_space():
-            # TODO: Test if end + 1 is needed
+    # This is too complicated, consider simplfiying the logic
+    fn store(inout self, data: Tensor[I8]) -> Bool:
+        if data.num_elements() > self.usable_space():
+            return False
+        if data.num_elements() <= self.uninatialized_space():
             cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
-        elif data.num_elements():
-            self.left_shift()
-            cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
+            self.end += data.num_elements()
+            return True
 
-    fn get_buffer(self, index: Int = 0) -> Buffer[I8]:
-        if index < len(self):
-            return Buffer[I8](self.buf._ptr + self.head + index, self.end - index)
+        self.left_shift()
+        cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
+        self.end += data.num_elements()
+        return True
+
+    fn get_ref_slice(self, slice: Slice) -> Buffer[I8]:
+        if slice.start - slice.end <= len(self):
+            return Buffer[I8](
+                self.buf._ptr + self.head + slice.start, slice.end - slice.start
+            )
         else:
             return Buffer[I8]()
 
@@ -115,29 +126,21 @@ struct BufferedReader(Sized):
     fn fill_buffer(inout self) -> Int:
         """Returns the number of bytes read into the buffer."""
         # Buffer is full
-        if len(self) == self.capacity():
-            return 0
+        return 0
 
-        self.left_shift()
-        try:
-            _ = self.source.read_bytes(self.usable_space())
-        except:
-            pass
+    fn read(self):
+        """Implicity call fill buffer if the whole buffer is consumed."""
+        pass
 
-        return -1
-
-    fn consume(inout self, amt: Int):
-        var amt_inner = min(amt, len(self))
-        self.inner_buf.consume(amt)
-
-    fn left_shift(inout self):
-        self.inner_buf.left_shift()
+    fn stream_untill_delimeter(self):
+        """Implicity call fill buffer if the whole buffer is consumed."""
+        pass
 
     fn capacity(self) -> Int:
         return self.inner_buf.capacity()
 
-    fn usable_space(self) -> Int:
-        return self.inner_buf.usable_space()
+    fn uninatialized_space(self) -> Int:
+        return self.inner_buf.uninatialized_space()
 
     fn __len__(self) -> Int:
         return len(self.inner_buf)
@@ -145,4 +148,4 @@ struct BufferedReader(Sized):
 
 fn main() raises:
     var b = InnerBuffer()
-    print(b[1:2])
+    var t = Tensor[I8](10000)
