@@ -61,7 +61,7 @@ struct IOStream(Sized, Stringable):
 
     @always_inline
     fn check_buf_state(inout self) -> Bool:
-        if self.head == self.end:
+        if self.head >= self.end:
             self.head = 0
             self.end = 0
             return True
@@ -93,6 +93,7 @@ struct IOStream(Sized, Stringable):
         try:
             var temp = self.source.read_bytes(nels)
             if temp.num_elements() == 0:
+                self.EOF = True
                 return -1
             _ = self.store(temp)
             return temp.num_elements()
@@ -104,6 +105,7 @@ struct IOStream(Sized, Stringable):
         try:
             var in_buf = self.source.read_bytes(self.capacity())
             if in_buf.num_elements() == 0:
+                self.EOF = True
                 return -1
             _ = self.store(in_buf)
             return in_buf.num_elements()
@@ -120,20 +122,33 @@ struct IOStream(Sized, Stringable):
         var buf = self.get(ele)
         if self.check_buf_state():
             var val = self.fill_buffer()
-            if val == -1:
-                self.EOF = True
         return buf
 
     fn read(inout self) raises -> Tensor[I8]:
         """Reads the whole buffer and calls fill buffer again."""
         if self.EOF:
             raise Error("EOF")
-
         var buf = self.get(self.len())
-        var val = self.fill_buffer()
-        if val == -1:
-            self.EOF = True
+        _ = self.fill_buffer()
         return buf
+
+    @always_inline
+    fn read_next_line(inout self) raises -> Int:
+        if self.EOF:
+            raise Error("EOF")
+
+        if self.check_buf_state():
+            _ = self.fill_buffer()
+
+        var start = self.head
+        var end = get_next_line_index(self.buf, start)
+
+        if end == -1:
+            _ = self.fill_buffer()
+
+        self.head = end + 1
+
+        return end
 
     @always_inline
     fn capacity(self) -> Int:
@@ -157,17 +172,18 @@ struct IOStream(Sized, Stringable):
 
 
 fn main() raises:
+    # TODO: Test get next line behaviour
     var buf = IOStream(
         "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq",
-        capacity=64 * 1024,
+        capacity=256 * 1024,
     )
 
     var t1 = time.now()
     while True:
         try:
-            var s = buf.read()
-            var e = s.num_elements()
+            _ = buf.read_next_line()
         except Error:
             break
     var t2 = time.now()
+
     print((t2 - t1) / 1e9)

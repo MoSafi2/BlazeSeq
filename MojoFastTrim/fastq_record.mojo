@@ -87,6 +87,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 "Uknown quality schema please choose one of 'sanger', 'solexa',"
                 " 'illumina_1.3', 'illumina_1.5', or 'illumina_1.8'"
             )
+        return Tensor[DType.int8](0)
 
     @always_inline
     fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[DType.int8]:

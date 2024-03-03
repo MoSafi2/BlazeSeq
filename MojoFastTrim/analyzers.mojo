@@ -21,29 +21,29 @@ struct BasepairDistribution(Analyser, Stringable):
 
     fn __init__(inout self):
         # Hack untill finding a away to grown a multidim tensor in place.
-        let shape = TensorShape(WIDTH, MAX_LENGTH)
+        var shape = TensorShape(WIDTH, MAX_LENGTH)
         self.bp_dist = Tensor[DType.int64](shape)
         self.max_length = 0
 
     fn tally_read(inout self, record: FastqRecord):
         if record.SeqStr.num_elements() > self.max_length:
             # BUG: Copying multi-dim tensor is not working
-            # let t = grow_matrix(self.bp_dist, record.SeqStr.num_elements())
+            # var t = grow_matrix(self.bp_dist, record.SeqStr.num_elements())
             self.max_length = record.SeqStr.num_elements()
 
         for i in range(record.SeqStr.num_elements()):
-            let index = VariadicList[Int]((record.SeqStr[i] % WIDTH).to_int(), i)
+            var index = VariadicList[Int]((record.SeqStr[i] % WIDTH).to_int(), i)
             self.bp_dist[index] += 1
 
     fn report(self) -> Tensor[DType.int64]:
         # return self.bp_dist
 
-        let final_shape = TensorShape(WIDTH, self.max_length)
+        var final_shape = TensorShape(WIDTH, self.max_length)
         var final_t = Tensor[DType.int64](WIDTH, self.max_length)
 
         for i in range(WIDTH):
             for j in range(self.max_length):
-                let index = VariadicList[Int](i, j)
+                var index = VariadicList[Int](i, j)
                 final_t[index] = self.bp_dist[index]
         return final_t
 
@@ -53,7 +53,7 @@ struct BasepairDistribution(Analyser, Stringable):
 
 fn grow_matrix[T: DType](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
     var new_tensor = Tensor[T](WIDTH * num_ele)
-    let reshape_e = TensorShape(old_tensor.num_elements())
+    var reshape_e = TensorShape(old_tensor.num_elements())
     var old_reshaped = old_tensor
     try:
         old_reshaped.ireshape(reshape_e)
@@ -63,7 +63,7 @@ fn grow_matrix[T: DType](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
     for i in range(old_reshaped.num_elements()):
         new_tensor[i] = old_reshaped[i]
 
-    let new_shape = TensorShape(WIDTH, num_ele)
+    var new_shape = TensorShape(WIDTH, num_ele)
     try:
         new_tensor.ireshape(new_shape)
     except Error:
@@ -99,7 +99,7 @@ struct CGContent(Analyser, Stringable):
             if previous_base + current_base == 138:
                 cg_num += 1
 
-        let read_cg_content = round(
+        var read_cg_content = round(
             cg_num * 100 / record.SeqStr.num_elements()
         ).to_int()
         self.cg_content[read_cg_content] += 1
@@ -196,7 +196,7 @@ struct QualityDistribution(Analyser, Stringable):
 
     fn __init__(inout self):
         # Hack untill finding a away to grown a tensor in place.
-        let shape = TensorShape(MAX_QUALITY, MAX_LENGTH)
+        var shape = TensorShape(MAX_QUALITY, MAX_LENGTH)
         self.qu_dist = Tensor[DType.int64](shape)
         self.max_length = 0
         self.max_qu = 0
@@ -206,19 +206,19 @@ struct QualityDistribution(Analyser, Stringable):
             self.max_length = record.QuStr.num_elements()
 
         for i in range(record.QuStr.num_elements()):
-            let index = VariadicList[Int]((record.QuStr[i] - OFFSET).to_int(), i)
+            var index = VariadicList[Int]((record.QuStr[i] - OFFSET).to_int(), i)
             if record.QuStr[i].to_int() - OFFSET > self.max_qu:
                 self.max_qu = record.QuStr[i].to_int() - OFFSET
             self.qu_dist[index] += 1
 
     fn report(self) -> Tensor[DType.int64]:
         print(self.max_length)
-        let final_shape = TensorShape(self.max_qu, self.max_length)
+        var final_shape = TensorShape(self.max_qu, self.max_length)
         var final_t = Tensor[DType.int64](final_shape)
 
         for i in range(self.max_qu):
             for j in range(self.max_length):
-                let index = VariadicList[Int](i, j)
+                var index = VariadicList[Int](i, j)
                 final_t[index] = self.qu_dist[index]
         return final_t
 
@@ -227,9 +227,9 @@ struct QualityDistribution(Analyser, Stringable):
 
 
 fn main():
-    let x = 500545425586454578
-    let y = 500545425586454578
-    let t1 = time.now()
-    let z = x == y
-    let t2 = time.now()
+    var x = 500545425586454578
+    var y = 500545425586454578
+    var t1 = time.now()
+    var z = x == y
+    var t2 = time.now()
     print(z, t2 - t1)
