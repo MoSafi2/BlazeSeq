@@ -12,12 +12,56 @@ alias DEFAULT_CAPACITY = 64 * 1024
 # Also supports line iterators
 
 
-struct IOStream(Sized, Stringable):
+trait reader:
+    fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
+        ...
+
+    fn __moveinit__(inout self, owned other: Self):
+        ...
+
+
+struct FileReader(reader):
+    var file_handle: FileHandle
+
+    fn __init__(inout self, path: Path) raises:
+        self.file_handle = open(path, "r")
+
+    fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
+        return self.file_handle.read_bytes(amt)
+
+    fn __moveinit__(inout self, owned other: Self):
+        self.file_handle = other.file_handle ^
+
+
+struct TensorReader(reader):
+    var pos: Int
+    var source: Tensor[I8]
+
+    fn __init__(inout self, source: Tensor[I8]):
+        self.source = source
+        self.pos = 0
+
+    fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
+        var ele = min(amt, self.source.num_elements() - self.pos)
+
+        if ele == 0:
+            return Tensor[I8](0)
+
+        var out = Tensor[I8](ele)
+        cpy_tensor[I8, simd_width](out, self.source, out.num_elements(), 0, self.pos)
+        self.pos += out.num_elements()
+        return out
+
+    fn __moveinit__(inout self, owned other: Self):
+        self.source = other.source ^
+        self.pos = other.pos
+
+
+struct IOStream[T: reader](Sized, Stringable):
     """A poor man's BufferedReader that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
-    TODO: Implement the in-memory buffer.
     """
 
-    var source: FileHandle
+    var source: T
     var buf: Tensor[I8]
     var head: Int
     var end: Int
@@ -26,9 +70,20 @@ struct IOStream(Sized, Stringable):
 
     fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
         if source.exists():
-            self.source = open(source, "r")
+            self.source = FileReader(source)
         else:
             raise Error("Provided file not found for read")
+        self.buf = Tensor[I8](capacity)
+        self.head = 0
+        self.end = 0
+        self.consumed = 0
+        self.EOF = False
+        _ = self.fill_empty_buffer()
+
+    fn __init__(
+        inout self, source: Tensor[I8], capacity: Int = DEFAULT_CAPACITY
+    ) raises:
+        self.source = TensorReader(source)
         self.buf = Tensor[I8](capacity)
         self.head = 0
         self.end = 0
@@ -93,7 +148,6 @@ struct IOStream(Sized, Stringable):
             var temp = self.source.read_bytes(nels)
             if temp.num_elements() == 0:
                 raise Error("EOF")
-                # return -1
             _ = self.store(temp)
             self.consumed += temp.num_elements()
             return temp.num_elements()
@@ -200,19 +254,17 @@ struct IOStream(Sized, Stringable):
 
 
 fn main() raises:
-    var buf = IOStream(
-        "/home/mohamed/Documents/Projects/Fastq_Parser/data/8_Swamp_S1B_MATK_2019_minq7.fastq",
-        capacity=256 * 1024,
+    var t = open(
+        "/home/mohamed/Documents/Projects/Fastq_Parser/data/SRR16012060.fastq",
+        "r",
     )
+    var x = t.read_bytes()
 
+    var buf = IOStream[TensorReader](x, capacity=64 * 1024)
     var t1 = time.now()
     while True:
         try:
             var file_pos = buf.next_line_index()
-            var buf_pos = buf.map_pos_2_buf(file_pos)
-            # print(file_pos, buf_pos, buf.buf[buf_pos])
-            if buf.buf[buf_pos] != 10:
-                print(buf.buf[buf_pos])
         except Error:
             print(Error)
             break

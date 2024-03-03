@@ -5,11 +5,12 @@ from MojoFastTrim.helpers import (
 )
 from MojoFastTrim.CONSTS import *
 from MojoFastTrim import Stats
-from MojoFastTrim.iostream import IOStream
+from MojoFastTrim.iostream import IOStream, FileReader
 import time
 
+
 struct FastqParser:
-    var stream: IOStream
+    var stream: IOStream[FileReader]
     var _BUF_SIZE: Int
     # var parsing_stats: Stats
 
@@ -17,7 +18,7 @@ struct FastqParser:
         inout self, path: String, num_workers: Int = 1, BUF_SIZE: Int = 64 * 1024
     ) raises -> None:
         self._BUF_SIZE = BUF_SIZE * num_workers
-        self.stream = IOStream(path, self._BUF_SIZE)
+        self.stream = IOStream[FileReader](path, self._BUF_SIZE)
         _ = self._header_parser()
         # self.parsing_stats = Stats()
 

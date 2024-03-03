@@ -35,7 +35,7 @@ struct FastqWriter:
     @always_inline
     fn flush_buffer(inout self) raises:
         var out = self._write_buffer
-        let out_string = String(out._steal_ptr(), self._buffer_position)
+        var out_string = String(out._steal_ptr(), self._buffer_position)
         _ = self._out_handle.seek(self._file_position)
         self._out_handle.write(out_string)
         self._file_position += self._buffer_position

@@ -5,21 +5,21 @@ from MojoFastTrim.helpers import (
 )
 from MojoFastTrim.CONSTS import read_header, quality_header
 from MojoFastTrim import RecordCoord, Stats
-from MojoFastTrim.iostream import IOStream
+from MojoFastTrim.iostream import IOStream, FileReader
 from MojoFastTrim.CONSTS import I8
 
 alias SIMD_WIDTH = simdwidthof[I8]()
 
 
 struct FastParser:
-    var stream: IOStream
+    var stream: IOStream[FileReader]
     var _BUF_SIZE: Int
     var parsing_stats: Stats
 
     fn __init__(inout self, path: String, BUF_SIZE: Int = 64 * 1024) raises -> None:
         # Initailizing starting conditions
         self._BUF_SIZE = BUF_SIZE
-        self.stream = IOStream(path, BUF_SIZE)
+        self.stream = IOStream[FileReader](path, BUF_SIZE)
         self.parsing_stats = Stats()
 
     # fn parse_all(inout self) raises:
