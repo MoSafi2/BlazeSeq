@@ -26,6 +26,10 @@ Validations:
 """
 
 
+alias ASCII_LOWER_BOUND: Scalar[DType.int8] = 0
+alias ASCII_UPPER_BOUND: Scalar[DType.int8] = 128
+
+
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     """Struct that represent a single FastaQ record."""
@@ -113,6 +117,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             raise Error("Sequence Header is corrput")
 
         if self.QuHeader[0] != quality_header:
+            print(self.QuHeader)
             raise Error("Quality Header is corrput")
 
         if self.SeqStr.num_elements() != self.QuStr.num_elements():
@@ -132,6 +137,10 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 self.QuStr[i] > self.quality_schema.UPPER
                 or self.QuStr[i] < self.quality_schema.LOWER
             ):
+                print(self.QuStr[i])
+                print(self.quality_schema.UPPER)
+                print(self.quality_schema.LOWER)
+
                 raise Error("Corrput quality score according to proivded schema")
 
     @always_inline
@@ -195,7 +204,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         for tensor in tensors:
             var t = tensor[]
             for i in range(t.num_elements()):
-                if t[i] > 128 or t[i] < 0:
+                if ASCII_LOWER_BOUND > t[i] > ASCII_UPPER_BOUND:
                     return False
         return True
 

@@ -84,7 +84,6 @@ struct IOStream(Sized, Stringable):
     fn fill_buffer(inout self) -> Int:
         """Returns the number of bytes read into the buf
         fer."""
-
         if self.check_buf_state():
             return self.fill_empty_buffer()
 
@@ -133,7 +132,8 @@ struct IOStream(Sized, Stringable):
         return buf
 
     # BUG: Can reach into garbage if end is not at the end of the unintailized
-    fn read_next_line(inout self) raises -> Int:
+    # fn read_next_line(inout self) raises -> Int:
+    fn read_next_line(inout self) raises -> Tensor[I8]:
         if self.EOF:
             raise Error("EOF")
 
@@ -143,6 +143,8 @@ struct IOStream(Sized, Stringable):
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, line_start)
 
+        # Avoids bugs when there is a partial read at EOF.
+        #TODO: Consider trimming the buffer at last chunk before EOF to avoid checks.
         if line_end > self.end:
             _ = self.fill_buffer()
             _ = self.read_next_line()
@@ -153,7 +155,9 @@ struct IOStream(Sized, Stringable):
 
         self.head = min(self.end, line_end + 1)
 
-        return line_end
+        # return line_end
+        return slice_tensor[I8](self.buf, line_start, line_end)
+        
 
     @always_inline
     fn capacity(self) -> Int:
@@ -179,17 +183,21 @@ struct IOStream(Sized, Stringable):
 fn main() raises:
     # TODO: Test get next line behaviour
     var buf = IOStream(
-        "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq",
-        capacity=64 * 1024,
+        "/home/mohamed/Documents/Projects/Fastq_Parser/data/8_Swamp_S1B_MATK_2019_minq7.fastq",
+        capacity=256 * 1024,
     )
 
     var t1 = time.now()
     while True:
         try:
             var x = buf.read_next_line()
-            # print(String(x._steal_ptr(), n))
+            var n = x.num_elements()
+            print(String(x._steal_ptr(), n + 1))
+            # print("head: ", buf.head)
+            # print("end: ", buf.end)
+            # print(x)
         except Error:
-            # print(Error)
+            print(Error)
             break
     var t2 = time.now()
 

@@ -21,7 +21,7 @@ fn find_chr_next_occurance_simd[
 ](in_tensor: Tensor[T], chr: Int, start: Int = 0) -> Int:
     """
     Function to find the next occurance of character using SIMD instruction.
-    The function assumes that the tensor is always in-bounds. any bound checks should be in the calling function.
+    Checks are in-bound. no-risk of overflowing the tensor.
     """
     var len = in_tensor.num_elements() - start
     var aligned = start + math.align_down(len, simd_width)
@@ -200,6 +200,10 @@ fn get_next_line_index[
     T: DType, USE_SIMD: Bool = True
 ](in_tensor: Tensor[T], start: Int) -> Int:
     var in_start = start
+
+    # Is this behaviour right?
+    # TODO: Make empty line skipping an optional behavior
+    # TODO: Add support for windows style seperators.
     while in_tensor[in_start] == new_line:  # Skip leadin \n
         print("skipping \n")
         in_start += 1
