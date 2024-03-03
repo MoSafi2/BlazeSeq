@@ -238,6 +238,7 @@ struct RecordCoord(Stringable):
 
     @always_inline
     fn validate(self, chunk: Tensor[DType.int8]) raises:
+        pass
         if chunk[self.SeqHeader.to_int()] != read_header:
             raise Error("Sequencing Header is corrput.")
 

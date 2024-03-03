@@ -25,6 +25,7 @@ struct IOStream(Sized, Stringable):
     var buf: Tensor[I8]
     var head: Int
     var end: Int
+    var consumed: Int
     var EOF: Bool
 
     fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
@@ -35,6 +36,7 @@ struct IOStream(Sized, Stringable):
         self.buf = Tensor[I8](capacity)
         self.head = 0
         self.end = 0
+        self.consumed = 0
         self.EOF = False
         _ = self.fill_empty_buffer()
 
@@ -85,16 +87,19 @@ struct IOStream(Sized, Stringable):
         """Returns the number of bytes read into the buf
         fer."""
         if self.check_buf_state():
-            return self.fill_empty_buffer()
+            var ele = self.fill_empty_buffer()
+            self.consumed += ele
+            return ele
 
         self.left_shift()
         var nels = self.uninatialized_space()
         try:
             var temp = self.source.read_bytes(nels)
             if temp.num_elements() == 0:
-                self.EOF = True
-                return -1
+                raise Error("EOF")
+                # return -1
             _ = self.store(temp)
+            self.consumed += temp.num_elements()
             return temp.num_elements()
         except:
             return -1
@@ -112,17 +117,17 @@ struct IOStream(Sized, Stringable):
             print(Error)
             return -1
 
+    @always_inline
     fn read(inout self, owned ele: Int) raises -> Tensor[I8]:
         """Patial reads from the buffer, if the buffer is empty, calls fill buffer."""
-
         if self.EOF:
             raise ("EOF")
-
         var buf = self.get(ele)
         if self.check_buf_state():
             var val = self.fill_buffer()
         return buf
 
+    @always_inline
     fn read(inout self) raises -> Tensor[I8]:
         """Reads the whole buffer and calls fill buffer again."""
         if self.EOF:
@@ -132,7 +137,6 @@ struct IOStream(Sized, Stringable):
         return buf
 
     # BUG: Can reach into garbage if end is not at the end of the unintailized
-    # fn read_next_line(inout self) raises -> Int:
     fn read_next_line(inout self) raises -> Tensor[I8]:
         if self.EOF:
             raise Error("EOF")
@@ -144,20 +148,39 @@ struct IOStream(Sized, Stringable):
         var line_end = get_next_line_index(self.buf, line_start)
 
         # Avoids bugs when there is a partial read at EOF.
-        #TODO: Consider trimming the buffer at last chunk before EOF to avoid checks.
+        # TODO: Consider trimming the buffer at last chunk before EOF to avoid checks.
         if line_end > self.end:
             _ = self.fill_buffer()
-            _ = self.read_next_line()
+            return self.read_next_line()
+        if line_end == -1:
+            _ = self.fill_buffer()
+            return self.read_next_line()
+        self.head = min(self.end, line_end + 1)
+        return slice_tensor[I8](self.buf, line_start, line_end)
+
+    fn next_line_index(inout self) raises -> Int:
+        if self.EOF:
+            raise Error("EOF")
+
+        if self.check_buf_state():
+            _ = self.fill_buffer()
+        var line_end = get_next_line_index(self.buf, self.head)
+
+        if line_end > self.end:
+            _ = self.fill_buffer()
+            return self.next_line_index()
 
         if line_end == -1:
             _ = self.fill_buffer()
-            _ = self.read_next_line()
+            return self.next_line_index()
 
         self.head = min(self.end, line_end + 1)
 
-        # return line_end
-        return slice_tensor[I8](self.buf, line_start, line_end)
-        
+        return line_end + self.consumed
+
+    @always_inline
+    fn map_pos_2_buf(self, file_pos: Int) -> Int:
+        return file_pos - self.consumed
 
     @always_inline
     fn capacity(self) -> Int:
@@ -181,7 +204,6 @@ struct IOStream(Sized, Stringable):
 
 
 fn main() raises:
-    # TODO: Test get next line behaviour
     var buf = IOStream(
         "/home/mohamed/Documents/Projects/Fastq_Parser/data/8_Swamp_S1B_MATK_2019_minq7.fastq",
         capacity=256 * 1024,
@@ -190,12 +212,11 @@ fn main() raises:
     var t1 = time.now()
     while True:
         try:
-            var x = buf.read_next_line()
-            var n = x.num_elements()
-            print(String(x._steal_ptr(), n + 1))
-            # print("head: ", buf.head)
-            # print("end: ", buf.end)
-            # print(x)
+            var file_pos = buf.next_line_index()
+            var buf_pos = buf.map_pos_2_buf(file_pos)
+            # print(file_pos, buf_pos, buf.buf[buf_pos])
+            if buf.buf[buf_pos] != 10:
+                print(buf.buf[buf_pos])
         except Error:
             print(Error)
             break

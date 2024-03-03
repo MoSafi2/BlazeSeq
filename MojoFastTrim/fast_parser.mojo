@@ -4,6 +4,7 @@ from MojoFastTrim.helpers import (
     find_last_read_header,
     cpy_tensor,
 )
+from MojoFastTrim.CONSTS import read_header, quality_header
 from MojoFastTrim import RecordCoord, Stats
 from MojoFastTrim.iostream import IOStream
 
@@ -35,38 +36,33 @@ struct FastParser:
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
         read = self.parse_read()
-        read.validate(self.stream.buf)
+        # read.validate(self.stream.buf)
         return read
 
+    # BUG, there is a still a problem with validation
     @always_inline
     fn parse_read(
         inout self,
     ) raises -> RecordCoord:
         var start = self.stream.head
-        var line1 = self.stream.read_next_line()
-        var line2 = self.stream.read_next_line()
-        var line3 = self.stream.read_next_line()
-        var line4 = self.stream.read_next_line()
+        var line1 = self.stream.next_line_index() + 1
+        var line2 = self.stream.next_line_index() + 1
+        var line3 = self.stream.next_line_index() + 1
+        var line4 = self.stream.next_line_index() + 1
         return RecordCoord(start, line1, line2, line3, line4)
-
-    @always_inline
-    fn set_last_index(inout self, num_elements: Int):
-        if not self.stream.EOF:
-            self.stream.end = find_last_read_header(self.stream.buf)
 
 
 fn main() raises:
     var parser = FastParser(
         "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
     )
-
     var no_bases = 0
     var num_reads = 0
     while True:
         try:
             var record = parser.next()
             num_reads += 1
-            no_bases += (record.SeqStr - record.QuHeader).to_int()
+            # no_bases += (record.SeqStr - record.QuHeader).to_int()
         except Error:
             print(Error)
             print(num_reads)
