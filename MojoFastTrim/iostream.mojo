@@ -132,8 +132,8 @@ struct IOStream(Sized, Stringable):
         _ = self.fill_buffer()
         return buf
 
-    @always_inline
-    fn read_next_line(inout self) raises -> Int:
+    # BUG: Can reach into garbage if end is not at the end of the unintailized
+    fn read_next_line(inout self) raises -> Tensor[I8]:
         if self.EOF:
             raise Error("EOF")
 
@@ -143,12 +143,17 @@ struct IOStream(Sized, Stringable):
         var start = self.head
         var end = get_next_line_index(self.buf, start)
 
+        if end > self.end:
+            _ = self.fill_buffer()
+            _ = self.read_next_line()
+
         if end == -1:
             _ = self.fill_buffer()
+            _ = self.read_next_line()
 
-        self.head = end + 1
+        self.head = self.end + 1
 
-        return end
+        return slice_tensor(self.buf, start, end)
 
     @always_inline
     fn capacity(self) -> Int:
@@ -174,15 +179,18 @@ struct IOStream(Sized, Stringable):
 fn main() raises:
     # TODO: Test get next line behaviour
     var buf = IOStream(
-        "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq",
+        "/home/mohamed/Documents/Projects/Fastq_Parser/data/8_Swamp_S1B_MATK_2019_minq7.fastq",
         capacity=256 * 1024,
     )
 
     var t1 = time.now()
     while True:
         try:
-            _ = buf.read_next_line()
+            var x = buf.read_next_line()
+            var n = x.num_elements()
+            print(String(x._steal_ptr(), n))
         except Error:
+            print(Error)
             break
     var t2 = time.now()
 
