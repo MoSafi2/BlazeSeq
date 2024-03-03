@@ -8,14 +8,15 @@ alias GB = 1024 * MB
 
 
 fn main() raises:
-    let vars = argv()
-    let t1 = time.now()
+    var vars = argv()
+    var t1 = time.now()
     var parser = FastParser(vars[1], 64 * KB)
     try:
-        parser.parse_all()
-    except:
+        _ = parser.next()
+    except Error:
+        print(Error)
         print(parser.parsing_stats)
-    let t2 = time.now()
+    var t2 = time.now()
     print((t2 - t1) / 1e9)
 
     # var num_reads = 0

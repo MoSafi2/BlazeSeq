@@ -1,6 +1,5 @@
 from MojoFastTrim import FastqRecord
 from MojoFastTrim.helpers import (
-    read_bytes,
     find_last_read_header,
     get_next_line,
 )
@@ -58,7 +57,7 @@ struct FastqParser:
 
 
 fn main() raises:
-    var file = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
+    var file = "/home/mohamed/Documents/Projects/Fastq_Parser/data/SRR16012060.fastq"
     var parser = FastqParser(file, 1, 256 * 1024)
 
     var t1 = time.now()

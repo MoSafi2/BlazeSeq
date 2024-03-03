@@ -129,7 +129,7 @@ fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
     """
     Copy a small tensor into a larger tensor given an index at the large tensor.
     Implemented iteratively due to small gain from copying less then 1MB tensor using SIMD.
-    Assumes copying is always in bounds. Bound checking is th responsbility of the caller.
+    Assumes copying is always in bounds. Bound checking is the responsbility of the caller.
     """
     for i in range(src.num_elements()):
         dest[start + i] = src[i]
@@ -158,10 +158,6 @@ fn cpy_tensor[
 ################################ Next line Ops ##############################
 
 # The next line OPs is dependent on find_chr_next_occurance and slice_tensor
-
-
-# BUG: If there is no new line sperator, the function results in segmentation-fault
-# Desired behaviour? could be either returning the whole tensor or returning an empty Tensor.
 
 
 @always_inline
@@ -247,14 +243,3 @@ fn find_last_read_header(
 
 
 ################################### File read ops #############################################
-
-
-@always_inline
-fn read_bytes(
-    handle: FileHandle, beginning: UInt64, length: Int64
-) raises -> Tensor[DType.int8]:
-    """Function to read a file chunk given an offset to seek.
-    Returns empty tensor or under-sized tensor if reached EOF.
-    """
-    _ = handle.seek(beginning)
-    return handle.read_bytes(length)

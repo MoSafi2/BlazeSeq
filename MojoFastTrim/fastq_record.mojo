@@ -16,6 +16,7 @@ from MojoFastTrim.CONSTS import (
     illumina_1_5_schema,
     illumina_1_8,
     solexa_schema,
+    simd_width,
 )
 
 """
@@ -117,7 +118,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             raise Error("Sequence Header is corrput")
 
         if self.QuHeader[0] != quality_header:
-            print(self.QuHeader)
             raise Error("Quality Header is corrput")
 
         if self.SeqStr.num_elements() != self.QuStr.num_elements():
@@ -137,10 +137,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 self.QuStr[i] > self.quality_schema.UPPER
                 or self.QuStr[i] < self.quality_schema.LOWER
             ):
-                print(self.QuStr[i])
-                print(self.quality_schema.UPPER)
-                print(self.quality_schema.LOWER)
-
                 raise Error("Corrput quality score according to proivded schema")
 
     @always_inline
@@ -203,10 +199,30 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     fn _validate_ascii(*tensors: Tensor[DType.int8]) -> Bool:
         for tensor in tensors:
             var t = tensor[]
-            for i in range(t.num_elements()):
-                if ASCII_LOWER_BOUND > t[i] > ASCII_UPPER_BOUND:
+            var aligned = math.align_down(t.num_elements(), simd_width)
+            for i in range(0, aligned, simd_width):
+                var vec = t.simd_load[simd_width](i)
+                var mask = vec & 0x80
+                var mask2 = mask.reduce_max()
+                if mask2 > 0:
+                    return False
+            for i in range(aligned, t.num_elements()):
+                if t[i] & 0x80:
                     return False
         return True
+
+    # # TODO: Make this SIMD
+    # @staticmethod
+    # fn _validate_ascii(*tensors: Tensor[DType.int8]) -> Bool:
+    #     for tensor in tensors:
+    #         var t = tensor[]
+    #         for i in range(t.num_elements()):
+    #             if t[i] & 0x80:
+    #                 return False
+    #     return True
+
+
+
 
 
 @value
