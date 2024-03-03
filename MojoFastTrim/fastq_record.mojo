@@ -135,7 +135,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
 
     @always_inline
     fn _empty_record(inout self):
-        let empty = Tensor[DType.int8](0)
+        var empty = Tensor[DType.int8](0)
         self.SeqStr = empty
         self.SeqHeader = empty
         self.QuStr = empty
@@ -192,11 +192,11 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     @staticmethod
     fn _validate_ascii(*tensors: Tensor[DType.int8]) -> Bool:
         for tensor in tensors:
-            let t = tensor[]
+            var t = tensor[]
             for i in range(t.num_elements()):
                 if t[i] > 128 or t[i] < 0:
                     return False
-            return True
+        return True
 
 
 @value

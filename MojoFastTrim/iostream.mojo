@@ -5,7 +5,7 @@ from MojoFastTrim.CONSTS import simd_width
 from math.math import min
 from utils.variant import Variant
 from pathlib import Path
-
+import time
 
 alias DEFAULT_CAPACITY = 64 * 1024
 
@@ -13,36 +13,53 @@ alias DEFAULT_CAPACITY = 64 * 1024
 # https://github.com/dignifiedquire/buffer-redux
 # Also supports line iterators
 
-
 alias I8 = DType.int8
 
 
-struct InnerBuffer(Sized, Stringable):
+struct IOStream(Sized, Stringable):
+    """A poor man's BufferedReader that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
+    TODO: Implement the in-memory buffer.
+    """
+
+    var source: FileHandle
     var buf: Tensor[I8]
     var head: Int
     var end: Int
+    var EOF: Bool
 
-    fn __init__(inout self, capacity: Int = DEFAULT_CAPACITY):
+    fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
+        if source.exists():
+            self.source = open(source, "r")
+        else:
+            raise Error("Provided file not found for read")
         self.buf = Tensor[I8](capacity)
         self.head = 0
         self.end = 0
+        self.EOF = False
+        _ = self.fill_empty_buffer()
 
-    fn __getitem__(self, index: Int) raises -> Int8:
-        if index <= self.end:
-            return self.buf[index]
-        else:
-            raise Error("out of bounds")
+    @always_inline
+    fn len(self) -> Int:
+        return self.end - self.head
 
-    fn __getitem__(self, slice: Slice) raises -> Tensor[I8]:
-        if slice.start >= self.head and slice.end <= self.end:
-            var temp = Tensor[I8](slice.end - slice.start)
-            cpy_tensor[I8, simd_width](
-                temp, self.buf, temp.num_elements(), 0, slice.start
-            )
-            return temp
-        else:
-            raise Error("out of bounds")
+    @always_inline
+    fn get(inout self, ele: Int) -> Tensor[I8]:
+        # Gets are always in bounds
+        var out_buf = Tensor[I8](min(ele, self.len()))
+        cpy_tensor[I8, simd_width](
+            out_buf, self.buf, out_buf.num_elements(), 0, self.head
+        )
+        self.head += out_buf.num_elements()
+        return out_buf
 
+    fn store(inout self, in_tensor: Tensor[I8]) -> Int:
+        # Stores are always in bounds
+        var nels = min(in_tensor.num_elements(), self.uninatialized_space())
+        cpy_tensor[I8, simd_width](self.buf, in_tensor, nels, self.end, 0)
+        self.end += nels
+        return nels
+
+    @always_inline
     fn check_buf_state(inout self) -> Bool:
         if self.head == self.end:
             self.head = 0
@@ -51,101 +68,106 @@ struct InnerBuffer(Sized, Stringable):
         else:
             return False
 
-    fn capacity(self) -> Int:
-        return self.buf.num_elements()
-
-    fn usable_space(self) -> Int:
-        return self.uninatialized_space() + self.head
-
-    fn uninatialized_space(self) -> Int:
-        return self.capacity() - self.end
-
-    fn consume(inout self, amt: Int):
-        self.head = min(self.head + amt, self.end)
-        _ = self.check_buf_state()
-
+    @always_inline
     fn left_shift(inout self):
         """Checks if there is remaining elements in the buffer and copys them to the beginning of buffer to allow for partial reading of new data.
         """
-        # The buffer head is still at the beginning
-        _ = self.check_buf_state()
         if self.head == 0:
             return
-
-        var no_items = len(self)
+        var no_items = self.len()
         var ptr = self.buf._ptr + self.head
         memcpy[I8](self.buf._ptr, ptr, no_items)  # Would this work?
         self.head = 0
         self.end = no_items
 
-    # This is too complicated, consider simplfiying the logic
-    fn store(inout self, data: Tensor[I8]) -> Bool:
-        if data.num_elements() > self.usable_space():
-            return False
-        if data.num_elements() <= self.uninatialized_space():
-            cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
-            self.end += data.num_elements()
-            return True
+    @always_inline
+    fn fill_buffer(inout self) -> Int:
+        """Returns the number of bytes read into the buf
+        fer."""
+
+        if self.check_buf_state():
+            return self.fill_empty_buffer()
 
         self.left_shift()
-        cpy_tensor[I8, simd_width](self.buf, data, data.num_elements(), self.end, 0)
-        self.end += data.num_elements()
-        return True
+        var nels = self.uninatialized_space()
+        try:
+            var temp = self.source.read_bytes(nels)
+            if temp.num_elements() == 0:
+                return -1
+            _ = self.store(temp)
+            return temp.num_elements()
+        except:
+            return -1
 
-    fn get_ref_slice(self, slice: Slice) -> Buffer[I8]:
-        if slice.start - slice.end <= len(self):
-            return Buffer[I8](
-                self.buf._ptr + self.head + slice.start, slice.end - slice.start
-            )
-        else:
-            return Buffer[I8]()
+    @always_inline
+    fn fill_empty_buffer(inout self) -> Int:
+        try:
+            var in_buf = self.source.read_bytes(self.capacity())
+            if in_buf.num_elements() == 0:
+                return -1
+            _ = self.store(in_buf)
+            return in_buf.num_elements()
+        except Error:
+            print(Error)
+            return -1
+
+    fn read(inout self, owned ele: Int) raises -> Tensor[I8]:
+        """Patial reads from the buffer, if the buffer is empty, calls fill buffer."""
+
+        if self.EOF:
+            raise ("EOF")
+
+        var buf = self.get(ele)
+        if self.check_buf_state():
+            var val = self.fill_buffer()
+            if val == -1:
+                self.EOF = True
+        return buf
+
+    fn read(inout self) raises -> Tensor[I8]:
+        """Reads the whole buffer and calls fill buffer again."""
+        if self.EOF:
+            raise Error("EOF")
+
+        var buf = self.get(self.len())
+        var val = self.fill_buffer()
+        if val == -1:
+            self.EOF = True
+        return buf
+
+    @always_inline
+    fn capacity(self) -> Int:
+        return self.buf.num_elements()
+
+    @always_inline
+    fn uninatialized_space(self) -> Int:
+        return self.capacity() - self.end
+
+    @always_inline
+    fn usable_space(self) -> Int:
+        return self.uninatialized_space() + self.head
 
     fn __len__(self) -> Int:
         return self.end - self.head
 
     fn __str__(self) -> String:
-        return self.buf.__str__()
-
-
-struct BufferedReader(Sized):
-    """A BufferedReader that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
-    TODO: Implement the in-memory buffer.
-    """
-
-    var inner_buf: InnerBuffer
-    var source: FileHandle
-
-    fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
-        if source.exists():
-            self.source = open(source, "r")
-        else:
-            raise Error("Provided file not found for read")
-
-        self.inner_buf = InnerBuffer(capacity)
-
-    fn fill_buffer(inout self) -> Int:
-        """Returns the number of bytes read into the buffer."""
-        # Buffer is full
-        return 0
-
-    fn read(self):
-        """Implicity call fill buffer if the whole buffer is consumed."""
-        pass
-
-    fn stream_untill_delimeter(self):
-        """Implicity call fill buffer if the whole buffer is consumed."""
-        pass
-
-    fn capacity(self) -> Int:
-        return self.inner_buf.capacity()
-
-    fn uninatialized_space(self) -> Int:
-        return self.inner_buf.uninatialized_space()
-
-    fn __len__(self) -> Int:
-        return len(self.inner_buf)
+        var out = Tensor[I8](self.len())
+        cpy_tensor[I8, simd_width](out, self.buf, self.len(), 0, self.head)
+        return String(out._steal_ptr(), self.len())
 
 
 fn main() raises:
-    var b = InnerBuffer()
-    var t = Tensor[I8](10000)
+    var buf = IOStream(
+        "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq",
+        capacity=64 * 1024,
+    )
+
+    var t1 = time.now()
+    while True:
+        try:
+            var s = buf.read()
+            var e = s.num_elements()
+        except Error:
+            break
+    var t2 = time.now()
+    print((t2 - t1) / 1e9)
