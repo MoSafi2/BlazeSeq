@@ -1,23 +1,7 @@
 from MojoFastTrim.helpers import slice_tensor, write_to_buff
-from memory.unsafe import DTypePointer
-from tensor import Tensor
-from base64 import b64encode
-from collections import KeyElement
 from math import min
-from MojoFastTrim.CONSTS import (
-    read_header,
-    new_line,
-    quality_header,
-    USE_SIMD,
-    QualitySchema,
-    generic_schema,
-    sanger_schema,
-    illumina_1_3_schema,
-    illumina_1_5_schema,
-    illumina_1_8,
-    solexa_schema,
-    simd_width,
-)
+from MojoFastTrim.CONSTS import *
+
 
 """
 Validations:
@@ -27,27 +11,23 @@ Validations:
 """
 
 
-alias ASCII_LOWER_BOUND: Scalar[DType.int8] = 0
-alias ASCII_UPPER_BOUND: Scalar[DType.int8] = 128
-
-
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     """Struct that represent a single FastaQ record."""
 
-    var SeqHeader: Tensor[DType.int8]
-    var SeqStr: Tensor[DType.int8]
-    var QuHeader: Tensor[DType.int8]
-    var QuStr: Tensor[DType.int8]
+    var SeqHeader: Tensor[I8]
+    var SeqStr: Tensor[I8]
+    var QuHeader: Tensor[I8]
+    var QuStr: Tensor[I8]
     var total_length: Int
     var quality_schema: QualitySchema
 
     fn __init__(
         inout self,
-        SH: Tensor[DType.int8],
-        SS: Tensor[DType.int8],
-        QH: Tensor[DType.int8],
-        QS: Tensor[DType.int8],
+        SH: Tensor[I8],
+        SS: Tensor[I8],
+        QH: Tensor[I8],
+        QS: Tensor[I8],
         quality_schema: QualitySchema = generic_schema,
     ) raises -> None:
         self.SeqHeader = SH
@@ -75,7 +55,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return String(temp._steal_ptr(), temp.num_elements())
 
     @always_inline
-    fn get_qulity_scores(self, quality_format: String) -> Tensor[DType.int8]:
+    fn get_qulity_scores(self, quality_format: String) -> Tensor[I8]:
         var schema: QualitySchema
         if quality_format == "sanger":
             schema = sanger_schema
@@ -92,14 +72,14 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 "Uknown quality schema please choose one of 'sanger', 'solexa',"
                 " 'illumina_1.3', 'illumina_1.5', or 'illumina_1.8'"
             )
-        return Tensor[DType.int8](0)
+        return Tensor[I8](0)
 
     @always_inline
-    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[DType.int8]:
+    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[I8]:
         return self.QuStr - schema.OFFSET
 
     @always_inline
-    fn get_qulity_scores(self, offset: Int8) -> Tensor[DType.int8]:
+    fn get_qulity_scores(self, offset: Int8) -> Tensor[I8]:
         return self.QuStr - offset
 
     @always_inline
@@ -140,21 +120,12 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 raise Error("Corrput quality score according to proivded schema")
 
     @always_inline
-    fn _empty_record(inout self):
-        var empty = Tensor[DType.int8](0)
-        self.SeqStr = empty
-        self.SeqHeader = empty
-        self.QuStr = empty
-        self.QuHeader = empty
-        self.total_length = 0
-
-    @always_inline
-    fn __concat_record(self) -> Tensor[DType.int8]:
+    fn __concat_record(self) -> Tensor[I8]:
         if self.total_length == 0:
-            return Tensor[DType.int8](0)
+            return Tensor[I8](0)
 
         var offset = 0
-        var t = Tensor[DType.int8](self.total_length)
+        var t = Tensor[I8](self.total_length)
 
         write_to_buff(self.SeqHeader, t, offset)
         offset = offset + self.SeqHeader.num_elements() + 1
@@ -196,7 +167,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return self.__hash__() == other.__hash__()
 
     @staticmethod
-    fn _validate_ascii(*tensors: Tensor[DType.int8]) -> Bool:
+    fn _validate_ascii(*tensors: Tensor[I8]) -> Bool:
         for tensor in tensors:
             var t = tensor[]
             var aligned = math.align_down(t.num_elements(), simd_width)
@@ -210,19 +181,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 if t[i] & 0x80:
                     return False
         return True
-
-    # # TODO: Make this SIMD
-    # @staticmethod
-    # fn _validate_ascii(*tensors: Tensor[DType.int8]) -> Bool:
-    #     for tensor in tensors:
-    #         var t = tensor[]
-    #         for i in range(t.num_elements()):
-    #             if t[i] & 0x80:
-    #                 return False
-    #     return True
-
-
-
 
 
 @value
@@ -253,7 +211,7 @@ struct RecordCoord(Stringable):
         self.end = end
 
     @always_inline
-    fn validate(self, chunk: Tensor[DType.int8]) raises:
+    fn validate(self, chunk: Tensor[I8]) raises:
         pass
         if chunk[self.SeqHeader.to_int()] != read_header:
             raise Error("Sequencing Header is corrput.")

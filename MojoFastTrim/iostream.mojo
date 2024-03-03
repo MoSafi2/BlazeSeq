@@ -1,9 +1,7 @@
-from utils import variant
 from memory.memory import memcpy
 from MojoFastTrim.helpers import get_next_line_index, slice_tensor, cpy_tensor
-from MojoFastTrim.CONSTS import simd_width
+from MojoFastTrim.CONSTS import simd_width, I8
 from math.math import min
-from utils.variant import Variant
 from pathlib import Path
 import time
 
@@ -12,8 +10,6 @@ alias DEFAULT_CAPACITY = 64 * 1024
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
 # https://github.com/dignifiedquire/buffer-redux
 # Also supports line iterators
-
-alias I8 = DType.int8
 
 
 struct IOStream(Sized, Stringable):

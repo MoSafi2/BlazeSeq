@@ -1,10 +1,5 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
-from MojoFastTrim import FastqRecord, RecordCoord
-from collections import Dict
-from tensor import Tensor, TensorShape
-from MojoFastTrim.helpers import write_to_buff
-from math import max
 from MojoFastTrim.analyzers import *
 
 alias MAX_COUNTS = 1_000_000
@@ -45,8 +40,8 @@ struct Stats(Stringable):
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
         self.qu_dist.tally_read(record)
-        self.dup_reads.tally_read(record) #Most expensive 3.5s for 5.5 M reads
-        self.cg_content.tally_read(record) #Almost Free
+        self.dup_reads.tally_read(record)  # Most expensive 3.5s for 5.5 M reads
+        self.cg_content.tally_read(record)  # Almost Free
 
     fn __str__(self) -> String:
         return (

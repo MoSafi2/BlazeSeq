@@ -1,5 +1,4 @@
 import math
-import time
 from algorithm import vectorize
 from MojoFastTrim.CONSTS import *
 
@@ -222,9 +221,7 @@ fn get_next_line_index[
 ############################# Fastq recod-related Ops ################################
 
 
-fn find_last_read_header(
-    in_tensor: Tensor[DType.int8], start: Int = 0, end: Int = -1
-) -> Int:
+fn find_last_read_header(in_tensor: Tensor[I8], start: Int = 0, end: Int = -1) -> Int:
     var end_inner: Int
     if end == -1:
         end_inner = in_tensor.num_elements()
@@ -240,6 +237,3 @@ fn find_last_read_header(
             return -1
         last_chr = find_last_read_header(in_tensor, start, end_inner)
     return last_chr
-
-
-################################### File read ops #############################################

@@ -6,9 +6,9 @@ from MojoFastTrim.helpers import (
 from MojoFastTrim.CONSTS import read_header, quality_header
 from MojoFastTrim import RecordCoord, Stats
 from MojoFastTrim.iostream import IOStream
+from MojoFastTrim.CONSTS import I8
 
-alias T = DType.int8
-alias SIMD_WIDTH = simdwidthof[DType.int8]()
+alias SIMD_WIDTH = simdwidthof[I8]()
 
 
 struct FastParser:

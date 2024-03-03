@@ -3,15 +3,10 @@ from MojoFastTrim.helpers import (
     find_last_read_header,
     get_next_line,
 )
-from algorithm import parallelize
-from os.atomic import Atomic
 from MojoFastTrim.CONSTS import *
 from MojoFastTrim import Stats
 from MojoFastTrim.iostream import IOStream
 import time
-
-alias T = DType.int8
-
 
 struct FastqParser:
     var stream: IOStream
