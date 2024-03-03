@@ -35,7 +35,6 @@ struct FastqParser:
         self.fill_buffer()
         _ = self._header_parser()
 
-
     fn parse_all(inout self) raises:
         while True:
             self._parse_chunk(self._current_chunk, start=0, end=self._chunk_last_index)
@@ -52,7 +51,7 @@ struct FastqParser:
         self.check_EOF()
         if self._chunk_pos >= self._chunk_last_index:
             self.fill_buffer()
-            
+
         read = self._parse_read(self._chunk_pos, self._current_chunk)
         self.parsing_stats.tally(read)
 

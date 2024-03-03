@@ -67,7 +67,8 @@ fn main() raises:
             var record = parser.next()
             num_reads += 1
             no_bases += (record.SeqStr - record.QuHeader).to_int()
-        except:
+        except Error:
+            print(Error)
             print(num_reads)
             print(no_bases)
             break

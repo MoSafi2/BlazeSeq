@@ -61,7 +61,7 @@ struct IOStream(Sized, Stringable):
 
     @always_inline
     fn check_buf_state(inout self) -> Bool:
-        if self.head >= self.end:
+        if self.head == self.end:
             self.head = 0
             self.end = 0
             return True
@@ -133,27 +133,27 @@ struct IOStream(Sized, Stringable):
         return buf
 
     # BUG: Can reach into garbage if end is not at the end of the unintailized
-    fn read_next_line(inout self) raises -> Tensor[I8]:
+    fn read_next_line(inout self) raises -> Int:
         if self.EOF:
             raise Error("EOF")
 
         if self.check_buf_state():
             _ = self.fill_buffer()
 
-        var start = self.head
-        var end = get_next_line_index(self.buf, start)
+        var line_start = self.head
+        var line_end = get_next_line_index(self.buf, line_start)
 
-        if end > self.end:
+        if line_end > self.end:
             _ = self.fill_buffer()
             _ = self.read_next_line()
 
-        if end == -1:
+        if line_end == -1:
             _ = self.fill_buffer()
             _ = self.read_next_line()
 
-        self.head = self.end + 1
+        self.head = min(self.end, line_end + 1)
 
-        return slice_tensor(self.buf, start, end)
+        return line_end
 
     @always_inline
     fn capacity(self) -> Int:
@@ -179,18 +179,17 @@ struct IOStream(Sized, Stringable):
 fn main() raises:
     # TODO: Test get next line behaviour
     var buf = IOStream(
-        "/home/mohamed/Documents/Projects/Fastq_Parser/data/8_Swamp_S1B_MATK_2019_minq7.fastq",
-        capacity=256 * 1024,
+        "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq",
+        capacity=64 * 1024,
     )
 
     var t1 = time.now()
     while True:
         try:
             var x = buf.read_next_line()
-            var n = x.num_elements()
-            print(String(x._steal_ptr(), n))
+            # print(String(x._steal_ptr(), n))
         except Error:
-            print(Error)
+            # print(Error)
             break
     var t2 = time.now()
 
