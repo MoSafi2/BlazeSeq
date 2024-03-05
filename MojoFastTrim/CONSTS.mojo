@@ -34,7 +34,8 @@ struct QualitySchema(Stringable):
 
 # Values for schemas are derived from
 # https://github.com/BioJulia/FASTX.jl/blob/master/src/fastq/quality.jl
-# Check the values again, smthing smells solexa is different than Illumina 1.3?
+# Also check: https://www.biostars.org/p/90845/
+# TODO: Validate those ranges
 
 alias generic_schema = QualitySchema("Generic", 0, 127, 0)
 alias sanger_schema = QualitySchema("Sanger", 33, 126, 33)

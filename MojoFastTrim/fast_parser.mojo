@@ -35,7 +35,7 @@ struct FastParser:
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
         read = self.parse_read()
-        # read.validate(self.stream.buf)
+        read.validate(self.stream)
         return read
 
     # BUG, there is a still a problem with validation

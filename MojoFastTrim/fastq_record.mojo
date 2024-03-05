@@ -1,6 +1,7 @@
 from MojoFastTrim.helpers import slice_tensor, write_to_buff
 from math import min
 from MojoFastTrim.CONSTS import *
+from MojoFastTrim.iostream import IOStream
 
 
 """
@@ -211,15 +212,19 @@ struct RecordCoord(Stringable):
         self.end = end
 
     @always_inline
-    fn validate(self, chunk: Tensor[I8]) raises:
+    fn validate(self, buf: IOStream) raises:
         pass
-        if chunk[self.SeqHeader.to_int()] != read_header:
+        if buf.buf[self.SeqHeader.to_int() - buf.consumed] != read_header:
+            print(buf.buf[self.SeqHeader.to_int() - buf.consumed])
+            print(self.SeqHeader)
+            print(buf.consumed)
+            print(self.SeqHeader - buf.consumed)
             raise Error("Sequencing Header is corrput.")
 
         if self.seq_len() != self.qu_len():
             raise Error("Corrupt Lengths.")
 
-        if chunk[self.QuHeader.to_int() + 1] != quality_header:
+        if buf.buf[self.QuHeader.to_int() - buf.consumed] != quality_header:
             raise Error("Quality Header is corrput.")
 
     @always_inline
