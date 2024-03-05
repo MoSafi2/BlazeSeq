@@ -213,31 +213,21 @@ struct RecordCoord(Stringable):
 
     @always_inline
     fn validate(self, buf: IOStream) raises:
-        pass
-        if buf.buf[self.SeqHeader.to_int() - buf.consumed] != read_header:
-            print(buf.buf[self.SeqHeader.to_int() - buf.consumed])
-            print(self.SeqHeader)
-            print(buf.consumed)
-            print(self.SeqHeader - buf.consumed)
-            raise Error("Sequencing Header is corrput.")
-
-        if self.seq_len() != self.qu_len():
+        if self.seq_len() != self.qu_len() + 1:
+            print(self.seq_len(), self.qu_len())
             raise Error("Corrupt Lengths.")
-
-        if buf.buf[self.QuHeader.to_int() - buf.consumed] != quality_header:
-            raise Error("Quality Header is corrput.")
 
     @always_inline
     fn seq_len(self) -> Int32:
-        return self.QuHeader - self.SeqStr - 1
+        return self.QuHeader - self.SeqStr
 
     @always_inline
     fn qu_len(self) -> Int32:
-        return self.end - self.QuStr - 1
+        return self.end - self.QuStr
 
     @always_inline
     fn qu_header_len(self) -> Int32:
-        return self.QuStr - self.QuHeader - 1
+        return self.QuStr - self.QuHeader
 
     fn __str__(self) -> String:
         return (

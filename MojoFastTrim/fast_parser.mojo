@@ -43,12 +43,19 @@ struct FastParser:
     fn parse_read(
         inout self,
     ) raises -> RecordCoord:
-        var start = self.stream.head
-        var line1 = self.stream.next_line_index() + 1
-        var line2 = self.stream.next_line_index() + 1
-        var line3 = self.stream.next_line_index() + 1
-        var line4 = self.stream.next_line_index() + 1
-        return RecordCoord(start, line1, line2, line3, line4)
+        var line1 = self.stream.next_line_coord()
+        if self.stream.buf[self.stream.map_pos_2_buf(line1.start)] != read_header:
+            raise Error("Corrupt read header")
+        var line2 = self.stream.next_line_coord()
+        var line3 = self.stream.next_line_coord()
+
+        if self.stream.buf[self.stream.map_pos_2_buf(line3.start)] != quality_header:
+            raise Error("Corrupt quality header")
+
+        var line4 = self.stream.next_line_coord()
+        return RecordCoord(
+            line1.start, line2.start, line3.start, line4.start, line4.end
+        )
 
 
 fn main() raises:
@@ -61,9 +68,8 @@ fn main() raises:
         try:
             var record = parser.next()
             num_reads += 1
-            # no_bases += (record.SeqStr - record.QuHeader).to_int()
+            no_bases += (record.seq_len()).to_int()
         except Error:
-            print(Error)
             print(num_reads)
             print(no_bases)
             break

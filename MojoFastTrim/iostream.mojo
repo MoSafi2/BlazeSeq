@@ -150,6 +150,7 @@ struct IOStream[T: reader](Sized, Stringable):
         _ = self.store(in_buf)
         return in_buf.num_elements()
 
+    @always_inline
     fn read_next_line(inout self) raises -> Tensor[I8]:
         if self.check_buf_state():
             _ = self.fill_buffer(empty=True)
@@ -157,20 +158,19 @@ struct IOStream[T: reader](Sized, Stringable):
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, line_start)
 
-        if line_end > self.end:
-            _ = self.fill_buffer()
-            return self.read_next_line()
-
         if line_end == -1:
             _ = self.fill_buffer()
-            return self.read_next_line()
+            var line_start = self.head
+            var line_end = get_next_line_index(self.buf, line_start)
+            self.head = min(self.end, line_end + 1)
+            return slice_tensor[I8](self.buf, line_start, line_end)
 
         self.head = min(self.end, line_end + 1)
 
         return slice_tensor[I8](self.buf, line_start, line_end)
 
+    @always_inline
     fn next_line_coord(inout self) raises -> Slice:
-        
         if self.check_buf_state():
             _ = self.fill_buffer(empty=True)
 
@@ -179,7 +179,10 @@ struct IOStream[T: reader](Sized, Stringable):
 
         if line_end == -1:
             _ = self.fill_buffer()
-            return self.next_line_coord()
+            var line_start = self.head
+            var line_end = get_next_line_index(self.buf, self.head)
+            self.head = min(self.end, line_end + 1)
+            return slice(line_start + self.consumed, line_end + self.consumed)
 
         self.head = min(self.end, line_end + 1)
         return slice(line_start + self.consumed, line_end + self.consumed)
@@ -216,40 +219,13 @@ struct IOStream[T: reader](Sized, Stringable):
         cpy_tensor[I8, simd_width](out, self.buf, self.len(), 0, self.head)
         return String(out._steal_ptr(), self.len())
 
-    # @always_inline
-    # fn read(inout self, owned ele: Int) raises -> Tensor[I8]:
-    #     """Patial reads from the buffer, if the buffer is empty, calls fill buffer."""
-    #     if self.EOF:
-    #         raise ("EOF")
-    #     var buf = self.get(ele)
-    #     if self.check_buf_state():
-    #         var val = self.fill_buffer()
-    #     return buf
-
-    # @always_inline
-    # fn read(inout self) raises -> Tensor[I8]:
-    #     """Reads the whole buffer and calls fill buffer again."""
-    #     if self.EOF:
-    #         raise Error("EOF")
-    #     var buf = self.get(self.len())
-    #     _ = self.fill_buffer()
-    #     return buf
-
-    # @always_inline
-    # fn get(inout self, ele: Int) -> Tensor[I8]:
-    #     var out_buf = Tensor[I8](min(ele, self.len()))
-    #     cpy_tensor[I8, simd_width](
-    #         out_buf, self.buf, out_buf.num_elements(), 0, self.head
-    #     )
-    #     self.head += out_buf.num_elements()
-    #     return out_buf
-
 
 fn main() raises:
     var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
-    var buf = IOStream[FileReader](p, capacity=1024)
+    # var h = open(p, "r").read_bytes()
+    var buf = IOStream[FileReader](p, capacity=64 * 1024)
     while True:
         try:
-            var file_pos = buf.next_line_coord()
+            var line = buf.read_next_line()
         except Error:
             break

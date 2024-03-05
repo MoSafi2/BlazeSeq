@@ -199,11 +199,11 @@ fn get_next_line_index[
     # Is this behaviour right?
     # TODO: Make empty line skipping an optional behavior
     # TODO: Add support for windows style seperators.
-    while in_tensor[in_start] == new_line:  # Skip leadin \n
-        print("skipping \n")
-        in_start += 1
-        if in_start >= in_tensor.num_elements():
-            return -1
+    # while in_tensor[in_start] == new_line:  # Skip leadin \n
+    #     print("skipping \n")
+    #     in_start += 1
+    #     if in_start >= in_tensor.num_elements():
+    #         return -1
 
     @parameter
     if USE_SIMD:
