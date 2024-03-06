@@ -19,15 +19,7 @@ struct FastqParser:
     ) raises -> None:
         self._BUF_SIZE = BUF_SIZE * num_workers
         self.stream = IOStream[FileReader](path, self._BUF_SIZE)
-        _ = self._header_parser()
         # self.parsing_stats = Stats()
-
-    fn parse_all(inout self) raises:
-        while True:
-            try:
-                var read = self.next()
-            except:
-                break
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
@@ -37,11 +29,6 @@ struct FastqParser:
         # self.parsing_stats.tally(read)
         return read
 
-    @always_inline
-    fn _header_parser(self) raises -> Bool:
-        if self.stream.buf[0] != 64:
-            raise Error("Fastq file should start with valid header '@'")
-        return True
 
     @always_inline
     fn _parse_read(inout self) raises -> FastqRecord:
@@ -63,6 +50,7 @@ fn main() raises:
             var read = parser.next()
             no_reads += 1
         except Error:
+            print(Error)
             print(no_reads)
             break
     var t2 = time.now()

@@ -17,19 +17,10 @@ struct FastParser:
     var parsing_stats: Stats
 
     fn __init__(inout self, path: String, BUF_SIZE: Int = 64 * 1024) raises -> None:
-        # Initailizing starting conditions
         self._BUF_SIZE = BUF_SIZE
         self.stream = IOStream[FileReader](path, BUF_SIZE)
         self.parsing_stats = Stats()
 
-    # fn parse_all(inout self) raises:
-    #     while True:
-    #         self.parse_chunk(self._current_chunk, start=0, end=self._chunk_last_index)
-    #         try:
-    #             self.fill_buffer()
-    #             self.check_EOF()
-    #         except:
-    #             break
 
     @always_inline
     fn next(inout self) raises -> RecordCoord:
