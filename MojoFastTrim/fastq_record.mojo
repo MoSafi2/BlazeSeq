@@ -189,19 +189,17 @@ struct RecordCoord(Stringable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Int32
-    var SeqStr: Int32
-    var QuHeader: Int32
-    var QuStr: Int32
-    var end: Int32
+    var SeqHeader: Slice
+    var SeqStr: Slice
+    var QuHeader: Slice
+    var QuStr: Slice
 
     fn __init__(
         inout self,
-        SH: Int32,
-        SS: Int32,
-        QH: Int32,
-        QS: Int32,
-        end: Int32,
+        SH: Slice,
+        SS: Slice,
+        QH: Slice,
+        QS: Slice,
     ):
         """Coordinates of the FastqRecord inside a chunk including the start and the end of the record.
         """
@@ -209,36 +207,41 @@ struct RecordCoord(Stringable):
         self.SeqStr = SS
         self.QuHeader = QH
         self.QuStr = QS
-        self.end = end
 
     @always_inline
     fn validate(self, buf: IOStream) raises:
-        if self.seq_len() != self.qu_len() + 1:
+        if self.seq_len() != self.qu_len():
             print(self.seq_len(), self.qu_len())
             raise Error("Corrupt Lengths.")
 
     @always_inline
     fn seq_len(self) -> Int32:
-        return self.QuHeader - self.SeqStr
+        return self.SeqStr.end - self.SeqStr.start
 
     @always_inline
     fn qu_len(self) -> Int32:
-        return self.end - self.QuStr
+        return self.QuStr.end - self.QuStr.start
 
     @always_inline
     fn qu_header_len(self) -> Int32:
-        return self.QuStr - self.QuHeader
+        return self.QuHeader.end - self.QuHeader.start
 
     fn __str__(self) -> String:
         return (
             String("SeqHeader: ")
-            + self.SeqHeader
+            + self.SeqHeader.start
+            + "..."
+            + self.SeqHeader.end
             + "\nSeqStr: "
-            + self.SeqStr
+            + self.SeqStr.start
+            + "..."
+            + self.SeqStr.end
             + "\nQuHeader: "
-            + self.QuHeader
+            + self.QuHeader.start
+            + "..."
+            + self.QuHeader.end
             + "\nQuStr: "
-            + self.QuStr
-            + "\nend: "
-            + self.end
+            + self.QuStr.start
+            + "..."
+            + self.QuStr.end
         )

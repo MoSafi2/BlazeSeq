@@ -135,7 +135,6 @@ struct IOStream[T: reader](Sized, Stringable):
     @always_inline
     fn fill_empty_buffer(inout self) raises -> Int:
         var in_buf = self.source.read_bytes(self.capacity())
-
         if in_buf.num_elements() == 0:
             raise Error("EOF")
 
@@ -225,5 +224,8 @@ fn main() raises:
     while True:
         try:
             var line = buf.next_line_coord()
+            # buf.end = 0
+            # buf.head = 0
+            # _ = buf.fill_empty_buffer()
         except Error:
             break

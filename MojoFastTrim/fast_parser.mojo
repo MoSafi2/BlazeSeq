@@ -38,7 +38,6 @@ struct FastParser:
         read.validate(self.stream)
         return read
 
-    # BUG, there is a still a problem with validation
     @always_inline
     fn parse_read(
         inout self,
@@ -46,16 +45,15 @@ struct FastParser:
         var line1 = self.stream.next_line_coord()
         if self.stream.buf[self.stream.map_pos_2_buf(line1.start)] != read_header:
             raise Error("Corrupt read header")
-        var line2 = self.stream.next_line_coord()
-        var line3 = self.stream.next_line_coord()
 
+        var line2 = self.stream.next_line_coord()
+
+        var line3 = self.stream.next_line_coord()
         if self.stream.buf[self.stream.map_pos_2_buf(line3.start)] != quality_header:
             raise Error("Corrupt quality header")
 
         var line4 = self.stream.next_line_coord()
-        return RecordCoord(
-            line1.start, line2.start, line3.start, line4.start, line4.end
-        )
+        return RecordCoord(line1, line2, line3, line4)
 
 
 fn main() raises:
