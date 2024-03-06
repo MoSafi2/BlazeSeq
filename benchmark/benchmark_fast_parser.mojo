@@ -10,7 +10,7 @@ alias GB = 1024 * MB
 fn main() raises:
     var vars = argv()
     var t1 = time.now()
-    var parser = FastParser(vars[1], 64 * KB)
+    var parser = FastParser(vars[1], 64 * 1024)
     # try:
     #     _ = parser.next()
     # except Error:
@@ -28,6 +28,6 @@ fn main() raises:
             num_reads += 1
             num_bases += record.seq_len().to_int()
             num_qu += record.qu_len().to_int()
-        except:
+        except Error:
             print(num_reads, num_bases, num_qu)
             break
