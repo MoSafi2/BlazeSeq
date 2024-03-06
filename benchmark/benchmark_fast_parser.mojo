@@ -11,24 +11,23 @@ fn main() raises:
     var vars = argv()
     var t1 = time.now()
     var parser = FastParser(vars[1], 64 * KB)
-    try:
-        _ = parser.next()
-    except Error:
-        print(Error)
-        print(parser.parsing_stats)
-    var t2 = time.now()
-    print((t2 - t1) / 1e9)
+    # try:
+    #     _ = parser.next()
+    # except Error:
+    #     print(Error)
+    #     print(parser.parsing_stats)
+    # var t2 = time.now()
+    # print((t2 - t1) / 1e9)
 
-    # var num_reads = 0
-    # var num_bases = 0
-    # var num_qu = 0
-    # while True:
-    #     try:
-    #         let record = parser.next()
-    #         num_reads += 1
-    #         num_bases += record.seq_len().to_int()
-    #         num_qu += record.qu_len().to_int()
-    #     except:
-    #         print(num_reads, num_bases, num_qu)
-    #         parser._file_handle.close()
-    #         break
+    var num_reads = 0
+    var num_bases = 0
+    var num_qu = 0
+    while True:
+        try:
+            var record = parser.next()
+            num_reads += 1
+            num_bases += record.seq_len().to_int()
+            num_qu += record.qu_len().to_int()
+        except:
+            print(num_reads, num_bases, num_qu)
+            break

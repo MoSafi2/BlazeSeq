@@ -93,7 +93,7 @@ struct IOStream[T: reader](Sized, Stringable):
 
     @always_inline
     fn check_buf_state(inout self) -> Bool:
-        if self.head == self.end:
+        if self.head >= self.end:
             self.head = 0
             self.end = 0
             return True
@@ -153,16 +153,15 @@ struct IOStream[T: reader](Sized, Stringable):
             _ = self.fill_buffer()
             var line_start = self.head
             var line_end = get_next_line_index(self.buf, line_start)
-            self.head = min(self.end, line_end + 1)
+            self.head = line_end + 1
             return slice_tensor[I8](self.buf, line_start, line_end)
 
-        self.head = min(self.end, line_end + 1)
-
+        self.head = line_end + 1
         return slice_tensor[I8](self.buf, line_start, line_end)
 
+    # Inlining, elimination of recursion increases performance 10%.
     @always_inline
     fn next_line_coord(inout self) raises -> Slice:
-        # Slices does not contain line seperator.
         if self.check_buf_state():
             _ = self.fill_buffer(empty=True)
 
@@ -173,10 +172,9 @@ struct IOStream[T: reader](Sized, Stringable):
             _ = self.fill_buffer()
             var line_start = self.head
             var line_end = get_next_line_index(self.buf, self.head)
-            self.head = min(self.end, line_end + 1)
-            return slice(line_start + self.consumed, line_end + self.consumed - 1)
-
-        self.head = min(self.end, line_end + 1)
+            self.head = line_end + 1
+            return slice(line_start + self.consumed, line_end + self.consumed)
+        self.head = line_end + 1
         return slice(line_start + self.consumed, line_end + self.consumed)
 
     @always_inline
@@ -220,10 +218,12 @@ struct IOStream[T: reader](Sized, Stringable):
 fn main() raises:
     var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/SRR16012060.fastq"
     # var h = open(p, "r").read_bytes()
-    var buf = IOStream[FileReader](p, capacity=64 * 1024)
+    var buf = IOStream[FileReader](p, capacity=256 * 1024)
     while True:
         try:
             var line = buf.next_line_coord()
+            if buf.buf[buf.map_pos_2_buf(line.end + 1)] != 10:
+                print(buf.buf[buf.map_pos_2_buf(line.end + 1)])
             # buf.end = 0
             # buf.head = 0
             # _ = buf.fill_empty_buffer()
