@@ -34,7 +34,6 @@ fn find_chr_next_occurance_simd[
     for i in range(aligned, in_tensor.num_elements()):
         if in_tensor[i] == chr:
             return i
-
     return -1
 
 
@@ -137,7 +136,8 @@ fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
 # The Function does not provide bounds checks on purpose, the bounds checks is the callers responsibility
 @always_inline
 fn cpy_tensor[
-    T: DType, simd_width: Int
+    T: DType
+    # simd_width: Int
 ](
     inout dest: Tensor[T],
     src: Tensor[T],
@@ -145,13 +145,17 @@ fn cpy_tensor[
     dest_strt: Int = 0,
     src_strt: Int = 0,
 ):
-    @parameter
-    fn vec_cpy[width: Int](index: Int):
-        dest.simd_store[width](
-            index + dest_strt, src.simd_load[width](index + src_strt)
-        )
+    var dest_ptr = dest._ptr + dest_strt
+    var src_ptr = src._ptr + src_strt
+    memcpy[T](dest_ptr, src_ptr, num_elements)
 
-    vectorize[vec_cpy, simd_width](num_elements)
+    # @parameter
+    # fn vec_cpy[width: Int](index: Int):
+    #     dest.simd_store[width](
+    #         index + dest_strt, src.simd_load[width](index + src_strt)
+    #     )
+
+    # vectorize[vec_cpy, simd_width](num_elements)
 
 
 ################################ Next line Ops ##############################
@@ -196,14 +200,7 @@ fn get_next_line_index[
 ](in_tensor: Tensor[T], start: Int) -> Int:
     var in_start = start
 
-    # Is this behaviour right?
-    # TODO: Make empty line skipping an optional behavior
     # TODO: Add support for windows style seperators.
-    # while in_tensor[in_start] == new_line:  # Skip leadin \n
-    #     print("skipping \n")
-    #     in_start += 1
-    #     if in_start >= in_tensor.num_elements():
-    #         return -1
 
     @parameter
     if USE_SIMD:

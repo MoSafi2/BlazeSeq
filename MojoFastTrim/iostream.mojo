@@ -48,7 +48,7 @@ struct TensorReader(reader):
             return Tensor[I8](0)
 
         var out = Tensor[I8](ele)
-        cpy_tensor[I8, simd_width](out, self.source, out.num_elements(), 0, self.pos)
+        cpy_tensor[I8](out, self.source, out.num_elements(), 0, self.pos)
         self.pos += out.num_elements()
         return out
 
@@ -92,14 +92,6 @@ struct IOStream[T: reader](Sized, Stringable):
         _ = self.fill_empty_buffer()
 
     @always_inline
-    fn store(inout self, in_tensor: Tensor[I8]) -> Int:
-        # Stores are always in bounds
-        var nels = min(in_tensor.num_elements(), self.uninatialized_space())
-        cpy_tensor[I8, simd_width](self.buf, in_tensor, nels, self.end, 0)
-        self.end += nels
-        return nels
-
-    @always_inline
     fn check_buf_state(inout self) -> Bool:
         if self.head == self.end:
             self.head = 0
@@ -114,9 +106,9 @@ struct IOStream[T: reader](Sized, Stringable):
         """
         if self.head == 0:
             return
+
         var no_items = self.len()
-        var ptr = self.buf._ptr + self.head
-        memcpy[I8](self.buf._ptr, ptr, no_items)  # Would this work?
+        cpy_tensor[I8](self.buf, self.buf, no_items, 0, self.head)
         self.head = 0
         self.end = no_items
 
@@ -136,8 +128,8 @@ struct IOStream[T: reader](Sized, Stringable):
         if temp.num_elements() == 0:
             raise Error("EOF")
 
-        _ = self.store(temp)
-        self.consumed += temp.num_elements()
+        self._store(temp, nels)
+        self.consumed += nels
         return temp.num_elements()
 
     @always_inline
@@ -147,7 +139,7 @@ struct IOStream[T: reader](Sized, Stringable):
         if in_buf.num_elements() == 0:
             raise Error("EOF")
 
-        _ = self.store(in_buf)
+        _ = self._store(in_buf, in_buf.num_elements())
         return in_buf.num_elements()
 
     @always_inline
@@ -171,6 +163,7 @@ struct IOStream[T: reader](Sized, Stringable):
 
     @always_inline
     fn next_line_coord(inout self) raises -> Slice:
+        # Slices does not contain line seperator.
         if self.check_buf_state():
             _ = self.fill_buffer(empty=True)
 
@@ -182,16 +175,21 @@ struct IOStream[T: reader](Sized, Stringable):
             var line_start = self.head
             var line_end = get_next_line_index(self.buf, self.head)
             self.head = min(self.end, line_end + 1)
-            return slice(line_start + self.consumed, line_end + self.consumed)
+            return slice(line_start + self.consumed, line_end + self.consumed - 1)
 
         self.head = min(self.end, line_end + 1)
         return slice(line_start + self.consumed, line_end + self.consumed)
 
     @always_inline
+    fn _store(inout self, in_tensor: Tensor[I8], amt: Int):
+        cpy_tensor[I8](self.buf, in_tensor, amt, self.end, 0)
+        self.end += amt
+
+    ########################## Helpers functions, have no side effects #######################
+
+    @always_inline
     fn map_pos_2_buf(self, file_pos: Int) -> Int:
         return file_pos - self.consumed
-
-    ########################## Helpers functions #######################
 
     @always_inline
     fn len(self) -> Int:
@@ -216,16 +214,16 @@ struct IOStream[T: reader](Sized, Stringable):
     @always_inline
     fn __str__(self) -> String:
         var out = Tensor[I8](self.len())
-        cpy_tensor[I8, simd_width](out, self.buf, self.len(), 0, self.head)
+        cpy_tensor[I8](out, self.buf, self.len(), 0, self.head)
         return String(out._steal_ptr(), self.len())
 
 
 fn main() raises:
-    var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
+    var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/SRR16012060.fastq"
     # var h = open(p, "r").read_bytes()
     var buf = IOStream[FileReader](p, capacity=64 * 1024)
     while True:
         try:
-            var line = buf.read_next_line()
+            var line = buf.next_line_coord()
         except Error:
             break
