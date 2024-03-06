@@ -43,7 +43,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             + 4  # Addition of 4 \n again
         )
         self.quality_schema = quality_schema
-        self.validate_record()
 
     @always_inline
     fn get_seq(self) -> String:
@@ -94,7 +93,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return String(temp._steal_ptr(), temp.num_elements())
 
     @always_inline
-    fn validate_record(self) raises:
+    fn validate_record[validate_ascii: Bool = True](self) raises:
         if self.SeqHeader[0] != read_header:
             raise Error("Sequence Header is corrput")
 
@@ -108,10 +107,12 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
                 raise Error("Quality Header is corrupt")
 
-        if not self._validate_ascii(
-            self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr
-        ):
-            raise Error("read contain non-ASCII lettters")
+        @parameter
+        if validate_ascii:
+            if not self._validate_ascii(
+                self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr
+            ):
+                raise Error("read contain non-ASCII lettters")
 
         for i in range(self.QuStr.num_elements()):
             if (
