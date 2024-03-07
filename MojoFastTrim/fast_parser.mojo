@@ -21,7 +21,6 @@ struct FastParser:
         self.stream = IOStream[FileReader](path, BUF_SIZE)
         self.parsing_stats = Stats()
 
-
     @always_inline
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
@@ -33,17 +32,17 @@ struct FastParser:
     fn parse_read(
         inout self,
     ) raises -> RecordCoord:
-        var line1 = self.stream.next_line_coord()
+        var line1 = self.stream.read_next_coord()
         if self.stream.buf[self.stream.map_pos_2_buf(line1.start)] != read_header:
             raise Error("Corrupt read header")
 
-        var line2 = self.stream.next_line_coord()
+        var line2 = self.stream.read_next_coord()
 
-        var line3 = self.stream.next_line_coord()
+        var line3 = self.stream.read_next_coord()
         if self.stream.buf[self.stream.map_pos_2_buf(line3.start)] != quality_header:
             raise Error("Corrupt quality header")
 
-        var line4 = self.stream.next_line_coord()
+        var line4 = self.stream.read_next_coord()
         return RecordCoord(line1, line2, line3, line4)
 
 

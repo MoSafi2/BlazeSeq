@@ -86,13 +86,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
                 raise Error("Quality Header is corrupt")
 
-        @parameter
-        if validate_ascii:
-            if not self._validate_ascii(
-                self.SeqHeader, self.SeqStr, self.QuHeader, self.QuStr
-            ):
-                raise Error("read contain non-ASCII lettters")
-
         for i in range(self.QuStr.num_elements()):
             if (
                 self.QuStr[i] > self.quality_schema.UPPER
@@ -180,21 +173,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     fn __eq__(self, other: Self) -> Bool:
         return self.__hash__() == other.__hash__()
 
-    @staticmethod
-    fn _validate_ascii(*tensors: Tensor[I8]) -> Bool:
-        for tensor in tensors:
-            var t = tensor[]
-            var aligned = math.align_down(t.num_elements(), simd_width)
-            for i in range(0, aligned, simd_width):
-                var vec = t.simd_load[simd_width](i)
-                var mask = vec & 0x80
-                var mask2 = mask.reduce_max()
-                if mask2 > 0:
-                    return False
-            for i in range(aligned, t.num_elements()):
-                if t[i] & 0x80:
-                    return False
-        return True
 
 
 @value

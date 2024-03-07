@@ -75,7 +75,6 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
     var head: Int
     var end: Int
     var consumed: Int
-    var EOF: Bool
 
     fn __init__(inout self, source: Path, capacity: Int = DEFAULT_CAPACITY) raises:
         if source.exists():
@@ -86,7 +85,6 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.head = 0
         self.end = 0
         self.consumed = 0
-        self.EOF = False
         _ = self.fill_buffer()
 
     fn __init__(
@@ -97,35 +95,31 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.head = 0
         self.end = 0
         self.consumed = 0
-        self.EOF = False
+        _ = self.fill_buffer()
+
+    fn __init__(inout self, owned source: T, capacity: Int = DEFAULT_CAPACITY) raises:
+        self.source = source ^
+        self.buf = Tensor[I8](capacity)
+        self.head = 0
+        self.end = 0
+        self.consumed = 0
         _ = self.fill_buffer()
 
     @always_inline
-    fn check_buf_state(inout self) -> Bool:
-        if self.head >= self.end:
-            self.head = 0
-            self.end = 0
-            return True
-        else:
-            return False
+    fn read_next_line(inout self) raises -> Tensor[I8]:
+        var line_coord = self._line_coord()
+        return slice_tensor[I8](self.buf, line_coord.start, line_coord.end)
 
     @always_inline
-    fn left_shift(inout self):
-        """Checks if there is remaining elements in the buffer and copys them to the beginning of buffer to allow for partial reading of new data.
-        """
-        if self.head == 0:
-            return
-
-        var no_items = self.len()
-        cpy_tensor[I8](self.buf, self.buf, no_items, 0, self.head)
-        self.head = 0
-        self.end = no_items
+    fn read_next_coord(inout self) raises -> Slice:
+        var line_coord = self._line_coord()
+        return slice(line_coord.start + self.consumed, line_coord.end + self.consumed)
 
     @always_inline
     fn fill_buffer(inout self) raises -> Int:
         """Returns the number of bytes read into the buffer."""
 
-        self.left_shift()
+        self._left_shift()
         var nels = self.uninatialized_space()
         var in_buf = self.source.read_bytes(nels)
 
@@ -139,28 +133,8 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.consumed += nels
         return in_buf.num_elements()
 
-    fn read_next_line(inout self) raises -> Tensor[I8]:
-        if self.check_buf_state():
-            _ = self.fill_buffer()
-
-        var line_start = self.head
-        var line_end = get_next_line_index(self.buf, line_start)
-
-        if line_end == -1:
-            if self.head == 0:
-                self._resize_buf(self.capacity(), MAX_CAPACITY)
-                _ = self.fill_buffer()
-                return self.read_next_line()
-
-            _ = self.fill_buffer()
-            return self.read_next_line()
-
-        self.head = line_end + 1
-        return slice_tensor[I8](self.buf, line_start, line_end)
-
-    # Inlining, elimination of recursion increases performance 10%.
-    fn next_line_coord(inout self) raises -> Slice:
-        if self.check_buf_state():
+    fn _line_coord(inout self) raises -> Slice:
+        if self._check_buf_state():
             _ = self.fill_buffer()
 
         var line_start = self.head
@@ -170,13 +144,13 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
             if self.head == 0:
                 self._resize_buf(self.capacity(), MAX_CAPACITY)
                 _ = self.fill_buffer()
-                return self.next_line_coord()
+                return self._line_coord()
 
             _ = self.fill_buffer()
-            return self.next_line_coord()
+            return self._line_coord()
 
         self.head = line_end + 1
-        return slice(line_start + self.consumed, line_end + self.consumed)
+        return slice(line_start, line_end)
 
     @always_inline
     fn _store[
@@ -185,26 +159,30 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         @parameter
         if check_ascii:
             self._check_ascii(in_tensor)
-
         cpy_tensor[I8](self.buf, in_tensor, amt, self.end, 0)
         self.end += amt
 
     @always_inline
-    @staticmethod
-    fn _check_ascii(in_tensor: Tensor[I8]) raises:
-        var aligned = math.align_down(in_tensor.num_elements(), simd_width)
-        for i in range(0, aligned, simd_width):
-            var vec = in_tensor.simd_load[simd_width](i)
-            var mask = vec & 0x80
-            var mask2 = mask.reduce_max()
-            var mask3 = mask.reduce_min()
-            if mask2 != 0 or mask3 != 0:
-                raise Error("Non ASCII letters found")
-        for i in range(aligned, in_tensor.num_elements()):
-            if in_tensor[i] & 0x80 != 0:
-                raise Error("Non ASCII letters found")
+    fn _left_shift(inout self):
+        """Checks if there is remaining elements in the buffer and copys them to the beginning of buffer to allow for partial reading of new data.
+        """
+        if self.head == 0:
+            return
 
-    # There is no way in Mojo to do that right now
+        var no_items = self.len()
+        cpy_tensor[I8](self.buf, self.buf, no_items, 0, self.head)
+        self.head = 0
+        self.end = no_items
+
+    @always_inline
+    fn _check_buf_state(inout self) -> Bool:
+        if self.head >= self.end:
+            self.head = 0
+            self.end = 0
+            return True
+        else:
+            return False
+
     fn _resize_buf(inout self, amt: Int, max_capacity: Int) raises:
         if self.capacity() == max_capacity:
             raise Error("Buffer is at max capacity")
@@ -218,6 +196,22 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         var nels_to_copy = min(self.capacity(), self.capacity() + amt)
         cpy_tensor[I8](x, self.buf, nels_to_copy, 0, 0)
         self.buf = x
+
+    @always_inline
+    @staticmethod
+    fn _check_ascii(in_tensor: Tensor[I8]) raises:
+        var aligned = math.align_down(in_tensor.num_elements(), simd_width)
+
+        for i in range(0, aligned, simd_width):
+            var vec = in_tensor.simd_load[simd_width](i)
+            var mask = vec & 0x80
+            for i in range(mask):
+                if mask[i] != 0:
+                    raise Error("Non ASCII letters found")
+
+        for i in range(aligned, in_tensor.num_elements()):
+            if in_tensor[i] & 0x80 != 0:
+                raise Error("Non ASCII letters found")
 
     ########################## Helpers functions, have no side effects #######################
 
@@ -251,13 +245,19 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         cpy_tensor[I8](out, self.buf, self.len(), 0, self.head)
         return String(out._steal_ptr(), self.len())
 
-    fn __getitem__(self, index: Int) -> Scalar[I8]:
-        return self.buf[index]
+    fn __getitem__(self, index: Int) raises -> Scalar[I8]:
+        if self.head <= index <= self.end:
+            return self.buf[index]
+        else:
+            raise Error("Out of bounds")
 
-    fn __getitem__(self, slice: Slice) -> Tensor[I8]:
-        var out = Tensor[I8](slice.end - slice.start)
-        cpy_tensor[I8](out, self.buf, slice.end - slice.start, 0, slice.start)
-        return out
+    fn __getitem__(self, slice: Slice) raises -> Tensor[I8]:
+        if slice.start >= self.head and slice.end <= self.end:
+            var out = Tensor[I8](slice.end - slice.start)
+            cpy_tensor[I8](out, self.buf, slice.end - slice.start, 0, slice.start)
+            return out
+        else:
+            raise Error("Out of bounds")
 
 
 fn main() raises:
@@ -267,9 +267,9 @@ fn main() raises:
     var line_no = 0
     while True:
         try:
-            var line = buf.next_line_coord()
+            var line = buf.read_next_coord()
             line_no += 1
         except Error:
             print(Error)
-            print(line_no)
+            print(line_no / 4)
             break
