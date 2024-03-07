@@ -29,6 +29,7 @@ struct FileReader(reader):
     fn __init__(inout self, path: Path) raises:
         self.file_handle = open(path, "r")
 
+    @always_inline
     fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
         return self.file_handle.read_bytes(amt)
 
@@ -44,16 +45,23 @@ struct TensorReader(reader):
         self.source = source
         self.pos = 0
 
+    @always_inline
     fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
         var ele = min(amt, self.source.num_elements() - self.pos)
 
         if ele == 0:
             return Tensor[I8](0)
-
         var out = Tensor[I8](ele)
         cpy_tensor[I8](out, self.source, out.num_elements(), 0, self.pos)
         self.pos += out.num_elements()
         return out
+
+    # fn read_bytes(inout self, inout dest: Tensor[I8], amt: Int, dest_strt: Int) raises:
+    #     var ele = min(amt, self.source.num_elements() - self.pos)
+    #     if ele == 0:
+    #         return
+    #     cpy_tensor[I8](dest, self.source, ele, dest_strt, self.pos)
+    #     self.pos += ele
 
     fn __moveinit__(inout self, owned other: Self):
         self.source = other.source ^
@@ -199,7 +207,7 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         for i in range(0, aligned, simd_width):
             var vec = in_tensor.simd_load[simd_width](i)
             var mask = vec & 0x80
-            for i in range(mask):
+            for i in range(len(mask)):
                 if mask[i] != 0:
                     raise Error("Non ASCII letters found")
 

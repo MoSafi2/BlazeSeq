@@ -153,6 +153,10 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return schema
 
     @always_inline
+    fn hash(self) -> Int:
+        return self.__hash__()
+
+    @always_inline
     fn __str__(self) -> String:
         if self.total_length() == 0:
             return ""
@@ -163,16 +167,18 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     fn __len__(self) -> Int:
         return self.SeqStr.num_elements()
 
-    # Consider changing hash function to another performant one.
-    # Document the Hashing algorithm used
     @always_inline
     fn __hash__(self) -> Int:
-        return hash(self.SeqStr._ptr, min(self.SeqStr.num_elements(), 50))
+        """Hashes the first 31 bp (if possible) into one 64bit"""
+        var hash: Int = 0
+        for i in range(min(31, self.SeqStr.num_elements())):
+            var rem = self.SeqStr[i] & 0x03  # Mask for for first 2 significant bits.
+            hash = (hash << 2) + rem.to_int()
+        return hash
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
         return self.__hash__() == other.__hash__()
-
 
 
 @value
@@ -236,3 +242,29 @@ struct RecordCoord(Stringable):
             + "..."
             + self.QuStr.end
         )
+
+
+struct RollingHash:
+    var start: Int
+    var end: Int
+    var init_hash: Int
+    var hash: Int
+
+    fn __init__(inout self, record: FastqRecord):
+        self.start = 0
+        self.end = min(len(record), 31)
+        self.init_hash = record.hash()
+        self.hash = self.init_hash
+        var ref = Reference(record)
+
+    fn rolling_hash(inout self, record: FastqRecord, start: Int, end: Int) -> Int:
+        var ele = min(end - start, 31)
+
+        for i in range(self.end, end):
+            self.hash = self.hash & 0x1FFFFFFFFFFFFFFF
+            var rem = record.SeqStr[i] & 0x03  # Mask for the first two bits
+            self.hash = (self.hash << 2) + rem.to_int()
+
+        self.start += self.end - end
+        self.end = end
+        return self.hash
