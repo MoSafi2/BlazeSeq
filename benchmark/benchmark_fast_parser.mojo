@@ -1,4 +1,4 @@
-from MojoFastTrim import FastParser
+from MojoFastTrim import CoordParser
 from sys import argv
 import time
 
@@ -10,14 +10,7 @@ alias GB = 1024 * MB
 fn main() raises:
     var vars = argv()
     var t1 = time.now()
-    var parser = FastParser(vars[1], 64 * 1024)
-    # try:
-    #     _ = parser.next()
-    # except Error:
-    #     print(Error)
-    #     print(parser.parsing_stats)
-    # var t2 = time.now()
-    # print((t2 - t1) / 1e9)
+    var parser = CoordParser(vars[1])
 
     var num_reads = 0
     var num_bases = 0

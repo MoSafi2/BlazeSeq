@@ -1,6 +1,5 @@
-from .fast_parser import FastParser
-from .fastq_parser import FastqParser
-from .fastq_record import RecordCoord
-from .fastq_record import FastqRecord
-from .fastq_writer import FastqWriter
+from .parser import CoordParser, FastqParser
+from .record import RecordCoord
+from .record import FastqRecord
+from .writer import BufferedWriter
 from .stats import Stats

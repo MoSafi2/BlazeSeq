@@ -1,7 +1,7 @@
 import time
 from math import math
 from sys import argv
-from MojoFastTrim import FastParser, FastqParser
+from MojoFastTrim import CoordParser, FastqParser
 from math.math import round
 
 alias KB = 1024

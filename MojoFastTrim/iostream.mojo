@@ -1,15 +1,9 @@
 from memory.memory import memcpy
 from MojoFastTrim.helpers import get_next_line_index, slice_tensor, cpy_tensor
-from MojoFastTrim.CONSTS import simd_width, I8
+from MojoFastTrim.CONSTS import simd_width, I8, DEFAULT_CAPACITY, MAX_CAPACITY
 from math.math import min
 from pathlib import Path
 import time
-
-alias KB = 1024
-alias MB = 1024 * KB
-alias GB = 1024 * MB
-alias DEFAULT_CAPACITY = 64 * KB
-alias MAX_CAPACITY = 1 * GB
 
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,

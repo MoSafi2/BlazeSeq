@@ -1,9 +1,16 @@
+alias KB = 1024
+alias MB = 1024 * KB
+alias GB = 1024 * MB
+
+
 alias USE_SIMD = True
 alias read_header = 64
 alias quality_header = 43
 alias new_line = 10
 alias simd_width: Int = simdwidthof[DType.int8]()
 alias I8 = DType.int8
+alias DEFAULT_CAPACITY = 64 * KB
+alias MAX_CAPACITY = 1 * GB
 
 
 @value

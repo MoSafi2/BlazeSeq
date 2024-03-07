@@ -1,4 +1,4 @@
-from MojoFastTrim import FastqRecord
+from MojoFastTrim import FastqRecord, RecordCoord
 from MojoFastTrim.helpers import (
     find_last_read_header,
     get_next_line,
@@ -10,16 +10,12 @@ import time
 
 
 struct FastqParser:
-    var stream: IOStream[FileReader]
+    var stream: IOStream[FileReader, check_ascii=True]
     var quality_schema: QualitySchema
-    var _BUF_SIZE: Int
     # var parsing_stats: Stats
 
-    fn __init__(
-        inout self, path: String, schema: String = "generic", BUF_SIZE: Int = 64 * 1024
-    ) raises -> None:
-        self._BUF_SIZE = BUF_SIZE
-        self.stream = IOStream[FileReader](path, self._BUF_SIZE)
+    fn __init__(inout self, path: String, schema: String = "generic") raises -> None:
+        self.stream = IOStream[FileReader, check_ascii=True](path, DEFAULT_CAPACITY)
         self.quality_schema = generic_schema
         # self.parsing_stats = Stats()
 
@@ -41,6 +37,42 @@ struct FastqParser:
         var line3 = self.stream.read_next_line()
         var line4 = self.stream.read_next_line()
         return FastqRecord(line1, line2, line3, line4)
+
+
+struct CoordParser:
+    var stream: IOStream[FileReader]
+    var parsing_stats: Stats
+
+    fn __init__(
+        inout self,
+        path: String,
+    ) raises -> None:
+        self.stream = IOStream[FileReader](path, DEFAULT_CAPACITY)
+        self.parsing_stats = Stats()
+
+    @always_inline
+    fn next(inout self) raises -> RecordCoord:
+        var read: RecordCoord
+        read = self._parse_read()
+        read.validate(self.stream)
+        return read
+
+    @always_inline
+    fn _parse_read(
+        inout self,
+    ) raises -> RecordCoord:
+        var line1 = self.stream.read_next_coord()
+        if self.stream.buf[self.stream.map_pos_2_buf(line1.start)] != read_header:
+            raise Error("Corrupt read header")
+
+        var line2 = self.stream.read_next_coord()
+
+        var line3 = self.stream.read_next_coord()
+        if self.stream.buf[self.stream.map_pos_2_buf(line3.start)] != quality_header:
+            raise Error("Corrupt quality header")
+
+        var line4 = self.stream.read_next_coord()
+        return RecordCoord(line1, line2, line3, line4)
 
 
 fn main() raises:

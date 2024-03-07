@@ -30,6 +30,10 @@ struct BufferedWriter:
         self.written += self.cursor
         self.cursor = 0
 
+
+    fn _resize_buf(inout self, amt: Int):
+        pass
+
     fn uninatialized_space(self) -> Int:
         return self.capacity() - self.cursor
 
