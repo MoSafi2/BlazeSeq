@@ -11,38 +11,32 @@ Validations:
 - Quality line are within the expected range (upper, lower, offset). [x]
 """
 
+alias TI8 = Tensor[I8]
+
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     """Struct that represent a single FastaQ record."""
 
-    var SeqHeader: Tensor[I8]
-    var SeqStr: Tensor[I8]
-    var QuHeader: Tensor[I8]
-    var QuStr: Tensor[I8]
-    var total_length: Int
+    var SeqHeader: TI8
+    var SeqStr: TI8
+    var QuHeader: TI8
+    var QuStr: TI8
     var quality_schema: QualitySchema
 
     fn __init__(
         inout self,
-        SH: Tensor[I8],
-        SS: Tensor[I8],
-        QH: Tensor[I8],
-        QS: Tensor[I8],
-        quality_schema: QualitySchema = generic_schema,
-    ) raises -> None:
+        SH: TI8,
+        SS: TI8,
+        QH: TI8,
+        QS: TI8,
+        quality_schema: String = "generic",
+    ) raises:
         self.SeqHeader = SH
         self.QuHeader = QH
         self.SeqStr = SS
         self.QuStr = QS
-        self.total_length = (
-            SH.num_elements()
-            + SS.num_elements()
-            + QH.num_elements()
-            + QS.num_elements()
-            + 4  # Addition of 4 \n again
-        )
-        self.quality_schema = quality_schema
+        self.quality_schema = self._parse_schema(quality_schema)
 
     @always_inline
     fn get_seq(self) -> String:
@@ -56,23 +50,8 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
 
     @always_inline
     fn get_qulity_scores(self, quality_format: String) -> Tensor[I8]:
-        var schema: QualitySchema
-        if quality_format == "sanger":
-            schema = sanger_schema
-        elif quality_format == "solexa":
-            schema = solexa_schema
-        elif quality_format == "illumina_1.3":
-            schema = illumina_1_3_schema
-        elif quality_format == "illumina_1.5":
-            schema = illumina_1_5_schema
-        elif quality_format == "illumina_1.8":
-            schema = illumina_1_8
-        else:
-            print(
-                "Uknown quality schema please choose one of 'sanger', 'solexa',"
-                " 'illumina_1.3', 'illumina_1.5', or 'illumina_1.8'"
-            )
-        return Tensor[I8](0)
+        var schema = self._parse_schema((quality_format))
+        return self.QuStr - schema.OFFSET
 
     @always_inline
     fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[I8]:
@@ -122,12 +101,21 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
                 raise Error("Corrput quality score according to proivded schema")
 
     @always_inline
+    fn total_length(self) -> Int:
+        return (
+            self.SeqHeader.num_elements()
+            + self.SeqStr.num_elements()
+            + self.QuHeader.num_elements()
+            + self.QuStr.num_elements()
+        )
+
+    @always_inline
     fn __concat_record(self) -> Tensor[I8]:
-        if self.total_length == 0:
+        if self.total_length() == 0:
             return Tensor[I8](0)
 
         var offset = 0
-        var t = Tensor[I8](self.total_length)
+        var t = Tensor[I8](self.total_length())
 
         write_to_buff(self.SeqHeader, t, offset)
         offset = offset + self.SeqHeader.num_elements() + 1
@@ -147,12 +135,36 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
 
         return t
 
+    @staticmethod
+    fn _parse_schema(quality_format: String) -> QualitySchema:
+        var schema: QualitySchema
+
+        if quality_format == "sanger":
+            schema = sanger_schema
+        elif quality_format == "solexa":
+            schema = solexa_schema
+        elif quality_format == "illumina_1.3":
+            schema = illumina_1_3_schema
+        elif quality_format == "illumina_1.5":
+            schema = illumina_1_5_schema
+        elif quality_format == "illumina_1.8":
+            schema = illumina_1_8
+        elif quality_format == "generic":
+            schema = generic_schema
+        else:
+            print(
+                "Uknown quality schema please choose one of 'sanger', 'solexa',"
+                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
+            )
+            return generic_schema
+        return schema
+
     @always_inline
     fn __str__(self) -> String:
-        if self.total_length == 0:
+        if self.total_length() == 0:
             return ""
         var concat = self.__concat_record()
-        return String(concat._steal_ptr(), self.total_length)
+        return String(concat._steal_ptr(), self.total_length())
 
     @always_inline
     fn __len__(self) -> Int:

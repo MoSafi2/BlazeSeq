@@ -18,6 +18,9 @@ alias MAX_CAPACITY = 1 * GB
 # Caveat: Currently does not support buffer-resize at runtime.
 
 
+# TODO: Handle windows style seperators?
+
+
 trait reader:
     fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
         ...

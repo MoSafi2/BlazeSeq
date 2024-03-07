@@ -11,12 +11,16 @@ import time
 
 struct FastqParser:
     var stream: IOStream[FileReader]
+    var quality_schema: QualitySchema
     var _BUF_SIZE: Int
     # var parsing_stats: Stats
 
-    fn __init__(inout self, path: String, BUF_SIZE: Int = 64 * 1024) raises -> None:
+    fn __init__(
+        inout self, path: String, schema: String = "generic", BUF_SIZE: Int = 64 * 1024
+    ) raises -> None:
         self._BUF_SIZE = BUF_SIZE
         self.stream = IOStream[FileReader](path, self._BUF_SIZE)
+        self.quality_schema = generic_schema
         # self.parsing_stats = Stats()
 
     @always_inline
