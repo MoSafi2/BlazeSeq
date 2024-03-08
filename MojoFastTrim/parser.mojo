@@ -4,34 +4,45 @@ from MojoFastTrim.helpers import (
     get_next_line,
 )
 from MojoFastTrim.CONSTS import *
+from MojoFastTrim.analyzers import Analyser
 from MojoFastTrim import Stats
 from MojoFastTrim.iostream import IOStream, FileReader
 import time
 
+# TODO
+# [] pass a list of analysers at comp time and decide if to tally the result at comptime.
 
-struct FastqParser:
+
+struct FastqParser[tally: Bool = False]:
     var stream: IOStream[FileReader, check_ascii=True]
     var quality_schema: QualitySchema
-    # var parsing_stats: Stats
+    var parsing_stats: Stats
 
     fn __init__(inout self, path: String, schema: String = "generic") raises -> None:
         self.stream = IOStream[FileReader, check_ascii=True](path, DEFAULT_CAPACITY)
         self.quality_schema = generic_schema
-        # self.parsing_stats = Stats()
+        self.parsing_stats = Stats()
+
+    fn parse_all(inout self) raises:
+        while True:
+            var record = self.next()
+            record.validate_record()
+
+            @parameter
+            if tally:
+                self.parsing_stats.tally(record)
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
-        var read: FastqRecord
-        read = self._parse_read()
-
+        var record: FastqRecord
+        record = self._parse_record()
         # ASCII validation is carried out in the reader
-        read.validate_record[validate_ascii=False]()
-        # self.parsing_stats.tally(read)
-        return read
+        record.validate_record[validate_ascii=False]()
+        return record
 
     @always_inline
-    fn _parse_read(inout self) raises -> FastqRecord:
+    fn _parse_record(inout self) raises -> FastqRecord:
         var line1 = self.stream.read_next_line()
         var line2 = self.stream.read_next_line()
         var line3 = self.stream.read_next_line()

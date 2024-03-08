@@ -12,11 +12,16 @@ import time
 # Caveat: Currently does not support buffer-resize at runtime.
 
 
-# TODO: Handle windows style seperators?
+# TODO: Handle windows style seperators [x]
 
 
 trait reader:
     fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
+        ...
+
+    fn read_to_buffer(
+        inout self, inout buf: Tensor[I8], buf_pos: Int, amt: Int
+    ) raises -> Int:
         ...
 
     fn __moveinit__(inout self, owned other: Self):
@@ -32,6 +37,16 @@ struct FileReader(reader):
     @always_inline
     fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
         return self.file_handle.read_bytes(amt)
+
+    @always_inline
+    fn read_to_buffer(
+        inout self, inout buf: Tensor[I8], buf_pos: Int, amt: Int
+    ) raises -> Int:
+        var out = self.read_bytes(amt)
+        if out.num_elements() == 0:
+            return 0
+        cpy_tensor[I8](buf, out, out.num_elements(), buf_pos, 0)
+        return out.num_elements()
 
     fn __moveinit__(inout self, owned other: Self):
         self.file_handle = other.file_handle ^
@@ -56,12 +71,15 @@ struct TensorReader(reader):
         self.pos += out.num_elements()
         return out
 
-    # fn read_bytes(inout self, inout dest: Tensor[I8], amt: Int, dest_strt: Int) raises:
-    #     var ele = min(amt, self.source.num_elements() - self.pos)
-    #     if ele == 0:
-    #         return
-    #     cpy_tensor[I8](dest, self.source, ele, dest_strt, self.pos)
-    #     self.pos += ele
+    fn read_to_buffer(
+        inout self, inout buf: Tensor[I8], buf_pos: Int, amt: Int
+    ) raises -> Int:
+        var ele = min(amt, self.source.num_elements() - self.pos)
+        if ele == 0:
+            return 0
+        cpy_tensor[I8](buf, self.source, ele, buf_pos, self.pos)
+        self.pos += ele
+        return ele
 
     fn __moveinit__(inout self, owned other: Self):
         self.source = other.source ^

@@ -5,12 +5,6 @@ from MojoFastTrim.analyzers import *
 alias MAX_COUNTS = 1_000_000
 
 
-trait Analyser:
-    fn tally_read(inout self, record: FastqRecord):
-        ...
-
-    fn report(self) -> Tensor[DType.int64]:
-        ...
 
 
 struct Stats(Stringable):

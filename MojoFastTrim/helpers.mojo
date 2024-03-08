@@ -200,8 +200,6 @@ fn get_next_line_index[
 ](in_tensor: Tensor[T], start: Int) -> Int:
     var in_start = start
 
-    # TODO: Add support for windows style seperators.
-
     @parameter
     if USE_SIMD:
         var next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)

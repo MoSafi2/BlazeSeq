@@ -1,4 +1,3 @@
-from MojoFastTrim.stats import Analyser
 from MojoFastTrim.helpers import write_to_buff
 from MojoFastTrim import FastqRecord
 from tensor import TensorShape
@@ -14,6 +13,15 @@ alias MAX_QUALITY = 100
 alias OFFSET = 33
 
 
+trait Analyser(CollectionElement):
+    fn tally_read(inout self, record: FastqRecord):
+        ...
+
+    fn report(self) -> Tensor[DType.int64]:
+        ...
+
+
+@value
 struct BasepairDistribution(Analyser, Stringable):
     var bp_dist: Tensor[DType.int64]
     # var bp_dist: Dict[StringKey, Tensor[DType.int64]]
@@ -82,6 +90,7 @@ at the end, divide the number by the read length, accumulate 1 to the CpG Tensor
 """
 
 
+@value
 struct CGContent(Analyser, Stringable):
     var cg_content: Tensor[DType.int64]
 
@@ -111,6 +120,7 @@ struct CGContent(Analyser, Stringable):
         return String("\nThe CpG content tensor is: ") + self.cg_content
 
 
+@value
 struct DupReader(Analyser, Stringable):
     var unique_dict: Dict[FastqRecord, Int64]
     var unique_reads: Int
@@ -142,6 +152,7 @@ struct DupReader(Analyser, Stringable):
         return String("\nNumber of duplicated reads is") + self.report()
 
 
+@value
 struct LengthDistribution(Analyser, Stringable):
     var length_vector: Tensor[DType.int64]
 
@@ -189,6 +200,7 @@ fn grow_tensor[
 # }
 
 
+@value
 struct QualityDistribution(Analyser, Stringable):
     var qu_dist: Tensor[DType.int64]
     var max_length: Int
