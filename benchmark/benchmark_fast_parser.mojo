@@ -2,10 +2,6 @@ from MojoFastTrim import CoordParser
 from sys import argv
 import time
 
-alias KB = 1024
-alias MB = 1024 * KB
-alias GB = 1024 * MB
-
 
 fn main() raises:
     var vars = argv()

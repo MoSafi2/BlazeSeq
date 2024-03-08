@@ -153,6 +153,7 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.consumed += nels
         return in_buf.num_elements()
 
+    @always_inline
     fn _line_coord(inout self) raises -> Slice:
         if self._check_buf_state():
             _ = self.fill_buffer()
@@ -162,13 +163,41 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
 
         if line_end == -1:
             if self.head == 0:
-                self._resize_buf(self.capacity(), MAX_CAPACITY)
+                var coord: Slice
+                for i in range(30):
+                    self._resize_buf(self.capacity(), MAX_CAPACITY)
+                    _ = self.fill_buffer()
+                    var coord = self._line_coord_missing_line()
+
+                    if coord.end != -1:
+                        return coord
+                    else:
+                        coord = self._line_coord_missing_line()
+
                 _ = self.fill_buffer()
-                return self._line_coord()
 
+            return self._line_coord2()
+
+        self.head = line_end + 1
+        return slice(line_start, line_end)
+
+    @always_inline
+    fn _line_coord_missing_line(inout self) raises -> Slice:
+        if self._check_buf_state():
             _ = self.fill_buffer()
-            return self._line_coord()
+        self._resize_buf(self.capacity(), MAX_CAPACITY)
+        _ = self.fill_buffer()
+        var line_start = self.head
+        var line_end = get_next_line_index(self.buf, self.head)
+        self.head = line_end + 1
+        return slice(line_start, line_end)
 
+    @always_inline
+    fn _line_coord2(inout self) raises -> Slice:
+        if self._check_buf_state():
+            _ = self.fill_buffer()
+        var line_start = self.head
+        var line_end = get_next_line_index(self.buf, self.head)
         self.head = line_end + 1
         return slice(line_start, line_end)
 
@@ -283,11 +312,11 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
 fn main() raises:
     var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
     # var h = open(p, "r").read_bytes()
-    var buf = IOStream[FileReader, check_ascii=False](p, capacity=64 * 1024)
+    var buf = IOStream[FileReader](p, capacity=1)
     var line_no = 0
     while True:
         try:
-            var line = buf.read_next_coord()
+            var line = buf.read_next_line()
             line_no += 1
         except Error:
             print(Error)
