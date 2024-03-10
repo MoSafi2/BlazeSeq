@@ -1,6 +1,12 @@
 from memory.memory import memcpy
 from MojoFastTrim.helpers import get_next_line_index, slice_tensor, cpy_tensor
-from MojoFastTrim.CONSTS import simd_width, I8, DEFAULT_CAPACITY, MAX_CAPACITY
+from MojoFastTrim.CONSTS import (
+    simd_width,
+    I8,
+    DEFAULT_CAPACITY,
+    MAX_CAPACITY,
+    MAX_SHIFT,
+)
 from math.math import min
 from pathlib import Path
 import time
@@ -13,6 +19,7 @@ import time
 
 
 # TODO: Handle windows style seperators [x]
+# Bug in resizing buffer: One extra line & bad consumed and file coordinates.
 
 
 trait reader:
@@ -106,6 +113,7 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.end = 0
         self.consumed = 0
         _ = self.fill_buffer()
+        self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
     fn __init__(
         inout self, source: Tensor[I8], capacity: Int = DEFAULT_CAPACITY
@@ -116,6 +124,7 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.end = 0
         self.consumed = 0
         _ = self.fill_buffer()
+        self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
     fn __init__(inout self, owned source: T, capacity: Int = DEFAULT_CAPACITY) raises:
         self.source = source ^
@@ -124,6 +133,8 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         self.end = 0
         self.consumed = 0
         _ = self.fill_buffer()
+        self.consumed = 0  # Hack to make the initial buffer full non-consuming
+        print(self.consumed)
 
     @always_inline
     fn read_next_line(inout self) raises -> Tensor[I8]:
@@ -158,24 +169,27 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         if self._check_buf_state():
             _ = self.fill_buffer()
 
+        var line_shift: Int
+        var coord: Slice
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
 
-        if line_end == -1:
-            if self.head == 0:
-                var coord: Slice
-                for i in range(30):
-                    self._resize_buf(self.capacity(), MAX_CAPACITY)
-                    _ = self.fill_buffer()
-                    var coord = self._line_coord_missing_line()
+        # Handling Windows-syle line seperator
+        if self.buf[line_start] == 13:
+            line_start += 1
 
+        coord = Slice(line_start, line_end)
+        if coord.end == -1:
+            # Handle small buffers
+            if self.head == 0:
+                for i in range(MAX_SHIFT):
                     if coord.end != -1:
                         return coord
                     else:
                         coord = self._line_coord_missing_line()
 
-                _ = self.fill_buffer()
-
+            # Handle incomplete lines across two chunks
+            _ = self.fill_buffer()
             return self._line_coord2()
 
         self.head = line_end + 1
@@ -183,8 +197,6 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
 
     @always_inline
     fn _line_coord_missing_line(inout self) raises -> Slice:
-        if self._check_buf_state():
-            _ = self.fill_buffer()
         self._resize_buf(self.capacity(), MAX_CAPACITY)
         _ = self.fill_buffer()
         var line_start = self.head
@@ -232,6 +244,7 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
         else:
             return False
 
+    @always_inline
     fn _resize_buf(inout self, amt: Int, max_capacity: Int) raises:
         if self.capacity() == max_capacity:
             raise Error("Buffer is at max capacity")
@@ -312,11 +325,11 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
 fn main() raises:
     var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
     # var h = open(p, "r").read_bytes()
-    var buf = IOStream[FileReader](p, capacity=1)
+    var buf = IOStream[FileReader](p, capacity=64 * 1024)
     var line_no = 0
     while True:
         try:
-            var line = buf.read_next_line()
+            var line = buf.read_next_coord()
             line_no += 1
         except Error:
             print(Error)

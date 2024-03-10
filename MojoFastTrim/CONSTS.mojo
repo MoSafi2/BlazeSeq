@@ -10,7 +10,8 @@ alias new_line = 10
 alias simd_width: Int = simdwidthof[DType.int8]()
 alias I8 = DType.int8
 alias DEFAULT_CAPACITY = 64 * KB
-alias MAX_CAPACITY = 1 * GB
+alias MAX_SHIFT = 30
+alias MAX_CAPACITY = 2 ** MAX_SHIFT
 
 
 @value
