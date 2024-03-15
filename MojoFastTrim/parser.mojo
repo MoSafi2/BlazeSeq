@@ -1,11 +1,11 @@
-from MojoFastTrim import FastqRecord, RecordCoord
-from MojoFastTrim.helpers import (
+from . import FastqRecord, RecordCoord
+from .helpers import (
     find_last_read_header,
     get_next_line,
 )
-from MojoFastTrim.CONSTS import *
-from MojoFastTrim import Stats
-from MojoFastTrim.iostream import IOStream, FileReader
+from .CONSTS import *
+from . import Stats
+from .iostream import BufferedLineIterator, FileReader
 import time
 
 # TODO
@@ -13,14 +13,16 @@ import time
 
 
 struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
-    var stream: IOStream[FileReader, check_ascii=validate_ascii]
+    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
     var stats: Stats
 
     fn __init__(
         inout self, path: String, analysers: Stats, schema: String = "generic"
     ) raises -> None:
-        self.stream = IOStream[FileReader, check_ascii=validate_ascii](path, DEFAULT_CAPACITY)
+        self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
+            path, DEFAULT_CAPACITY
+        )
         self.quality_schema = generic_schema
         self.stats = analysers
 
@@ -59,14 +61,14 @@ struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
 
 
 struct CoordParser:
-    var stream: IOStream[FileReader]
+    var stream: BufferedLineIterator[FileReader]
     var parsing_stats: Stats
 
     fn __init__(
         inout self,
         path: String,
     ) raises -> None:
-        self.stream = IOStream[FileReader](path, DEFAULT_CAPACITY)
+        self.stream = BufferedLineIterator[FileReader](path, DEFAULT_CAPACITY)
         self.parsing_stats = Stats()
 
     @always_inline

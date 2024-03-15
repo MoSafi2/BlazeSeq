@@ -1,7 +1,7 @@
-from MojoFastTrim.helpers import slice_tensor, write_to_buff
+from .helpers import slice_tensor, write_to_buff
 from math import min
-from MojoFastTrim.CONSTS import *
-from MojoFastTrim.iostream import IOStream
+from .CONSTS import *
+from .iostream import BufferedLineIterator
 
 
 """
@@ -206,7 +206,7 @@ struct RecordCoord(Stringable):
         self.QuStr = QS
 
     @always_inline
-    fn validate(self, buf: IOStream) raises:
+    fn validate(self, buf: BufferedLineIterator) raises:
         if self.seq_len() != self.qu_len():
             print(self.seq_len(), self.qu_len())
             raise Error("Corrupt Lengths.")

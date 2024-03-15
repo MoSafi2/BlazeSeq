@@ -1,6 +1,6 @@
 from memory.memory import memcpy
-from MojoFastTrim.helpers import get_next_line_index, slice_tensor, cpy_tensor
-from MojoFastTrim.CONSTS import (
+from .helpers import get_next_line_index, slice_tensor, cpy_tensor
+from .CONSTS import (
     simd_width,
     I8,
     DEFAULT_CAPACITY,
@@ -93,7 +93,7 @@ struct TensorReader(reader):
         self.pos = other.pos
 
 
-struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
+struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringable):
     """A poor man's BufferedReader that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
 
@@ -322,10 +322,50 @@ struct IOStream[T: reader, check_ascii: Bool = False](Sized, Stringable):
             raise Error("Out of bounds")
 
 
+struct BufferedWriter:
+    var sink: FileHandle
+    var buf: Tensor[DType.int8]
+    var cursor: Int
+    var written: Int
+
+    fn __init__(inout self, out_path: String, buf_size: Int) raises:
+        self.sink = open(out_path, "w")
+        self.buf = Tensor[I8](buf_size)
+        self.cursor = 0
+        self.written = 0
+
+    fn ingest(inout self, source: Tensor[I8]) raises -> Bool:
+        if source.num_elements() > self.uninatialized_space():
+            self.flush_buffer()
+        cpy_tensor[I8](self.buf, source, source.num_elements(), self.cursor, 0)
+        return True
+
+    fn flush_buffer(inout self) raises:
+        var out = Tensor[I8](self.cursor)
+        cpy_tensor[I8](out, self.buf, self.cursor, 0, 0)
+        var out_string = String(out._steal_ptr(), self.cursor)
+        self.sink.write(out_string)
+        self.written += self.cursor
+        self.cursor = 0
+
+    fn _resize_buf(inout self, amt: Int):
+        pass
+
+    fn uninatialized_space(self) -> Int:
+        return self.capacity() - self.cursor
+
+    fn capacity(self) -> Int:
+        return self.buf.num_elements()
+
+    fn close(inout self) raises:
+        self.flush_buffer()
+        self.sink.close()
+
+
 fn main() raises:
     var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
     # var h = open(p, "r").read_bytes()
-    var buf = IOStream[FileReader](p, capacity=64 * 1024)
+    var buf = BufferedLineIterator[FileReader](p, capacity=64 * 1024)
     var line_no = 0
     while True:
         try:

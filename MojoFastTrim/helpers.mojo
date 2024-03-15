@@ -1,6 +1,6 @@
 import math
 from algorithm import vectorize
-from MojoFastTrim.CONSTS import *
+from .CONSTS import *
 
 
 ######################### Character find functions ###################################
