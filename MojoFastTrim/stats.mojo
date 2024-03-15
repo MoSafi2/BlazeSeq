@@ -1,12 +1,20 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
-from MojoFastTrim.analyzers import *
+from MojoFastTrim.analyzers import (
+    BasepairDistribution,
+    LengthDistribution,
+    QualityDistribution,
+    DupReader,
+    CGContent,
+)
+from MojoFastTrim.analyzers import Analyser
+from collections.vector import DynamicVector
+from MojoFastTrim import FastqRecord
 
 alias MAX_COUNTS = 1_000_000
 
 
-
-
+@value
 struct Stats(Stringable):
     var num_reads: Int64
     var total_bases: Int64
@@ -19,7 +27,6 @@ struct Stats(Stringable):
     fn __init__(inout self):
         self.num_reads = 0
         self.total_bases = 0
-
         self.len_dist = LengthDistribution()
         self.bp_dist = BasepairDistribution()
         self.qu_dist = QualityDistribution()

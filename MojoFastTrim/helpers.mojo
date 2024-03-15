@@ -145,17 +145,17 @@ fn cpy_tensor[
     dest_strt: Int = 0,
     src_strt: Int = 0,
 ):
-    var dest_ptr = dest._ptr + dest_strt
-    var src_ptr = src._ptr + src_strt
-    memcpy[T](dest_ptr, src_ptr, num_elements)
+    # var dest_ptr = dest._ptr + dest_strt
+    # var src_ptr = src._ptr + src_strt
+    # memcpy[T](dest_ptr, src_ptr, num_elements)
 
-    # @parameter
-    # fn vec_cpy[width: Int](index: Int):
-    #     dest.simd_store[width](
-    #         index + dest_strt, src.simd_load[width](index + src_strt)
-    #     )
+    @parameter
+    fn vec_cpy[width: Int](index: Int):
+        dest.simd_store[width](
+            index + dest_strt, src.simd_load[width](index + src_strt)
+        )
 
-    # vectorize[vec_cpy, simd_width](num_elements)
+    vectorize[vec_cpy, simd_width](num_elements)
 
 
 ################################ Next line Ops ##############################

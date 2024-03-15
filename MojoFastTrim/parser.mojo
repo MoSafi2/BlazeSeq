@@ -4,7 +4,6 @@ from MojoFastTrim.helpers import (
     get_next_line,
 )
 from MojoFastTrim.CONSTS import *
-from MojoFastTrim.analyzers import Analyser
 from MojoFastTrim import Stats
 from MojoFastTrim.iostream import IOStream, FileReader
 import time
@@ -13,24 +12,33 @@ import time
 # [] pass a list of analysers at comp time and decide if to tally the result at comptime.
 
 
-struct FastqParser[tally: Bool = False]:
-    var stream: IOStream[FileReader, check_ascii=True]
+struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
+    var stream: IOStream[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
-    var parsing_stats: Stats
+    var stats: Stats
 
-    fn __init__(inout self, path: String, schema: String = "generic") raises -> None:
-        self.stream = IOStream[FileReader, check_ascii=True](path, DEFAULT_CAPACITY)
+    fn __init__(
+        inout self, path: String, analysers: Stats, schema: String = "generic"
+    ) raises -> None:
+        self.stream = IOStream[FileReader, check_ascii=validate_ascii](path, DEFAULT_CAPACITY)
         self.quality_schema = generic_schema
-        self.parsing_stats = Stats()
+        self.stats = analysers
 
     fn parse_all(inout self) raises:
         while True:
-            var record = self.next()
-            record.validate_record()
+            try:
+                var record = self.next()
+                record.validate_record()
 
-            @parameter
-            if tally:
-                self.parsing_stats.tally(record)
+                @parameter
+                if tally:
+                    self.stats.tally(record)
+            except:
+
+                @parameter
+                if tally:
+                    print(self.stats)
+                break
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
@@ -88,7 +96,7 @@ struct CoordParser:
 
 fn main() raises:
     var file = "/home/mohamed/Documents/Projects/Fastq_Parser/data/SRR16012060.fastq"
-    var parser = FastqParser(file)
+    var parser = FastqParser(file, Stats())
     var t1 = time.now()
     var no_reads = 0
     while True:

@@ -1,6 +1,7 @@
-from MojoFastTrim import FastqParser
+from MojoFastTrim import FastqParser, Stats
 from sys import argv
 import time
+
 
 alias KB = 1024
 alias MB = 1024 * KB
@@ -10,7 +11,7 @@ alias GB = 1024 * MB
 fn main() raises:
     var vars = argv()
     var t1 = time.now()
-    var parser = FastqParser(vars[1], 64 * KB)
+    var parser = FastqParser(vars[1], Stats())
     var read_no = 0
     while True:
         try:
