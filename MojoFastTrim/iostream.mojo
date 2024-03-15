@@ -15,11 +15,8 @@ import time
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
 # https://github.com/dignifiedquire/buffer-redux
 # Minimial Implementation that support only line iterations
-# Caveat: Currently does not support buffer-resize at runtime.
 
-
-# TODO: Handle windows style seperators [x]
-# Bug in resizing buffer: One extra line & bad consumed and file coordinates.
+# BUG in resizing buffer: One extra line & bad consumed and file coordinates.
 
 
 trait reader:
@@ -112,7 +109,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.head = 0
         self.end = 0
         self.consumed = 0
-        _ = self.fill_buffer()
+        _ = self._fill_buffer()
         self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
     fn __init__(
@@ -123,7 +120,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.head = 0
         self.end = 0
         self.consumed = 0
-        _ = self.fill_buffer()
+        _ = self._fill_buffer()
         self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
     fn __init__(inout self, owned source: T, capacity: Int = DEFAULT_CAPACITY) raises:
@@ -132,7 +129,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.head = 0
         self.end = 0
         self.consumed = 0
-        _ = self.fill_buffer()
+        _ = self._fill_buffer()
         self.consumed = 0  # Hack to make the initial buffer full non-consuming
         print(self.consumed)
 
@@ -147,7 +144,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         return slice(line_coord.start + self.consumed, line_coord.end + self.consumed)
 
     @always_inline
-    fn fill_buffer(inout self) raises -> Int:
+    fn _fill_buffer(inout self) raises -> Int:
         """Returns the number of bytes read into the buffer."""
 
         self._left_shift()
@@ -167,7 +164,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     @always_inline
     fn _line_coord(inout self) raises -> Slice:
         if self._check_buf_state():
-            _ = self.fill_buffer()
+            _ = self._fill_buffer()
 
         var line_shift: Int
         var coord: Slice
@@ -189,7 +186,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
                         coord = self._line_coord_missing_line()
 
             # Handle incomplete lines across two chunks
-            _ = self.fill_buffer()
+            _ = self._fill_buffer()
             return self._line_coord2()
 
         self.head = line_end + 1
@@ -198,7 +195,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     @always_inline
     fn _line_coord_missing_line(inout self) raises -> Slice:
         self._resize_buf(self.capacity(), MAX_CAPACITY)
-        _ = self.fill_buffer()
+        _ = self._fill_buffer()
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
         self.head = line_end + 1
@@ -207,7 +204,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     @always_inline
     fn _line_coord2(inout self) raises -> Slice:
         if self._check_buf_state():
-            _ = self.fill_buffer()
+            _ = self._fill_buffer()
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
         self.head = line_end + 1
@@ -225,11 +222,8 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
 
     @always_inline
     fn _left_shift(inout self):
-        """Checks if there is remaining elements in the buffer and copys them to the beginning of buffer to allow for partial reading of new data.
-        """
         if self.head == 0:
             return
-
         var no_items = self.len()
         cpy_tensor[I8](self.buf, self.buf, no_items, 0, self.head)
         self.head = 0

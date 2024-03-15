@@ -8,9 +8,6 @@ from . import Stats
 from .iostream import BufferedLineIterator, FileReader
 import time
 
-# TODO
-# [] pass a list of analysers at comp time and decide if to tally the result at comptime.
-
 
 struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
@@ -60,15 +57,17 @@ struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
         return FastqRecord(line1, line2, line3, line4)
 
 
-struct CoordParser:
-    var stream: BufferedLineIterator[FileReader]
+struct CoordParser[tally: Bool = False, validate_ascii: Bool = False]:
+    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var parsing_stats: Stats
 
     fn __init__(
         inout self,
         path: String,
     ) raises -> None:
-        self.stream = BufferedLineIterator[FileReader](path, DEFAULT_CAPACITY)
+        self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
+            path, DEFAULT_CAPACITY
+        )
         self.parsing_stats = Stats()
 
     @always_inline
@@ -76,6 +75,9 @@ struct CoordParser:
         var read: RecordCoord
         read = self._parse_read()
         read.validate(self.stream)
+
+        # TODO: Add basic stat for RecordCoord
+
         return read
 
     @always_inline
@@ -94,20 +96,3 @@ struct CoordParser:
 
         var line4 = self.stream.read_next_coord()
         return RecordCoord(line1, line2, line3, line4)
-
-
-fn main() raises:
-    var file = "/home/mohamed/Documents/Projects/Fastq_Parser/data/SRR16012060.fastq"
-    var parser = FastqParser(file, Stats())
-    var t1 = time.now()
-    var no_reads = 0
-    while True:
-        try:
-            var read = parser.next()
-            no_reads += 1
-        except Error:
-            print(Error)
-            print(no_reads)
-            break
-    var t2 = time.now()
-    print((t2 - t1) / 1e9)

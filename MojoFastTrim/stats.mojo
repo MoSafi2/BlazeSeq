@@ -32,7 +32,6 @@ struct Stats(Stringable):
     var bp_dist: BasepairDistribution
     var len_dist: LengthDistribution
     var qu_dist: QualityDistribution
-    var dup_reads: DupReader
     var cg_content: CGContent
 
     fn __init__(inout self):
@@ -41,7 +40,6 @@ struct Stats(Stringable):
         self.len_dist = LengthDistribution()
         self.bp_dist = BasepairDistribution()
         self.qu_dist = QualityDistribution()
-        self.dup_reads = DupReader()
         self.cg_content = CGContent()
 
     # Consider using Internal function for each type to get this, there is no need to know the impelemtnation of each type, this can get Ugly if you want to Add BAM, SAM .. etc.
@@ -52,7 +50,6 @@ struct Stats(Stringable):
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
         self.qu_dist.tally_read(record)
-        self.dup_reads.tally_read(record)  # Most expensive 3.5s for 5.5 M reads
         self.cg_content.tally_read(record)  # Almost Free
 
     fn __str__(self) -> String:
@@ -65,7 +62,6 @@ struct Stats(Stringable):
             + self.bp_dist
             + self.len_dist
             + self.qu_dist
-            + self.dup_reads
             + self.cg_content
         )
 
