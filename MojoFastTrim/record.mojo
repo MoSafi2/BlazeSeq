@@ -4,15 +4,8 @@ from .CONSTS import *
 from .iostream import BufferedLineIterator
 
 
-"""
-Validations:
-- Header validations [x]
-- All contents are ASCII [x]
-- Quality line are within the expected range (upper, lower, offset). [x]
-"""
 
 alias TI8 = Tensor[I8]
-
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
@@ -182,7 +175,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
 
 
 @value
-struct RecordCoord(Stringable):
+struct RecordCoord(CollectionElement, Sized, Stringable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
@@ -198,8 +191,6 @@ struct RecordCoord(Stringable):
         QH: Slice,
         QS: Slice,
     ):
-        """Coordinates of the FastqRecord inside a chunk including the start and the end of the record.
-        """
         self.SeqHeader = SH
         self.SeqStr = SS
         self.QuHeader = QH
@@ -222,6 +213,9 @@ struct RecordCoord(Stringable):
     @always_inline
     fn qu_header_len(self) -> Int32:
         return self.QuHeader.end - self.QuHeader.start
+
+    fn __len__(self) -> Int:
+        return self.seq_len().to_int()
 
     fn __str__(self) -> String:
         return (

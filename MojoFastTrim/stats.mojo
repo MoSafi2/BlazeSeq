@@ -1,8 +1,8 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
 from collections.vector import DynamicVector
-from . import FastqRecord
-from .helpers import write_to_buff
+from MojoFastTrim import FastqRecord
+from MojoFastTrim.helpers import write_to_buff
 from tensor import TensorShape
 from collections import Dict, KeyElement
 from math import round
@@ -26,7 +26,7 @@ trait Analyser(CollectionElement):
 
 
 @value
-struct Stats(Stringable):
+struct FullStats(Stringable, CollectionElement):
     var num_reads: Int64
     var total_bases: Int64
     var bp_dist: BasepairDistribution
@@ -281,12 +281,3 @@ struct QualityDistribution(Analyser, Stringable):
 
     fn __str__(self) -> String:
         return String("\nQuality_dist_matrix: ") + self.report()
-
-
-fn main():
-    var x = 500545425586454578
-    var y = 500545425586454578
-    var t1 = time.now()
-    var z = x == y
-    var t2 = time.now()
-    print(z, t2 - t1)

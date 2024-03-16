@@ -1,3 +1,7 @@
+
+----
+theme: cosmo
+----
 # MojoFastTrim🔥
 
 ## Experimental 'FASTQ' parser and quality trimmer written in mojo
@@ -13,6 +17,11 @@ it is on overage **2x** faster than the industry-standard ```Cutadapt``` perform
 ### Disclaimer: MojoFastTrim🔥 is for demonstration purposes only and shouldn't be used as part of bioinformatic pipelines
 
 ## Usage 
+
+```python
+from time import time
+parser = Parser[validate, tally](file_path, stats, schema)
+```
 
 * to test ```MojoFastTrim🔥```, clone the repository  ```git clone https://github.com/MoSafi2/MojoFastTrim.git```  
 * ```MojoFastTrim🔥```provides two Fastq parser interface, `FastqParser`, a regular parser which returns `FastqRecord` objects containing all the reads components which can be further manipulated or stored for later use (Ex: in a `DynamicVector`). In addition you can use `FastParser` which returns `RecordCoord` object referencing the record coordinates instead (**3X** faster parsing).
@@ -74,7 +83,7 @@ FASTQ trimming was carried out with minimum Phred quality of ```20```.
 
 ### FASTQ parsing
 
-| reads  | SeqIO <br> (Python) | Needletail <br> (Rust) | MojoFastqTrim <br> (Mojo🔥)|
+| reads  | SeqIO <br> (Python) | Needletail <br> (Rust) | MojoFastqTrim <br> (Mojo🔥) |
 | ------ | ------------------- | ---------------------- | -------------------------- |
 | 40k    | 0.57s               | 0.010s                 | 0.018s                     |
 | 5.5M   | 27.1s               | 0.27s                  | 0.21s                      |
@@ -84,7 +93,7 @@ FASTQ trimming was carried out with minimum Phred quality of ```20```.
 
 ### FASTQ quality Trimming
 
-| reads  | Cutadapt <br>  (Cython, C) | MojoFastqTrim <br> (Mojo🔥)|
+| reads  | Cutadapt <br>  (Cython, C) | MojoFastqTrim <br> (Mojo🔥) |
 | ------ | -------------------------- | -------------------------- |
 | 40k    | 0.075s                     | 0.74s                      |
 | 5.5M   | 6.1s                       | 2.8s                       |

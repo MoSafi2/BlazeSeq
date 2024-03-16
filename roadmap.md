@@ -6,3 +6,12 @@
 - [ ] Add adapter sequene aligner (Needleman–Wunsch, Parallel, Optional: SIMD Vectorized)
 - [x] Add basic aggregate statistics (GC Content, quality distribution per base pair, read-length distribution ... etc)
 - [ ] Add reporting capapility, output as JSON.
+
+
+# TODO
+
+- [ ] Make a consistent API
+- Choose a name:
+  * Mamba
+  * BlazeSeq
+  * Fastq-tools

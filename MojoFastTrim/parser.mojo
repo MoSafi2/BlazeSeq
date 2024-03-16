@@ -4,7 +4,7 @@ from .helpers import (
     get_next_line,
 )
 from .CONSTS import *
-from . import Stats
+from . import FullStats
 from .iostream import BufferedLineIterator, FileReader
 import time
 
@@ -12,10 +12,10 @@ import time
 struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
-    var stats: Stats
+    var stats: FullStats
 
     fn __init__(
-        inout self, path: String, analysers: Stats, schema: String = "generic"
+        inout self, path: String, analysers: FullStats, schema: String = "generic"
     ) raises -> None:
         self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
             path, DEFAULT_CAPACITY
@@ -59,7 +59,7 @@ struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
 
 struct CoordParser[tally: Bool = False, validate_ascii: Bool = False]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
-    var parsing_stats: Stats
+    var parsing_stats: FullStats
 
     fn __init__(
         inout self,
@@ -68,7 +68,7 @@ struct CoordParser[tally: Bool = False, validate_ascii: Bool = False]:
         self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
             path, DEFAULT_CAPACITY
         )
-        self.parsing_stats = Stats()
+        self.parsing_stats = FullStats()
 
     @always_inline
     fn next(inout self) raises -> RecordCoord:

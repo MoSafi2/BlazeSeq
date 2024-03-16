@@ -3,7 +3,7 @@ from math import math
 from sys import argv
 from . import CoordParser, FastqParser
 from .iostream import FileReader
-from . import Stats
+from . import FullStats
 from math.math import round
 from utils.variant import Variant
 
