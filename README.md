@@ -18,7 +18,7 @@ it is on overage **2x** faster than the industry-standard ```Cutadapt``` perform
 
 ## Usage 
 
-```python
+```mojo
 from time import time
 parser = Parser[validate, tally](file_path, stats, schema)
 ```
