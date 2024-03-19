@@ -1,4 +1,4 @@
-from MojoFastTrim import FastqParser, Stats
+from MojoFastTrim import RecordParser
 from sys import argv
 import time
 
@@ -10,8 +10,9 @@ alias GB = 1024 * MB
 
 fn main() raises:
     var vars = argv()
-    var t1 = time.now()
-    var parser = FastqParser(vars[1], Stats())
+    var parser = RecordParser[validate_ascii=True, validate_quality=True](
+        vars[1], "illumina_1.8"
+    )
     var read_no = 0
     while True:
         try:
@@ -20,5 +21,3 @@ fn main() raises:
         except Error:
             print(read_no)
             break
-    var t2 = time.now()
-    print((t2 - t1) / 1e9)

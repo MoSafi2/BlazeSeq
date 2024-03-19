@@ -9,34 +9,21 @@ from .iostream import BufferedLineIterator, FileReader
 import time
 
 
-struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
+struct RecordParser[validate_ascii: Bool = False, validate_quality: Bool = False]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
-    var stats: FullStats
 
-    fn __init__(
-        inout self, path: String, analysers: FullStats, schema: String = "generic"
-    ) raises -> None:
+    fn __init__(inout self, path: String, schema: String = "generic") raises -> None:
         self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
             path, DEFAULT_CAPACITY
         )
-        self.quality_schema = generic_schema
-        self.stats = analysers
+        self.quality_schema = self._parse_schema(schema)
 
     fn parse_all(inout self) raises:
         while True:
             try:
                 var record = self.next()
-                record.validate_record()
-
-                @parameter
-                if tally:
-                    self.stats.tally(record)
             except:
-
-                @parameter
-                if tally:
-                    print(self.stats)
                 break
 
     @always_inline
@@ -44,8 +31,12 @@ struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
         """Method that lazily returns the Next record in the file."""
         var record: FastqRecord
         record = self._parse_record()
+
         # ASCII validation is carried out in the reader
-        record.validate_record[validate_ascii=False]()
+        @parameter
+        if validate_quality:
+            record.validate_quality_schema()
+
         return record
 
     @always_inline
@@ -54,12 +45,36 @@ struct FastqParser[tally: Bool = False, validate_ascii: Bool = False]:
         var line2 = self.stream.read_next_line()
         var line3 = self.stream.read_next_line()
         var line4 = self.stream.read_next_line()
-        return FastqRecord(line1, line2, line3, line4)
+        return FastqRecord(line1, line2, line3, line4, self.quality_schema)
+
+    @staticmethod
+    @always_inline
+    fn _parse_schema(quality_format: String) -> QualitySchema:
+        var schema: QualitySchema
+
+        if quality_format == "sanger":
+            schema = sanger_schema
+        elif quality_format == "solexa":
+            schema = solexa_schema
+        elif quality_format == "illumina_1.3":
+            schema = illumina_1_3_schema
+        elif quality_format == "illumina_1.5":
+            schema = illumina_1_5_schema
+        elif quality_format == "illumina_1.8":
+            schema = illumina_1_8
+        elif quality_format == "generic":
+            schema = generic_schema
+        else:
+            print(
+                "Uknown quality schema please choose one of 'sanger', 'solexa',"
+                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
+            )
+            return generic_schema
+        return schema
 
 
-struct CoordParser[tally: Bool = False, validate_ascii: Bool = False]:
+struct CoordParser[validate_ascii: Bool = False]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
-    var parsing_stats: FullStats
 
     fn __init__(
         inout self,
@@ -68,16 +83,12 @@ struct CoordParser[tally: Bool = False, validate_ascii: Bool = False]:
         self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
             path, DEFAULT_CAPACITY
         )
-        self.parsing_stats = FullStats()
 
     @always_inline
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
         read = self._parse_read()
         read.validate(self.stream)
-
-        # TODO: Add basic stat for RecordCoord
-
         return read
 
     @always_inline

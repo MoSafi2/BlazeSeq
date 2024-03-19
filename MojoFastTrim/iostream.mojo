@@ -91,7 +91,7 @@ struct TensorReader(reader):
 
 
 struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringable):
-    """A poor man's BufferedReader that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
+    """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
 
     var source: T

@@ -15,7 +15,7 @@ alias MAX_CAPACITY = 2**MAX_SHIFT
 
 
 @value
-struct QualitySchema(Stringable):
+struct QualitySchema(Stringable, CollectionElement):
     var SCHEMA: StringLiteral
     var LOWER: Int8
     var UPPER: Int8

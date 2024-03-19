@@ -2,10 +2,11 @@ from .helpers import slice_tensor, write_to_buff
 from math import min
 from .CONSTS import *
 from .iostream import BufferedLineIterator
-
-
+from utils.variant import Variant
 
 alias TI8 = Tensor[I8]
+alias schema = Variant[String, QualitySchema]
+
 
 @value
 struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
@@ -23,13 +24,17 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         SS: TI8,
         QH: TI8,
         QS: TI8,
-        quality_schema: String = "generic",
+        quality_schema: schema = "generic",
     ) raises:
         self.SeqHeader = SH
         self.QuHeader = QH
         self.SeqStr = SS
         self.QuStr = QS
-        self.quality_schema = self._parse_schema(quality_schema)
+
+        if quality_schema.isa[String]():
+            self.quality_schema = self._parse_schema(quality_schema.get[String]()[])
+        else:
+            self.quality_schema = quality_schema.get[QualitySchema]()[]
 
     @always_inline
     fn get_seq(self) -> String:
@@ -65,7 +70,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return String(temp._steal_ptr(), temp.num_elements())
 
     @always_inline
-    fn validate_record[validate_ascii: Bool = True](self) raises:
+    fn validate_record(self) raises:
         if self.SeqHeader[0] != read_header:
             raise Error("Sequence Header is corrput")
 
@@ -79,6 +84,8 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
                 raise Error("Quality Header is corrupt")
 
+    @always_inline
+    fn validate_quality_schema(self) raises:
         for i in range(self.QuStr.num_elements()):
             if (
                 self.QuStr[i] > self.quality_schema.UPPER
@@ -122,6 +129,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return t
 
     @staticmethod
+    @always_inline
     fn _parse_schema(quality_format: String) -> QualitySchema:
         var schema: QualitySchema
 
