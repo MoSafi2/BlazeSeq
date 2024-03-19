@@ -6,6 +6,7 @@ from .CONSTS import (
     DEFAULT_CAPACITY,
     MAX_CAPACITY,
     MAX_SHIFT,
+    carriage_return,
 )
 from math.math import min
 from pathlib import Path
@@ -161,6 +162,19 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.consumed += nels
         return in_buf.num_elements()
 
+    # if coord.end == -1:
+    #     # Handle small buffers
+    #     if self.head == 0:
+    #         for i in range(MAX_SHIFT):
+    #             if coord.end != -1:
+    #                 return coord
+    #             else:
+    #                 coord = self._line_coord_missing_line()
+
+    #     # Handle incomplete lines across two chunks
+    #     _ = self._fill_buffer()
+    #     return self._line_coord2()
+
     @always_inline
     fn _line_coord(inout self) raises -> Slice:
         if self._check_buf_state():
@@ -171,25 +185,40 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
 
-        # Handling Windows-syle line seperator
-        if self.buf[line_start] == 13:
-            line_start += 1
-
         coord = Slice(line_start, line_end)
-        if coord.end == -1:
-            # Handle small buffers
-            if self.head == 0:
-                for i in range(MAX_SHIFT):
-                    if coord.end != -1:
-                        return coord
-                    else:
-                        coord = self._line_coord_missing_line()
 
-            # Handle incomplete lines across two chunks
+        # Handle small buffers
+        if coord.end == -1 and self.head == 0:
+            for i in range(MAX_SHIFT):
+                if coord.end != -1:
+                    return self._handle_windows_sep(coord)
+                else:
+                    coord = self._line_coord_missing_line()
+
+        # Handle incomplete lines across two chunks
+        if coord.end == -1:
             _ = self._fill_buffer()
-            return self._line_coord2()
+            return self._handle_windows_sep(self._line_coord_incomplete_line())
 
         self.head = line_end + 1
+
+        # Handling Windows-syle line seperator
+        if self.buf[line_end] == carriage_return:
+            line_end -= 1
+
+        return slice(line_start, line_end)
+
+    @always_inline
+    fn _line_coord_incomplete_line(inout self) raises -> Slice:
+        if self._check_buf_state():
+            _ = self._fill_buffer()
+        var line_start = self.head
+        var line_end = get_next_line_index(self.buf, self.head)
+        self.head = line_end + 1
+
+        if self.buf[line_end] == carriage_return:
+            line_end -= 1
+
         return slice(line_start, line_end)
 
     @always_inline
@@ -198,16 +227,9 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         _ = self._fill_buffer()
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
-        self.head = line_end + 1
-        return slice(line_start, line_end)
 
-    @always_inline
-    fn _line_coord2(inout self) raises -> Slice:
-        if self._check_buf_state():
-            _ = self._fill_buffer()
-        var line_start = self.head
-        var line_end = get_next_line_index(self.buf, self.head)
         self.head = line_end + 1
+
         return slice(line_start, line_end)
 
     @always_inline
@@ -268,6 +290,12 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         for i in range(aligned, in_tensor.num_elements()):
             if in_tensor[i] & 0x80 != 0:
                 raise Error("Non ASCII letters found")
+
+    @always_inline
+    fn _handle_windows_sep(self, in_slice: Slice) -> Slice:
+        if self.buf[in_slice.end] != carriage_return:
+            return in_slice
+        return Slice(in_slice.start, in_slice.end - 1)
 
     ########################## Helpers functions, have no side effects #######################
 
