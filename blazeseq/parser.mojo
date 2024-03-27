@@ -9,7 +9,7 @@ from .iostream import BufferedLineIterator, FileReader
 import time
 
 
-struct RecordParser[validate_ascii: Bool = False, validate_quality: Bool = False]:
+struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
 
@@ -21,7 +21,16 @@ struct RecordParser[validate_ascii: Bool = False, validate_quality: Bool = False
 
     fn parse_all(inout self) raises:
         while True:
-            var record = self.next()
+            try:
+                var record = self.next()
+            except Error:
+                var err_msg = Error._message()
+                if err_msg == "EOF":
+                    print("EOF")
+                    break
+                else:
+                    print(err_msg)
+                    raise Error
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
