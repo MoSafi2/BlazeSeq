@@ -18,6 +18,7 @@ fn test_invalid_file(file: String, msg: String = "") raises:
         parser.parse_all()
 
 
+# TODO: Add also file schema to test, to test for schema boundries.
 fn test_valid_file(file: String) raises:
     var parser = RecordParser(test_dir + file)
     try:

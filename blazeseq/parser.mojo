@@ -35,10 +35,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
     fn next(inout self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
         var record: FastqRecord
-        try:
-            record = self._parse_record()
-        except:
-            print("EOF")
+        record = self._parse_record()
         record.validate_record()
 
         # ASCII validation is carried out in the reader
