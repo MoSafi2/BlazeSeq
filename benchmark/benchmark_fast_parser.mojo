@@ -1,4 +1,4 @@
-from MojoFastTrim import CoordParser
+from blazeseq import CoordParser
 from sys import argv
 import time
 

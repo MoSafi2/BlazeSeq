@@ -1,4 +1,4 @@
-from MojoFastTrim import RecordParser
+from blazeseq import RecordParser
 from sys import argv
 import time
 
