@@ -21,22 +21,24 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
 
     fn parse_all(inout self) raises:
         while True:
-            try:
-                var record = self.next()
-            except Error:
-                var err_msg = Error._message()
-                if err_msg == "EOF":
-                    print("EOF")
-                    break
-                else:
-                    print(err_msg)
-                    raise Error
+            var record: FastqRecord
+            record = self._parse_record()
+            # print(record)
+            record.validate_record()
+
+            # ASCII validation is carried out in the reader
+            @parameter
+            if validate_quality:
+                record.validate_quality_schema()
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
         var record: FastqRecord
-        record = self._parse_record()
+        try:
+            record = self._parse_record()
+        except:
+            print("EOF")
         record.validate_record()
 
         # ASCII validation is carried out in the reader

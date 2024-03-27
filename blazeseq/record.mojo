@@ -162,6 +162,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     fn hash(self) -> Int:
         return self.__hash__()
 
+    # BUG: returns Smaller strings that expected.
     @always_inline
     fn __str__(self) -> String:
         if self.total_length() == 0:

@@ -91,6 +91,8 @@ struct TensorReader(reader):
         self.pos = other.pos
 
 
+# BUG Last line is not returned if the file does not end with line end seperator
+# TODO: when in EOF Flush the buffer
 struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringable):
     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
