@@ -45,7 +45,6 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         @parameter
         if validate_quality:
             record.validate_quality_schema()
-
         return record
 
     @always_inline
