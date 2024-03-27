@@ -84,6 +84,11 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
                 raise Error("Quality Header is corrupt")
 
+        if self.QuHeader.num_elements() > 1:
+            for i in range(1, self.QuHeader.num_elements()):
+                if self.QuHeader[i] != self.SeqHeader[i]:
+                    raise Error("Non matching headers")
+
     @always_inline
     fn validate_quality_schema(self) raises:
         for i in range(self.QuStr.num_elements()):

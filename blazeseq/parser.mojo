@@ -21,16 +21,14 @@ struct RecordParser[validate_ascii: Bool = False, validate_quality: Bool = False
 
     fn parse_all(inout self) raises:
         while True:
-            try:
-                var record = self.next()
-            except:
-                break
+            var record = self.next()
 
     @always_inline
     fn next(inout self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
         var record: FastqRecord
         record = self._parse_record()
+        record.validate_record()
 
         # ASCII validation is carried out in the reader
         @parameter
