@@ -135,7 +135,6 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.consumed = 0
         _ = self._fill_buffer()
         self.consumed = 0  # Hack to make the initial buffer full non-consuming
-        print(self.consumed)
 
     @always_inline
     fn read_next_line(inout self) raises -> Tensor[I8]:
@@ -150,11 +149,9 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     @always_inline
     fn _fill_buffer(inout self) raises -> Int:
         """Returns the number of bytes read into the buffer."""
-
         self._left_shift()
         var nels = self.uninatialized_space()
         var in_buf = self.source.read_bytes(nels)
-        # print("_fill_buffer", in_buf)
         if in_buf.num_elements() == 0:
             raise Error("EOF")
 
@@ -239,8 +236,6 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     fn _store[
         check_ascii: Bool = False
     ](inout self, in_tensor: Tensor[I8], amt: Int) raises:
-        # print("_store", in_tensor)
-
         @parameter
         if check_ascii:
             self._check_ascii(in_tensor)
@@ -390,9 +385,9 @@ struct BufferedWriter:
 
 
 fn main() raises:
-    var p = "/home/mohamed/Documents/Projects/Fastq_Parser/data/M_abscessus_HiSeq.fq"
+    var p = "data/M_abscessus_HiSeq.fq"
     # var h = open(p, "r").read_bytes()
-    var buf = BufferedLineIterator[FileReader](p, capacity=64 * 1024)
+    var buf = BufferedLineIterator[FileReader, check_ascii=False](p, capacity=64 * 1024)
     var line_no = 0
 
     # var line = buf.read_next_line()
@@ -402,6 +397,7 @@ fn main() raises:
     while True:
         try:
             var line = buf.read_next_line()
+            print(line)
             line_no += 1
         except Error:
             print(Error)

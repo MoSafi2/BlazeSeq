@@ -4,8 +4,8 @@ import time
 
 
 fn main() raises:
-    var vars = argv()
-    var t1 = time.now()
+    # var vars = argv()
+    var vars = List("", "data/M_abscessus_HiSeq.fq")
     var parser = CoordParser(vars[1])
 
     var num_reads = 0
@@ -18,5 +18,6 @@ fn main() raises:
             num_bases += record.seq_len().to_int()
             num_qu += record.qu_len().to_int()
         except Error:
+            print(Error)
             print(num_reads, num_bases, num_qu)
             break

@@ -147,18 +147,17 @@ fn cpy_tensor[
     dest_strt: Int = 0,
     src_strt: Int = 0,
 ):
-    # var dest_ptr: DTypePointer[T] = dest._ptr + dest_strt
-    # var src_ptr: DTypePointer[T] = src._ptr + src_strt
-    # memcpy[Int](dest_ptr, src_ptr, num_elements)
+    var dest_ptr: DTypePointer[T] = dest._ptr + dest_strt
+    var src_ptr: DTypePointer[T] = src._ptr + src_strt
+    memcpy(dest_ptr, src_ptr, num_elements)
 
-    for i in range(src.num_elements()):
-        dest[i + dest_strt] = src[i + src_strt]
-
+    ## Alternative method
     # @parameter
-    # fn vec_cpy[width: Int](index: Int):
-    #     dest.store[width=width](index + dest_strt, src.load[width](index + src_strt))
-    # vectorize[vec_cpy, simd_width](num_elements)
-    # print("dest_cpy_tesnor", dest)
+    # fn inner[simd_width: Int](size: Int):
+    #     var transfer = src.load[width=simd_width](src_strt + size)
+    #     dest.store[width=simd_width](dest_strt + size, transfer)
+
+    # vectorize[inner, simd_width](num_elements)
 
 
 ################################ Next line Ops ##############################
