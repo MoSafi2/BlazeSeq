@@ -1,6 +1,10 @@
 import math
 from algorithm import vectorize
 from .CONSTS import *
+from tensor import Tensor
+from collections.vector import *
+from tensor import Tensor
+from collections.list import List
 
 
 ######################### Character find functions ###################################
@@ -26,7 +30,7 @@ fn find_chr_next_occurance_simd[
     var aligned = start + math.align_down(len, simd_width)
 
     for s in range(start, aligned, simd_width):
-        var v = in_tensor.simd_load[simd_width](s)
+        var v = in_tensor.load[simd_width](s)
         var mask = v == chr
         if mask.reduce_or():
             return s + arg_true(mask)
@@ -61,19 +65,18 @@ fn find_chr_last_occurance[
 
 
 @always_inline
-fn find_chr_all_occurances[
-    T: DType
-](in_tensor: Tensor[T], chr: Int) -> DynamicVector[Int]:
-    var holder = DynamicVector[Int]()
+fn find_chr_all_occurances[T: DType](in_tensor: Tensor[T], chr: Int) -> List[Int]:
+    var holder = List[Int]()
 
     @parameter
     fn inner[simd_width: Int](size: Int):
-        var simd_vec = in_tensor.simd_load[simd_width](size)
+        var simd_vec = in_tensor.load[simd_width](size)
         var bool_vec = simd_vec == chr
         if bool_vec.reduce_or():
             for i in range(len(bool_vec)):
                 if bool_vec[i]:
-                    holder.push_back(size + i)
+                    holder.append(size + 1)
+                    # holder.push_back(size + i)
 
     vectorize[inner, simd_width](in_tensor.num_elements())
     return holder
@@ -106,8 +109,8 @@ fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Te
 
     @parameter
     fn inner[simd_width: Int](size: Int):
-        var transfer = in_tensor.simd_load[simd_width](start + size)
-        out_tensor.simd_store[simd_width](size, transfer)
+        var transfer = in_tensor.load[simd_width](start + size)
+        out_tensor.store[simd_width](size, transfer)
 
     vectorize[inner, simd_width](out_tensor.num_elements())
 
@@ -151,9 +154,7 @@ fn cpy_tensor[
 
     @parameter
     fn vec_cpy[width: Int](index: Int):
-        dest.simd_store[width](
-            index + dest_strt, src.simd_load[width](index + src_strt)
-        )
+        dest.store[width](index + dest_strt, src.load[width](index + src_strt))
 
     vectorize[vec_cpy, simd_width](num_elements)
 

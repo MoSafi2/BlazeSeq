@@ -1,12 +1,12 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
-from collections.vector import DynamicVector
 from . import FastqRecord
 from .helpers import write_to_buff
 from tensor import TensorShape
 from collections import Dict, KeyElement
 from math import round
 import time
+from tensor import Tensor
 
 
 alias MAX_LENGTH = 10_000

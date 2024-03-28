@@ -11,6 +11,7 @@ from .CONSTS import (
 from math.math import min
 from pathlib import Path
 import time
+from tensor import Tensor
 
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
@@ -283,7 +284,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         var aligned = math.align_down(in_tensor.num_elements(), simd_width)
 
         for i in range(0, aligned, simd_width):
-            var vec = in_tensor.simd_load[simd_width](i)
+            var vec = in_tensor.load[simd_width](i)
             var mask = vec & 0x80
             for i in range(len(mask)):
                 if mask[i] != 0:

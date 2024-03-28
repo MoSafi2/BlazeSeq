@@ -3,6 +3,7 @@ from math import min
 from .CONSTS import *
 from .iostream import BufferedLineIterator
 from utils.variant import Variant
+from tensor import Tensor
 
 alias TI8 = Tensor[I8]
 alias schema = Variant[String, QualitySchema]
@@ -186,6 +187,9 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
         return self.__hash__() == other.__hash__()
+
+    fn __ne__(self, other: Self) -> Bool:
+        return self.__hash__() != other.__hash__()
 
 
 @value
