@@ -1,6 +1,6 @@
 from memory.memory import memcpy
-from .helpers import get_next_line_index, slice_tensor, cpy_tensor
-from .CONSTS import (
+from blazeseq.helpers import get_next_line_index, slice_tensor, cpy_tensor
+from blazeseq.CONSTS import (
     simd_width,
     I8,
     DEFAULT_CAPACITY,
@@ -154,7 +154,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self._left_shift()
         var nels = self.uninatialized_space()
         var in_buf = self.source.read_bytes(nels)
-
+        # print("_fill_buffer", in_buf)
         if in_buf.num_elements() == 0:
             raise Error("EOF")
 
@@ -239,6 +239,8 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     fn _store[
         check_ascii: Bool = False
     ](inout self, in_tensor: Tensor[I8], amt: Int) raises:
+        # print("_store", in_tensor)
+
         @parameter
         if check_ascii:
             self._check_ascii(in_tensor)
@@ -284,7 +286,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         var aligned = math.align_down(in_tensor.num_elements(), simd_width)
 
         for i in range(0, aligned, simd_width):
-            var vec = in_tensor.load[simd_width](i)
+            var vec = in_tensor.load[width=simd_width](i)
             var mask = vec & 0x80
             for i in range(len(mask)):
                 if mask[i] != 0:
@@ -392,9 +394,14 @@ fn main() raises:
     # var h = open(p, "r").read_bytes()
     var buf = BufferedLineIterator[FileReader](p, capacity=64 * 1024)
     var line_no = 0
+
+    # var line = buf.read_next_line()
+    # line = buf.read_next_line()
+    # print(line)
+
     while True:
         try:
-            var line = buf.read_next_coord()
+            var line = buf.read_next_line()
             line_no += 1
         except Error:
             print(Error)
