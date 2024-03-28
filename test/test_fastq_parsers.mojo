@@ -82,7 +82,7 @@ fn test_invalid() raises:
     alias corrput_qu_score = "Corrput quality score according to proivded schema"
     alias EOF = "EOF"
     alias cor_len = "Corrput Lengths"
-    alias cor_seq_hed = "Sequence Header is corrput"
+    alias cor_seq_hed = "Sequence Header is corrupt"
     alias cor_qu_hed = "Quality Header is corrupt"
     alias non_mat_hed = "Non matching headers"
 

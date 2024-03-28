@@ -73,10 +73,10 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     @always_inline
     fn validate_record(self) raises:
         if self.SeqHeader[0] != read_header:
-            raise Error("Sequence Header is corrput")
+            raise Error("Sequence Header is corrupt")
 
         if self.QuHeader[0] != quality_header:
-            raise Error("Quality Header is corrput")
+            raise Error("Quality Header is corrupt")
 
         if self.SeqStr.num_elements() != self.QuStr.num_elements():
             raise Error("Corrput Lengths")

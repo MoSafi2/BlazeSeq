@@ -390,10 +390,6 @@ fn main() raises:
     var buf = BufferedLineIterator[FileReader, check_ascii=False](p, capacity=64 * 1024)
     var line_no = 0
 
-    # var line = buf.read_next_line()
-    # line = buf.read_next_line()
-    # print(line)
-
     while True:
         try:
             var line = buf.read_next_line()
