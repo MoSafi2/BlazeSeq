@@ -18,7 +18,6 @@ fn test_invalid_file(file: String, msg: String = "") raises:
         parser.parse_all()
 
 
-# TODO: Add also file schema to test, to test for schema boundries.
 fn test_valid_file(file: String, schema: String = "generic") raises:
     var parser = RecordParser[validate_ascii=True, validate_quality=True](
         test_dir + file, schema
@@ -54,33 +53,25 @@ fn test_valid() raises:
     test_valid_file("misc_rna_as_illumina.fastq", "illumina_1.3")
     test_valid_file("misc_rna_as_sanger.fastq", "sanger")
     test_valid_file("misc_rna_as_solexa.fastq", "solexa")
-    test_valid_file("misc_rna_as_solexa.fastq", "solexa")
-
-    # test_valid_file("bug2335.fastq")
-    # var valid_files = Set[String](
-    #     "misc_rna_original_sanger.fastq",
-    #     "sanger_93.fastq",
-    #     "sanger_faked.fastq",
-    #     "sanger_full_range_as_illumina.fastq",
-    #     "sanger_full_range_as_sanger.fastq",
-    #     "sanger_full_range_as_solexa.fastq",
-    #     "sanger_full_range_original_sanger.fastq",
-    #     "solexa_example.fastq",
-    #     "solexa_faked.fastq",
-    #     "solexa_full_range_as_illumina.fastq",
-    #     "solexa_full_range_as_sanger.fastq",
-    #     "solexa_full_range_as_solexa.fastq",
-    #     "solexa_full_range_original_solexa.fastq",
-    #     "test1_sanger.fastq",
-    #     "test2_solexa.fastq",
-    #     "test3_illumina.fastq",
-    #     "wrapping_as_illumina.fastq",
-    #     "wrapping_as_sanger.fastq",
-    #     "wrapping_as_solexa.fastq",
-    # )
-
-    # for i in valid_files:
-    #     test_valid_file(i[])
+    test_valid_file("misc_rna_original_sanger.fastq", "sanger")
+    test_valid_file("sanger_93.fastq", "sanger")
+    test_valid_file("sanger_faked.fastq", "sanger")
+    test_valid_file("sanger_full_range_as_illumina.fastq", "illumina_1.3")
+    test_valid_file("sanger_full_range_as_sanger.fastq", "sanger")
+    test_valid_file("sanger_full_range_as_solexa.fastq", "solexa")
+    test_valid_file("sanger_full_range_original_sanger.fastq", "sanger")
+    test_valid_file("solexa_example.fastq", "solexa")
+    test_valid_file("solexa_faked.fastq", "solexa")
+    test_valid_file("solexa_full_range_as_illumina.fastq", "illumina_1.3")
+    test_valid_file("solexa_full_range_as_sanger.fastq", "sanger")
+    test_valid_file("solexa_full_range_as_solexa.fastq", "solexa")
+    test_valid_file("solexa_full_range_original_solexa.fastq", "solexa")
+    test_valid_file("test1_sanger.fastq", "sanger")
+    test_valid_file("test2_solexa.fastq", "solexa")
+    test_valid_file("test3_illumina.fastq", "illumina_1.3")
+    test_valid_file("wrapping_as_illumina.fastq", "illumina_1.3")
+    test_valid_file("wrapping_as_sanger.fastq", "sanger")
+    test_valid_file("wrapping_as_solexa.fastq", "solexa")
 
 
 fn test_invalid() raises:
@@ -123,5 +114,5 @@ fn test_invalid() raises:
 
 
 fn main() raises:
-    # test_invalid()
+    test_invalid()
     test_valid()
