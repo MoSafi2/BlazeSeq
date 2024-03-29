@@ -5,7 +5,7 @@ import time
 
 fn main() raises:
     # var vars = argv()
-    var vars = List("", "data/M_abscessus_HiSeq.fq")
+    var vars = argv()
     var parser = CoordParser(vars[1])
 
     var num_reads = 0

@@ -71,8 +71,9 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
             schema = generic_schema
         else:
             print(
-                "Uknown quality schema please choose one of 'sanger', 'solexa',"
-                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
+                """Uknown quality schema please choose one of 'sanger', 'solexa',"
+                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
+                Parsing with generic schema."""
             )
             return generic_schema
         return schema
