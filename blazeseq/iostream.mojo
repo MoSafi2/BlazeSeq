@@ -14,6 +14,29 @@ import time
 from tensor import Tensor
 
 
+@register_passable
+struct _OwnedStringRef(Boolable):
+    var data: DTypePointer[DType.int8]
+    var length: Int
+
+    fn __init__() -> _OwnedStringRef:
+        return Self {data: DTypePointer[DType.int8](), length: 0}
+
+    fn __del__(owned self):
+        if self.data:
+            self.data.free()
+
+    fn consume_as_error(owned self) -> Error:
+        var data = self.data
+        # Don't free self.data in our dtor.
+        self.data = DTypePointer[DType.int8]()
+        var length = self.length
+        return Error {data: data, loaded_length: -length}
+
+    fn __bool__(self) -> Bool:
+        return self.length != 0
+
+
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
 # https://github.com/dignifiedquire/buffer-redux
 # Minimial Implementation that support only line iterations
@@ -35,15 +58,27 @@ trait reader:
 
 
 struct FileReader(reader):
-    var file_handle: FileHandle
+    var handle: FileHandle
 
     fn __init__(inout self, path: Path) raises:
-        self.file_handle = open(path, "r")
+        self.handle = open(path, "r")
 
     @always_inline
-    fn read_bytes(inout self, amt: Int) raises -> Tensor[I8]:
-        return self.file_handle.read_bytes(amt)
+    fn read_bytes(inout self, amt: Int = -1) raises -> Tensor[I8]:
+        var size_copy: Int64 = amt
+        var err_msg = _OwnedStringRef()
+        var buf = external_call["KGEN_CompilerRT_IO_FileReadBytes", Pointer[Int8]](
+            self.handle.handle,
+            Pointer.address_of(size_copy),
+            Pointer.address_of(err_msg),
+        )
+        if err_msg:
+            raise (err_msg ^).consume_as_error()
 
+        var ptr = DTypePointer[DType.int8](buf.address)
+        return Tensor[DType.int8](int(size_copy), ptr)
+
+    # Does not work well currently
     @always_inline
     fn read_to_buffer(
         inout self, inout buf: Tensor[I8], buf_pos: Int, amt: Int
@@ -55,8 +90,7 @@ struct FileReader(reader):
         return out.num_elements()
 
     fn __moveinit__(inout self, owned other: Self):
-        self.file_handle = other.file_handle ^
-
+        self.handle = other.handle ^
 
 struct TensorReader(reader):
     var pos: Int
