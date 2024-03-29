@@ -215,10 +215,11 @@ struct RecordCoord(CollectionElement, Sized, Stringable):
         self.QuStr = QS
 
     @always_inline
-    fn validate(self, buf: BufferedLineIterator) raises:
+    fn validate(self) raises:
         if self.seq_len() != self.qu_len():
-            print(self.seq_len(), self.qu_len())
-            raise Error("Corrupt Lengths.")
+            raise Error("Corrput Lengths")
+        if self.qu_header_len() > 1 and self.qu_header_len() != self.seq_header_len():
+            raise Error("Corrput Lengths")
 
     @always_inline
     fn seq_len(self) -> Int32:
@@ -231,6 +232,10 @@ struct RecordCoord(CollectionElement, Sized, Stringable):
     @always_inline
     fn qu_header_len(self) -> Int32:
         return self.QuHeader.end - self.QuHeader.start
+
+    @always_inline
+    fn seq_header_len(self) -> Int32:
+        return self.SeqHeader.end - self.SeqHeader.start
 
     fn __len__(self) -> Int:
         return self.seq_len().to_int()

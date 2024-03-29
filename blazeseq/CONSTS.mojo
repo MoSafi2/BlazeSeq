@@ -1,3 +1,5 @@
+from blazeseq.helpers import QualitySchema
+
 alias KB = 1024
 alias MB = 1024 * KB
 alias GB = 1024 * MB
@@ -15,38 +17,11 @@ alias MAX_SHIFT = 30
 alias MAX_CAPACITY = 2**MAX_SHIFT
 
 
-@value
-struct QualitySchema(Stringable, CollectionElement):
-    var SCHEMA: StringLiteral
-    var LOWER: Int8
-    var UPPER: Int8
-    var OFFSET: Int8
-
-    fn __init__(inout self, schema: StringLiteral, lower: Int, upper: Int, offset: Int):
-        self.SCHEMA = schema
-        self.UPPER = upper
-        self.LOWER = lower
-        self.OFFSET = offset
-
-    fn __str__(self) -> String:
-        return (
-            String("Quality schema: ")
-            + self.SCHEMA
-            + "\nLower: "
-            + self.LOWER
-            + "\nUpper: "
-            + self.UPPER
-            + "\nOffset: "
-            + self.OFFSET
-        )
-
-
 # Values for schemas are derived from
 # https://github.com/BioJulia/FASTX.jl/blob/master/src/fastq/quality.jl
 # Also check: https://www.biostars.org/p/90845/
-# TODO: Validate those ranges
 
-# Minimum and maximum value of all schemas
+# Generic is the minimum and maximum value of all possible schemas schemas
 alias generic_schema = QualitySchema("Generic", 33, 126, 0)
 alias sanger_schema = QualitySchema("Sanger", 33, 126, 33)
 alias solexa_schema = QualitySchema("Solexa", 59, 126, 64)
@@ -54,6 +29,3 @@ alias illumina_1_3_schema = QualitySchema("Illumina v1.3", 64, 126, 64)
 alias illumina_1_5_schema = QualitySchema("Illumina v1.5", 66, 126, 64)
 alias illumina_1_8 = QualitySchema("Illumina v1.8", 33, 126, 33)
 
-
-fn main():
-    print(solexa_schema)

@@ -92,6 +92,7 @@ struct FileReader(reader):
     fn __moveinit__(inout self, owned other: Self):
         self.handle = other.handle ^
 
+
 struct TensorReader(reader):
     var pos: Int
     var source: Tensor[I8]
@@ -313,16 +314,17 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
     @staticmethod
     fn _check_ascii(in_tensor: Tensor[I8]) raises:
         var aligned = math.align_down(in_tensor.num_elements(), simd_width)
-
+        # alias bit_mask = 0xA0  # Between 32 and 127, makes a problems with 10
+        alias bit_mask = 0x80  # Non negative
         for i in range(0, aligned, simd_width):
             var vec = in_tensor.load[width=simd_width](i)
-            var mask = vec & 0x80
+            var mask = vec & bit_mask
             for i in range(len(mask)):
                 if mask[i] != 0:
                     raise Error("Non ASCII letters found")
 
         for i in range(aligned, in_tensor.num_elements()):
-            if in_tensor[i] & 0x80 != 0:
+            if in_tensor[i] & bit_mask != 0:
                 raise Error("Non ASCII letters found")
 
     @always_inline

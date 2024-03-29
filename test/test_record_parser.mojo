@@ -1,15 +1,21 @@
-"""Testing for the parser on test suite of valid and invalid FASTQ files provided by BioJava.
+"""Testing for the parser on test suite of valid and invalid FASTQ files used for testing by BioJava, BioPerl, and Biopython projects.
+File were downloaded from BioJava.
 'https://github.com/biojava/biojava/tree/master/biojava-genome%2Fsrc%2Ftest%2Fresources%2Forg%2Fbiojava%2Fnbio%2Fgenome%2Fio%2Ffastq'
 Truncated files were padded with 1, 2, or 3, extra line terminators to prevent `EOF` errors and to allow for record validation using the `validate_record` function.
 Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ.
 """
 
-from blazeseq import FastqRecord, RecordParser
+from blazeseq import RecordParser
 from testing import assert_raises
-from pathlib import Path
-from collections.set import Set
 
 alias test_dir = "test/test_data/fastq_parser/"
+
+alias corrput_qu_score = "Corrput quality score according to proivded schema"
+alias EOF = "EOF"
+alias cor_len = "Corrput Lengths"
+alias cor_seq_hed = "Sequence Header is corrupt"
+alias cor_qu_hed = "Quality Header is corrupt"
+alias non_mat_hed = "Non matching headers"
 
 
 fn test_invalid_file(file: String, msg: String = "") raises:
@@ -75,13 +81,6 @@ fn test_valid() raises:
 
 
 fn test_invalid() raises:
-    alias corrput_qu_score = "Corrput quality score according to proivded schema"
-    alias EOF = "EOF"
-    alias cor_len = "Corrput Lengths"
-    alias cor_seq_hed = "Sequence Header is corrupt"
-    alias cor_qu_hed = "Quality Header is corrupt"
-    alias non_mat_hed = "Non matching headers"
-
     test_invalid_file("empty.fastq", EOF)
     test_invalid_file("error_diff_ids.fastq", non_mat_hed)
     test_invalid_file("error_long_qual.fastq", cor_len)

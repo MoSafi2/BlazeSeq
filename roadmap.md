@@ -15,5 +15,5 @@
 - [ ] Make a consistent API
 - [x] Choose a name:
   * Mamba
-  * BlazeSeq
+  * Blaze-seq
   * Fastq-tools

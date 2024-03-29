@@ -78,37 +78,37 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         return schema
 
 
-struct CoordParser[validate_ascii: Bool = False]:
-    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
+struct CoordParser:
+    var stream: BufferedLineIterator[FileReader]
 
-    fn __init__(
-        inout self,
-        path: String,
-    ) raises -> None:
-        self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
-            path, DEFAULT_CAPACITY
-        )
+    fn __init__(inout self, path: String) raises -> None:
+        self.stream = BufferedLineIterator[FileReader](path, DEFAULT_CAPACITY)
+
+    @always_inline
+    fn parse_all(inout self) raises:
+        while True:
+            var record: RecordCoord
+            record = self._parse_record()
+            record.validate()
 
     @always_inline
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
-        read = self._parse_read()
-        read.validate(self.stream)
+        read = self._parse_record()
+        read.validate()
         return read
 
     @always_inline
-    fn _parse_read(
-        inout self,
-    ) raises -> RecordCoord:
+    fn _parse_record(inout self) raises -> RecordCoord:
         var line1 = self.stream.read_next_coord()
         if self.stream.buf[self.stream.map_pos_2_buf(line1.start)] != read_header:
-            raise Error("Corrupt read header")
+            raise Error("Sequence Header is corrupt")
 
         var line2 = self.stream.read_next_coord()
 
         var line3 = self.stream.read_next_coord()
         if self.stream.buf[self.stream.map_pos_2_buf(line3.start)] != quality_header:
-            raise Error("Corrupt quality header")
+            raise Error("Quality Header is corrupt")
 
         var line4 = self.stream.read_next_coord()
         return RecordCoord(line1, line2, line3, line4)

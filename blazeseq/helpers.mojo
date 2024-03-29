@@ -234,3 +234,29 @@ fn find_last_read_header(in_tensor: Tensor[I8], start: Int = 0, end: Int = -1) -
             return -1
         last_chr = find_last_read_header(in_tensor, start, end_inner)
     return last_chr
+
+
+@value
+struct QualitySchema(Stringable, CollectionElement):
+    var SCHEMA: StringLiteral
+    var LOWER: Int8
+    var UPPER: Int8
+    var OFFSET: Int8
+
+    fn __init__(inout self, schema: StringLiteral, lower: Int, upper: Int, offset: Int):
+        self.SCHEMA = schema
+        self.UPPER = upper
+        self.LOWER = lower
+        self.OFFSET = offset
+
+    fn __str__(self) -> String:
+        return (
+            String("Quality schema: ")
+            + self.SCHEMA
+            + "\nLower: "
+            + self.LOWER
+            + "\nUpper: "
+            + self.UPPER
+            + "\nOffset: "
+            + self.OFFSET
+        )
