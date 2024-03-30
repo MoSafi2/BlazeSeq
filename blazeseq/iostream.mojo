@@ -76,7 +76,8 @@ struct FileReader(reader):
             raise (err_msg ^).consume_as_error()
 
         var ptr = DTypePointer[DType.int8](buf.address)
-        return Tensor[DType.int8](int(size_copy), ptr)
+        # return Tensor[DType.int8](int(size_copy), ptr)
+        return Tensor[DType.int8](ptr, int(size_copy))
 
     # Does not work well currently
     @always_inline
