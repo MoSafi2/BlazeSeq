@@ -4,23 +4,6 @@
 * add link to the previous version at the end of the 1st paragraph
 
 
-- [Blaze-Seq🔥](#blaze-seq)
-  - [Fastq Parser for Efficient Sequence Analysis](#fastq-parser-for-efficient-sequence-analysis)
-  - [Key Features:](#key-features)
-  - [Installation](#installation)
-  - [Getting started](#getting-started)
-    - [Command line](#command-line)
-    - [Interative usage examples](#interative-usage-examples)
-  - [Performance](#performance)
-    - [Setup](#setup)
-    - [Replication](#replication)
-    - [Datasets](#datasets)
-  - [Results](#results)
-    - [FASTQ parsing](#fastq-parsing)
-  - [Functional testing](#functional-testing)
-  - [Roadmap](#roadmap)
-  - [Contribution](#contribution)
-  - [Liscence](#liscence)
 
 ## Fastq Parser for Efficient Sequence Analysis
 
@@ -51,18 +34,21 @@ blazeseq_cli [options] /path/to/file
 ```
 Check `blazeseq_cli --help` for full list of options
 
-### Interative usage examples
+### Interative usage
 
-* Parse all records, fast error check.
+* Basic usage
 ```mojo
 from blazeseq import RecordParser, CoordParser
 fn main():
-    parser = RecordParser[validate_ascii = True, validate_quality = True](path="path/to/your/file.fastq", schema = "schema)
-    # Only validates read headers and Ids length matching
-    # parser = CoordParser(path="path/to/your/file.fastq") 
-    parser.parse_all()
-```
+   parser = RecordParser[validate_ascii = True, validate_quality = True](path="path/to/your/file.fastq", schema = "schema")
+   # Only validates read headers and Ids length matching
+   # parser = CoordParser(path="path/to/your/file.fastq") 
+    parser.next() # Lazily get the next FASTQ record
+    parser.parse_all() # Parse all records, fast error check.
 
+
+```
+### Examples
 
 * Get total number of reads and base pairs (fast mode)
 ```mojo
@@ -83,7 +69,7 @@ fn main():
 ```
 
 
-**Lazy parse, collect record statistics**. for now only the `FullStats` option is present (_more options are under development_).
+**Lazy parse, collect record statistics**. for now only works with `RecordParser`, the `FullStats` aggregator is the only one present (_more options are under development_).
 
 ```mojo
 from blazeseq import RecordParser, FullStats
@@ -101,11 +87,11 @@ fn main() raises:
 
 
 ## Performance
-**Disclaimer:** Performance reporting metrics is a tricky business in the best of days.  
+**Disclaimer:** Performance reporting is a tricky business on the best of days.  
 The following numbers provide a ballpark of `Blaze-Seq` performance targets and serve as internal metrics to track improvements as `Blaze-Seq` and `Mojo` evolve.   
 
 ### Setup
-All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of DDR6 memory equipped with 2TB PCI 4.0 NVME hardrive and running Ubuntu 22.04. Mojo 24.2. benchmarking scripts were compiled using the following command `mojo build /path/to/file.mojo` and run using `<binary> /path/to/file.fastq`.
+All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of DDR6 memory equipped with 2TB PCI 4.0 NVME hardrive and running Ubuntu 22.04. Mojo 24.2. benchmarking scripts were compiled using the following command `mojo build /path/to/file.mojo` and run using ` hyperfine "<binary> /path/to/file.fastq" --warmup 2`.
 
 ### Replication
 All code used in benchmarks are present in the `benchmark` directory of the repository.  
@@ -124,13 +110,13 @@ Download the datasets from the following links. Compile and run the benchmarking
 
 ### FASTQ parsing
 
-| reads  | SeqIO <br> (Python) | Needletail <br> (Rust) | MojoFastqTrim <br> (Mojo🔥) |
-| ------ | ------------------- | ---------------------- | -------------------------- |
-| 40k    | 0.57s               | 0.010s                 | 0.018s                     |
-| 5.5M   | 27.1s               | 0.27s                  | 0.21s                      |
-| 12.2M  | 58.7s               | 0.59s                  | 0.51s                      |
-| 27.7M  | 87.4s               | 0.92s                  | 0.94s                      |
-| 169.8M | -                   | 17.6s                  | 17.5s                      |
+| reads  | CoordParser     | RecordParser (no validation) | RecordParser (quality validation) | RecordParser (complete validation) |
+| ------ | --------------- | ---------------------------- | --------------------------------- | ---------------------------------- |
+| 40k    | 13.7 ± 5.0 ms   | 18.2 ± 4.7 ms                | 26.0 ± 4.9 ms                     | 50.3 ± 6.3 ms                      |
+| 5.5M   | 268.8 ± 4.3 ms  | 696.9 ± 2.7 ms               | 935.8 ± 6.3 ms                    | 1.441 ± 0.024 s                    |
+| 12.2M  | 710.2 ± 4.0 ms  | 1.671 ± 0.08 s               | 2.198 ± 0.014 s                   | 3.428 ± 0.042 s                    |
+| 27.7M  | 1.247 ± 0.07 s  | 3.478 ± 0.08 s               | 3.92 ± 0.030 s                    | 4.838 ± 0.034 s                    |
+| 169.8M | 30.246 ± 0.051s | 37.863 ±  0.237 s            | 40.430 ±  1.648 s                 | 54.969 ± 0.232 s                   |
 
 
 ## Functional testing
@@ -140,7 +126,7 @@ the dataset were obtained from the [**BioJava**]('https://github.com/biojava/bio
 The same test dataset is used for the [**Biopython**](https://biopython.org/) and [**BioPerl** ](https://bioperl.org/) FASTQ parsers as well.  
 
 ## Roadmap
-Some points of the following roadmap are tightly coupled with Mojo's evolution, as Mojo matures more options will be added
+Some points of the following roadmap are tightly coupled with Mojo's evolution, as Mojo matures more options will be added.
 
 - [ ] parallel processing of records (requires stable concurrency model and concurrency primitives from Mojo)
 - [ ] Parsing over contineous (decompression , network) streams (requires Mojo implementation or binding to decompression and networking libraries).

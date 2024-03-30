@@ -6,7 +6,7 @@ from sys import argv
 fn main() raises:
     var vars = argv()
     var path = vars[1]
-    var parser = RecordParser[validate_ascii=False, validate_quality=False](
+    var parser = RecordParser[validate_ascii=False, validate_quality=True](
         path, "illumina_1.8"
     )
     var read_no = 0
