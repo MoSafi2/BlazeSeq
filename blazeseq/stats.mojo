@@ -13,7 +13,6 @@ alias MAX_LENGTH = 10_000
 alias WIDTH = 5
 alias MAX_READS = 100_000
 alias MAX_QUALITY = 100
-alias OFFSET = 33
 alias MAX_COUNTS = 1_000_000
 
 
@@ -133,7 +132,6 @@ From left to right, check the sum of every to consecutive numbers, if the number
 accumate one to CpG counter
 at the end, divide the number by the read length, accumulate 1 to the CpG Tensor at the end of the rounded number.
 """
-
 
 @value
 struct CGContent(Analyser, Stringable):
@@ -263,9 +261,13 @@ struct QualityDistribution(Analyser, Stringable):
             self.max_length = record.QuStr.num_elements()
 
         for i in range(record.QuStr.num_elements()):
-            var index = VariadicList[Int]((record.QuStr[i] - OFFSET).to_int(), i)
-            if record.QuStr[i].to_int() - OFFSET > self.max_qu:
-                self.max_qu = record.QuStr[i].to_int() - OFFSET
+            var index = VariadicList[Int](
+                (record.QuStr[i] - record.quality_schema.OFFSET).to_int(), i
+            )
+            if record.QuStr[i].to_int() - record.quality_schema.OFFSET > self.max_qu:
+                self.max_qu = (
+                    record.QuStr[i].to_int() - record.quality_schema.OFFSET.to_int()
+                )
             self.qu_dist[index] += 1
 
     fn report(self) -> Tensor[DType.int64]:

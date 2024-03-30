@@ -420,19 +420,3 @@ struct BufferedWriter:
         self.flush_buffer()
         self.sink.close()
 
-
-fn main() raises:
-    var p = "data/M_abscessus_HiSeq.fq"
-    # var h = open(p, "r").read_bytes()
-    var buf = BufferedLineIterator[FileReader, check_ascii=False](p, capacity=64 * 1024)
-    var line_no = 0
-
-    while True:
-        try:
-            var line = buf.read_next_line()
-            print(line)
-            line_no += 1
-        except Error:
-            print(Error)
-            print(line_no / 4)
-            break
