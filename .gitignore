@@ -1,5 +1,5 @@
 data/*
-benchmark/fast_parser
+benchmark/
 *.ipynb
 test_file.mojo
 .VSCodeCounter
@@ -7,5 +7,6 @@ zlib_c
 zlib
 README_files
 README.html
-
+*.mojopkg
+!benchmark/*.mojo
 
