@@ -1,7 +1,7 @@
 
 # BlazeSeq🔥 
 Blaze-Seq is a performant and versatile FASTQ format parser that provide FASTQ parsing toolkit with fine-control knobs. It can be further utilized in several application as quality control, kmer-generation, alignment ... etc.  
-It provides two options: `CoordParser` minimal-copy parser that can do limited validation of records similair to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is 3X slower but also provides options to validate the quality schema of records and validates that all records has no non-ASCII content.
+It provides two options: `CoordParser` minimal-copy parser that can do limited validation of records similair to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is 3X slower but also provides compile-time options for quality schema and ASCII validation of the records.
 
 **Disclaimer**: Blazeseq is a re-write of the earlier `MojoFastTrim` which can still be accessed from [here](). 
 
@@ -36,12 +36,15 @@ Check `blazeseq_cli --help` for full list of options
 ```mojo
 from blazeseq import RecordParser, CoordParser
 fn main():
-   parser = RecordParser[validate_ascii = True, validate_quality = True](path="path/to/your/file.fastq", schema = "schema")
-   # Only validates read headers and Ids length matching
+    var validate_ascii = True
+    var validate_quality = True
+    var parser = RecordParser[validate_ascii, validate_quality](path="path/to/your/file.fastq", schema = "schema")
+
+   # Only validates read headers and Ids length matching, 3X faster on average.
    # parser = CoordParser(path="path/to/your/file.fastq") 
+
     parser.next() # Lazily get the next FASTQ record
     parser.parse_all() # Parse all records, fast error check.
-
 
 ```
 ### Examples
@@ -83,8 +86,8 @@ fn main() raises:
 
 
 ## Performance
-**Disclaimer:** Performance reporting is a tricky business on the best of days.  
-Consider the following numbers provide a ballpark of `Blaze-Seq` performance targets. It also serve as internal metrics to track improvements as `Blaze-Seq` and `Mojo` evolve.   
+**Disclaimer:** Performance reporting is a tricky business on the best of days. Consider the following numbers as approximate of `Blaze-Seq` single-core performance targets on modern hardware.  
+It also serve as internal metrics to track improvements as `Blaze-Seq` and `Mojo` evolve.   
 
 ### Setup
 All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of DDR6 memory equipped with 2TB PCI 4.0 NVME hardrive and running Ubuntu 22.04. Mojo 24.2. benchmarking scripts were compiled using the following command `mojo build /path/to/file.mojo` and run using ` hyperfine "<binary> /path/to/file.fastq" --warmup 2`.
