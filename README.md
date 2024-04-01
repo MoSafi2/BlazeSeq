@@ -1,20 +1,22 @@
 
 # BlazeSeq🔥
 
-Blaze-Seq is a performant and versatile FASTQ format parser that provide FASTQ parsing with fine-control knobs. It can be further utilized in several application as quality control tooling, kmer-generation, alignment ... etc.  
-It currently provides two main options: `CoordParser` minimal-copy parser that can do limited validation of records similar to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is 3X slower but also provides compile-time options for quality schema and ASCII validation of the records.
+BlazeSeq is a performant and versatile FASTQ format parser that provide FASTQ parsing with fine-control knobs. It can be further utilized in several application as quality control tooling, kmer-generation, alignment ... etc.  
+It currently provides two main options: `CoordParser` a minimal-copy parser that can do limited validation of records similar to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is 3X slower but also provides compile-time optional quality schema and ASCII validation of the records.
 
-**Disclaimer**: Blazeseq is a re-write of the earlier `MojoFastTrim` which can still be accessed from [here](MoSafi2@b5f60ccea2c66fa42c1b1e7b5ed7f267afbe720e).
+**Note**: BlazeSeq is a re-write of the earlier `MojoFastTrim` which can still be accessed from [here]().
 
-## Key Features:
-* Zero-overhead control over parser guarantees through Mojo's compile-time metaprogramming
+## Key Features
+
+* Zero-overhead control over parser validation guarantees through Mojo's compile time meta-programming.
 * Multiple parsing modes with progressive validation/performance compromise.
-* Parsing speed upto 5Gb/s from disk on modern hardware. 
+* Parsing speed up to 5Gb/s from disk on modern hardware.
+* Different aggregation statistics modules (Length & Quality distribution, GC-content .. etc.)
 
 ## Installation
 
-`Blaze-Seq`  requires `Mojo 24.2` on Ubuntu, Mac or WSL2 on windows.  
-You can get `blaze-seq` source code as well as pre-compiled CLI tool from the releases page, you can clone and compile the repository yourself.
+`BlazeSeq`  requires `Mojo 24.2` on Ubuntu, Mac or WSL2 on windows.  
+You can get `BlazeSeq` source code as well as pre-compiled CLI tool from the releases page, you can clone and compile the repository yourself.
 
 ```bash
 git clone [add repo]
@@ -25,23 +27,25 @@ mojo pkg blazeseq //mojo pkg
 
 ## Getting started
 
-### Command line 
+### Command line
 
 ```bash
 blazeseq_cli [options] /path/to/file
 ```
+
 Check `blazeseq_cli --help` for full list of options
 
-### Interative usage
+### Interactive usage
 
 * Basic usage
+
 ```mojo
 from blazeseq import RecordParser, CoordParser
 fn main():
     var validate_ascii = True
     var validate_quality = True
     # Schema can be: generic, sanger, solexa, illumina_1.3, illumina_1.5, illumina_1.8
-    schame = "sanger"
+    schema = "sanger"
     var parser = RecordParser[validate_ascii, validate_quality](path="path/to/your/file.fastq", schema)
 
    # Only validates read headers and Ids length matching, 3X faster on average.
@@ -51,9 +55,11 @@ fn main():
     parser.parse_all() # Parse all records, fast error check.
 
 ```
+
 ### Examples
 
 * Get total number of reads and base pairs (fast mode)
+
 ```mojo
 from blazeseq import CoordParser
 fn main():
@@ -71,7 +77,6 @@ fn main():
 
 ```
 
-
 **Lazy parse, collect record statistics**. for now only works with `RecordParser`, the `FullStats` aggregator is the only one present (_more options are under development_).
 
 ```mojo
@@ -88,20 +93,18 @@ fn main() raises:
             break
 ```
 
-
 ## Performance
-**Disclaimer:** Performance reporting is a tricky business on the best of days. Consider the following numbers as approximate of `Blaze-Seq` single-core performance targets on modern hardware.  
-It also serve as internal metrics to track improvements as `Blaze-Seq` and `Mojo` evolve.   
+
+**Disclaimer:** Performance reporting is a tricky business on the best of days. Consider the following numbers as approximate of `BlazeSeq` single-core performance targets on modern hardware. It also serve as internal metrics to track improvements as `BlazeSeq` and `Mojo` evolve.  
+All code used in benchmarks are present in the `benchmark` directory of the repository. Download the datasets from the following links. Compile and run the benchmarking scripts as follow.
 
 ### Setup
-All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of DDR6 memory equipped with 2TB PCI 4.0 NVME hardrive and running Ubuntu 22.04. Mojo 24.2. benchmarking scripts were compiled using the following command `mojo build /path/to/file.mojo` and run using ` hyperfine "<binary> /path/to/file.fastq" --warmup 2`.
 
-### Replication
-All code used in benchmarks are present in the `benchmark` directory of the repository.  
-Download the datasets from the following links. Compile and run the benchmarking scripts as previously described.
+All tests were carried out on a personal PC with Intel core-i7 13700K processor, 32 GB of DDR6 memory equipped with 2TB Samsung 980 pro NVME hard drive and running Ubuntu 22.04 and Mojo 24.2. benchmarking scripts were compiled using the following command `mojo build /path/to/file.mojo` and run using `hyperfine "<binary> /path/to/file.fastq" --warmup 2`.
 
 ### Datasets
-5 datasets with progressivly bigger sizes and number of reads were used for benchmarking.
+
+5 datasets with progressively bigger sizes and number of reads were used for benchmarking.
 
 * [Raposa. (2020).](https://zenodo.org/records/3736457/files/9_Swamp_S2B_rbcLa_2019_minq7.fastq?download=1) (40K reads)
 * [Biofast benchmark dataset](https://github.com/lh3/biofast/releases/tag/biofast-data-v1) (5.5M reads)
@@ -121,28 +124,30 @@ Download the datasets from the following links. Compile and run the benchmarking
 | 27.7M  | 1.247 ± 0.07 s  | 3.478 ± 0.08 s               | 3.92 ± 0.030 s                                | 4.838 ± 0.034 s                    |
 | 169.8M | 30.246 ± 0.051s | 37.863 ±  0.237 s            | 40.430 ±  1.648 s                             | 54.969 ± 0.232 s                   |
 
-
 ## Functional testing
-A dataset of toy valid/invalid FASTQ files were used for testing. 
-the dataset were obtained from the [**BioJava**](https://github.com/biojava/biojava/tree/master/biojava-genome%2Fsrc%2Ftest%2Fresources%2Forg%2Fbiojava%2Fnbio%2Fgenome%2Fio%2Ffastq) project. 
-The same test dataset is used for the [**Biopython**](https://biopython.org/) and [**BioPerl** ](https://bioperl.org/) FASTQ parsers as well.  
+
+A dataset of toy valid/invalid FASTQ files were used for testing.
+the dataset were obtained from the [**BioJava**](https://github.com/biojava/biojava/tree/master/biojava-genome%2Fsrc%2Ftest%2Fresources%2Forg%2Fbiojava%2Fnbio%2Fgenome%2Fio%2Ffastq) project.
+The same test dataset is used for the [**Biopython**](https://biopython.org/) and [**BioPerl**](https://bioperl.org/) FASTQ parsers as well.  
 
 ## Roadmap
+
 Some points of the following roadmap are tightly coupled with Mojo's evolution, as Mojo matures more options will be added.
 
-- [ ] parallel processing of Fastq files (requires stable concurrency model and concurrency primitives from Mojo)
-- [ ] Parsing over contineous (decompression , network) streams (requires Mojo implementation or binding to decompression and networking libraries).
-- [ ] Reporting output as JSON, HTML? Python inter-op for plotting?.
-- [ ] Comprehensive testing of basic aggregate statistics (GC Content, quality distribution per  base pair, read-length distribution ... etc) vs Industry standards
-- [ ] Passing custom list of aggregator to the parser.
+* [ ] parallel processing of Fastq files (requires stable concurrency model and concurrency primitives from Mojo)
+* [ ] Parsing over continuous (decompression , network) streams (requires Mojo implementation or binding to decompression and networking libraries).
+* [ ] Reporting output as JSON, HTML? Python inter-op for plotting?.
+* [ ] Comprehensive testing of basic aggregate statistics (GC Content, quality distribution per  base pair, read-length distribution ... etc) vs Industry standards
+* [ ] Passing custom list of aggregator to the parser.
 
 ## Contribution
-This project welcomes all contributions! Here are some ways if you are intrested:
 
-* **Bug reports**: Blaze-Seq is still new, bugs and rough-edges are expected. If you encounter any bugs, please create an issue.
+This project welcomes all contributions! Here are some ways if you are interested:
+
+* **Bug reports**: BlazeSeq is still new, bugs and rough-edges are expected. If you encounter any bugs, please create an issue.
 * **Feature requests**: If you have ideas for new features, feel free to create an issue or a pull request.
 * **Code contributions**: Pull requests that improve existing code or add new functionalities are welcome.
 
-## Liscence
-This project is licensed under the MIT License.
+## License
 
+This project is licensed under the MIT License.

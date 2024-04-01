@@ -12,6 +12,9 @@ fn main() raises:
     var validate_quality = False
     var vars = argv()
 
+    if len(vars) == 1:
+        print(help_msg)
+
     if vars[1] == "-h" or vars[1] == "--help":
         print(help_msg)
 
@@ -150,6 +153,7 @@ Options:
 -f, --fast-mode: Use a faster parser (). Use a faster parser (may skip some validations).
 -a, --validate-ascii [schema]: Validate that the input file is ASCII encoded (not available in fast-mode).
 -q, --validate-quality: Perform additional quality checks on the parsed data (not available in fast-mode).
+
 Description:
 
 Blaze-seq is a verstaile FASTQ parser, It offers different options to control the parsing behavior:
