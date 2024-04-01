@@ -38,7 +38,9 @@ from blazeseq import RecordParser, CoordParser
 fn main():
     var validate_ascii = True
     var validate_quality = True
-    var parser = RecordParser[validate_ascii, validate_quality](path="path/to/your/file.fastq", schema = "schema")
+    # Schema can be: generic, sanger, solexa, illumina_1.3, illumina_1.5, illumina_1.8
+    schame = "sanger"
+    var parser = RecordParser[validate_ascii, validate_quality](path="path/to/your/file.fastq", schema)
 
    # Only validates read headers and Ids length matching, 3X faster on average.
    # parser = CoordParser(path="path/to/your/file.fastq") 
