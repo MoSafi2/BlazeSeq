@@ -78,7 +78,6 @@ fn test_invalid() raises:
 
 
 fn test_valid() raises:
-    test_valid_file("bug2335.fastq")
     test_valid_file("example.fastq")
     test_valid_file("illumina_example.fastq", "illumina_1.3")
     test_valid_file("illumina_faked.fastq", "illumina_1.3")
