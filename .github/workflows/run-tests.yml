@@ -16,7 +16,7 @@ jobs:
 
     - name: Install modular
       run: |
-        curl https://get.modular.com
+        curl -s https://get.modular.com | sh -
         modular auth
 
 
