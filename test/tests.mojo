@@ -13,5 +13,5 @@ fn main() raises:
 
     for test_file in valid_files:
         var thrown_away = external_call["system", Int, StringRef](
-            (String("mojo run /home/") + test_file[]._strref_dangerous())
+            (String("mojo run /home/") + test_file[])._strref_dangerous()
         )
