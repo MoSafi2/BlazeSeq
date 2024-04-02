@@ -1,0 +1,29 @@
+name: Run Mojo tests
+
+on:
+  push:
+    branches:
+      - "*"
+
+jobs:
+  run-tests:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Install modular
+      run: |
+        curl https://get.modular.com | MODULAR_AUTH=${{ secrets.AUTH_TOKEN }} sh -
+
+
+    - name: Install Mojo
+      run: modular install mojo
+
+    - name: Add to PATH
+      run: echo "/home/runner/.modular/pkg/packages.modular.com_mojo/bin" >> $GITHUB_PATH
+
+    - name: Run tests
+      run: mojo test/tests.mojo
