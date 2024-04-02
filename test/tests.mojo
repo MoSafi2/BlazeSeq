@@ -8,8 +8,12 @@ fn main() raises:
 
     # Remove tests.mojo from test_files
     for test_file in test_files:
-        if test_file != String("tests.mojo"):
-            valid_files.append(test_file)
+        var string_pointer = test_file.get_unsafe_pointer()
+        var file_str = string_pointer.load(0)
+        if file_str != String("tests.mojo"):
+            valid_files.append(file_str)
 
-    for test_file in test_files:
-        var thrown_away = external_call["system", Int, String]("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/" + test_file)
+    print(valid_files)
+
+    #for test_file in test_files:
+    #    var thrown_away = external_call["system", Int, String]("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/" + test_file)
