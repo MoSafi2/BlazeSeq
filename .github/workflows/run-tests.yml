@@ -19,7 +19,6 @@ jobs:
         curl -s https://get.modular.com | sh -
         modular auth examples
 
-
     - name: Install Mojo
       run: modular install mojo
 

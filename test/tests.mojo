@@ -1,7 +1,7 @@
 from sys import external_call
 from os import listdir
 
-fn main():
+fn main() raises:
     var test_files: List[String] = listdir("./test/")
 
     for test_file in test_files:
