@@ -7,7 +7,7 @@ fn main() raises:
     var valid_files: List[String] = List[String]()
     for file_str in test_files:
         var tmp = file_str[]
-        if tmp != String("tests.mojo"):
+        if tmp != String("tests.mojo") and tmp.endswith(".mojo"):
             valid_files.append(tmp)
             print(tmp)
 
