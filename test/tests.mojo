@@ -2,7 +2,7 @@ from sys import external_call
 from os import listdir
 
 fn main() raises:
-    var test_files: List[String] = listdir("/home/test")
+    var test_files: List[String] = listdir("/home/test/")
 
     print("Files:")
     print(test_files[0])
