@@ -2,8 +2,9 @@ from sys import external_call
 from collections import List
 from os import listdir
 
+
 fn main() raises:
-    var test_files: List[String] = listdir("/home/runner/work/Fastq_Parser/Fastq_Parser/test/")
+    var test_files: List[String] = listdir("/home/")
     var valid_files: List[String] = List[String]()
     for file_str in test_files:
         var tmp = file_str[]
@@ -11,4 +12,6 @@ fn main() raises:
             valid_files.append(tmp)
 
     for test_file in valid_files:
-        var thrown_away = external_call["system", Int, String](String("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/") + test_file[])
+        var thrown_away = external_call["system", Int, StringRef](
+            (String("mojo run /home/") + test_file[]._strref_dangerous())
+        )
