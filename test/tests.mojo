@@ -5,7 +5,8 @@ from os import listdir
 
 fn main() raises:
     var test_files: List[String] = listdir("/home/runner/work/Fastq_Parser/Fastq_Parser/test/")
-    print(test_files)
+    for file_str in test_files:
+        print(file_str)
     #var valid_files: List[String]
     # Remove tests.mojo from test_files
     #for test_file in test_files:
