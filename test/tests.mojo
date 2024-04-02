@@ -11,4 +11,4 @@ fn main() raises:
             valid_files.append(tmp)
 
     for test_file in valid_files:
-        var thrown_away = external_call["system", Int, String]("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/" + test_file)
+        var thrown_away = external_call["system", Int, String](String("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/") + test_file[])
