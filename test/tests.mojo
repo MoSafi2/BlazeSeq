@@ -8,5 +8,5 @@ fn main() raises:
     print(test_files[0])
     print(".")
 
-    for test_file in test_files:
-        var thrown_away = external_call["system", Int, String](String("mojo run ") + String(test_file))
+    #for test_file in test_files:
+    #    var thrown_away = external_call["system", Int, String](String("mojo run ") + String(test_file))

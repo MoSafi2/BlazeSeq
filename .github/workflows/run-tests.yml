@@ -26,4 +26,4 @@ jobs:
       run: echo "/home/runner/.modular/pkg/packages.modular.com_mojo/bin" >> $GITHUB_PATH
 
     - name: Run tests
-      run: mojo test/tests.mojo
+      run: mojo run test/tests.mojo
