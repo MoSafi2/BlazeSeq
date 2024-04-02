@@ -16,7 +16,8 @@ jobs:
 
     - name: Install modular
       run: |
-        curl https://get.modular.com | MODULAR_AUTH=${{ secrets.AUTH_TOKEN }} sh -
+        curl https://get.modular.com
+        modular auth
 
 
     - name: Install Mojo
