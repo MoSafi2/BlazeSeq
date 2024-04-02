@@ -9,7 +9,6 @@ fn main() raises:
         var tmp = file_str[]
         if tmp != String("tests.mojo") and tmp.endswith(".mojo"):
             valid_files.append(tmp)
-            print(tmp)
 
-    #for test_file in test_files:
-    #    var thrown_away = external_call["system", Int, String]("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/" + test_file)
+    for test_file in valid_files:
+        var thrown_away = external_call["system", Int, String]("mojo run /home/runner/work/Fastq_Parser/Fastq_Parser/test/" + test_file)
