@@ -5,19 +5,19 @@ from testing import assert_equal, assert_false, assert_true
 
 fn get_fastq_records() raises -> DynamicVector[Tensor[DType.int8]]:
     var vec = DynamicVector[Tensor[DType.int8]](capacity=4)
-    let f = open("data/fastq_test.fastq", "r")
-    let t = f.read_bytes()
+    var f = open("data/fastq_test.fastq", "r")
+    var t = f.read_bytes()
 
     var offset = 0
     for i in range(4):
-        let line = get_next_line(t, offset)
+        var line = get_next_line(t, offset)
         vec.push_back(line)
         offset += line.num_elements() + 1
     return vec
 
 
 fn valid_fastq_record() raises:
-    let valid_vec = get_fastq_records()
+    var valid_vec = get_fastq_records()
     var read = FastqRecord(valid_vec[0], valid_vec[1], valid_vec[2], valid_vec[3])
 
     assert_false(len(read) == 0)
