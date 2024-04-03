@@ -2,7 +2,7 @@
 # BlazeSeq🔥
 
 BlazeSeq is a performant and versatile FASTQ format parser that provide FASTQ parsing with fine-control knobs. It can be further utilized in several application as quality control tooling, kmer-generation, alignment ... etc.  
-It currently provides two main options: `CoordParser` a minimal-copy parser that can do limited validation of records similar to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is 3X slower but also provides compile-time optional quality schema and ASCII validation of the records.
+It currently provides two main options: `CoordParser` a minimal-copy parser that can do limited validation of records similar to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is ~3X slower but also provides compile-time optional quality schema and ASCII validation of the records.
 
 **Note**: BlazeSeq is a re-write of the earlier `MojoFastTrim` which can still be accessed from [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim).
 
