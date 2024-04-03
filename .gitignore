@@ -1,5 +1,10 @@
-data
-playground.ipynb
-fastq_parser
-MojoFastTrim
-benchmark/needletail_benchmark/target
+data/*
+benchmark/
+*.ipynb
+*.mojopkg
+!benchmark/*.mojo
+blazeseq/*
+!blazeseq/*.mojo
+
+
+
