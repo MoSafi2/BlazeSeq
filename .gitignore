@@ -5,6 +5,5 @@ benchmark/
 !benchmark/*.mojo
 blazeseq/*
 !blazeseq/*.mojo
-
-
+*.mojo
 

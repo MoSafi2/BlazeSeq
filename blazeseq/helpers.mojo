@@ -1,6 +1,6 @@
 import math
 from algorithm import vectorize
-from .CONSTS import *
+from blazeseq.CONSTS import *
 from tensor import Tensor
 from collections.vector import *
 from tensor import Tensor

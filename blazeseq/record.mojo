@@ -1,7 +1,7 @@
-from .helpers import slice_tensor, write_to_buff
+from blazeseq.helpers import slice_tensor, write_to_buff
 from math import min
-from .CONSTS import *
-from .iostream import BufferedLineIterator
+from blazeseq.CONSTS import *
+from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant
 from tensor import Tensor
 
@@ -67,8 +67,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
 
     @always_inline
     fn wirte_record(self) -> String:
-        var temp = self.__concat_record()
-        return String(temp._steal_ptr(), temp.num_elements())
+        return self.__concat_record()
 
     @always_inline
     fn validate_record(self) raises:
@@ -106,33 +105,27 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             + self.SeqStr.num_elements()
             + self.QuHeader.num_elements()
             + self.QuStr.num_elements()
+            + 4
         )
 
     @always_inline
-    fn __concat_record(self) -> Tensor[I8]:
+    fn __concat_record(self) -> String:
         if self.total_length() == 0:
-            return Tensor[I8](0)
+            return ""
 
-        var offset = 0
-        var t = Tensor[I8](self.total_length())
+        var line1 = self.SeqHeader
+        var line1_str = String(line1._steal_ptr(), self.SeqHeader.num_elements() + 1)
 
-        write_to_buff(self.SeqHeader, t, offset)
-        offset = offset + self.SeqHeader.num_elements() + 1
-        t[offset - 1] = new_line
+        var line2 = self.SeqStr
+        var line2_str = String(line2._steal_ptr(), self.SeqStr.num_elements() + 1)
 
-        write_to_buff(self.SeqStr, t, offset)
-        offset = offset + self.SeqStr.num_elements() + 1
-        t[offset - 1] = new_line
+        var line3 = self.QuHeader
+        var line3_str = String(line3._steal_ptr(), self.QuHeader.num_elements() + 1)
 
-        write_to_buff(self.QuHeader, t, offset)
-        offset = offset + self.QuHeader.num_elements() + 1
-        t[offset - 1] = new_line
+        var line4 = self.QuStr
+        var line4_str = String(line4._steal_ptr(), self.QuStr.num_elements() + 1)
 
-        write_to_buff(self.QuStr, t, offset)
-        offset = offset + self.QuStr.num_elements() + 1
-        t[offset - 1] = new_line
-
-        return t
+        return line1_str + "\n" + line2_str + "\n" + line3_str + "\n" + line4_str + "\n"
 
     @staticmethod
     @always_inline
@@ -166,10 +159,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     # BUG: returns Smaller strings that expected.
     @always_inline
     fn __str__(self) -> String:
-        if self.total_length() == 0:
-            return ""
-        var concat = self.__concat_record()
-        return String(concat._steal_ptr(), self.total_length())
+        return self.__concat_record()
 
     @always_inline
     fn __len__(self) -> Int:

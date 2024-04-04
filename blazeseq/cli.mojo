@@ -1,9 +1,9 @@
 import time
 from math import math
 from sys import argv
-from blazeseq import CoordParser, RecordParser
+from blazeseq.parser import CoordParser, RecordParser
 from blazeseq.iostream import FileReader
-from blazeseq import FullStats
+from blazeseq.stats import FullStats
 
 
 fn main() raises:
