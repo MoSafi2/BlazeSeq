@@ -37,6 +37,8 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         else:
             self.quality_schema = quality_schema.get[QualitySchema]()[]
 
+        
+
     @always_inline
     fn get_seq(self) -> String:
         var temp = self.SeqStr
@@ -66,8 +68,8 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return String(temp._steal_ptr(), temp.num_elements())
 
     @always_inline
-    fn wirte_record(self) -> String:
-        return self.__concat_record()
+    fn wirte_record(self) -> Tensor[I8]:
+        return self.__concat_record_tensor()
 
     @always_inline
     fn validate_record(self) raises:
@@ -108,8 +110,33 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             + 4
         )
 
+    
     @always_inline
-    fn __concat_record(self) -> String:
+    fn __concat_record_tensor(self) -> Tensor[I8]:
+        var final_list = List[Int8](capacity = self.total_length())
+        
+        for i in range(self.SeqHeader.num_elements()):
+            final_list.append(self.SeqHeader[i])
+        final_list.append(10)
+
+        for i in range(self.SeqStr.num_elements()):
+            final_list.append(self.SeqStr[i])
+        final_list.append(10)
+
+        for i in range(self.QuHeader.num_elements()):
+            final_list.append(self.QuHeader[i])
+        final_list.append(10)
+
+        for i in range(self.QuStr.num_elements()):
+            final_list.append(self.QuStr[i])
+        final_list.append(10)
+
+        return Tensor[I8](final_list)
+
+
+
+    @always_inline
+    fn __concat_record_str(self) -> String:
         if self.total_length() == 0:
             return ""
 
@@ -159,7 +186,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
     # BUG: returns Smaller strings that expected.
     @always_inline
     fn __str__(self) -> String:
-        return self.__concat_record()
+        return self.__concat_record_str()
 
     @always_inline
     fn __len__(self) -> Int:

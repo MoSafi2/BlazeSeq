@@ -12,6 +12,7 @@ from math.math import min
 from pathlib import Path
 import time
 from tensor import Tensor
+from algorithm.swap import swap
 
 
 @register_passable
@@ -380,7 +381,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         else:
             raise Error("Out of bounds")
 
-
+#TODO: Add a resize if the buffer is too small
 struct BufferedWriter:
     var sink: FileHandle
     var buf: Tensor[DType.int8]
@@ -397,18 +398,26 @@ struct BufferedWriter:
         if source.num_elements() > self.uninatialized_space():
             self.flush_buffer()
         cpy_tensor[I8](self.buf, source, source.num_elements(), self.cursor, 0)
+        self.cursor += source.num_elements()
         return True
 
     fn flush_buffer(inout self) raises:
         var out = Tensor[I8](self.cursor)
         cpy_tensor[I8](out, self.buf, self.cursor, 0, 0)
-        var out_string = String(out._steal_ptr(), self.cursor)
+        var out_string = StringRef(out._steal_ptr(), self.cursor)
         self.sink.write(out_string)
         self.written += self.cursor
         self.cursor = 0
 
-    fn _resize_buf(inout self, amt: Int):
-        pass
+    fn _resize_buf(inout self, amt: Int, max_capacity: Int = MAX_CAPACITY):
+        var new_capacity = 0
+        if self.buf.num_elements() + amt > max_capacity:
+            new_capacity = max_capacity
+        else:
+            new_capacity = self.buf.num_elements() + amt
+        var new_tensor = Tensor[I8](new_capacity)
+        cpy_tensor[I8](new_tensor, self.buf, self.cursor, 0, 0)
+        swap(self.buf, new_tensor)
 
     fn uninatialized_space(self) -> Int:
         return self.capacity() - self.cursor
