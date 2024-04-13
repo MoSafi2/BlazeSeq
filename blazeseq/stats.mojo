@@ -27,7 +27,6 @@ trait Analyser(CollectionElement):
     fn report(self) -> Tensor[DType.int64]:
         ...
 
-
 @value
 struct FullStats(Stringable, CollectionElement):
     var num_reads: Int64
@@ -145,14 +144,9 @@ struct CGContent(Analyser, Stringable):
         self.cg_content = Tensor[DType.int64](100)
 
     fn tally_read(inout self, record: FastqRecord):
-        var previous_base: Int8 = 0
-        var current_base: Int8 = 0
         var cg_num = 0
-
-        for index in range(1, record.SeqStr.num_elements()):
-            previous_base = record.SeqStr[index - 1]
-            current_base = record.SeqStr[index]
-            if previous_base + current_base == 138:
+        for index in range(0, record.SeqStr.num_elements()):
+            if record.SeqStr[index] & 0b111 == 3 or record.SeqStr[index] & 0b111 == 7 :
                 cg_num += 1
 
         var read_cg_content = round(

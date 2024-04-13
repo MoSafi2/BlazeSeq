@@ -43,17 +43,17 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         SS: String,
         QH: String,
         QS: String,
-        quality_schema: String = "generic",
+        quality_schema: schema = "generic",
     ):
         self.SeqHeader = Tensor[I8](SH.as_bytes())
         self.SeqStr = Tensor[I8](SS.as_bytes())
         self.QuHeader = Tensor[I8](QH.as_bytes())
         self.QuStr = Tensor[I8](QS.as_bytes())
-        self.quality_schema = self._parse_schema(quality_schema)
-        # if quality_schema.isa[String]():
-        #     self.quality_schema = self._parse_schema(quality_schema.get[String]()[])
-        # else:
-        #     self.quality_schema = quality_schema.get[QualitySchema]()[]
+        if quality_schema.isa[String]():
+            var q: String  = quality_schema.get[String]()[]
+            self.quality_schema = self._parse_schema(q)
+        else:
+            self.quality_schema = quality_schema.get[QualitySchema]()[]
 
     @always_inline
     fn get_seq(self) -> String:

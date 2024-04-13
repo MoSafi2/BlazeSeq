@@ -1,9 +1,8 @@
+*.*
 data/*
-benchmark/
-*.ipynb
-*.mojopkg
-!benchmark/*.mojo
+benchmark/*
 blazeseq/*
+!benchmark/*.mojo
 !blazeseq/*.mojo
-*.mojo
+!.gitignore
 
