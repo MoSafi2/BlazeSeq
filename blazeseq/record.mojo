@@ -10,7 +10,7 @@ alias schema = Variant[String, QualitySchema]
 
 
 @value
-struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
+struct FastqRecord(Sized, Stringable, CollectionElement):
     """Struct that represent a single FastaQ record."""
 
     var SeqHeader: TI8
@@ -37,7 +37,23 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         else:
             self.quality_schema = quality_schema.get[QualitySchema]()[]
 
-        
+    fn __init__(
+        inout self,
+        SH: String,
+        SS: String,
+        QH: String,
+        QS: String,
+        quality_schema: String = "generic",
+    ):
+        self.SeqHeader = Tensor[I8](SH.as_bytes())
+        self.SeqStr = Tensor[I8](SS.as_bytes())
+        self.QuHeader = Tensor[I8](QH.as_bytes())
+        self.QuStr = Tensor[I8](QS.as_bytes())
+        self.quality_schema = self._parse_schema(quality_schema)
+        # if quality_schema.isa[String]():
+        #     self.quality_schema = self._parse_schema(quality_schema.get[String]()[])
+        # else:
+        #     self.quality_schema = quality_schema.get[QualitySchema]()[]
 
     @always_inline
     fn get_seq(self) -> String:
@@ -110,11 +126,10 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             + 4
         )
 
-    
     @always_inline
     fn __concat_record_tensor(self) -> Tensor[I8]:
-        var final_list = List[Int8](capacity = self.total_length())
-        
+        var final_list = List[Int8](capacity=self.total_length())
+
         for i in range(self.SeqHeader.num_elements()):
             final_list.append(self.SeqHeader[i])
         final_list.append(10)
@@ -132,8 +147,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         final_list.append(10)
 
         return Tensor[I8](final_list)
-
-
 
     @always_inline
     fn __concat_record_str(self) -> String:
@@ -179,9 +192,6 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
             return generic_schema
         return schema
 
-    @always_inline
-    fn hash(self) -> Int:
-        return self.__hash__()
 
     # BUG: returns Smaller strings that expected.
     @always_inline
@@ -193,13 +203,17 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
         return self.SeqStr.num_elements()
 
     @always_inline
-    fn __hash__(self) -> Int:
-        """Hashes the first 31 bp (if possible) into one 64bit"""
-        var hash: Int = 0
-        for i in range(min(31, self.SeqStr.num_elements())):
-            var rem = self.SeqStr[i] & 0x03  # Mask for for first 2 significant bits.
-            hash = (hash << 2) + rem.to_int()
+    fn hash(self) -> UInt64:
+        """Hashes the first 31 bp (if possible) into one 64bit."""
+        var hash: UInt64 = 0
+        for i in range(min(21, self.SeqStr.num_elements())):
+            var base_val = self.SeqStr[i] & 0b111  # Mask for for first 2 significant bits.
+            hash = (hash << 3) + base_val.to_int()
         return hash
+
+    @always_inline
+    fn __hash__(self) -> Int:
+        return self.hash().to_int()
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -210,7 +224,7 @@ struct FastqRecord(CollectionElement, Sized, Stringable, KeyElement):
 
 
 @value
-struct RecordCoord(CollectionElement, Sized, Stringable):
+struct RecordCoord(Sized, Stringable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
@@ -281,24 +295,47 @@ struct RecordCoord(CollectionElement, Sized, Stringable):
 struct RollingHash:
     var start: Int
     var end: Int
-    var init_hash: Int
-    var hash: Int
+    var init_hash: UInt64
+    var hash: UInt64
 
     fn __init__(inout self, record: FastqRecord):
         self.start = 0
-        self.end = min(len(record), 31)
+        self.end = min(len(record), 21)
         self.init_hash = record.hash()
         self.hash = self.init_hash
-        var ref = Reference(record)
 
-    fn rolling_hash(inout self, record: FastqRecord, start: Int, end: Int) -> Int:
-        var ele = min(end - start, 31)
-
+    fn rolling_hash(inout self, record: FastqRecord, end: Int, check_hash: UInt64) -> Bool:
+        
+        var present = self.hash == check_hash
         for i in range(self.end, end):
-            self.hash = self.hash & 0x1FFFFFFFFFFFFFFF
-            var rem = record.SeqStr[i] & 0x03  # Mask for the first two bits
-            self.hash = (self.hash << 2) + rem.to_int()
+            self.hash = self.hash & 0x1FFFFFFFFFFFFFFF # Remove the most signifcant 3 bits
+            var rem = record.SeqStr[i] & 0b111  # Mask for the least sig. three bits
+            self.hash = (self.hash << 3) + rem.to_int()
+            if self.hash == check_hash:
+                present = True
 
         self.start += self.end - end
         self.end = end
-        return self.hash
+        return present
+    
+    fn _hash_to_seq(self) -> String:
+        var inner = self.hash
+        var out: String = ""
+        var sig2bit: UInt64
+
+        for i in range(21, -1, -1):
+            sig2bit = (inner >> (i * 3)) & 0b111
+            if sig2bit == 1:
+                out += "A"
+            if sig2bit == 3:
+                out += "C"
+            if sig2bit == 7:
+                out += "G"
+            if sig2bit == 4:
+                out += "T"
+            if sig2bit == 6:
+                out += "N"
+        return out
+
+    
+
