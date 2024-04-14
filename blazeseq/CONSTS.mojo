@@ -22,7 +22,7 @@ alias MAX_CAPACITY = 2**MAX_SHIFT
 # Also check: https://www.biostars.org/p/90845/
 
 # Generic is the minimum and maximum value of all possible schemas schemas
-alias generic_schema = QualitySchema("Generic", 33, 126, 0)
+alias generic_schema = QualitySchema("Generic", 33, 126, 33)
 alias sanger_schema = QualitySchema("Sanger", 33, 126, 33)
 alias solexa_schema = QualitySchema("Solexa", 59, 126, 64)
 alias illumina_1_3_schema = QualitySchema("Illumina v1.3", 64, 126, 64)

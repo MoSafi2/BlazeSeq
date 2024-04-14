@@ -2,12 +2,14 @@
 
 from blazeseq.record import FastqRecord
 from blazeseq.helpers import write_to_buff
+from blazeseq.helpers import cpy_tensor
 from tensor import TensorShape
 from collections import Dict, KeyElement
 from math import round
 import time
 from tensor import Tensor
-
+from python import Python
+from algorithm.swap import swap
 
 
 #BUG: CG content stats output does not corrspond to FASTQC output. 
@@ -16,7 +18,7 @@ from tensor import Tensor
 alias MAX_LENGTH = 10_000
 alias WIDTH = 5
 alias MAX_READS = 100_000
-alias MAX_QUALITY = 100
+alias MAX_QUALITY = 93
 alias MAX_COUNTS = 1_000_000
 
 
@@ -54,6 +56,13 @@ struct FullStats(Stringable, CollectionElement):
         self.qu_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
 
+    @always_inline
+    fn plot(self) raises:
+        self.bp_dist.plot()
+        self.cg_content.plot()
+        self.len_dist.plot()
+        self.qu_dist.plot()
+
     fn __str__(self) -> String:
         return (
             String("Number of Reads: ")
@@ -71,70 +80,43 @@ struct FullStats(Stringable, CollectionElement):
 @value
 struct BasepairDistribution(Analyser, Stringable):
     var bp_dist: Tensor[DType.int64]
-    # var bp_dist: Dict[StringKey, Tensor[DType.int64]]
     var max_length: Int
 
     fn __init__(inout self):
-        # Hack untill finding a away to grown a multidim tensor in place.
-        var shape = TensorShape(WIDTH, MAX_LENGTH)
+        var shape = TensorShape(VariadicList[Int](1, WIDTH))
         self.bp_dist = Tensor[DType.int64](shape)
         self.max_length = 0
 
     fn tally_read(inout self, record: FastqRecord):
+
         if record.SeqStr.num_elements() > self.max_length:
-            # BUG: Copying multi-dim tensor is not working
-            # var t = grow_matrix(self.bp_dist, record.SeqStr.num_elements())
             self.max_length = record.SeqStr.num_elements()
+            var new_tensor = grow_matrix(self.bp_dist, TensorShape(self.max_length, WIDTH))
+            swap(self.bp_dist, new_tensor)
 
         for i in range(record.SeqStr.num_elements()):
-            var index = VariadicList[Int]((record.SeqStr[i] % WIDTH).to_int(), i)
+            # Remined of first 5 bits seperates N from T
+            var base_val = ((record.SeqStr[i] & 0b11111) % WIDTH).to_int()
+            var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
     fn report(self) -> Tensor[DType.int64]:
-        # return self.bp_dist
+        return self.bp_dist
 
-        var final_shape = TensorShape(WIDTH, self.max_length)
-        var final_t = Tensor[DType.int64](WIDTH, self.max_length)
 
-        for i in range(WIDTH):
-            for j in range(self.max_length):
-                var index = VariadicList[Int](i, j)
-                final_t[index] = self.bp_dist[index]
-        return final_t
+    fn plot(self) raises:
+        var plt = Python.import_module("matplotlib.pyplot")
+        var arr = matrix_to_numpy(self.bp_dist)
+        var x = plt.subplots()  # Create a figure
+        var fig = x[0]
+        var ax = x[1]
+        ax.plot(arr)
+        fig.savefig("BasepairDistribution.png")
+
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + self.report()
 
-
-fn grow_matrix[T: DType](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
-    var new_tensor = Tensor[T](WIDTH * num_ele)
-    var reshape_e = TensorShape(old_tensor.num_elements())
-    var old_reshaped = old_tensor
-    try:
-        old_reshaped.ireshape(reshape_e)
-    except Error:
-        print("Error", Error)
-
-    for i in range(old_reshaped.num_elements()):
-        new_tensor[i] = old_reshaped[i]
-
-    var new_shape = TensorShape(WIDTH, num_ele)
-    try:
-        new_tensor.ireshape(new_shape)
-    except Error:
-        print("Error", Error)
-
-    return new_tensor
-
-
-"""
-Module to Find CpGs in The read:
-Algorithm: 
-ord("C") + ord("G") = 138
-From left to right, check the sum of every to consecutive numbers, if the number == 138
-accumate one to CpG counter
-at the end, divide the number by the read length, accumulate 1 to the CpG Tensor at the end of the rounded number.
-"""
 
 @value
 struct CGContent(Analyser, Stringable):
@@ -156,6 +138,17 @@ struct CGContent(Analyser, Stringable):
 
     fn report(self) -> Tensor[DType.int64]:
         return self.cg_content
+
+    
+    fn plot(self) raises:
+        var plt = Python.import_module("matplotlib.pyplot")
+        var arr = tensor_to_numpy_1d(self.cg_content)
+        var x = plt.subplots()  # Create a figure
+        var fig = x[0]
+        var ax = x[1]
+        ax.plot(arr)
+        fig.savefig("CGContent.png")
+
 
     fn __str__(self) -> String:
         return String("\nThe CpG content tensor is: ") + self.cg_content
@@ -202,9 +195,8 @@ struct LengthDistribution(Analyser, Stringable):
 
     fn tally_read(inout self, record: FastqRecord):
         if record.SeqStr.num_elements() > self.length_vector.num_elements():
-            self.length_vector = grow_tensor(
-                self.length_vector, record.SeqStr.num_elements()
-            )
+            var new_tensor = grow_tensor(self.length_vector, record.SeqStr.num_elements())
+            swap(self.length_vector, new_tensor)
         self.length_vector[record.SeqStr.num_elements() - 1] += 1
 
     @always_inline
@@ -217,17 +209,19 @@ struct LengthDistribution(Analyser, Stringable):
     fn report(self) -> Tensor[DType.int64]:
         return self.length_vector
 
+    
+    fn plot(self) raises:
+        var plt = Python.import_module("matplotlib.pyplot")
+        var arr = tensor_to_numpy_1d(self.length_vector)
+        var x = plt.subplots()  # Create a figure
+        var fig = x[0]
+        var ax = x[1]
+        ax.plot(arr)
+        fig.savefig("LengthDistribution.png")
+
     fn __str__(self) -> String:
         return String("\nLength Distribution: ") + self.length_vector
 
-
-fn grow_tensor[
-    T: DType,
-](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
-    var new_tensor = Tensor[T](num_ele)
-    write_to_buff(old_tensor, new_tensor, 0)
-
-    return new_tensor
 
 
 # TODO: The encoding of the Fastq file should be predicted and used
@@ -241,6 +235,7 @@ fn grow_tensor[
 # }
 
 
+#BUG: There is a bug here which shows qualities 
 @value
 struct QualityDistribution(Analyser, Stringable):
     var qu_dist: Tensor[DType.int64]
@@ -248,28 +243,35 @@ struct QualityDistribution(Analyser, Stringable):
     var max_qu: Int
 
     fn __init__(inout self):
-        # Hack untill finding a away to grown a tensor in place.
-        var shape = TensorShape(MAX_QUALITY, MAX_LENGTH)
+        var shape = TensorShape(1, MAX_QUALITY)
         self.qu_dist = Tensor[DType.int64](shape)
         self.max_length = 0
         self.max_qu = 0
 
     fn tally_read(inout self, record: FastqRecord):
+
         if record.QuStr.num_elements() > self.max_length:
             self.max_length = record.QuStr.num_elements()
+            var new_shape = TensorShape(self.max_length, MAX_QUALITY)
+            var new_tensor = grow_matrix(self.qu_dist, new_shape)
+            print(new_tensor)
+            swap(self.qu_dist, new_tensor)
 
         for i in range(record.QuStr.num_elements()):
-            var index = VariadicList[Int](
-                (record.QuStr[i] - record.quality_schema.OFFSET).to_int(), i
-            )
-            if record.QuStr[i].to_int() - record.quality_schema.OFFSET > self.max_qu:
-                self.max_qu = (
-                    record.QuStr[i].to_int() - record.quality_schema.OFFSET.to_int()
-                )
+            var base_qu = (record.QuStr[i] - record.quality_schema.OFFSET).to_int()
+            var index = VariadicList[Int](i, base_qu)
             self.qu_dist[index] += 1
+            if base_qu > self.max_qu:
+                self.max_qu = base_qu
+
+
+
+    fn plot(self) raises:
+        var arr = matrix_to_numpy(self.qu_dist)
+        var np = Python.import_module("numpy")
+        np.save("arr.npy", arr)
 
     fn report(self) -> Tensor[DType.int64]:
-        print(self.max_length)
         var final_shape = TensorShape(self.max_qu, self.max_length)
         var final_t = Tensor[DType.int64](final_shape)
 
@@ -281,3 +283,40 @@ struct QualityDistribution(Analyser, Stringable):
 
     fn __str__(self) -> String:
         return String("\nQuality_dist_matrix: ") + self.report()
+
+
+
+#TODO: Add module for adapter content
+
+
+
+def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
+    np = Python.import_module("numpy")
+    ar = np.zeros(tensor.num_elements())
+    for i in range(tensor.num_elements()):
+        ar.itemset(i, tensor[i])
+    return ar
+
+
+def matrix_to_numpy[T: DType](tensor: Tensor[T]) -> PythonObject:
+    np = Python.import_module("numpy")
+    ar = np.zeros([tensor.shape()[0], tensor.shape()[1]])
+    for i in range(tensor.shape()[0]):
+        for j in range(tensor.shape()[1]):
+            ar.itemset((i, j), tensor[i, j])
+    return ar
+
+
+fn grow_tensor[
+    T: DType,
+](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
+    var new_tensor = Tensor[T](num_ele)
+    cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
+    return new_tensor
+
+
+fn grow_matrix[T: DType](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
+    var new_tensor = Tensor[T](new_shape)
+    cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
+    return new_tensor
+
