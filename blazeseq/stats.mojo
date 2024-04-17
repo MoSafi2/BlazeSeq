@@ -96,7 +96,7 @@ struct BasepairDistribution(Analyser, Stringable):
 
         for i in range(record.SeqStr.num_elements()):
             # Remined of first 5 bits seperates N from T
-            var base_val = ((record.SeqStr[i] & 0b11111) % WIDTH).to_int()
+            var base_val = int((record.SeqStr[i] & 0b11111) % WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
@@ -131,9 +131,7 @@ struct CGContent(Analyser, Stringable):
             if record.SeqStr[index] & 0b111 == 3 or record.SeqStr[index] & 0b111 == 7 :
                 cg_num += 1
 
-        var read_cg_content = round(
-            cg_num * 100 / record.SeqStr.num_elements()
-        ).to_int()
+        var read_cg_content = int(round(cg_num * 100 / record.SeqStr.num_elements()))
         self.cg_content[read_cg_content] += 1
 
     fn report(self) -> Tensor[DType.int64]:
@@ -204,7 +202,7 @@ struct LengthDistribution(Analyser, Stringable):
         var cum: Int64 = 0
         for i in range(self.length_vector.num_elements()):
             cum += self.length_vector[i] * (i + 1)
-        return cum.to_int() / num_reads
+        return int(cum) / num_reads
 
     fn report(self) -> Tensor[DType.int64]:
         return self.length_vector
@@ -258,7 +256,7 @@ struct QualityDistribution(Analyser, Stringable):
             swap(self.qu_dist, new_tensor)
 
         for i in range(record.QuStr.num_elements()):
-            var base_qu = (record.QuStr[i] - record.quality_schema.OFFSET).to_int()
+            var base_qu = int(record.QuStr[i] - record.quality_schema.OFFSET)
             var index = VariadicList[Int](i, base_qu)
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:

@@ -209,12 +209,12 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
             var base_val = self.SeqStr[
                 i
             ] & 0b111  # Mask for for first 2 significant bits.
-            hash = (hash << 3) + base_val.to_int()
+            hash = (hash << 3) + int(base_val)
         return hash
 
     @always_inline
     fn __hash__(self) -> Int:
-        return self.hash().to_int()
+        return int(self.hash())
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -270,7 +270,7 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
         return self.SeqHeader.end - self.SeqHeader.start
 
     fn __len__(self) -> Int:
-        return self.seq_len().to_int()
+        return int(self.seq_len())
 
     fn __str__(self) -> String:
         return (
@@ -319,7 +319,7 @@ struct RollingHash:
                 self.hash & 0x1FFFFFFFFFFFFFFF
             )  # Remove the most signifcant 3 bits
             var rem = record.SeqStr[i] & 0b111  # Mask for the least sig. three bits
-            self.hash = (self.hash << 3) + rem.to_int()
+            self.hash = (self.hash << 3) + int(rem)
             if len(hashes) > 0:
                 self.check_hashes(hashes, bool_tuple)
         self.start += self.end - end
