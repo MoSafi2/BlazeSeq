@@ -66,19 +66,7 @@ struct FileReader(reader):
 
     @always_inline
     fn read_bytes(inout self, amt: Int = -1) raises -> Tensor[I8]:
-        var size_copy: Int64 = amt
-        var err_msg = _OwnedStringRef()
-        var buf = external_call["KGEN_CompilerRT_IO_FileReadBytes", Pointer[Int8]](
-            self.handle.handle,
-            Pointer.address_of(size_copy),
-            Pointer.address_of(err_msg),
-        )
-        if err_msg:
-            raise (err_msg ^).consume_as_error()
-
-        var ptr = DTypePointer[DType.int8](buf.address)
-        # return Tensor[DType.int8](int(size_copy), ptr)
-        return Tensor[DType.int8](ptr, int(size_copy))
+        return self.handle.read_bytes(amt)
 
     # Does not work well currently
     @always_inline
@@ -131,11 +119,13 @@ struct TensorReader(reader):
 
 # BUG Last line is not returned if the file does not end with line end seperator
 # TODO: when in EOF Flush the buffer
+
+
 struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringable):
     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
 
-    var source: T
+    var source: FileReader
     var buf: Tensor[I8]
     var head: Int
     var end: Int
@@ -153,25 +143,25 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         _ = self._fill_buffer()
         self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
-    fn __init__(
-        inout self, source: Tensor[I8], capacity: Int = DEFAULT_CAPACITY
-    ) raises:
-        self.source = TensorReader(source)
-        self.buf = Tensor[I8](capacity)
-        self.head = 0
-        self.end = 0
-        self.consumed = 0
-        _ = self._fill_buffer()
-        self.consumed = 0  # Hack to make the initial buffer full non-consuming
+    # fn __init__(
+    #     inout self, source: Tensor[I8], capacity: Int = DEFAULT_CAPACITY
+    # ) raises:
+    #     self.source = TensorReader(source)
+    #     self.buf = Tensor[I8](capacity)
+    #     self.head = 0
+    #     self.end = 0
+    #     self.consumed = 0
+    #     _ = self._fill_buffer()
+    #     self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
-    fn __init__(inout self, owned source: T, capacity: Int = DEFAULT_CAPACITY) raises:
-        self.source = source ^
-        self.buf = Tensor[I8](capacity)
-        self.head = 0
-        self.end = 0
-        self.consumed = 0
-        _ = self._fill_buffer()
-        self.consumed = 0  # Hack to make the initial buffer full non-consuming
+    # fn __init__(inout self, owned source: T, capacity: Int = DEFAULT_CAPACITY) raises:
+    #     self.source = source^
+    #     self.buf = Tensor[I8](capacity)
+    #     self.head = 0
+    #     self.end = 0
+    #     self.consumed = 0
+    #     _ = self._fill_buffer()
+    #     self.consumed = 0  # Hack to make the initial buffer full non-consuming
 
     @always_inline
     fn read_next_line(inout self) raises -> Tensor[I8]:

@@ -222,18 +222,7 @@ struct LengthDistribution(Analyser, Stringable):
 
 
 
-# TODO: The encoding of the Fastq file should be predicted and used
-# FROM: https://www.biostars.org/p/90845/
-# RANGES = {
-#     'Sanger': (33, 73),
-#     'Solexa': (59, 104),
-#     'Illumina-1.3': (64, 104),
-#     'Illumina-1.5': (66, 104),
-#     'Illumina-1.8': (33, 94)
-# }
 
-
-#BUG: There is a bug here which shows qualities 
 @value
 struct QualityDistribution(Analyser, Stringable):
     var qu_dist: Tensor[DType.int64]
@@ -241,7 +230,7 @@ struct QualityDistribution(Analyser, Stringable):
     var max_qu: Int
 
     fn __init__(inout self):
-        var shape = TensorShape(1, MAX_QUALITY)
+        var shape = TensorShape(1, 40)
         self.qu_dist = Tensor[DType.int64](shape)
         self.max_length = 0
         self.max_qu = 0
@@ -250,9 +239,8 @@ struct QualityDistribution(Analyser, Stringable):
 
         if record.QuStr.num_elements() > self.max_length:
             self.max_length = record.QuStr.num_elements()
-            var new_shape = TensorShape(self.max_length, MAX_QUALITY)
+            var new_shape = TensorShape(self.max_length, 40)
             var new_tensor = grow_matrix(self.qu_dist, new_shape)
-            print(new_tensor)
             swap(self.qu_dist, new_tensor)
 
         for i in range(record.QuStr.num_elements()):
@@ -263,10 +251,14 @@ struct QualityDistribution(Analyser, Stringable):
                 self.max_qu = base_qu
 
 
-
+# Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     fn plot(self) raises:
         var arr = matrix_to_numpy(self.qu_dist)
+        self.qu_dist.tofile("matrix_tensor")
+        Python.add_to_path("/usr/local/lib/python3.10/dist-packages")
         var np = Python.import_module("numpy")
+        var mean_line = np.sum(arr*np.arange(1,41), axis=1) / np.sum(arr, axis=1)
+
         np.save("arr.npy", arr)
 
     fn report(self) -> Tensor[DType.int64]:
@@ -313,8 +305,11 @@ fn grow_tensor[
     return new_tensor
 
 
+# Bug: Copy tensor in this way in probably wrong.
 fn grow_matrix[T: DType](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
     var new_tensor = Tensor[T](new_shape)
-    cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
+    for i in range(old_tensor.shape()[0]):
+        for j in range(old_tensor.shape()[1]):
+            new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
+    #cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
     return new_tensor
-
