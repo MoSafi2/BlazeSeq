@@ -54,8 +54,8 @@ struct FullStats(Stringable, CollectionElement):
         self.total_bases += record.SeqStr.num_elements()
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
-        self.qu_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
+        self.qu_dist.tally_read(record) #Expensive operation, a lot of memory access
 
     @always_inline
     fn plot(self) raises:
@@ -252,10 +252,11 @@ struct QualityDistribution(Analyser, Stringable):
                 self.max_qu = base_qu
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
+    #TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
+    #TODO: Stylize the plot
     fn plot(self) raises:
         var arr = matrix_to_numpy(self.qu_dist)
         Python.add_to_path("/usr/local/lib/python3.10/dist-packages")
-        /home/mohamed/miniforge3/bin/python
         var np = Python.import_module("numpy")
         var plt = Python.import_module("matplotlib.pyplot")
         var py_builtin = Python.import_module("builtins")
@@ -304,7 +305,29 @@ struct QualityDistribution(Analyser, Stringable):
         return String("\nQuality_dist_matrix: ") + self.report()
 
 
+
 # TODO: Add module for adapter content
+
+@value
+struct AdapterContent(Analyser):
+
+    fn tally_read(inout self, read: FastqRecord):
+        pass
+
+    fn report(self) -> Tensor[DType.int64]:
+        return Tensor[DType.int64]()
+
+
+@value
+struct KmerContent(Analyser):
+
+    fn tally_read(inout self, read: FastqRecord):
+        pass
+
+    fn report(self) -> Tensor[DType.int64]:
+        return Tensor[DType.int64]()
+
+
 
 
 def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
