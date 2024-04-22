@@ -12,7 +12,7 @@ from python import Python
 from algorithm.swap import swap
 
 
-#BUG: CG content stats output does not corrspond to FASTQC output. 
+# BUG: CG content stats output does not corrspond to FASTQC output.
 
 
 alias MAX_LENGTH = 10_000
@@ -28,6 +28,7 @@ trait Analyser(CollectionElement):
 
     fn report(self) -> Tensor[DType.int64]:
         ...
+
 
 @value
 struct FullStats(Stringable, CollectionElement):
@@ -88,10 +89,11 @@ struct BasepairDistribution(Analyser, Stringable):
         self.max_length = 0
 
     fn tally_read(inout self, record: FastqRecord):
-
         if record.SeqStr.num_elements() > self.max_length:
             self.max_length = record.SeqStr.num_elements()
-            var new_tensor = grow_matrix(self.bp_dist, TensorShape(self.max_length, WIDTH))
+            var new_tensor = grow_matrix(
+                self.bp_dist, TensorShape(self.max_length, WIDTH)
+            )
             swap(self.bp_dist, new_tensor)
 
         for i in range(record.SeqStr.num_elements()):
@@ -103,7 +105,6 @@ struct BasepairDistribution(Analyser, Stringable):
     fn report(self) -> Tensor[DType.int64]:
         return self.bp_dist
 
-
     fn plot(self) raises:
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = matrix_to_numpy(self.bp_dist)
@@ -112,7 +113,6 @@ struct BasepairDistribution(Analyser, Stringable):
         var ax = x[1]
         ax.plot(arr)
         fig.savefig("BasepairDistribution.png")
-
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + self.report()
@@ -128,16 +128,20 @@ struct CGContent(Analyser, Stringable):
     fn tally_read(inout self, record: FastqRecord):
         var cg_num = 0
         for index in range(0, record.SeqStr.num_elements()):
-            if record.SeqStr[index] & 0b111 == 3 or record.SeqStr[index] & 0b111 == 7 :
+            if (
+                record.SeqStr[index] & 0b111 == 3
+                or record.SeqStr[index] & 0b111 == 7
+            ):
                 cg_num += 1
 
-        var read_cg_content = int(round(cg_num * 100 / record.SeqStr.num_elements()))
+        var read_cg_content = int(
+            round(cg_num * 100 / record.SeqStr.num_elements())
+        )
         self.cg_content[read_cg_content] += 1
 
     fn report(self) -> Tensor[DType.int64]:
         return self.cg_content
 
-    
     fn plot(self) raises:
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
@@ -146,7 +150,6 @@ struct CGContent(Analyser, Stringable):
         var ax = x[1]
         ax.plot(arr)
         fig.savefig("CGContent.png")
-
 
     fn __str__(self) -> String:
         return String("\nThe CpG content tensor is: ") + self.cg_content
@@ -193,7 +196,9 @@ struct LengthDistribution(Analyser, Stringable):
 
     fn tally_read(inout self, record: FastqRecord):
         if record.SeqStr.num_elements() > self.length_vector.num_elements():
-            var new_tensor = grow_tensor(self.length_vector, record.SeqStr.num_elements())
+            var new_tensor = grow_tensor(
+                self.length_vector, record.SeqStr.num_elements()
+            )
             swap(self.length_vector, new_tensor)
         self.length_vector[record.SeqStr.num_elements() - 1] += 1
 
@@ -207,7 +212,6 @@ struct LengthDistribution(Analyser, Stringable):
     fn report(self) -> Tensor[DType.int64]:
         return self.length_vector
 
-    
     fn plot(self) raises:
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.length_vector)
@@ -219,8 +223,6 @@ struct LengthDistribution(Analyser, Stringable):
 
     fn __str__(self) -> String:
         return String("\nLength Distribution: ") + self.length_vector
-
-
 
 
 @value
@@ -236,7 +238,6 @@ struct QualityDistribution(Analyser, Stringable):
         self.max_qu = 0
 
     fn tally_read(inout self, record: FastqRecord):
-
         if record.QuStr.num_elements() > self.max_length:
             self.max_length = record.QuStr.num_elements()
             var new_shape = TensorShape(self.max_length, 40)
@@ -250,16 +251,47 @@ struct QualityDistribution(Analyser, Stringable):
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
 
-
-# Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
+    # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     fn plot(self) raises:
         var arr = matrix_to_numpy(self.qu_dist)
         self.qu_dist.tofile("matrix_tensor")
         Python.add_to_path("/usr/local/lib/python3.10/dist-packages")
         var np = Python.import_module("numpy")
-        var mean_line = np.sum(arr*np.arange(1,41), axis=1) / np.sum(arr, axis=1)
+        var plt = Python.import_module("matplotlib.pyplot")
+        var py_builtin = Python.import_module("builtins")
 
-        np.save("arr.npy", arr)
+        var mean_line = np.sum(arr * np.arange(1, 41), axis=1) / np.sum(
+            arr, axis=1
+        )
+        var cum_sum = np.cumsum(arr, axis=1)
+        var total_counts = np.reshape(np.sum(arr, axis=1), (100, 1))
+        var median = np.argmax(cum_sum > total_counts / 2, axis=1)
+        var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
+        var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
+        var IQR = Q75 - Q25
+
+        var whislo = np.full(len(IQR), None)
+        var whishi = np.full(len(IQR), None)
+
+        var keys = PythonObject(["med", "q1", "q3", "whislo", "whishi"])
+
+        # var stats = Python.evaluate("[dict(zip(keys, vals)) for vals in zip(median, Q25, Q75, whislo, whishi)]")
+        var x = plt.subplots()
+        var fig = x[0]
+        var ax = x[1]
+        var l = py_builtin.list()
+        for i in range(len(IQR)):
+            var stat: PythonObject = py_builtin.dict()
+            stat["med"] = median[i]
+            stat["q1"] = Q25[i]
+            stat["q3"] = Q75[i]
+            stat["whislo"] = whislo[i]
+            stat["whishi"] = whishi[i]
+            l.append(stat)
+
+        ax.bxp(l, showfliers=False)
+        # plt.plot(mean_line)
+        fig.savefig("QualityDistribution.png")
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(self.max_qu, self.max_length)
@@ -275,9 +307,7 @@ struct QualityDistribution(Analyser, Stringable):
         return String("\nQuality_dist_matrix: ") + self.report()
 
 
-
-#TODO: Add module for adapter content
-
+# TODO: Add module for adapter content
 
 
 def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
@@ -306,10 +336,12 @@ fn grow_tensor[
 
 
 # Bug: Copy tensor in this way in probably wrong.
-fn grow_matrix[T: DType](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
+fn grow_matrix[
+    T: DType
+](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
     var new_tensor = Tensor[T](new_shape)
     for i in range(old_tensor.shape()[0]):
         for j in range(old_tensor.shape()[1]):
             new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
-    #cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
+    # cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
     return new_tensor
