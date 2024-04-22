@@ -273,9 +273,6 @@ struct QualityDistribution(Analyser, Stringable):
         var whislo = np.full(len(IQR), None)
         var whishi = np.full(len(IQR), None)
 
-        var keys = PythonObject(["med", "q1", "q3", "whislo", "whishi"])
-
-        # var stats = Python.evaluate("[dict(zip(keys, vals)) for vals in zip(median, Q25, Q75, whislo, whishi)]")
         var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
