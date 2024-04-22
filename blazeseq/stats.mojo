@@ -287,7 +287,7 @@ struct QualityDistribution(Analyser, Stringable):
             l.append(stat)
 
         ax.bxp(l, showfliers=False)
-        # plt.plot(mean_line)
+        ax.plot(mean_line)
         fig.savefig("QualityDistribution.png")
 
     fn report(self) -> Tensor[DType.int64]:
