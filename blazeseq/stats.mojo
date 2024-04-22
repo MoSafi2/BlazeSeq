@@ -254,8 +254,8 @@ struct QualityDistribution(Analyser, Stringable):
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     fn plot(self) raises:
         var arr = matrix_to_numpy(self.qu_dist)
-        self.qu_dist.tofile("matrix_tensor")
         Python.add_to_path("/usr/local/lib/python3.10/dist-packages")
+        /home/mohamed/miniforge3/bin/python
         var np = Python.import_module("numpy")
         var plt = Python.import_module("matplotlib.pyplot")
         var py_builtin = Python.import_module("builtins")
