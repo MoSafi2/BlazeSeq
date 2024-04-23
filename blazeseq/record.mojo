@@ -202,19 +202,18 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return self.SeqStr.num_elements()
 
     @always_inline
-    fn hash(self) -> UInt64:
+    fn hash(self, kmer: Int) -> UInt64:
         """Hashes the first 31 bp (if possible) into one 64bit."""
         var hash: UInt64 = 0
-        for i in range(min(21, self.SeqStr.num_elements())):
-            var base_val = self.SeqStr[
-                i
-            ] & 0b111  # Mask for for first 2 significant bits.
+        for i in range(min(kmer, self.SeqStr.num_elements())):
+            # Mask for for first 3 significant bits.
+            var base_val = self.SeqStr[i] & 0b111  
             hash = (hash << 3) + int(base_val)
         return hash
 
     @always_inline
     fn __hash__(self) -> Int:
-        return int(self.hash())
+        return int(self.hash(21))
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -223,6 +222,69 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     fn __ne__(self, other: Self) -> Bool:
         return self.__hash__() != other.__hash__()
 
+
+
+struct RollingHash:
+    var hash: UInt64
+    var kmer_len: Int
+
+    fn __init__(inout self, record: FastqRecord):
+        self.hash = 0
+        self.kmer_len = 0
+
+    # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
+    @always_inline
+    fn rolling_hash(inout self, record: FastqRecord, kmer_len: Int, check_hashes: StaticTuple[UInt64]) -> StaticTuple[Bool, 50]:
+        
+        self.kmer_len = kmer_len
+        var bool_tuple = StaticTuple[Bool, 50]()
+        self.hash = record.hash(kmer_len)
+        var end = kmer_len
+
+        # Check initial Kmer
+        if len(check_hashes) > 0:
+            self.check_hashes(check_hashes, bool_tuple)
+
+        for i in range(end, record.SeqStr.num_elements()):
+
+            # Remove the most signifcant 3 bits
+            self.hash = self.hash & 0x1FFFFFFFFFFFFFFF
+
+            # Mask for the least sig. three bits, add to hash
+            var rem = record.SeqStr[i] & 0b111  
+            self.hash = (self.hash << 3) + int(rem)
+
+            if len(check_hashes) > 0:
+                self.check_hashes(check_hashes, bool_tuple)
+
+        return bool_tuple
+
+    @always_inline
+    fn check_hashes(
+        self, hashes: StaticTuple[UInt64], inout bool_tuple: StaticTuple[Bool]
+    ):
+        for i in range(len(hashes)):
+            if self.hash == hashes[i]:
+                bool_tuple[i] = True
+
+    fn _hash_to_seq(self) -> String:
+        var inner = self.hash
+        var out: String = ""
+        var sig2bit: UInt64
+
+        for i in range(21, -1, -1):
+            sig2bit = (inner >> (i * 3)) & 0b111
+            if sig2bit == 1:
+                out += "A"
+            if sig2bit == 3:
+                out += "C"
+            if sig2bit == 7:
+                out += "G"
+            if sig2bit == 4:
+                out += "T"
+            if sig2bit == 6:
+                out += "N"
+        return out
 
 @value
 struct RecordCoord(Sized, Stringable, CollectionElement):
@@ -292,63 +354,3 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
             + self.QuStr.end
         )
 
-
-struct RollingHash:
-    var start: Int
-    var end: Int
-    var init_hash: UInt64
-    var hash: UInt64
-
-    fn __init__(inout self, record: FastqRecord):
-        self.start = 0
-        self.end = min(len(record), 21)
-        self.init_hash = record.hash()
-        self.hash = self.init_hash
-
-    # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
-    @always_inline
-    fn rolling_hash(
-        inout self, record: FastqRecord, end: Int, hashes: StaticTuple[UInt64]
-    ) -> StaticTuple[Bool, 50]:
-        var bool_tuple = StaticTuple[Bool, 50]()
-        if len(hashes) > 0:
-            self.check_hashes(hashes, bool_tuple)
-
-        for i in range(self.end, end):
-            self.hash = (
-                self.hash & 0x1FFFFFFFFFFFFFFF
-            )  # Remove the most signifcant 3 bits
-            var rem = record.SeqStr[i] & 0b111  # Mask for the least sig. three bits
-            self.hash = (self.hash << 3) + int(rem)
-            if len(hashes) > 0:
-                self.check_hashes(hashes, bool_tuple)
-        self.start += self.end - end
-        self.end = end
-        return bool_tuple
-
-    @always_inline
-    fn check_hashes(
-        self, hashes: StaticTuple[UInt64], inout bool_tuple: StaticTuple[Bool]
-    ):
-        for i in range(len(hashes)):
-            if self.hash == hashes[i]:
-                bool_tuple[i] = True
-
-    fn _hash_to_seq(self) -> String:
-        var inner = self.hash
-        var out: String = ""
-        var sig2bit: UInt64
-
-        for i in range(21, -1, -1):
-            sig2bit = (inner >> (i * 3)) & 0b111
-            if sig2bit == 1:
-                out += "A"
-            if sig2bit == 3:
-                out += "C"
-            if sig2bit == 7:
-                out += "G"
-            if sig2bit == 4:
-                out += "T"
-            if sig2bit == 6:
-                out += "N"
-        return out

@@ -6,3 +6,6 @@ blazeseq/*
 !blazeseq/*.mojo
 !.gitignore
 
+# pixi environments
+.pixi
+
