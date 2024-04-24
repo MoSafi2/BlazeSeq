@@ -228,44 +228,48 @@ struct RollingHash:
     var hash: UInt64
     var kmer_len: Int
 
-    fn __init__(inout self, record: FastqRecord):
+    fn __init__(inout self):
         self.hash = 0
         self.kmer_len = 0
 
     # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
     @always_inline
-    fn rolling_hash(inout self, record: FastqRecord, kmer_len: Int, check_hashes: StaticTuple[UInt64]) -> StaticTuple[Bool, 50]:
+    fn rolling_hash(inout self, record: FastqRecord, kmer_len: Int, check_hashes: List[Int]) -> List[Int]:
         
         self.kmer_len = kmer_len
-        var bool_tuple = StaticTuple[Bool, 50]()
+        var hash_count = List[Int]()
         self.hash = record.hash(kmer_len)
         var end = kmer_len
 
+        # Make a custom bit mask of 1s by certain length
+        var mask: UInt64 = (0b1 << kmer_len * 3) - 1
+        var neg_mask = mask >> 3
+
         # Check initial Kmer
         if len(check_hashes) > 0:
-            self.check_hashes(check_hashes, bool_tuple)
+            self.check_hashes(check_hashes, hash_count)
 
         for i in range(end, record.SeqStr.num_elements()):
 
             # Remove the most signifcant 3 bits
-            self.hash = self.hash & 0x1FFFFFFFFFFFFFFF
+            self.hash = self.hash & neg_mask
 
             # Mask for the least sig. three bits, add to hash
             var rem = record.SeqStr[i] & 0b111  
             self.hash = (self.hash << 3) + int(rem)
-
             if len(check_hashes) > 0:
-                self.check_hashes(check_hashes, bool_tuple)
+                self.check_hashes(check_hashes, hash_count)
+            print(self._hash_to_seq())
 
-        return bool_tuple
+        return hash_count
 
     @always_inline
     fn check_hashes(
-        self, hashes: StaticTuple[UInt64], inout bool_tuple: StaticTuple[Bool]
+        self, hashes: List[Int], inout bool_tuple: List[Int]
     ):
         for i in range(len(hashes)):
             if self.hash == hashes[i]:
-                bool_tuple[i] = True
+                bool_tuple[i] += 1
 
     fn _hash_to_seq(self) -> String:
         var inner = self.hash
