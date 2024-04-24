@@ -5,7 +5,7 @@ from blazeseq.helpers import write_to_buff
 from blazeseq.helpers import cpy_tensor
 from tensor import TensorShape
 from collections import Dict, KeyElement
-from math import round
+from math import round, min
 import time
 from tensor import Tensor
 from python import Python
@@ -318,14 +318,81 @@ struct AdapterContent(Analyser):
         return Tensor[DType.int64]()
 
 
+
 @value
 struct KmerContent(Analyser):
+    var kmer_len: Int
+    var hash_counts:Tensor[DType.int64]
+    var hash_list: List[UInt64]
 
-    fn tally_read(inout self, read: FastqRecord):
-        pass
+    fn __init__(inout self, hashes: List[UInt64], kmer_len: Int = 0):
+        self.kmer_len = min(kmer_len, 21)
+        self.hash_list = hashes
+        self.hash_counts = Tensor[DType.int64](len(self.hash_list))
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
+
+    # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
+    @always_inline
+    fn tally_read(inout self, record: FastqRecord):
+
+        var hash = record.hash(self.kmer_len)
+        var end = self.kmer_len
+        # Make a custom bit mask of 1s by certain length
+        var mask: UInt64 = (0b1 << self.kmer_len * 3) - 1
+        var neg_mask = mask >> 3
+
+        # Check initial Kmer
+        if len(self.hash_list) > 0:
+            self._check_hashes(hash)
+
+        for i in range(end, record.SeqStr.num_elements()):
+            # Remove the most signifcant 3 bits
+            hash = hash & neg_mask
+
+            # Mask for the least sig. three bits, add to hash
+            var rem = record.SeqStr[i] & 0b111  
+            hash = (hash << 3) + int(rem)
+            if len(self.hash_list) > 0:
+                self._check_hashes(hash)
+
+    @always_inline
+    fn _check_hashes(inout self, hash: UInt64):
+        for i in range(len(self.hash_list)):
+            if hash == self.hash_list[i]:
+                self.hash_counts[i] += 1
+
+fn _seq_to_hash(seq: String) -> UInt64:
+    var hash = 0
+    for i in range(0, len(seq)):
+        # Remove the most signifcant 3 bits
+        hash = hash & 0x1FFFFFFFFFFFFFFF
+        # Mask for the least sig. three bits, add to hash
+        var rem = ord(seq[i]) & 0b111  
+        hash = (hash << 3) + int(rem)
+    return hash
+
+fn _hash_to_seq(hash: UInt64) -> String:
+    var inner = hash
+    var out: String = ""
+    var sig2bit: UInt64
+
+    for i in range(21, -1, -1):
+        sig2bit = (inner >> (i * 3)) & 0b111
+        if sig2bit == 1:
+            out += "A"
+        if sig2bit == 3:
+            out += "C"
+        if sig2bit == 7:
+            out += "G"
+        if sig2bit == 4:
+            out += "T"
+        if sig2bit == 6:
+            out += "N"
+    return out
+
+
 
 
 

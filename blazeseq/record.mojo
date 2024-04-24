@@ -222,73 +222,9 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     fn __ne__(self, other: Self) -> Bool:
         return self.__hash__() != other.__hash__()
 
+from math import min
+from memory.memory import memset_zero
 
-
-struct RollingHash:
-    var hash: UInt64
-    var kmer_len: Int
-
-    fn __init__(inout self):
-        self.hash = 0
-        self.kmer_len = 0
-
-    # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
-    @always_inline
-    fn rolling_hash(inout self, record: FastqRecord, kmer_len: Int, check_hashes: List[Int]) -> List[Int]:
-        
-        self.kmer_len = kmer_len
-        var hash_count = List[Int]()
-        self.hash = record.hash(kmer_len)
-        var end = kmer_len
-
-        # Make a custom bit mask of 1s by certain length
-        var mask: UInt64 = (0b1 << kmer_len * 3) - 1
-        var neg_mask = mask >> 3
-
-        # Check initial Kmer
-        if len(check_hashes) > 0:
-            self.check_hashes(check_hashes, hash_count)
-
-        for i in range(end, record.SeqStr.num_elements()):
-
-            # Remove the most signifcant 3 bits
-            self.hash = self.hash & neg_mask
-
-            # Mask for the least sig. three bits, add to hash
-            var rem = record.SeqStr[i] & 0b111  
-            self.hash = (self.hash << 3) + int(rem)
-            if len(check_hashes) > 0:
-                self.check_hashes(check_hashes, hash_count)
-            print(self._hash_to_seq())
-
-        return hash_count
-
-    @always_inline
-    fn check_hashes(
-        self, hashes: List[Int], inout bool_tuple: List[Int]
-    ):
-        for i in range(len(hashes)):
-            if self.hash == hashes[i]:
-                bool_tuple[i] += 1
-
-    fn _hash_to_seq(self) -> String:
-        var inner = self.hash
-        var out: String = ""
-        var sig2bit: UInt64
-
-        for i in range(21, -1, -1):
-            sig2bit = (inner >> (i * 3)) & 0b111
-            if sig2bit == 1:
-                out += "A"
-            if sig2bit == 3:
-                out += "C"
-            if sig2bit == 7:
-                out += "G"
-            if sig2bit == 4:
-                out += "T"
-            if sig2bit == 6:
-                out += "N"
-        return out
 
 @value
 struct RecordCoord(Sized, Stringable, CollectionElement):
