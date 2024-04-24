@@ -13,8 +13,8 @@ fn main() raises:
         try:
             var read = parser.next()
             read_no += 1
-            base_number += read.seq_len().to_int()
-            qu_numeber += read.qu_len().to_int()
+            base_number += int(read.seq_len())
+            qu_numeber += int(read.qu_len())
         except Error:
             break
     print(read_no, base_number, qu_numeber)

@@ -15,28 +15,6 @@ from tensor import Tensor
 from algorithm.swap import swap
 
 
-@register_passable
-struct _OwnedStringRef(Boolable):
-    var data: DTypePointer[DType.int8]
-    var length: Int
-
-    fn __init__() -> _OwnedStringRef:
-        return Self {data: DTypePointer[DType.int8](), length: 0}
-
-    fn __del__(owned self):
-        if self.data:
-            self.data.free()
-
-    fn consume_as_error(owned self) -> Error:
-        var data = self.data
-        # Don't free self.data in our dtor.
-        self.data = DTypePointer[DType.int8]()
-        var length = self.length
-        return Error {data: data, loaded_length: -length}
-
-    fn __bool__(self) -> Bool:
-        return self.length != 0
-
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
 # https://github.com/dignifiedquire/buffer-redux
