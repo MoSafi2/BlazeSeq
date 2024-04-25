@@ -307,7 +307,6 @@ struct QualityDistribution(Analyser, Stringable):
 
 
 # TODO: Add module for adapter content
-
 @value
 struct AdapterContent(Analyser):
 
@@ -320,13 +319,13 @@ struct AdapterContent(Analyser):
 
 
 @value
-struct KmerContent(Analyser):
+struct KmerContent[bits: Int = 3](Analyser):
     var kmer_len: Int
     var hash_counts:Tensor[DType.int64]
     var hash_list: List[UInt64]
 
     fn __init__(inout self, hashes: List[UInt64], kmer_len: Int = 0):
-        self.kmer_len = min(kmer_len, 21)
+        self.kmer_len = min(kmer_len, 64 // bits)
         self.hash_list = hashes
         self.hash_counts = Tensor[DType.int64](len(self.hash_list))
 
@@ -340,8 +339,8 @@ struct KmerContent(Analyser):
         var hash = record.hash(self.kmer_len)
         var end = self.kmer_len
         # Make a custom bit mask of 1s by certain length
-        var mask: UInt64 = (0b1 << self.kmer_len * 3) - 1
-        var neg_mask = mask >> 3
+        var mask: UInt64 = (0b1 << self.kmer_len * bits) - 1
+        var neg_mask = mask >> bits
 
         # Check initial Kmer
         if len(self.hash_list) > 0:
@@ -353,7 +352,7 @@ struct KmerContent(Analyser):
 
             # Mask for the least sig. three bits, add to hash
             var rem = record.SeqStr[i] & 0b111  
-            hash = (hash << 3) + int(rem)
+            hash = (hash << bits) + int(rem)
             if len(self.hash_list) > 0:
                 self._check_hashes(hash)
 
@@ -362,6 +361,15 @@ struct KmerContent(Analyser):
         for i in range(len(self.hash_list)):
             if hash == self.hash_list[i]:
                 self.hash_counts[i] += 1
+
+
+struct DuplicateReads:
+    pass
+
+
+
+
+
 
 fn _seq_to_hash(seq: String) -> UInt64:
     var hash = 0
