@@ -366,19 +366,41 @@ struct KmerContent[bits: Int = 3](Analyser):
 
 @value
 struct DuplicateReads(Analyser):
-    var dup_reads: StaticTuple[UInt64, 100_000]
+    var dup_reads: Tensor[DType.uint64]
 
     fn __init__(inout self):
-        self.dup_reads = StaticTuple[UInt64, 100_000]()
+        self.dup_reads = Tensor[DType.uint64](100_000)
 
     @always_inline
     fn tally_read(inout self, record: FastqRecord):
-        var index = record.hash() / 100_0000
+        var index = int(record.hash() % 100_000)
         self.dup_reads[index] += 1
 
 
-    fn report(self) -> StaticTuple[UInt64, 100_000]:
+    fn report(self) -> Tensor[DType.uint64]:
         return self.dup_reads
+
+
+
+# @value
+# struct DuplicateReads(Analyser):
+#     var dup_reads: StaticIntTuple[100_000]
+
+#     fn __init__(inout self):
+#         self.dup_reads = StaticIntTuple[100_000]()
+#         for i in range(100_000):
+#             self.dup_reads[i] = 0
+
+#     @always_inline
+#     fn tally_read(inout self, record: FastqRecord):
+#         var index = int(record.hash() % 100_000)
+#         self.dup_reads[index] += 1
+
+
+#     fn report(self) -> StaticIntTuple[100_000]:
+#         return self.dup_reads
+
+
 
 
 

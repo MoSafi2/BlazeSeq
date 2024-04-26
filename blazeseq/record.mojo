@@ -205,7 +205,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     fn hash[bits: Int = 2](self) -> UInt64:
         """Hashes the first 31 bp (if possible) into one 64bit."""
         var hash: UInt64 = 0
-        var rnge = 64 % bits
+        var rnge: Int = 64 // bits
         var mask = (0b1 << bits)  - 1
         for i in range(min(rnge, self.SeqStr.num_elements())):
             # Mask for for first 3 significant bits.
