@@ -10,6 +10,7 @@ import time
 from tensor import Tensor
 from python import Python
 from algorithm.swap import swap
+from utils.static_tuple import StaticTuple
 
 
 # BUG: CG content stats output does not corrspond to FASTQC output.
@@ -26,8 +27,8 @@ trait Analyser(CollectionElement):
     fn tally_read(inout self, record: FastqRecord):
         ...
 
-    fn report(self) -> Tensor[DType.int64]:
-        ...
+    # fn report(self) -> Tensor[DType.int64]:
+    #     ...
 
 
 @value
@@ -336,11 +337,12 @@ struct KmerContent[bits: Int = 3](Analyser):
     @always_inline
     fn tally_read(inout self, record: FastqRecord):
 
-        var hash = record.hash(self.kmer_len)
-        var end = self.kmer_len
+        var hash: UInt64 = 0
+        var end = 0
         # Make a custom bit mask of 1s by certain length
         var mask: UInt64 = (0b1 << self.kmer_len * bits) - 1
         var neg_mask = mask >> bits
+        var bit_shift = (0b1 << bits) -1
 
         # Check initial Kmer
         if len(self.hash_list) > 0:
@@ -351,7 +353,7 @@ struct KmerContent[bits: Int = 3](Analyser):
             hash = hash & neg_mask
 
             # Mask for the least sig. three bits, add to hash
-            var rem = record.SeqStr[i] & 0b111  
+            var rem = record.SeqStr[i] & bit_shift  
             hash = (hash << bits) + int(rem)
             if len(self.hash_list) > 0:
                 self._check_hashes(hash)
@@ -362,12 +364,21 @@ struct KmerContent[bits: Int = 3](Analyser):
             if hash == self.hash_list[i]:
                 self.hash_counts[i] += 1
 
+@value
+struct DuplicateReads(Analyser):
+    var dup_reads: StaticTuple[UInt64, 100_000]
 
-struct DuplicateReads:
-    pass
+    fn __init__(inout self):
+        self.dup_reads = StaticTuple[UInt64, 100_000]()
+
+    @always_inline
+    fn tally_read(inout self, record: FastqRecord):
+        var index = record.hash() / 100_0000
+        self.dup_reads[index] += 1
 
 
-
+    fn report(self) -> StaticTuple[UInt64, 100_000]:
+        return self.dup_reads
 
 
 

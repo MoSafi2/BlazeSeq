@@ -202,18 +202,20 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return self.SeqStr.num_elements()
 
     @always_inline
-    fn hash(self, kmer: Int) -> UInt64:
+    fn hash[bits: Int = 2](self) -> UInt64:
         """Hashes the first 31 bp (if possible) into one 64bit."""
         var hash: UInt64 = 0
-        for i in range(min(kmer, self.SeqStr.num_elements())):
+        var rnge = 64 % bits
+        var mask = (0b1 << bits)  - 1
+        for i in range(min(rnge, self.SeqStr.num_elements())):
             # Mask for for first 3 significant bits.
-            var base_val = self.SeqStr[i] & 0b111  
-            hash = (hash << 3) + int(base_val)
+            var base_val = self.SeqStr[i] & mask  
+            hash = (hash << bits) + int(base_val)
         return hash
 
     @always_inline
     fn __hash__(self) -> Int:
-        return int(self.hash(21))
+        return int(self.hash())
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
