@@ -208,7 +208,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         var rnge: Int = 64 // bits
         var mask = (0b1 << bits)  - 1
         for i in range(min(rnge, self.SeqStr.num_elements())):
-            # Mask for for first 3 significant bits.
+            # Mask for for first <n> significant bits.
             var base_val = self.SeqStr[i] & mask  
             hash = (hash << bits) + int(base_val)
         return hash
@@ -224,8 +224,6 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     fn __ne__(self, other: Self) -> Bool:
         return self.__hash__() != other.__hash__()
 
-from math import min
-from memory.memory import memset_zero
 
 
 @value

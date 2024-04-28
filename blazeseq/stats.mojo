@@ -12,8 +12,18 @@ from python import Python
 from algorithm.swap import swap
 from utils.static_tuple import StaticTuple
 
+alias py_lib: String = "/home/mohamed/Documents/Projects/BlazeSeq/.pixi/envs/default/lib/python3.12/site-packages/"
 
-# BUG: CG content stats output does not corrspond to FASTQC output.
+fn hash_list() -> List[UInt64]:
+    var  li: List[UInt64] = List[UInt64](
+            _seq_to_hash("AGATCGGAAGAG"),
+            _seq_to_hash("TGGAATTCTCGG"),
+            _seq_to_hash("GATCGTCGGACT"),
+            _seq_to_hash("CTGTCTCTTATA"),
+            _seq_to_hash("AAAAAAAAAAAA"),
+            _seq_to_hash("GGGGGGGGGGGG")
+            )
+    return li
 
 
 alias MAX_LENGTH = 10_000
@@ -27,8 +37,8 @@ trait Analyser(CollectionElement):
     fn tally_read(inout self, record: FastqRecord):
         ...
 
-    # fn report(self) -> Tensor[DType.int64]:
-    #     ...
+    fn report(self) -> Tensor[DType.int64]:
+        ...
 
 
 @value
@@ -39,6 +49,8 @@ struct FullStats(Stringable, CollectionElement):
     var len_dist: LengthDistribution
     var qu_dist: QualityDistribution
     var cg_content: CGContent
+    var dup_reads: DuplicateReads
+    var kmer_content: KmerContent
 
     fn __init__(inout self):
         self.num_reads = 0
@@ -47,8 +59,9 @@ struct FullStats(Stringable, CollectionElement):
         self.bp_dist = BasepairDistribution()
         self.qu_dist = QualityDistribution()
         self.cg_content = CGContent()
+        self.dup_reads = DuplicateReads()
+        self.kmer_content = KmerContent(hash_list(), 12)
 
-    # Consider using Internal function for each type to get this, there is no need to know the impelemtnation of each type, this can get Ugly if you want to Add BAM, SAM .. etc.
     @always_inline
     fn tally(inout self, record: FastqRecord):
         self.num_reads += 1
@@ -56,14 +69,20 @@ struct FullStats(Stringable, CollectionElement):
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
-        self.qu_dist.tally_read(record) #Expensive operation, a lot of memory access
+        self.dup_reads.tally_read(record)
+        self.kmer_content.tally_read(record)
+        
+        # BUG: There is a bug here which causes core dumped
+        # self.qu_dist.tally_read(record) #Expensive operation, a lot of memory access
+
 
     @always_inline
     fn plot(self) raises:
         self.bp_dist.plot()
         self.cg_content.plot()
         self.len_dist.plot()
-        self.qu_dist.plot()
+        #self.qu_dist.plot()
+        self.dup_reads.plot()
 
     fn __str__(self) -> String:
         return (
@@ -76,6 +95,8 @@ struct FullStats(Stringable, CollectionElement):
             + self.len_dist
             + self.qu_dist
             + self.cg_content
+            + self.kmer_content
+            + self.dup_reads
         )
 
 
@@ -98,7 +119,7 @@ struct BasepairDistribution(Analyser, Stringable):
             swap(self.bp_dist, new_tensor)
 
         for i in range(record.SeqStr.num_elements()):
-            # Remined of first 5 bits seperates N from T
+            # Remineder of first 5 bits seperates N from T
             var base_val = int((record.SeqStr[i] & 0b11111) % WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
@@ -156,36 +177,36 @@ struct CGContent(Analyser, Stringable):
         return String("\nThe CpG content tensor is: ") + self.cg_content
 
 
-@value
-struct DupReader(Analyser, Stringable):
-    var unique_dict: Dict[FastqRecord, Int64]
-    var unique_reads: Int
+# @value
+# struct DupReader(Analyser, Stringable):
+#     var unique_dict: Dict[FastqRecord, Int64]
+#     var unique_reads: Int
 
-    fn __init__(inout self):
-        self.unique_dict = Dict[FastqRecord, Int64]()
-        self.unique_reads = 0
+#     fn __init__(inout self):
+#         self.unique_dict = Dict[FastqRecord, Int64]()
+#         self.unique_reads = 0
 
-    fn tally_read(inout self, record: FastqRecord):
-        if self.unique_dict.__contains__(record):
-            try:
-                self.unique_dict[record] += 1
-                return
-            except:
-                return
+#     fn tally_read(inout self, record: FastqRecord):
+#         if self.unique_dict.__contains__(record):
+#             try:
+#                 self.unique_dict[record] += 1
+#                 return
+#             except:
+#                 return
 
-        if self.unique_reads < MAX_READS:
-            self.unique_dict[record] = 1
-            self.unique_reads += 1
-        else:
-            pass
+#         if self.unique_reads < MAX_READS:
+#             self.unique_dict[record] = 1
+#             self.unique_reads += 1
+#         else:
+#             pass
 
-    fn report(self) -> Tensor[DType.int64]:
-        var report = Tensor[DType.int64](1)
-        report[0] = len(self.unique_dict)
-        return report
+#     fn report(self) -> Tensor[DType.int64]:
+#         var report = Tensor[DType.int64](1)
+#         report[0] = len(self.unique_dict)
+#         return report
 
-    fn __str__(self) -> String:
-        return String("\nNumber of duplicated reads is") + self.report()
+#     fn __str__(self) -> String:
+#         return String("\nNumber of duplicated reads is") + self.report()
 
 
 @value
@@ -240,6 +261,7 @@ struct QualityDistribution(Analyser, Stringable):
 
     fn tally_read(inout self, record: FastqRecord):
         if record.QuStr.num_elements() > self.max_length:
+            print("swapping")
             self.max_length = record.QuStr.num_elements()
             var new_shape = TensorShape(self.max_length, 40)
             var new_tensor = grow_matrix(self.qu_dist, new_shape)
@@ -257,7 +279,7 @@ struct QualityDistribution(Analyser, Stringable):
     #TODO: Stylize the plot
     fn plot(self) raises:
         var arr = matrix_to_numpy(self.qu_dist)
-        Python.add_to_path("/usr/local/lib/python3.10/dist-packages")
+        Python.add_to_path(py_lib)
         var np = Python.import_module("numpy")
         var plt = Python.import_module("matplotlib.pyplot")
         var py_builtin = Python.import_module("builtins")
@@ -306,19 +328,6 @@ struct QualityDistribution(Analyser, Stringable):
         return String("\nQuality_dist_matrix: ") + self.report()
 
 
-
-# TODO: Add module for adapter content
-@value
-struct AdapterContent(Analyser):
-
-    fn tally_read(inout self, read: FastqRecord):
-        pass
-
-    fn report(self) -> Tensor[DType.int64]:
-        return Tensor[DType.int64]()
-
-
-
 @value
 struct KmerContent[bits: Int = 3](Analyser):
     var kmer_len: Int
@@ -331,7 +340,7 @@ struct KmerContent[bits: Int = 3](Analyser):
         self.hash_counts = Tensor[DType.int64](len(self.hash_list))
 
     fn report(self) -> Tensor[DType.int64]:
-        return Tensor[DType.int64]()
+        return self.hash_counts
 
     # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
     @always_inline
@@ -364,46 +373,44 @@ struct KmerContent[bits: Int = 3](Analyser):
             if hash == self.hash_list[i]:
                 self.hash_counts[i] += 1
 
+    fn __str__(self) -> String:
+        return String("\nhash count table is ") + str(self.hash_counts)
+
 @value
 struct DuplicateReads(Analyser):
-    var dup_reads: Tensor[DType.uint64]
+    var dup_reads: Tensor[DType.int64]
+    var hashes: Tensor[DType.uint64]
 
     fn __init__(inout self):
-        self.dup_reads = Tensor[DType.uint64](100_000)
+        self.dup_reads = Tensor[DType.int64](TensorShape(100_000), 0)
+        self.hashes = Tensor[DType.uint64](TensorShape(100_000), 0)
 
     @always_inline
     fn tally_read(inout self, record: FastqRecord):
         var index = int(record.hash() % 100_000)
-        self.dup_reads[index] += 1
+
+        #New hash
+        if self.hashes[index] == 0:
+            self.hashes[index] = record.hash()
+            self.dup_reads[index] += 1
+        else:
+            if self.hashes[index] == record.hash():
+                self.dup_reads[index] += 1
 
 
-    fn report(self) -> Tensor[DType.uint64]:
+    fn plot(self) raises:
+        var np = Python.import_module("numpy")
+        var arr = tensor_to_numpy_1d(self.dup_reads)
+        np.save("arr.npy", arr)
+        
+    fn report(self) -> Tensor[DType.int64]:
         return self.dup_reads
 
+    fn __str__(self) -> String:
+        return String("\nDuplicate reads is: ") + str(self.dup_reads)
 
 
-# @value
-# struct DuplicateReads(Analyser):
-#     var dup_reads: StaticIntTuple[100_000]
-
-#     fn __init__(inout self):
-#         self.dup_reads = StaticIntTuple[100_000]()
-#         for i in range(100_000):
-#             self.dup_reads[i] = 0
-
-#     @always_inline
-#     fn tally_read(inout self, record: FastqRecord):
-#         var index = int(record.hash() % 100_000)
-#         self.dup_reads[index] += 1
-
-
-#     fn report(self) -> StaticIntTuple[100_000]:
-#         return self.dup_reads
-
-
-
-
-
+# TODO: Make this also parametrized on the number of bits per bp
 fn _seq_to_hash(seq: String) -> UInt64:
     var hash = 0
     for i in range(0, len(seq)):
@@ -414,6 +421,7 @@ fn _seq_to_hash(seq: String) -> UInt64:
         hash = (hash << 3) + int(rem)
     return hash
 
+#TODO: Make this also parametrized on the number of bits per bp, this now works only for 3bits
 fn _hash_to_seq(hash: UInt64) -> String:
     var inner = hash
     var out: String = ""
@@ -434,17 +442,13 @@ fn _hash_to_seq(hash: UInt64) -> String:
     return out
 
 
-
-
-
-
 def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
+    Python.add_to_path(py_lib)
     np = Python.import_module("numpy")
     ar = np.zeros(tensor.num_elements())
     for i in range(tensor.num_elements()):
         ar.itemset(i, tensor[i])
     return ar
-
 
 def matrix_to_numpy[T: DType](tensor: Tensor[T]) -> PythonObject:
     np = Python.import_module("numpy")
@@ -473,3 +477,19 @@ fn grow_matrix[
             new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
     # cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
     return new_tensor
+
+
+
+
+# TODO: Add module for adapter content
+@value
+struct AdapterContent(Analyser):
+
+    fn tally_read(inout self, read: FastqRecord):
+        pass
+
+    fn report(self) -> Tensor[DType.int64]:
+        return Tensor[DType.int64]()
+
+
+
