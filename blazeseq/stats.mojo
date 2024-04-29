@@ -33,11 +33,13 @@ alias MAX_QUALITY = 93
 alias MAX_COUNTS = 1_000_000
 
 
-trait Analyser(CollectionElement):
+trait Analyser(CollectionElement, Stringable):
     fn tally_read(inout self, record: FastqRecord):
         ...
 
     fn report(self) -> Tensor[DType.int64]:
+        ...
+    fn __str__(self) -> String:
         ...
 
 
@@ -101,7 +103,7 @@ struct FullStats(Stringable, CollectionElement):
 
 
 @value
-struct BasepairDistribution(Analyser, Stringable):
+struct BasepairDistribution(Analyser):
     var bp_dist: Tensor[DType.int64]
     var max_length: Int
 
@@ -141,7 +143,7 @@ struct BasepairDistribution(Analyser, Stringable):
 
 
 @value
-struct CGContent(Analyser, Stringable):
+struct CGContent(Analyser):
     var cg_content: Tensor[DType.int64]
 
     fn __init__(inout self):
@@ -210,7 +212,7 @@ struct CGContent(Analyser, Stringable):
 
 
 @value
-struct LengthDistribution(Analyser, Stringable):
+struct LengthDistribution(Analyser):
     var length_vector: Tensor[DType.int64]
 
     fn __init__(inout self):
@@ -248,7 +250,7 @@ struct LengthDistribution(Analyser, Stringable):
 
 
 @value
-struct QualityDistribution(Analyser, Stringable):
+struct QualityDistribution(Analyser):
     var qu_dist: Tensor[DType.int64]
     var max_length: Int
     var max_qu: Int
@@ -491,5 +493,7 @@ struct AdapterContent(Analyser):
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
 
+    fn __str__(self) -> String:
+        return ""
 
 
