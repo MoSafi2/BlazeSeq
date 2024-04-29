@@ -20,10 +20,10 @@ jobs:
         modular auth examples
 
     - name: Install Mojo
-      run: modular install mojo
+      run: modular install nightly/mojo
 
     - name: Add to PATH
-      run: echo "/home/runner/.modular/pkg/packages.modular.com_mojo/bin" >> $GITHUB_PATH
+      run: echo "/home/runner/.modular/pkg/packages.modular.com_nightly_mojo/bin/" >> $GITHUB_PATH
 
     - name: Create package
       run: mojo package blazeseq -o blazeseq.mojopkg
