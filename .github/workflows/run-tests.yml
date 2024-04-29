@@ -25,7 +25,6 @@ jobs:
     - name: Add to PATH
       run: | 
             echo "/home/runner/.modular/pkg/packages.modular.com_nightly_mojo/bin/" >> $GITHUB_PATH
-            echo "/home/runner/.modular/pkg/packages.modular.com_mojo/bin" >> $GITHUB_PATH
 
     - name: Log everything
       run:
