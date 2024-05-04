@@ -1,5 +1,4 @@
 from blazeseq.helpers import slice_tensor, write_to_buff
-from math import min
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant

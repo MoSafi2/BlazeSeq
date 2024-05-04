@@ -5,7 +5,6 @@ from blazeseq.helpers import write_to_buff
 from blazeseq.helpers import cpy_tensor
 from tensor import TensorShape
 from collections import Dict, KeyElement
-from math import round, min
 import time
 from tensor import Tensor
 from python import Python
@@ -42,7 +41,6 @@ trait Analyser(CollectionElement, Stringable):
     fn __str__(self) -> String:
         ...
 
-
 @value
 struct FullStats(Stringable, CollectionElement):
     var num_reads: Int64
@@ -75,7 +73,7 @@ struct FullStats(Stringable, CollectionElement):
         self.kmer_content.tally_read(record)
         
         # BUG: There is a bug here which causes core dumped
-        # self.qu_dist.tally_read(record) #Expensive operation, a lot of memory access
+        self.qu_dist.tally_read(record) #Expensive operation, a lot of memory access
 
 
     @always_inline
@@ -83,7 +81,7 @@ struct FullStats(Stringable, CollectionElement):
         self.bp_dist.plot()
         self.cg_content.plot()
         self.len_dist.plot()
-        #self.qu_dist.plot()
+        self.qu_dist.plot()
         self.dup_reads.plot()
 
     fn __str__(self) -> String:
@@ -238,11 +236,21 @@ struct LengthDistribution(Analyser):
 
     fn plot(self) raises:
         var plt = Python.import_module("matplotlib.pyplot")
+        var np = Python.import_module("numpy")
+        var mtp = Python.import_module("matplotlib")
+
         var arr = tensor_to_numpy_1d(self.length_vector)
+
         var x = plt.subplots()  # Create a figure
         var fig = x[0]
         var ax = x[1]
-        ax.plot(arr)
+
+        var arr2 = np.insert(arr, 0, 0)
+        var arr3 = np.append(arr2, 0)
+        ax.plot(arr3)
+        ax.xaxis.set_major_locator(mtp.ticker.MaxNLocator(integer=True))
+        ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
+        ax.set_ylim(0)
         fig.savefig("LengthDistribution.png")
 
     fn __str__(self) -> String:
@@ -263,7 +271,6 @@ struct QualityDistribution(Analyser):
 
     fn tally_read(inout self, record: FastqRecord):
         if record.QuStr.num_elements() > self.max_length:
-            print("swapping")
             self.max_length = record.QuStr.num_elements()
             var new_shape = TensorShape(self.max_length, 40)
             var new_tensor = grow_matrix(self.qu_dist, new_shape)
@@ -281,10 +288,16 @@ struct QualityDistribution(Analyser):
     #TODO: Stylize the plot
     fn plot(self) raises:
         var arr = matrix_to_numpy(self.qu_dist)
+        
         Python.add_to_path(py_lib)
         var np = Python.import_module("numpy")
         var plt = Python.import_module("matplotlib.pyplot")
+        var sns = Python.import_module("seaborn")
         var py_builtin = Python.import_module("builtins")
+        np.save("arr_qu.npy", arr)
+
+
+        ################# Quality Histogram ##################
 
         var mean_line = np.sum(arr * np.arange(1, 41), axis=1) / np.sum(
             arr, axis=1
@@ -315,6 +328,14 @@ struct QualityDistribution(Analyser):
         ax.bxp(l, showfliers=False)
         ax.plot(mean_line)
         fig.savefig("QualityDistribution.png")
+
+        #################### Quality  Heatmap #########################
+
+        var y = plt.subplots()
+        var fig2 = x[0]
+        var ax2 = x[1]
+        sns.heatmap(np.flipud(arr).T, cmap="Blues", robust= True, ax = ax2)
+        fig2.savefig("QualityDistributionHeatMap.png")
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(self.max_qu, self.max_length)
@@ -403,7 +424,7 @@ struct DuplicateReads(Analyser):
     fn plot(self) raises:
         var np = Python.import_module("numpy")
         var arr = tensor_to_numpy_1d(self.dup_reads)
-        np.save("arr.npy", arr)
+        np.save("arr_DupReads.npy", arr)
         
     fn report(self) -> Tensor[DType.int64]:
         return self.dup_reads
