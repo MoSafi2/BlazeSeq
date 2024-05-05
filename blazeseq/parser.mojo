@@ -89,13 +89,13 @@ struct CoordParser:
     fn parse_all(inout self) raises:
         while True:
             var record: RecordCoord
-            record = self._parse_record()
+            record = self._parse_record2()
             record.validate()
 
     @always_inline
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
-        read = self._parse_record()
+        read = self._parse_record2()
         read.validate()
         return read
 
@@ -113,3 +113,17 @@ struct CoordParser:
 
         var line4 = self.stream.read_next_coord()
         return RecordCoord(line1, line2, line3, line4)
+
+
+    @always_inline
+    fn _parse_record2(inout self) raises -> RecordCoord:
+        var coords = self.stream.read_n_coords[4]()
+        var n = 0
+        if self.stream.buf[coords[0].start] != read_header:
+            print(coords[n], StringRef(self.stream.buf._ptr + coords[n].start, coords[n].end - coords[n].start))
+            raise Error("Sequence Header is corrupt")
+
+        if self.stream.buf[coords[2].start] != quality_header:
+            raise Error("Quality Header is corrupt")
+
+        return RecordCoord(coords[0], coords[1], coords[2], coords[3])

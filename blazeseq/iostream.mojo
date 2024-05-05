@@ -152,6 +152,11 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         return slice(line_coord.start + self.consumed, line_coord.end + self.consumed)
 
     @always_inline
+    fn read_n_coords[lines: Int](inout self) raises -> InlineArray[Slice, lines]:
+        return self._read_n_line[lines]()
+
+
+    @always_inline
     fn _fill_buffer(inout self) raises -> Int:
         """Returns the number of bytes read into the buffer."""
         self._left_shift()
@@ -167,18 +172,6 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.consumed += nels
         return in_buf.num_elements()
 
-    # if coord.end == -1:
-    #     # Handle small buffers
-    #     if self.head == 0:
-    #         for i in range(MAX_SHIFT):
-    #             if coord.end != -1:
-    #                 return coord
-    #             else:
-    #                 coord = self._line_coord_missing_line()
-
-    #     # Handle incomplete lines across two chunks
-    #     _ = self._fill_buffer()
-    #     return self._line_coord2()
 
     @always_inline
     fn _line_coord(inout self) raises -> Slice:
@@ -213,17 +206,19 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         return slice(line_start, line_end)
 
 
-    # Now works 
-    # TODO: Handle small Buffers, handle windows seperator, simplify 
+    # TODO: Handle small Buffers, handle windows seperator, simplify
+    @always_inline 
     fn _read_n_line[no: Int](inout self) raises -> InlineArray[Slice, no]:
         
         var coords = InlineArray[Slice, no](Slice(-1, -1))
         var internal_head = self.head
 
+        @unroll(no)
         for i in range(no):
-
             if internal_head >= self.end:
                 internal_head -= self.head 
+                for j in range(i):
+                    coords[j] = Slice(coords[j].start - self.head, coords[j].end - self.head)
                 _ = self._fill_buffer()
 
             var coord: Slice
@@ -236,6 +231,10 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
             if coord.end == -1:
                 internal_head -= self.head 
                 line_start = internal_head
+
+                for j in range(i):
+                    coords[j] = Slice(coords[j].start - self.head, coords[j].end-  self.head)
+
                 _ = self._fill_buffer()
                 var completet_line = self._line_coord_incomplete_line(internal_head)
                 coords[i] =  completet_line
@@ -243,6 +242,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
 
             internal_head = line_end + 1
             coords[i] =  slice(line_start, line_end)
+
         self.head = internal_head
         return coords
 
@@ -443,4 +443,3 @@ struct BufferedWriter:
     fn close(inout self) raises:
         self.flush_buffer()
         self.sink.close()
-
