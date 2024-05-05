@@ -12,6 +12,7 @@ from pathlib import Path
 import time
 from tensor import Tensor
 from algorithm.swap import swap
+from utils.static_tuple import InlineArray
 
 
 
@@ -184,7 +185,6 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         if self._check_buf_state():
             _ = self._fill_buffer()
 
-        var line_shift: Int
         var coord: Slice
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
@@ -211,6 +211,34 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
             line_end -= 1
 
         return slice(line_start, line_end)
+
+
+    # BUG: Crashes at new chunk read
+    fn _read_n_line[no: Int](inout self) raises -> InlineArray[Slice, no]:
+
+        var coords = InlineArray[Slice, no](Slice(-1, -1))
+        var internal_head = self.head
+
+        for i in range(no):
+            if self._check_buf_state():
+                _ = self._fill_buffer()
+            var coord: Slice
+            var line_start = internal_head
+            var line_end = get_next_line_index(self.buf, internal_head)
+
+            coord = Slice(line_start, line_end)
+
+            # Handle incomplete lines across two chunks
+            if coord.end == -1:
+                _ = self._fill_buffer()
+                coords[i] =  self._line_coord_incomplete_line()
+            internal_head = line_end + 1
+            coords[i] =  slice(line_start, line_end)
+        self.head = internal_head
+        return coords
+
+
+
 
     @always_inline
     fn _line_coord_incomplete_line(inout self) raises -> Slice:
@@ -254,6 +282,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         cpy_tensor[I8](self.buf, self.buf, no_items, 0, self.head)
         self.head = 0
         self.end = no_items
+
 
     @always_inline
     fn _check_buf_state(inout self) -> Bool:

@@ -1,5 +1,4 @@
 import time
-from math import math
 from sys import argv
 from blazeseq.parser import CoordParser, RecordParser
 from blazeseq.iostream import FileReader
@@ -83,7 +82,7 @@ fn run_record_parser_session(inout parser: RecordParser) raises:
             if reads % 1_000_000 == 0:
                 var current = time.now()
                 var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-                var rounded = int(math.round(reads_p_min))
+                var rounded = int(round(reads_p_min))
                 print("\33[H")
                 print("\033[J")
                 print("Number of reads processed is:", reads)
@@ -93,7 +92,7 @@ fn run_record_parser_session(inout parser: RecordParser) raises:
             var current = time.now()
             var elapsed = (current - strt) / 1e9
             var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-            var rounded = int(math.round(reads_p_min))
+            var rounded = int(round(reads_p_min))
             print(
                 "total of",
                 reads,
@@ -117,7 +116,7 @@ fn run_coord_parser(inout parser: CoordParser) raises:
             if reads % 1_000_000 == 0:
                 var current = time.now()
                 var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-                var rounded = int(math.round(reads_p_min))
+                var rounded = int(round(reads_p_min))
                 print("\33[H")
                 print("\033[J")
                 print("Number of reads processed is:", reads)
@@ -127,7 +126,7 @@ fn run_coord_parser(inout parser: CoordParser) raises:
             var current = time.now()
             var elapsed = (current - strt) / 1e9
             var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-            var rounded = int(math.round(reads_p_min))
+            var rounded = int(round(reads_p_min))
             print("\33[H")
             print("\033[J")
             print(
