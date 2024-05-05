@@ -213,15 +213,19 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         return slice(line_start, line_end)
 
 
-    # BUG: Crashes at new chunk read
+    # Now works 
+    # TODO: Handle small Buffers, handle windows seperator, simplify 
     fn _read_n_line[no: Int](inout self) raises -> InlineArray[Slice, no]:
-
+        
         var coords = InlineArray[Slice, no](Slice(-1, -1))
         var internal_head = self.head
 
         for i in range(no):
-            if self._check_buf_state():
+
+            if internal_head >= self.end:
+                internal_head -= self.head 
                 _ = self._fill_buffer()
+
             var coord: Slice
             var line_start = internal_head
             var line_end = get_next_line_index(self.buf, internal_head)
@@ -230,13 +234,17 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
 
             # Handle incomplete lines across two chunks
             if coord.end == -1:
+                internal_head -= self.head 
+                line_start = internal_head
                 _ = self._fill_buffer()
-                coords[i] =  self._line_coord_incomplete_line()
+                var completet_line = self._line_coord_incomplete_line(internal_head)
+                coords[i] =  completet_line
+                line_end = completet_line.end
+
             internal_head = line_end + 1
             coords[i] =  slice(line_start, line_end)
         self.head = internal_head
         return coords
-
 
 
 
@@ -250,8 +258,20 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
 
         if self.buf[line_end] == carriage_return:
             line_end -= 1
-
         return slice(line_start, line_end)
+
+
+    
+    @always_inline
+    fn _line_coord_incomplete_line(inout self, pos: Int) raises -> Slice:
+        if self._check_buf_state():
+            _ = self._fill_buffer()
+        var line_start = pos
+        var line_end = get_next_line_index(self.buf, pos)
+        if self.buf[line_end] == carriage_return:
+            line_end -= 1
+        return slice(line_start, line_end)
+
 
     @always_inline
     fn _line_coord_missing_line(inout self) raises -> Slice:
@@ -259,7 +279,6 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         _ = self._fill_buffer()
         var line_start = self.head
         var line_end = get_next_line_index(self.buf, self.head)
-
         self.head = line_end + 1
 
         return slice(line_start, line_end)
