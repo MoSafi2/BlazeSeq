@@ -257,6 +257,7 @@ struct LengthDistribution(Analyser):
         return String("\nLength Distribution: ") + self.length_vector
 
 
+#TODO: FIX this struct to reflect FastQC
 @value
 struct QualityDistribution(Analyser):
     var qu_dist: Tensor[DType.int64]
@@ -490,7 +491,6 @@ fn grow_tensor[
     return new_tensor
 
 
-# Bug: Copy tensor in this way in probably wrong.
 fn grow_matrix[
     T: DType
 ](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
@@ -498,9 +498,7 @@ fn grow_matrix[
     for i in range(old_tensor.shape()[0]):
         for j in range(old_tensor.shape()[1]):
             new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
-    # cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
     return new_tensor
-
 
 
 
@@ -516,5 +514,3 @@ struct AdapterContent(Analyser):
 
     fn __str__(self) -> String:
         return ""
-
-
