@@ -1,7 +1,6 @@
 from blazeseq import RecordParser, CoordParser
 from sys import argv
 from time import now
-from math import round
 
 
 fn main() raises:
