@@ -208,18 +208,19 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
 
     # TODO: Handle small Buffers, handle windows seperator, simplify
     @always_inline 
-    fn _read_n_line[no: Int](inout self) raises -> InlineArray[Slice, no]:
-        
-        var coords = InlineArray[Slice, no](Slice(-1, -1))
+    fn _read_n_line[lines: Int](inout self) raises -> InlineArray[Slice, lines]:
+        var coords = InlineArray[Slice, lines](Slice(-1, -1))
         var internal_head = self.head
 
-        @unroll(no)
-        for i in range(no):
+        @unroll(lines)
+        for i in range(lines):
+
             if internal_head >= self.end:
-                internal_head -= self.head 
+                internal_head -= self.head
+                # Resetting coordinates for read lines to the new buffer coordinates 
                 for j in range(i):
                     coords[j] = Slice(coords[j].start - self.head, coords[j].end - self.head)
-                _ = self._fill_buffer()
+                _ = self._fill_buffer() # self.head is reset to 0
 
             var coord: Slice
             var line_start = internal_head
@@ -227,21 +228,32 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
 
             coord = Slice(line_start, line_end)
 
+            # Handle small buffers
+            if coord.end == -1 and self.head == 0:
+                for i in range(MAX_SHIFT):
+                    if coord.end != -1:
+                        coords[i] =  self._handle_windows_sep(coord)
+                        continue
+                    else:
+                        coord = self._line_coord_missing_line(internal_head)
+
             # Handle incomplete lines across two chunks
             if coord.end == -1:
+                # Restting corrdinates to new buffer
                 internal_head -= self.head 
                 line_start = internal_head
-
                 for j in range(i):
                     coords[j] = Slice(coords[j].start - self.head, coords[j].end-  self.head)
-
-                _ = self._fill_buffer()
+                _ = self._fill_buffer() # self.head is 0
+                
+                # Try again to read the complete line
                 var completet_line = self._line_coord_incomplete_line(internal_head)
                 coords[i] =  completet_line
                 line_end = completet_line.end
 
             internal_head = line_end + 1
-            coords[i] =  slice(line_start, line_end)
+
+            coords[i] =  self._handle_windows_sep(slice(line_start, line_end))
 
         self.head = internal_head
         return coords
@@ -261,15 +273,13 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         return slice(line_start, line_end)
 
 
-    
+    #Overload to allow reading missing line from a specific point
     @always_inline
     fn _line_coord_incomplete_line(inout self, pos: Int) raises -> Slice:
         if self._check_buf_state():
             _ = self._fill_buffer()
         var line_start = pos
         var line_end = get_next_line_index(self.buf, pos)
-        if self.buf[line_end] == carriage_return:
-            line_end -= 1
         return slice(line_start, line_end)
 
 
@@ -282,6 +292,16 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](Sized, Stringa
         self.head = line_end + 1
 
         return slice(line_start, line_end)
+
+
+    @always_inline
+    fn _line_coord_missing_line(inout self, pos: Int) raises -> Slice:
+        self._resize_buf(self.capacity(), MAX_CAPACITY)
+        _ = self._fill_buffer()
+        var line_start = pos
+        var line_end = get_next_line_index(self.buf, pos)
+        return slice(line_start, line_end)
+
 
     @always_inline
     fn _store[
