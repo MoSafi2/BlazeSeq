@@ -94,21 +94,21 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         if self.QuHeader[0] != quality_header:
             raise Error("Quality Header is corrupt")
 
-        if self.SeqStr.num_elements() != self.QuStr.num_elements():
+        if self.len_record() != self.len_quality():
             raise Error("Corrput Lengths")
 
-        if self.QuHeader.num_elements() > 1:
-            if self.QuHeader.num_elements() != self.SeqHeader.num_elements():
+        if self.len_qu_header() > 1:
+            if self.len_qu_header() != self.len_seq_header():
                 raise Error("Quality Header is corrupt")
 
-        if self.QuHeader.num_elements() > 1:
-            for i in range(1, self.QuHeader.num_elements()):
+        if self.len_qu_header() > 1:
+            for i in range(1, self.len_qu_header()):
                 if self.QuHeader[i] != self.SeqHeader[i]:
                     raise Error("Non matching headers")
 
     @always_inline
     fn validate_quality_schema(self) raises:
-        for i in range(self.QuStr.num_elements()):
+        for i in range(self.len_quality()):
             if (
                 self.QuStr[i] > self.quality_schema.UPPER
                 or self.QuStr[i] < self.quality_schema.LOWER
@@ -118,10 +118,10 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     @always_inline
     fn total_length(self) -> Int:
         return (
-            self.SeqHeader.num_elements()
-            + self.SeqStr.num_elements()
-            + self.QuHeader.num_elements()
-            + self.QuStr.num_elements()
+            self.len_seq_header()
+            + self.len_record()
+            + self.len_qu_header()
+            + self.len_quality()
             + 4
         )
 
@@ -129,19 +129,19 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     fn __concat_record_tensor(self) -> Tensor[I8]:
         var final_list = List[Int8](capacity=self.total_length())
 
-        for i in range(self.SeqHeader.num_elements()):
+        for i in range(self.len_seq_header()):
             final_list.append(self.SeqHeader[i])
         final_list.append(10)
 
-        for i in range(self.SeqStr.num_elements()):
+        for i in range(self.len_record()):
             final_list.append(self.SeqStr[i])
         final_list.append(10)
 
-        for i in range(self.QuHeader.num_elements()):
+        for i in range(self.len_qu_header()):
             final_list.append(self.QuHeader[i])
         final_list.append(10)
 
-        for i in range(self.QuStr.num_elements()):
+        for i in range(self.len_quality()):
             final_list.append(self.QuStr[i])
         final_list.append(10)
 
@@ -153,16 +153,16 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
             return ""
 
         var line1 = self.SeqHeader
-        var line1_str = String(line1._steal_ptr(), self.SeqHeader.num_elements() + 1)
+        var line1_str = String(line1._steal_ptr(), self.len_seq_header() + 1)
 
         var line2 = self.SeqStr
-        var line2_str = String(line2._steal_ptr(), self.SeqStr.num_elements() + 1)
+        var line2_str = String(line2._steal_ptr(), self.len_record() + 1)
 
         var line3 = self.QuHeader
-        var line3_str = String(line3._steal_ptr(), self.QuHeader.num_elements() + 1)
+        var line3_str = String(line3._steal_ptr(), self.len_qu_header() + 1)
 
         var line4 = self.QuStr
-        var line4_str = String(line4._steal_ptr(), self.QuStr.num_elements() + 1)
+        var line4_str = String(line4._steal_ptr(), self.len_quality() + 1)
 
         return line1_str + "\n" + line2_str + "\n" + line3_str + "\n" + line4_str + "\n"
 
@@ -201,12 +201,28 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return self.SeqStr.num_elements()
 
     @always_inline
+    fn len_record(self) -> Int:
+        return self.SeqStr.num_elements()
+
+    @always_inline
+    fn len_quality(self) -> Int:
+        return self.QuStr.num_elements()
+
+    @always_inline
+    fn len_qu_header(self) -> Int:
+        return self.QuHeader.num_elements()
+    
+    @always_inline
+    fn len_seq_header(self) -> Int:
+        return self.SeqHeader.num_elements()
+
+    @always_inline
     fn hash[bits: Int = 2](self) -> UInt64:
         """Hashes the first 31 bp (if possible) into one 64bit."""
         var hash: UInt64 = 0
         var rnge: Int = 64 // bits
         var mask = (0b1 << bits)  - 1
-        for i in range(min(rnge, self.SeqStr.num_elements())):
+        for i in range(min(rnge, self.len_record())):
             # Mask for for first <n> significant bits.
             var base_val = self.SeqStr[i] & mask  
             hash = (hash << bits) + int(base_val)

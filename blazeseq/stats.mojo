@@ -65,7 +65,7 @@ struct FullStats(Stringable, CollectionElement):
     @always_inline
     fn tally(inout self, record: FastqRecord):
         self.num_reads += 1
-        self.total_bases += record.SeqStr.num_elements()
+        self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
@@ -111,14 +111,14 @@ struct BasepairDistribution(Analyser):
         self.max_length = 0
 
     fn tally_read(inout self, record: FastqRecord):
-        if record.SeqStr.num_elements() > self.max_length:
-            self.max_length = record.SeqStr.num_elements()
+        if record.len_record() > self.max_length:
+            self.max_length = record.len_record()
             var new_tensor = grow_matrix(
                 self.bp_dist, TensorShape(self.max_length, WIDTH)
             )
             swap(self.bp_dist, new_tensor)
 
-        for i in range(record.SeqStr.num_elements()):
+        for i in range(record.len_record()):
             # Remineder of first 5 bits seperates N from T
             var base_val = int((record.SeqStr[i] & 0b11111) % WIDTH)
             var index = VariadicList[Int](i, base_val)
@@ -149,7 +149,7 @@ struct CGContent(Analyser):
 
     fn tally_read(inout self, record: FastqRecord):
         var cg_num = 0
-        for index in range(0, record.SeqStr.num_elements()):
+        for index in range(0, record.len_record()):
             if (
                 record.SeqStr[index] & 0b111 == 3
                 or record.SeqStr[index] & 0b111 == 7
@@ -157,7 +157,7 @@ struct CGContent(Analyser):
                 cg_num += 1
 
         var read_cg_content = int(
-            round(cg_num * 100 / record.SeqStr.num_elements())
+            round(cg_num * 100 / record.len_record())
         )
         self.cg_content[read_cg_content] += 1
 
@@ -217,12 +217,12 @@ struct LengthDistribution(Analyser):
         self.length_vector = Tensor[DType.int64](0)
 
     fn tally_read(inout self, record: FastqRecord):
-        if record.SeqStr.num_elements() > self.length_vector.num_elements():
+        if record.len_record() > self.length_vector.num_elements():
             var new_tensor = grow_tensor(
-                self.length_vector, record.SeqStr.num_elements()
+                self.length_vector, record.len_record()
             )
             swap(self.length_vector, new_tensor)
-        self.length_vector[record.SeqStr.num_elements() - 1] += 1
+        self.length_vector[record.len_record() - 1] += 1
 
     @always_inline
     fn length_average(self, num_reads: Int) -> Float64:
@@ -270,13 +270,13 @@ struct QualityDistribution(Analyser):
         self.max_qu = 0
 
     fn tally_read(inout self, record: FastqRecord):
-        if record.QuStr.num_elements() > self.max_length:
-            self.max_length = record.QuStr.num_elements()
+        if record.len_quality() > self.max_length:
+            self.max_length = record.len_record()
             var new_shape = TensorShape(self.max_length, 40)
             var new_tensor = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_tensor)
 
-        for i in range(record.QuStr.num_elements()):
+        for i in range(record.len_quality()):
             var base_qu = int(record.QuStr[i] - record.quality_schema.OFFSET)
             var index = VariadicList[Int](i, base_qu)
             self.qu_dist[index] += 1
@@ -380,7 +380,7 @@ struct KmerContent[bits: Int = 3](Analyser):
         if len(self.hash_list) > 0:
             self._check_hashes(hash)
 
-        for i in range(end, record.SeqStr.num_elements()):
+        for i in range(end, record.len_record()):
             # Remove the most signifcant 3 bits
             hash = hash & neg_mask
 
