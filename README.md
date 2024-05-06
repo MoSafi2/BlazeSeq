@@ -44,10 +44,10 @@ Check `blazeseq_cli --help` for full list of options
 ```mojo
 from blazeseq import RecordParser, CoordParser
 fn main():
-    var validate_ascii = True
-    var validate_quality = True
+    alias validate_ascii = True
+    alias validate_quality = True
     # Schema can be: generic, sanger, solexa, illumina_1.3, illumina_1.5, illumina_1.8
-    schema = "sanger"
+    var schema = "sanger"
     var parser = RecordParser[validate_ascii, validate_quality](path="path/to/your/file.fastq", schema)
 
    # Only validates read headers and Ids length matching, 3X faster on average.
