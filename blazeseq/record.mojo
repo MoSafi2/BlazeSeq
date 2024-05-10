@@ -32,9 +32,9 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         self.QuStr = QS
 
         if quality_schema.isa[String]():
-            self.quality_schema = self._parse_schema(quality_schema.get[String]()[])
+            self.quality_schema = self._parse_schema(quality_schema[String])
         else:
-            self.quality_schema = quality_schema.get[QualitySchema]()[]
+            self.quality_schema = quality_schema[QualitySchema]
 
     fn __init__(
         inout self,
@@ -49,10 +49,10 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         self.QuHeader = Tensor[I8](QH.as_bytes())
         self.QuStr = Tensor[I8](QS.as_bytes())
         if quality_schema.isa[String]():
-            var q: String  = quality_schema.get[String]()[]
+            var q: String  = quality_schema[String]
             self.quality_schema = self._parse_schema(q)
         else:
-            self.quality_schema = quality_schema.get[QualitySchema]()[]
+            self.quality_schema = quality_schema[QualitySchema]
 
     @always_inline
     fn get_seq(self) -> String:

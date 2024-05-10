@@ -11,7 +11,6 @@ from blazeseq.CONSTS import (
 from pathlib import Path
 import time
 from tensor import Tensor
-from algorithm.swap import swap
 from utils.static_tuple import InlineArray
 
 

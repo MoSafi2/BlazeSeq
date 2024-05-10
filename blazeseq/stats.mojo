@@ -8,7 +8,6 @@ from collections import Dict, KeyElement
 import time
 from tensor import Tensor
 from python import Python
-from algorithm.swap import swap
 from utils.static_tuple import StaticTuple
 
 alias py_lib: String = "/home/mohamed/Documents/Projects/BlazeSeq/.pixi/envs/default/lib/python3.12/site-packages/"
@@ -333,8 +332,8 @@ struct QualityDistribution(Analyser):
         #################### Quality  Heatmap #########################
 
         var y = plt.subplots()
-        var fig2 = x[0]
-        var ax2 = x[1]
+        var fig2 = y[0]
+        var ax2 = y[1]
         sns.heatmap(np.flipud(arr).T, cmap="Blues", robust= True, ax = ax2)
         fig2.savefig("QualityDistributionHeatMap.png")
 
