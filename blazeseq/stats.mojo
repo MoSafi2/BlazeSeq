@@ -48,7 +48,7 @@ struct FullStats(Stringable, CollectionElement):
     var len_dist: LengthDistribution
     var qu_dist: QualityDistribution
     var cg_content: CGContent
-    var dup_reads: DuplicateReads
+    var dup_reads: DupReads
     var kmer_content: KmerContent
 
     fn __init__(inout self):
@@ -58,7 +58,7 @@ struct FullStats(Stringable, CollectionElement):
         self.bp_dist = BasepairDistribution()
         self.qu_dist = QualityDistribution()
         self.cg_content = CGContent()
-        self.dup_reads = DuplicateReads()
+        self.dup_reads = DupReads()
         self.kmer_content = KmerContent(hash_list(), 12)
 
     @always_inline
@@ -81,7 +81,7 @@ struct FullStats(Stringable, CollectionElement):
         self.cg_content.plot()
         self.len_dist.plot()
         self.qu_dist.plot()
-        self.dup_reads.plot()
+        #self.dup_reads.plot()
 
     fn __str__(self) -> String:
         return (
@@ -95,7 +95,7 @@ struct FullStats(Stringable, CollectionElement):
             + self.qu_dist
             + self.cg_content
             + self.kmer_content
-            + self.dup_reads
+            #+ self.dup_reads
         )
 
 
@@ -176,36 +176,36 @@ struct CGContent(Analyser):
         return String("\nThe CpG content tensor is: ") + self.cg_content
 
 
-# @value
-# struct DupReader(Analyser, Stringable):
-#     var unique_dict: Dict[FastqRecord, Int64]
-#     var unique_reads: Int
+@value
+struct DupReads(Analyser):
+    var unique_dict: Dict[FastqRecord, Int64]
+    var unique_reads: Int
 
-#     fn __init__(inout self):
-#         self.unique_dict = Dict[FastqRecord, Int64]()
-#         self.unique_reads = 0
+    fn __init__(inout self):
+        self.unique_dict = Dict[FastqRecord, Int64]()
+        self.unique_reads = 0
 
-#     fn tally_read(inout self, record: FastqRecord):
-#         if self.unique_dict.__contains__(record):
-#             try:
-#                 self.unique_dict[record] += 1
-#                 return
-#             except:
-#                 return
+    fn tally_read(inout self, record: FastqRecord):
+        if record in  self.unique_dict:
+            try:
+                self.unique_dict[record] += 1
+                return
+            except:
+                pass
 
-#         if self.unique_reads < MAX_READS:
-#             self.unique_dict[record] = 1
-#             self.unique_reads += 1
-#         else:
-#             pass
+        if self.unique_reads < MAX_READS:
+            self.unique_dict[record] = 1
+            self.unique_reads += 1
+        else:
+            pass
 
-#     fn report(self) -> Tensor[DType.int64]:
-#         var report = Tensor[DType.int64](1)
-#         report[0] = len(self.unique_dict)
-#         return report
+    fn report(self) -> Tensor[DType.int64]:
+        var report = Tensor[DType.int64](1)
+        report[0] = len(self.unique_dict)
+        return report
 
-#     fn __str__(self) -> String:
-#         return String("\nNumber of duplicated reads is") + self.report()
+    fn __str__(self) -> String:
+        return String("\nNumber of duplicated reads is") + self.report()
 
 
 @value
@@ -399,6 +399,7 @@ struct KmerContent[bits: Int = 3](Analyser):
     fn __str__(self) -> String:
         return String("\nhash count table is ") + str(self.hash_counts)
 
+        
 @value
 struct DuplicateReads(Analyser):
     var dup_reads: Tensor[DType.int64]
