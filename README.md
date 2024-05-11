@@ -17,7 +17,7 @@ It currently provides two main options: `CoordParser` a minimal-copy parser that
 
 ## Installation
 
-`BlazeSeq`  requires `Mojo 24.2` on Ubuntu, Mac or WSL2 on windows.  
+`BlazeSeq`  is always updated to the latest `Mojo nightly` on Ubuntu, Mac or WSL2 on windows as `Mojo` is moving forward quite fast.  
 You can get `BlazeSeq` source code as well as pre-compiled CLI tool from the releases page, you can clone and compile the repository yourself.
 
 ```bash
