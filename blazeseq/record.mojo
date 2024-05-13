@@ -218,7 +218,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
 
     @always_inline
     fn hash[bits: Int = 3](self) -> UInt64:
-        """Hashes the first xx bp (if possible) into one 64bit. Max length is 64/nBits per bp"""
+        """Hashes the first xx bp (if possible) into one 64bit. Max length is 64/nBits per bp."""
         var hash: UInt64 = 0
         var rnge: Int = 64 // bits
         var mask = (0b1 << bits)  - 1

@@ -74,7 +74,7 @@ struct FullStats(Stringable, CollectionElement):
 
 
     @always_inline
-    fn plot(self) raises:
+    fn plot(inout self) raises:
         self.bp_dist.plot()
         self.cg_content.plot()
         self.len_dist.plot()
@@ -181,12 +181,21 @@ struct CGContent(Analyser):
 struct DupReads(Analyser):
     var unique_dict: Dict[FastqRecord, Int64]
     var unique_reads: Int
+    var count_at_max: Int
+    var n: Int
+    var corrected_counts: Dict[Int, Float64]
 
     fn __init__(inout self):
         self.unique_dict = Dict[FastqRecord, Int64]()
         self.unique_reads = 0
+        self.count_at_max = 0
+        self.n = 0
+        self.corrected_counts = Dict[Int, Float64]()
 
     fn tally_read(inout self, record: FastqRecord):
+        
+        self.n += 1
+
         if record in self.unique_dict:
             try:
                 self.unique_dict[record] += 1
@@ -195,11 +204,66 @@ struct DupReads(Analyser):
                 print("error")
                 pass
 
-        if self.unique_reads < MAX_READS:
+        if self.unique_reads <= MAX_READS:
             self.unique_dict[record] = 1
             self.unique_reads += 1
+            if self.unique_reads == MAX_READS:
+                self.count_at_max = self.n
         else:
             pass
+        
+
+    
+    fn predict_reads(inout self):
+        #Construct Duplication levels dict
+        var dup_dict = Dict[Int, Int]()
+        for entry in self.unique_dict.values():
+            if int(entry[]) in dup_dict:
+                try:
+                    dup_dict[int(entry[])] += 1
+                except:
+                    print("error")
+            else:
+                dup_dict[int(entry[])] = 0
+
+        
+        # Correct reads levels
+        var corrected_reads = Dict[Int, Float64]()
+        for entry in dup_dict:
+            try:
+                var count = dup_dict[entry[]]
+                var level = entry[]
+                var corrected_count = self.correct_values(level, count, self.count_at_max, self.n)
+                corrected_reads[level] = corrected_count
+            except:
+                print("Error")
+
+        self.corrected_counts = corrected_reads
+
+    #Check how it is done in Falco.
+    @staticmethod
+    fn correct_values(dup_level: Int, count_at_level: Int,  count_at_max: Int, total_count: Int ) -> Float64:
+        if count_at_max == total_count:
+            return count_at_level
+        
+        if total_count - count_at_level < count_at_max:
+            return count_at_level
+        
+        var pNotSeeingAtLimit: Float64 = 1
+        var limitOfCaring = Float64(1) - (count_at_level / (count_at_level + 0.01))
+
+        for i in range(count_at_max):
+            pNotSeeingAtLimit *= ((total_count -i ) - dup_level) / (total_count - i)
+
+            if pNotSeeingAtLimit < limitOfCaring:
+                pNotSeeingAtLimit = 0
+                break
+
+        var pSeeingAtLimit:Float64 = 1 - pNotSeeingAtLimit
+        var trueCount = count_at_level / pSeeingAtLimit
+
+        return trueCount
+
 
     fn report(self) -> Tensor[DType.int64]:
         var report = Tensor[DType.int64](1)
@@ -210,12 +274,19 @@ struct DupReads(Analyser):
         return String("\nNumber of duplicated reads is") + self.report()
 
 
-    fn plot(self) raises:
-        var x = self.unique_dict.values()
-        var temp_tensor = Tensor[DType.int64](len(x))
-        for i in range(len(x)):
-            temp_tensor[i] = x.__next__()[]
-
+    fn plot(inout self) raises:
+        print("Enterd Plotting")
+        self.predict_reads()
+        print("Predicted Reads")
+        var temp_tensor = Tensor[DType.int64](len(self.corrected_counts) * 2 + 1)    
+        var i = 0
+        for index in self.corrected_counts:
+            print(index[])
+            print(self.corrected_counts[index[]])
+            temp_tensor[i * 2] = index[]
+            temp_tensor[i * 2 + 1] = self.corrected_counts[index[]]
+            i += 1
+    
         var np = Python.import_module("numpy")
         var arr = tensor_to_numpy_1d(temp_tensor)
         np.save("arr_DupReads.npy", arr)
@@ -412,40 +483,6 @@ struct KmerContent[bits: Int = 3](Analyser):
 
     fn __str__(self) -> String:
         return String("\nhash count table is ") + str(self.hash_counts)
-
-        
-# @value
-# struct DuplicateReads(Analyser):
-#     var dup_reads: Tensor[DType.int64]
-#     var hashes: Tensor[DType.uint64]
-
-#     fn __init__(inout self):
-#         self.dup_reads = Tensor[DType.int64](TensorShape(100_000), 0)
-#         self.hashes = Tensor[DType.uint64](TensorShape(100_000), 0)
-
-#     @always_inline
-#     fn tally_read(inout self, record: FastqRecord):
-#         var index = int(record.hash() % 100_000)
-
-#         #New hash
-#         if self.hashes[index] == 0:
-#             self.hashes[index] = record.hash()
-#             self.dup_reads[index] += 1
-#         else:
-#             if self.hashes[index] == record.hash():
-#                 self.dup_reads[index] += 1
-
-
-#     fn plot(self) raises:
-#         var np = Python.import_module("numpy")
-#         var arr = tensor_to_numpy_1d(self.dup_reads)
-#         np.save("arr_DupReads.npy", arr)
-        
-#     fn report(self) -> Tensor[DType.int64]:
-#         return self.dup_reads
-
-#     fn __str__(self) -> String:
-#         return String("\nDuplicate reads is: ") + str(self.dup_reads)
 
 
 # TODO: Make this also parametrized on the number of bits per bp
