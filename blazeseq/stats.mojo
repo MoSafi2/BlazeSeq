@@ -10,7 +10,7 @@ from tensor import Tensor
 from python import Python
 from utils.static_tuple import StaticTuple
 
-alias py_lib: String = "/home/mohamed/Documents/Projects/BlazeSeq/.pixi/envs/default/lib/python3.12/site-packages/"
+alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
 fn hash_list() -> List[UInt64]:
     var  li: List[UInt64] = List[UInt64](
@@ -24,11 +24,9 @@ fn hash_list() -> List[UInt64]:
     return li
 
 
-alias MAX_LENGTH = 10_000
 alias WIDTH = 5
-alias MAX_READS = 100_000
+alias MAX_READS = 1_000_000
 alias MAX_QUALITY = 93
-alias MAX_COUNTS = 1_000_000
 
 
 trait Analyser(CollectionElement, Stringable):
@@ -81,7 +79,7 @@ struct FullStats(Stringable, CollectionElement):
         self.cg_content.plot()
         self.len_dist.plot()
         self.qu_dist.plot()
-        #self.dup_reads.plot()
+        self.dup_reads.plot()
 
     fn __str__(self) -> String:
         return (
@@ -95,7 +93,7 @@ struct FullStats(Stringable, CollectionElement):
             + self.qu_dist
             + self.cg_content
             + self.kmer_content
-            #+ self.dup_reads
+            + self.dup_reads
         )
 
 
@@ -127,6 +125,7 @@ struct BasepairDistribution(Analyser):
         return self.bp_dist
 
     fn plot(self) raises:
+        Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = matrix_to_numpy(self.bp_dist)
         var x = plt.subplots()  # Create a figure
@@ -164,6 +163,7 @@ struct CGContent(Analyser):
         return self.cg_content
 
     fn plot(self) raises:
+        Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
         var x = plt.subplots()  # Create a figure
@@ -176,6 +176,7 @@ struct CGContent(Analyser):
         return String("\nThe CpG content tensor is: ") + self.cg_content
 
 
+#TODO: You should extraplolate from the number of reads in the unique reads to how it would look like for everything.
 @value
 struct DupReads(Analyser):
     var unique_dict: Dict[FastqRecord, Int64]
@@ -186,11 +187,12 @@ struct DupReads(Analyser):
         self.unique_reads = 0
 
     fn tally_read(inout self, record: FastqRecord):
-        if record in  self.unique_dict:
+        if record in self.unique_dict:
             try:
                 self.unique_dict[record] += 1
                 return
             except:
+                print("error")
                 pass
 
         if self.unique_reads < MAX_READS:
@@ -207,6 +209,17 @@ struct DupReads(Analyser):
     fn __str__(self) -> String:
         return String("\nNumber of duplicated reads is") + self.report()
 
+
+    fn plot(self) raises:
+        var x = self.unique_dict.values()
+        var temp_tensor = Tensor[DType.int64](len(x))
+        for i in range(len(x)):
+            temp_tensor[i] = x.__next__()[]
+
+        var np = Python.import_module("numpy")
+        var arr = tensor_to_numpy_1d(temp_tensor)
+        np.save("arr_DupReads.npy", arr)
+        
 
 @value
 struct LengthDistribution(Analyser):
@@ -234,6 +247,7 @@ struct LengthDistribution(Analyser):
         return self.length_vector
 
     fn plot(self) raises:
+        Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
         var mtp = Python.import_module("matplotlib")
@@ -400,38 +414,38 @@ struct KmerContent[bits: Int = 3](Analyser):
         return String("\nhash count table is ") + str(self.hash_counts)
 
         
-@value
-struct DuplicateReads(Analyser):
-    var dup_reads: Tensor[DType.int64]
-    var hashes: Tensor[DType.uint64]
+# @value
+# struct DuplicateReads(Analyser):
+#     var dup_reads: Tensor[DType.int64]
+#     var hashes: Tensor[DType.uint64]
 
-    fn __init__(inout self):
-        self.dup_reads = Tensor[DType.int64](TensorShape(100_000), 0)
-        self.hashes = Tensor[DType.uint64](TensorShape(100_000), 0)
+#     fn __init__(inout self):
+#         self.dup_reads = Tensor[DType.int64](TensorShape(100_000), 0)
+#         self.hashes = Tensor[DType.uint64](TensorShape(100_000), 0)
 
-    @always_inline
-    fn tally_read(inout self, record: FastqRecord):
-        var index = int(record.hash() % 100_000)
+#     @always_inline
+#     fn tally_read(inout self, record: FastqRecord):
+#         var index = int(record.hash() % 100_000)
 
-        #New hash
-        if self.hashes[index] == 0:
-            self.hashes[index] = record.hash()
-            self.dup_reads[index] += 1
-        else:
-            if self.hashes[index] == record.hash():
-                self.dup_reads[index] += 1
+#         #New hash
+#         if self.hashes[index] == 0:
+#             self.hashes[index] = record.hash()
+#             self.dup_reads[index] += 1
+#         else:
+#             if self.hashes[index] == record.hash():
+#                 self.dup_reads[index] += 1
 
 
-    fn plot(self) raises:
-        var np = Python.import_module("numpy")
-        var arr = tensor_to_numpy_1d(self.dup_reads)
-        np.save("arr_DupReads.npy", arr)
+#     fn plot(self) raises:
+#         var np = Python.import_module("numpy")
+#         var arr = tensor_to_numpy_1d(self.dup_reads)
+#         np.save("arr_DupReads.npy", arr)
         
-    fn report(self) -> Tensor[DType.int64]:
-        return self.dup_reads
+#     fn report(self) -> Tensor[DType.int64]:
+#         return self.dup_reads
 
-    fn __str__(self) -> String:
-        return String("\nDuplicate reads is: ") + str(self.dup_reads)
+#     fn __str__(self) -> String:
+#         return String("\nDuplicate reads is: ") + str(self.dup_reads)
 
 
 # TODO: Make this also parametrized on the number of bits per bp
