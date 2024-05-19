@@ -10,10 +10,10 @@ alias read_header = 64
 alias quality_header = 43
 alias new_line = 10
 alias carriage_return = 13
-alias simd_width: Int = simdwidthof[DType.int8]()
 
-# TODO: Transition the string representation from Int8 to Uint8
 alias U8 = DType.uint8
+alias simd_width: Int = simdwidthof[U8]()
+
 alias DEFAULT_CAPACITY = 64 * KB
 alias MAX_SHIFT = 30
 alias MAX_CAPACITY = 2**MAX_SHIFT
