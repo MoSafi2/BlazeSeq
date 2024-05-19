@@ -11,7 +11,9 @@ alias quality_header = 43
 alias new_line = 10
 alias carriage_return = 13
 alias simd_width: Int = simdwidthof[DType.int8]()
-alias I8 = DType.int8
+
+# TODO: Transition the string representation from Int8 to Uint8
+alias U8 = DType.uint8
 alias DEFAULT_CAPACITY = 64 * KB
 alias MAX_SHIFT = 30
 alias MAX_CAPACITY = 2**MAX_SHIFT
@@ -28,4 +30,3 @@ alias solexa_schema = QualitySchema("Solexa", 59, 126, 64)
 alias illumina_1_3_schema = QualitySchema("Illumina v1.3", 64, 126, 64)
 alias illumina_1_5_schema = QualitySchema("Illumina v1.5", 66, 126, 64)
 alias illumina_1_8 = QualitySchema("Illumina v1.8", 33, 126, 33)
-

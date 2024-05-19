@@ -4,7 +4,7 @@ from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant
 from tensor import Tensor
 
-alias TI8 = Tensor[I8]
+alias TU8 = Tensor[U8]
 alias schema = Variant[String, QualitySchema]
 
 
@@ -12,18 +12,18 @@ alias schema = Variant[String, QualitySchema]
 struct FastqRecord(Sized, Stringable, CollectionElement):
     """Struct that represent a single FastaQ record."""
 
-    var SeqHeader: TI8
-    var SeqStr: TI8
-    var QuHeader: TI8
-    var QuStr: TI8
+    var SeqHeader: TU8
+    var SeqStr: TU8
+    var QuHeader: TU8
+    var QuStr: TU8
     var quality_schema: QualitySchema
 
     fn __init__(
         inout self,
-        SH: TI8,
-        SS: TI8,
-        QH: TI8,
-        QS: TI8,
+        SH: TU8,
+        SS: TU8,
+        QH: TU8,
+        QS: TU8,
         quality_schema: schema = "generic",
     ) raises:
         self.SeqHeader = SH
@@ -44,12 +44,12 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         QS: String,
         quality_schema: schema = "generic",
     ):
-        self.SeqHeader = Tensor[I8](SH.as_bytes())
-        self.SeqStr = Tensor[I8](SS.as_bytes())
-        self.QuHeader = Tensor[I8](QH.as_bytes())
-        self.QuStr = Tensor[I8](QS.as_bytes())
+        self.SeqHeader = Tensor[U8](SH.as_bytes())
+        self.SeqStr = Tensor[U8](SS.as_bytes())
+        self.QuHeader = Tensor[U8](QH.as_bytes())
+        self.QuStr = Tensor[U8](QS.as_bytes())
         if quality_schema.isa[String]():
-            var q: String  = quality_schema[String]
+            var q: String = quality_schema[String]
             self.quality_schema = self._parse_schema(q)
         else:
             self.quality_schema = quality_schema[QualitySchema]
@@ -65,16 +65,16 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return String(temp._steal_ptr(), temp.num_elements())
 
     @always_inline
-    fn get_qulity_scores(self, quality_format: String) -> Tensor[I8]:
+    fn get_qulity_scores(self, quality_format: String) -> Tensor[U8]:
         var schema = self._parse_schema((quality_format))
         return self.QuStr - schema.OFFSET
 
     @always_inline
-    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[I8]:
+    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[U8]:
         return self.QuStr - schema.OFFSET
 
     @always_inline
-    fn get_qulity_scores(self, offset: Int8) -> Tensor[I8]:
+    fn get_qulity_scores(self, offset: UInt8) -> Tensor[U8]:
         return self.QuStr - offset
 
     @always_inline
@@ -83,7 +83,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return String(temp._steal_ptr(), temp.num_elements())
 
     @always_inline
-    fn wirte_record(self) -> Tensor[I8]:
+    fn wirte_record(self) -> Tensor[U8]:
         return self.__concat_record_tensor()
 
     @always_inline
@@ -113,7 +113,9 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
                 self.QuStr[i] > self.quality_schema.UPPER
                 or self.QuStr[i] < self.quality_schema.LOWER
             ):
-                raise Error("Corrput quality score according to proivded schema")
+                raise Error(
+                    "Corrput quality score according to proivded schema"
+                )
 
     @always_inline
     fn total_length(self) -> Int:
@@ -126,8 +128,8 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         )
 
     @always_inline
-    fn __concat_record_tensor(self) -> Tensor[I8]:
-        var final_list = List[Int8](capacity=self.total_length())
+    fn __concat_record_tensor(self) -> Tensor[U8]:
+        var final_list = List[UInt8](capacity=self.total_length())
 
         for i in range(self.len_seq_header()):
             final_list.append(self.SeqHeader[i])
@@ -145,7 +147,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
             final_list.append(self.QuStr[i])
         final_list.append(10)
 
-        return Tensor[I8](final_list)
+        return Tensor[U8](final_list)
 
     @always_inline
     fn __concat_record_str(self) -> String:
@@ -164,7 +166,16 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         var line4 = self.QuStr
         var line4_str = String(line4._steal_ptr(), self.len_quality() + 1)
 
-        return line1_str + "\n" + line2_str + "\n" + line3_str + "\n" + line4_str + "\n"
+        return (
+            line1_str
+            + "\n"
+            + line2_str
+            + "\n"
+            + line3_str
+            + "\n"
+            + line4_str
+            + "\n"
+        )
 
     @staticmethod
     @always_inline
@@ -211,20 +222,21 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     @always_inline
     fn len_qu_header(self) -> Int:
         return self.QuHeader.num_elements()
-    
+
     @always_inline
     fn len_seq_header(self) -> Int:
         return self.SeqHeader.num_elements()
 
     @always_inline
     fn hash[bits: Int = 3](self) -> UInt64:
-        """Hashes the first xx bp (if possible) into one 64bit. Max length is 64/nBits per bp."""
+        """Hashes the first xx bp (if possible) into one 64bit. Max length is 64/nBits per bp.
+        """
         var hash: UInt64 = 0
         var rnge: Int = 64 // bits
-        var mask = (0b1 << bits)  - 1
+        var mask = (0b1 << bits) - 1
         for i in range(min(rnge, self.len_record())):
             # Mask for for first <n> significant bits.
-            var base_val = self.SeqStr[i] & mask  
+            var base_val = self.SeqStr[i] & mask
             hash = (hash << bits) + int(base_val)
         return hash
 
@@ -238,7 +250,6 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
 
     fn __ne__(self, other: Self) -> Bool:
         return self.__hash__() != other.__hash__()
-
 
 
 @value
@@ -267,7 +278,10 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
     fn validate(self) raises:
         if self.seq_len() != self.qu_len():
             raise Error("Corrput Lengths")
-        if self.qu_header_len() > 1 and self.qu_header_len() != self.seq_header_len():
+        if (
+            self.qu_header_len() > 1
+            and self.qu_header_len() != self.seq_header_len()
+        ):
             raise Error("Corrput Lengths")
 
     @always_inline
@@ -308,4 +322,3 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
             + "..."
             + self.QuStr.end
         )
-

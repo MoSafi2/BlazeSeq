@@ -99,7 +99,9 @@ fn slice_tensor[
 
 
 @always_inline
-fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
+fn slice_tensor_simd[
+    T: DType
+](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
     """
     Generic Function that returns a python-style tensor slice from start till end (not inclusive).
     """
@@ -117,7 +119,9 @@ fn slice_tensor_simd[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Te
 
 
 @always_inline
-fn slice_tensor_iter[T: DType](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
+fn slice_tensor_iter[
+    T: DType
+](in_tensor: Tensor[T], start: Int, end: Int) -> Tensor[T]:
     var out_tensor = Tensor[T](end - start)
     for i in range(start, end):
         out_tensor[i - start] = in_tensor[i]
@@ -181,14 +185,18 @@ fn get_next_line[
 
     @parameter
     if USE_SIMD:
-        var next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_simd(
+            in_tensor, new_line, in_start
+        )
         if next_line_pos == -1:
             next_line_pos = (
                 in_tensor.num_elements()
             )  # If no line separator found, return the reminder of the string, behaviour subject to change
         return slice_tensor_simd(in_tensor, in_start, next_line_pos)
     else:
-        var next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_iter(
+            in_tensor, new_line, in_start
+        )
         if next_line_pos == -1:
             next_line_pos = (
                 in_tensor.num_elements()
@@ -204,12 +212,16 @@ fn get_next_line_index[
 
     @parameter
     if USE_SIMD:
-        var next_line_pos = find_chr_next_occurance_simd(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_simd(
+            in_tensor, new_line, in_start
+        )
         if next_line_pos == -1:
             return -1
         return next_line_pos
     else:
-        var next_line_pos = find_chr_next_occurance_iter(in_tensor, new_line, in_start)
+        var next_line_pos = find_chr_next_occurance_iter(
+            in_tensor, new_line, in_start
+        )
         if next_line_pos == -1:
             return -1
         return next_line_pos
@@ -218,14 +230,18 @@ fn get_next_line_index[
 ############################# Fastq recod-related Ops ################################
 
 
-fn find_last_read_header(in_tensor: Tensor[I8], start: Int = 0, end: Int = -1) -> Int:
+fn find_last_read_header(
+    in_tensor: Tensor[U8], start: Int = 0, end: Int = -1
+) -> Int:
     var end_inner: Int
     if end == -1:
         end_inner = in_tensor.num_elements()
     else:
         end_inner = end
 
-    var last_chr = find_chr_last_occurance(in_tensor, start, end_inner, read_header)
+    var last_chr = find_chr_last_occurance(
+        in_tensor, start, end_inner, read_header
+    )
     if in_tensor[last_chr - 1] == new_line:
         return last_chr
     else:
@@ -239,11 +255,13 @@ fn find_last_read_header(in_tensor: Tensor[I8], start: Int = 0, end: Int = -1) -
 @value
 struct QualitySchema(Stringable, CollectionElement):
     var SCHEMA: StringLiteral
-    var LOWER: Int8
-    var UPPER: Int8
-    var OFFSET: Int8
+    var LOWER: UInt8
+    var UPPER: UInt8
+    var OFFSET: UInt8
 
-    fn __init__(inout self, schema: StringLiteral, lower: Int, upper: Int, offset: Int):
+    fn __init__(
+        inout self, schema: StringLiteral, lower: Int, upper: Int, offset: Int
+    ):
         self.SCHEMA = schema
         self.UPPER = upper
         self.LOWER = lower
