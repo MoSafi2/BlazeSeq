@@ -272,9 +272,9 @@ struct QualitySchema(Stringable, CollectionElement):
             String("Quality schema: ")
             + self.SCHEMA
             + "\nLower: "
-            + self.LOWER
+            + str(self.LOWER)
             + "\nUpper: "
-            + self.UPPER
+            + str(self.UPPER)
             + "\nOffset: "
-            + self.OFFSET
+            + str(self.OFFSET)
         )

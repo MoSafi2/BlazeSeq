@@ -158,7 +158,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
     @always_inline
     fn read_n_coords[
         lines: Int
-    ](inout self) raises -> InlineArray[Slice, lines]:
+    ](inout self) raises -> List[Slice]:
         return self._read_n_line[lines]()
 
     @always_inline
@@ -211,8 +211,8 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
 
     # TODO: Handle small Buffers, handle windows seperator, simplify
     @always_inline
-    fn _read_n_line[lines: Int](inout self) raises -> InlineArray[Slice, lines]:
-        var coords = InlineArray[Slice, lines](Slice(-1, -1))
+    fn _read_n_line[lines: Int](inout self) raises -> List[Slice]:
+        var coords = List[Slice](Slice(-1, -1))
         var internal_head = self.head
 
         # TODO: Provide unrolling later using the @parameter for op

@@ -88,16 +88,16 @@ struct FullStats(Stringable, CollectionElement):
     fn __str__(self) -> String:
         return (
             String("Number of Reads: ")
-            + self.num_reads
+            + str(self.num_reads)
             + ". \n"
             + "Number of bases: "
-            + self.total_bases
-            + self.bp_dist
-            + self.len_dist
-            + self.qu_dist
-            + self.cg_content
-            + self.kmer_content
-            + self.dup_reads
+            + str(self.total_bases)
+            + str(self.bp_dist)
+            + str(self.len_dist)
+            + str(self.qu_dist)
+            + str(self.cg_content)
+            + str(self.kmer_content)
+            + str(self.dup_reads)
         )
 
 
@@ -139,7 +139,7 @@ struct BasepairDistribution(Analyser):
         fig.savefig("BasepairDistribution.png")
 
     fn __str__(self) -> String:
-        return String("\nBase_pair_dist_matrix: ") + self.report()
+        return String("\nBase_pair_dist_matrix: ") + str(self.report())
 
 
 @value
@@ -175,7 +175,7 @@ struct CGContent(Analyser):
         fig.savefig("CGContent.png")
 
     fn __str__(self) -> String:
-        return String("\nThe CpG content tensor is: ") + self.cg_content
+        return String("\nThe CpG content tensor is: ") + str(self.cg_content)
 
 
 # TODO: You should extraplolate from the number of reads in the unique reads to how it would look like for everything.
@@ -276,7 +276,7 @@ struct DupReads(Analyser):
         return report
 
     fn __str__(self) -> String:
-        return String("\nNumber of duplicated reads is") + self.report()
+        return String("\nNumber of duplicated reads is") + str(self.report())
 
     fn plot(inout self) raises:
         self.predict_reads()
@@ -343,7 +343,7 @@ struct LengthDistribution(Analyser):
         fig.savefig("LengthDistribution.png")
 
     fn __str__(self) -> String:
-        return String("\nLength Distribution: ") + self.length_vector
+        return String("\nLength Distribution: ") + str(self.length_vector)
 
 
 # TODO: FIX this struct to reflect FastQC
@@ -439,7 +439,7 @@ struct QualityDistribution(Analyser):
         return final_t
 
     fn __str__(self) -> String:
-        return String("\nQuality_dist_matrix: ") + self.report()
+        return String("\nQuality_dist_matrix: ") + str(self.report())
 
 
 @value
