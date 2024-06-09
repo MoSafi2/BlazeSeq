@@ -89,13 +89,13 @@ struct CoordParser:
     fn parse_all(inout self) raises:
         while True:
             var record: RecordCoord
-            record = self._parse_record2()
+            record = self._parse_record()
             record.validate()
 
     @always_inline
     fn next(inout self) raises -> RecordCoord:
         var read: RecordCoord
-        read = self._parse_record2()
+        read = self._parse_record()
         read.validate()
         return read
 
