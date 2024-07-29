@@ -3,7 +3,7 @@
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 
-**29/07 UPDATE: The Tensor pacakge was recently deprecated from the Mojo stdlib breaking BlazeSeq main branch. I am currently re-writing BlazeSeq, check out the "dev" branch to check the state of the project. WIP
+** 29/07 UPDATE: The Tensor pacakge was recently deprecated from the Mojo stdlib breaking BlazeSeq main branch. I am currently re-writing BlazeSeq, check out the "dev" branch to check the state of the project. WIP 
 **
 
 BlazeSeq is a performant and versatile FASTQ format parser that provide FASTQ parsing with fine-control knobs. It can be further utilized in several application as quality control tooling, kmer-generation, alignment ... etc.  
