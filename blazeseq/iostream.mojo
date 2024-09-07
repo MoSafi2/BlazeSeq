@@ -11,7 +11,7 @@ from blazeseq.CONSTS import (
 from pathlib import Path
 import time
 from tensor import Tensor
-from utils.static_tuple import InlineArray
+import math
 
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
@@ -146,19 +146,20 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
     @always_inline
     fn read_next_line(inout self) raises -> Tensor[U8]:
         var line_coord = self._line_coord()
-        return slice_tensor[U8](self.buf, line_coord.start, line_coord.end)
+        return slice_tensor[U8](
+            self.buf, line_coord.start.or_else(0), line_coord.end.or_else(0)
+        )
 
     @always_inline
     fn read_next_coord(inout self) raises -> Slice:
         var line_coord = self._line_coord()
         return slice(
-            line_coord.start + self.consumed, line_coord.end + self.consumed
+            line_coord.start.or_else(0) + self.consumed,
+            line_coord.end.or_else(0) + self.consumed,
         )
 
     @always_inline
-    fn read_n_coords[
-        lines: Int
-    ](inout self) raises -> List[Slice]:
+    fn read_n_coords[lines: Int](inout self) raises -> List[Slice]:
         return self._read_n_line[lines]()
 
     @always_inline
@@ -222,7 +223,8 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
                 # Resetting coordinates for read lines to the new buffer coordinates
                 for j in range(i):
                     coords[j] = Slice(
-                        coords[j].start - self.head, coords[j].end - self.head
+                        coords[j].start.or_else(0) - self.head,
+                        coords[j].end.or_else(0) - self.head,
                     )
                 _ = self._fill_buffer()  # self.head is reset to 0
 
@@ -248,7 +250,8 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
                 line_start = internal_head
                 for j in range(i):
                     coords[j] = Slice(
-                        coords[j].start - self.head, coords[j].end - self.head
+                        coords[j].start.or_else(0) - self.head,
+                        coords[j].end.or_else(0) - self.head,
                     )
                 _ = self._fill_buffer()  # self.head is 0
 
@@ -257,7 +260,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
                     internal_head
                 )
                 coords[i] = completet_line
-                line_end = completet_line.end
+                line_end = completet_line.end.or_else(0)
 
             internal_head = line_end + 1
 
@@ -367,9 +370,9 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
 
     @always_inline
     fn _handle_windows_sep(self, in_slice: Slice) -> Slice:
-        if self.buf[in_slice.end] != carriage_return:
+        if self.buf[in_slice.end.or_else(0)] != carriage_return:
             return in_slice
-        return Slice(in_slice.start, in_slice.end - 1)
+        return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
 
     ########################## Helpers functions, have no side effects #######################
 
@@ -410,10 +413,17 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
             raise Error("Out of bounds")
 
     fn __getitem__(self, slice: Slice) raises -> Tensor[U8]:
-        if slice.start >= self.head and slice.end <= self.end:
-            var out = Tensor[U8](slice.end - slice.start)
+        if (
+            slice.start.or_else(0) >= self.head
+            and slice.end.or_else(0) <= self.end
+        ):
+            var out = Tensor[U8](slice.end.or_else(0) - slice.start.or_else(0))
             cpy_tensor[U8](
-                out, self.buf, slice.end - slice.start, 0, slice.start
+                out,
+                self.buf,
+                slice.end.or_else(0) - slice.start.or_else(0),
+                0,
+                slice.start.or_else(0),
             )
             return out
         else:

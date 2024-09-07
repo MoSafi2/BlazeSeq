@@ -102,13 +102,13 @@ struct CoordParser:
     @always_inline
     fn _parse_record(inout self) raises -> RecordCoord:
         var line1 = self.stream.read_next_coord()
-        if self.stream.buf[self.stream.map_pos_2_buf(line1.start)] != read_header:
+        if self.stream.buf[self.stream.map_pos_2_buf(line1.start.or_else(0))] != read_header:
             raise Error("Sequence Header is corrupt")
 
         var line2 = self.stream.read_next_coord()
 
         var line3 = self.stream.read_next_coord()
-        if self.stream.buf[self.stream.map_pos_2_buf(line3.start)] != quality_header:
+        if self.stream.buf[self.stream.map_pos_2_buf(line3.start.or_else(0))] != quality_header:
             raise Error("Quality Header is corrupt")
 
         var line4 = self.stream.read_next_coord()
@@ -119,11 +119,11 @@ struct CoordParser:
     fn _parse_record2(inout self) raises -> RecordCoord:
         var coords = self.stream.read_n_coords[4]()
         var n = 0
-        if self.stream.buf[coords[0].start] != read_header:
-            print(coords[n], StringRef(self.stream.buf._ptr + coords[n].start, coords[n].end - coords[n].start))
+        if self.stream.buf[coords[0].start.or_else(0)] != read_header:
+            print(coords[n], StringRef(self.stream.buf._ptr + coords[n].start.or_else(0), coords[n].end.or_else(0) - coords[n].start.or_else(0)))
             raise Error("Sequence Header is corrupt")
 
-        if self.stream.buf[coords[2].start] != quality_header:
+        if self.stream.buf[coords[2].start.or_else(0)] != quality_header:
             raise Error("Quality Header is corrupt")
 
         return RecordCoord(coords[0], coords[1], coords[2], coords[3])

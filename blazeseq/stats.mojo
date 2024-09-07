@@ -7,7 +7,7 @@ from tensor import TensorShape
 from collections import Dict, KeyElement
 import time
 from tensor import Tensor
-from python import Python
+from python import Python, PythonObject
 from utils.static_tuple import StaticTuple
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"

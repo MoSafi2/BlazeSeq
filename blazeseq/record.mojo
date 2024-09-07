@@ -242,7 +242,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
 
 
     @staticmethod
-    fn _hash_packed[bits: Int = 3](bytes: DTypePointer[DType.uint8], length: Int) -> UInt64:
+    fn _hash_packed[bits: Int = 3](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
         """
         Hash the DNA strand to into 64bits unsigned number using xbit encoding.
         If the length of the bytes strand is longer than 32 bps, the hash is truncated for the first 32 bps.
@@ -258,7 +258,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return hash
 
     @staticmethod
-    fn _hash_additive[bits: Int = 3](bytes: DTypePointer[DType.uint8], length: Int) -> UInt64:
+    fn _hash_additive[bits: Int = 3](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
         """Hashes DNA sequences longer than 32bps. It hashes 16bps spans of the sequences and using 2 or 3 bit encoding and adds them to the hash.
         """
         constrained[bits <=3, "Additive hashing can only hash up to 3bit resolution"]()
@@ -330,19 +330,19 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
 
     @always_inline
     fn seq_len(self) -> Int32:
-        return self.SeqStr.end - self.SeqStr.start
+        return self.SeqStr.end.or_else(0) - self.SeqStr.start.or_else(0)
 
     @always_inline
     fn qu_len(self) -> Int32:
-        return self.QuStr.end - self.QuStr.start
+        return self.QuStr.end.or_else(0) - self.QuStr.start.or_else(0)
 
     @always_inline
     fn qu_header_len(self) -> Int32:
-        return self.QuHeader.end - self.QuHeader.start
+        return self.QuHeader.end.or_else(0) - self.QuHeader.start.or_else(0)
 
     @always_inline
     fn seq_header_len(self) -> Int32:
-        return self.SeqHeader.end - self.SeqHeader.start
+        return self.SeqHeader.end.or_else(0) - self.SeqHeader.start.or_else(0)
 
     fn __len__(self) -> Int:
         return int(self.seq_len())
@@ -350,19 +350,19 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
     fn __str__(self) -> String:
         return (
             String("SeqHeader: ")
-            + str(self.SeqHeader.start)
+            + str(self.SeqHeader.start.or_else(0))
             + "..."
-            + str(self.SeqHeader.end)
+            + str(self.SeqHeader.end.or_else(0))
             + "\nSeqStr: "
-            + str(self.SeqStr.start)
+            + str(self.SeqStr.start.or_else(0))
             + "..."
-            + str(self.SeqStr.end)
+            + str(self.SeqStr.end.or_else(0))
             + "\nQuHeader: "
-            + str(self.QuHeader.start)
+            + str(self.QuHeader.start.or_else(0))
             + "..."
-            + str(self.QuHeader.end)
+            + str(self.QuHeader.end.or_else(0))
             + "\nQuStr: "
-            + str(self.QuStr.start)
+            + str(self.QuStr.start.or_else(0))
             + "..."
-            + str(self.QuStr.end)
+            + str(self.QuStr.end.or_else(0))
         )

@@ -5,7 +5,7 @@ from tensor import Tensor
 from collections.vector import *
 from tensor import Tensor
 from collections.list import List
-
+from memory import memcpy
 
 ######################### Character find functions ###################################
 
@@ -151,8 +151,8 @@ fn cpy_tensor[
     dest_strt: Int = 0,
     src_strt: Int = 0,
 ):
-    var dest_ptr: DTypePointer[T] = dest._ptr + dest_strt
-    var src_ptr: DTypePointer[T] = src._ptr + src_strt
+    var dest_ptr: UnsafePointer[Scalar[T]] = dest._ptr + dest_strt
+    var src_ptr: UnsafePointer[Scalar[T]] = src._ptr + src_strt
     memcpy(dest_ptr, src_ptr, num_elements)
 
     ## Alternative method
