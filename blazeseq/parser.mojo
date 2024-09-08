@@ -1,10 +1,9 @@
 from blazeseq.record import FastqRecord, RecordCoord
-from .helpers import (
+from blazeseq.helpers import (
     find_last_read_header,
     get_next_line,
 )
 from blazeseq.CONSTS import *
-from blazeseq.stats import FullStats
 from blazeseq.iostream import BufferedLineIterator, FileReader
 import time
 
@@ -13,10 +12,12 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(inout self, path: String, schema: String = "generic") raises -> None:
-        self.stream = BufferedLineIterator[FileReader, check_ascii=validate_ascii](
-            path, DEFAULT_CAPACITY
-        )
+    fn __init__(
+        inout self, path: String, schema: String = "generic"
+    ) raises -> None:
+        self.stream = BufferedLineIterator[
+            FileReader, check_ascii=validate_ascii
+        ](path, DEFAULT_CAPACITY)
         self.quality_schema = self._parse_schema(schema)
 
     fn parse_all(inout self) raises:
@@ -102,25 +103,36 @@ struct CoordParser:
     @always_inline
     fn _parse_record(inout self) raises -> RecordCoord:
         var line1 = self.stream.read_next_coord()
-        if self.stream.buf[self.stream.map_pos_2_buf(line1.start.or_else(0))] != read_header:
+        if (
+            self.stream.buf[self.stream.map_pos_2_buf(line1.start.or_else(0))]
+            != read_header
+        ):
             raise Error("Sequence Header is corrupt")
 
         var line2 = self.stream.read_next_coord()
 
         var line3 = self.stream.read_next_coord()
-        if self.stream.buf[self.stream.map_pos_2_buf(line3.start.or_else(0))] != quality_header:
+        if (
+            self.stream.buf[self.stream.map_pos_2_buf(line3.start.or_else(0))]
+            != quality_header
+        ):
             raise Error("Quality Header is corrupt")
 
         var line4 = self.stream.read_next_coord()
         return RecordCoord(line1, line2, line3, line4)
-
 
     @always_inline
     fn _parse_record2(inout self) raises -> RecordCoord:
         var coords = self.stream.read_n_coords[4]()
         var n = 0
         if self.stream.buf[coords[0].start.or_else(0)] != read_header:
-            print(coords[n], StringRef(self.stream.buf._ptr + coords[n].start.or_else(0), coords[n].end.or_else(0) - coords[n].start.or_else(0)))
+            print(
+                coords[n],
+                StringRef(
+                    self.stream.buf._ptr + coords[n].start.or_else(0),
+                    coords[n].end.or_else(0) - coords[n].start.or_else(0),
+                ),
+            )
             raise Error("Sequence Header is corrupt")
 
         if self.stream.buf[coords[2].start.or_else(0)] != quality_header:

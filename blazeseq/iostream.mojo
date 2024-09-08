@@ -323,7 +323,9 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
         if self.head == 0:
             return
         var no_items = self.len()
-        cpy_tensor[U8](self.buf, self.buf, no_items, 0, self.head)
+        var dest_ptr: UnsafePointer[UInt8] = self.buf._ptr + 0
+        var src_ptr: UnsafePointer[UInt8] = self.buf._ptr + self.head
+        memcpy(dest_ptr, src_ptr, no_items)
         self.head = 0
         self.end = no_items
 
