@@ -234,15 +234,17 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
     fn hash[bits: Int = 3, length: Int = 64 // bits](self) -> UInt64:
         """Hashes the first xx bp (if possible) into one 64bit. Max length is 64/nBits per bp.
         """
+
         @parameter
         if length < 32:
             return self._hash_packed(self.SeqStr._ptr, length)
 
         return self._hash_additive(self.SeqStr._ptr, length)
 
-
     @staticmethod
-    fn _hash_packed[bits: Int = 3](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
+    fn _hash_packed[
+        bits: Int = 3
+    ](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
         """
         Hash the DNA strand to into 64bits unsigned number using xbit encoding.
         If the length of the bytes strand is longer than 32 bps, the hash is truncated for the first 32 bps.
@@ -254,14 +256,18 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         for i in range(min(rnge, length)):
             # Mask for for first <n> significant bits.
             var base_val = bytes[i] & mask
-            hash = (hash << bits)  | int(base_val)
+            hash = (hash << bits) | int(base_val)
         return hash
 
     @staticmethod
-    fn _hash_additive[bits: Int = 3](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
+    fn _hash_additive[
+        bits: Int = 3
+    ](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
         """Hashes DNA sequences longer than 32bps. It hashes 16bps spans of the sequences and using 2 or 3 bit encoding and adds them to the hash.
         """
-        constrained[bits <=3, "Additive hashing can only hash up to 3bit resolution"]()
+        constrained[
+            bits <= 3, "Additive hashing can only hash up to 3bit resolution"
+        ]()
         var full_hash: UInt64 = 0
         var mask = (0b1 << bits) - 1
         var rounds = align_down(length, 16)
@@ -269,16 +275,17 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
 
         for round in range(rounds):
             var interim_hash: UInt64 = 0
+
             @parameter
             for i in range(16):
-                var base_val = bytes[i + 16*round] & mask
+                var base_val = bytes[i + 16 * round] & mask
                 interim_hash = interim_hash << bits | int(base_val)
             full_hash = full_hash + interim_hash
 
         if rem > 0:
             var interim_hash: UInt64 = 0
             for i in range(rem):
-                var base_val = bytes[i + 16*rounds] & mask
+                var base_val = bytes[i + 16 * rounds] & mask
                 interim_hash = interim_hash << bits | int(base_val)
             full_hash = full_hash + interim_hash
 
