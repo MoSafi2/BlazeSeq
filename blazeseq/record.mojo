@@ -5,6 +5,7 @@ from utils.variant import Variant
 from tensor import Tensor
 from utils import Span
 from math import align_down, remainder
+from memory import UnsafePointer
 
 
 alias TU8 = Tensor[U8]
@@ -12,7 +13,7 @@ alias schema = Variant[String, QualitySchema]
 
 
 @value
-struct FastqRecord(Sized, Stringable, CollectionElement):
+struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
     """Struct that represent a single FastaQ record."""
 
     var SeqHeader: TU8
@@ -292,7 +293,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement):
         return full_hash
 
     @always_inline
-    fn __hash__(self) -> Int:
+    fn __hash__(self) -> UInt:
         return int(self.hash())
 
     @always_inline

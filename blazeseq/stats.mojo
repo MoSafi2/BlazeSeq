@@ -289,7 +289,7 @@ struct DupReads(Analyser):
             print(index[])
             print(self.corrected_counts[index[]])
             temp_tensor[i * 2] = index[]
-            temp_tensor[i * 2 + 1] = self.corrected_counts[index[]]
+            temp_tensor[i * 2 + 1] = int(self.corrected_counts[index[]])
             i += 1
 
         var np = Python.import_module("numpy")
