@@ -1,5 +1,6 @@
 import time
 from sys import argv
+from utils import StringRef
 from blazeseq.parser import CoordParser, RecordParser
 from blazeseq.iostream import FileReader
 from blazeseq.stats import FullStats
@@ -48,7 +49,10 @@ fn main() raises:
 
 
 fn run_record_parser(
-    path: String, validate_ascii: Bool, validate_quality: Bool, schema: StringRef
+    path: String,
+    validate_ascii: Bool,
+    validate_quality: Bool,
+    schema: StringRef,
 ) raises:
     if validate_ascii and validate_quality:
         var parser = RecordParser[validate_ascii=True, validate_quality=True](

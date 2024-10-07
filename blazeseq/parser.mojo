@@ -142,16 +142,3 @@ struct CoordParser:
         return RecordCoord(coords[0], coords[1], coords[2], coords[3])
 
 
-
-
-fn main() raises:
-    import time
-
-    pa = CoordParser("data/M_abscessus_HiSeq.fq")
-    t1 = time.perf_counter()
-    try:
-        pa.parse_all()
-    except:
-        pass
-    t2 = time.perf_counter()
-    print(t2 - t1)
