@@ -48,10 +48,10 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
         QS: String,
         quality_schema: schema = "generic",
     ):
-        self.SeqHeader = Tensor[U8](SH.as_bytes())
-        self.SeqStr = Tensor[U8](SS.as_bytes())
-        self.QuHeader = Tensor[U8](QH.as_bytes())
-        self.QuStr = Tensor[U8](QS.as_bytes())
+        self.SeqHeader = SH
+        self.SeqStr = SS
+        self.QuHeader = QH
+        self.QuStr = QS
         if quality_schema.isa[String]():
             var q: String = quality_schema[String]
             self.quality_schema = self._parse_schema(q)
