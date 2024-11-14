@@ -407,7 +407,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
     fn __str__(self) -> String:
         var out = Tensor[U8](self.len())
         cpy_tensor[U8](out, self.buf, self.len(), 0, self.head)
-        return String(out._steal_ptr().bitcast[DType.uint8](), self.len())
+        return String(ptr = out._steal_ptr().bitcast[DType.uint8](), length = self.len())
 
     fn __getitem__(self, index: Int) raises -> Scalar[U8]:
         if self.head <= index <= self.end:
@@ -480,3 +480,26 @@ struct BufferedWriter:
     fn close(inout self) raises:
         self.flush_buffer()
         self.sink.close()
+
+
+
+    
+fn main() raises:
+    var path = Path("data/M_abscessus_HiSeq.fq")
+    var reader = BufferedLineIterator[FileReader](path)
+
+    var n = 0
+    t1 = time.now()
+    while True:
+        try:
+            var line = reader.read_next_coord()
+            n += 1
+        except Error:
+            print("EOF")
+            print(n)
+            break
+    t2 = time.now()
+    print("Time taken:", (t2 - t1) / 1e6)
+
+
+
