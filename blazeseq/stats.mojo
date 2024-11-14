@@ -99,6 +99,7 @@ struct FullStats(Stringable, CollectionElement):
             + str(self.kmer_content)
             + str(self.dup_reads)
         )
+        
 
 
 @value

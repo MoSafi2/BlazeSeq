@@ -61,12 +61,12 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
     @always_inline
     fn get_seq(self) -> String:
         var temp = self.SeqStr
-        return String(temp._steal_ptr(), temp.num_elements())
+        return String(ptr=temp._steal_ptr(), length=temp.num_elements())
 
     @always_inline
     fn get_qulity(self) -> String:
         var temp = self.QuStr
-        return String(temp._steal_ptr(), temp.num_elements())
+        return String(ptr=temp._steal_ptr(), length=temp.num_elements())
 
     @always_inline
     fn get_qulity_scores(self, quality_format: String) -> Tensor[U8]:
@@ -84,7 +84,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
     @always_inline
     fn get_header(self) -> String:
         var temp = self.SeqHeader
-        return String(temp._steal_ptr(), temp.num_elements())
+        return String(ptr=temp._steal_ptr(), length=temp.num_elements())
 
     @always_inline
     fn wirte_record(self) -> Tensor[U8]:
@@ -159,16 +159,24 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
             return ""
 
         var line1 = self.SeqHeader
-        var line1_str = String(line1._steal_ptr(), self.len_seq_header() + 1)
+        var line1_str = String(
+            ptr=line1._steal_ptr(), length=self.len_seq_header() + 1
+        )
 
         var line2 = self.SeqStr
-        var line2_str = String(line2._steal_ptr(), self.len_record() + 1)
+        var line2_str = String(
+            ptr=line2._steal_ptr(), length=self.len_record() + 1
+        )
 
         var line3 = self.QuHeader
-        var line3_str = String(line3._steal_ptr(), self.len_qu_header() + 1)
+        var line3_str = String(
+            ptr=line3._steal_ptr(), length=self.len_qu_header() + 1
+        )
 
         var line4 = self.QuStr
-        var line4_str = String(line4._steal_ptr(), self.len_quality() + 1)
+        var line4_str = String(
+            ptr=line4._steal_ptr(), length=self.len_quality() + 1
+        )
 
         return (
             line1_str
