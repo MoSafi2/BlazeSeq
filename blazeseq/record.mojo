@@ -6,14 +6,14 @@ from tensor import Tensor
 from utils import Span
 from math import align_down, remainder
 from memory import UnsafePointer
-
+from utils import Writable, StringSlice
 
 alias TU8 = Tensor[U8]
 alias schema = Variant[String, QualitySchema]
 
 
 @value
-struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
+struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
     """Struct that represent a single FastaQ record."""
 
     var SeqHeader: TU8
@@ -48,10 +48,10 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
         QS: String,
         quality_schema: schema = "generic",
     ):
-        self.SeqHeader = SH
-        self.SeqStr = SS
-        self.QuHeader = QH
-        self.QuStr = QS
+        self.SeqHeader = SH._buffer
+        self.SeqStr = SS._buffer
+        self.QuHeader = QH._buffer
+        self.QuStr = QS._buffer
         if quality_schema.isa[String]():
             var q: String = quality_schema[String]
             self.quality_schema = self._parse_schema(q)
@@ -59,14 +59,16 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
             self.quality_schema = quality_schema[QualitySchema]
 
     @always_inline
-    fn get_seq(self) -> String:
-        var temp = self.SeqStr
-        return String(ptr=temp._steal_ptr(), length=temp.num_elements())
+    fn get_seq(self) -> StringSlice[__origin_of(self)]:
+        return StringSlice[__origin_of(self)](
+            ptr=self.SeqStr._ptr, length=self.SeqStr.num_elements()
+        )
 
     @always_inline
-    fn get_qulity(self) -> String:
-        var temp = self.QuStr
-        return String(ptr=temp._steal_ptr(), length=temp.num_elements())
+    fn get_qulity(self) -> StringSlice[__origin_of(self)]:
+        return StringSlice[__origin_of(self)](
+            ptr=self.QuStr._ptr, length=self.QuStr.num_elements()
+        )
 
     @always_inline
     fn get_qulity_scores(self, quality_format: String) -> Tensor[U8]:
@@ -82,13 +84,10 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
         return self.QuStr - offset
 
     @always_inline
-    fn get_header(self) -> String:
-        var temp = self.SeqHeader
-        return String(ptr=temp._steal_ptr(), length=temp.num_elements())
-
-    @always_inline
-    fn wirte_record(self) -> Tensor[U8]:
-        return self.__concat_record_tensor()
+    fn get_header(self) -> StringSlice[__origin_of(self)]:
+        return StringSlice[__origin_of(self)](
+            ptr=self.SeqHeader._ptr, length=self.SeqHeader.num_elements()
+        )
 
     @always_inline
     fn validate_record(self) raises:
@@ -131,63 +130,28 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
             + 4
         )
 
-    @always_inline
-    fn __concat_record_tensor(self) -> Tensor[U8]:
-        var final_list = List[UInt8](capacity=self.total_length())
-
-        for i in range(self.len_seq_header()):
-            final_list.append(self.SeqHeader[i])
-        final_list.append(10)
-
-        for i in range(self.len_record()):
-            final_list.append(self.SeqStr[i])
-        final_list.append(10)
-
-        for i in range(self.len_qu_header()):
-            final_list.append(self.QuHeader[i])
-        final_list.append(10)
-
-        for i in range(self.len_quality()):
-            final_list.append(self.QuStr[i])
-        final_list.append(10)
-
-        return Tensor[U8](final_list)
-
-    @always_inline
-    fn __concat_record_str(self) -> String:
-        if self.total_length() == 0:
-            return ""
-
-        var line1 = self.SeqHeader
-        var line1_str = String(
-            ptr=line1._steal_ptr(), length=self.len_seq_header() + 1
+    fn write_to[w: Writer](self, inout writer: w):
+        var l1 = Span[origin = __origin_of(self.SeqHeader)](
+            ptr=self.SeqHeader.unsafe_ptr(),
+            length=self.SeqHeader.num_elements(),
         )
-
-        var line2 = self.SeqStr
-        var line2_str = String(
-            ptr=line2._steal_ptr(), length=self.len_record() + 1
+        var l2 = Span[origin = __origin_of(self.SeqStr)](
+            ptr=self.SeqStr.unsafe_ptr(), length=self.SeqStr.num_elements()
         )
-
-        var line3 = self.QuHeader
-        var line3_str = String(
-            ptr=line3._steal_ptr(), length=self.len_qu_header() + 1
+        var l3 = Span[origin = __origin_of(self.QuHeader)](
+            ptr=self.QuHeader.unsafe_ptr(), length=self.QuHeader.num_elements()
         )
-
-        var line4 = self.QuStr
-        var line4_str = String(
-            ptr=line4._steal_ptr(), length=self.len_quality() + 1
+        var l4 = Span[origin = __origin_of(self.QuStr)](
+            ptr=self.QuStr.unsafe_ptr(), length=self.QuStr.num_elements()
         )
-
-        return (
-            line1_str
-            + "\n"
-            + line2_str
-            + "\n"
-            + line3_str
-            + "\n"
-            + line4_str
-            + "\n"
-        )
+        writer.write_bytes(l1)
+        writer.write("\n")
+        writer.write_bytes(l2)
+        writer.write("\n")
+        writer.write_bytes(l3)
+        writer.write("\n")
+        writer.write_bytes(l4)
+        writer.write("\n")
 
     @staticmethod
     @always_inline
@@ -217,7 +181,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
     # BUG: returns Smaller strings that expected.
     @always_inline
     fn __str__(self) -> String:
-        return self.__concat_record_str()
+        return String.write(self)
 
     @always_inline
     fn __len__(self) -> Int:
@@ -246,33 +210,45 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement):
 
         @parameter
         if length < 32:
-            return self._hash_packed(self.SeqStr._ptr, length)
+            return self._hash_packed(self.SeqStr.unsafe_ptr(), length)
+        return self._hash_additive(self.SeqStr.unsafe_ptr(), length)
 
-        return self._hash_additive(self.SeqStr._ptr, length)
-
+    # Can be Vectorized
     @staticmethod
+    @always_inline
     fn _hash_packed[
         bits: Int = 3
-    ](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
+    ](bytes: UnsafePointer[Byte], length: Int) -> UInt64:
         """
         Hash the DNA strand to into 64bits unsigned number using xbit encoding.
-        If the length of the bytes strand is longer than 32 bps, the hash is truncated for the first 32 bps.
-        """
+        If the length of the bytes strand is longer than 64//bits bps, the hash is truncated.
+        ----
 
+        parameters:
+        - bits (Int): the number of least significant bits used to hash a base pair. increased bit width reduces the number of bp that can be hashed.
+
+        args:
+        - bytes (UnsafePointer[Byte]): pointer the the basepair buffer.
+        - length (Int): the length of the buffer to be hashed.
+        """
         alias rnge: Int = 64 // bits
+        alias width = simdwidthof[Byte]()
         var hash: UInt64 = 0
         var mask = (0b1 << bits) - 1
-        for i in range(min(rnge, length)):
-            # Mask for for first <n> significant bits.
-            var base_val = bytes[i] & mask
-            hash = (hash << bits) | int(base_val)
+        for i in range(0, min(rnge, length), width):
+            # Mask for for first <n> significant bits, vectorized operation.
+            var base_vals = bytes.load[width=width](i) & mask
+            for j in range(len(base_vals)):
+                hash = (hash << bits) | int(base_vals[j])
         return hash
 
+    # Can be Vectorized
     @staticmethod
+    @always_inline
     fn _hash_additive[
         bits: Int = 3
     ](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
-        """Hashes DNA sequences longer than 32bps. It hashes 16bps spans of the sequences and using 2 or 3 bit encoding and adds them to the hash.
+        """Hashes longer DNA sequences . It hashes 16bps spans of the sequences and using 2 or 3 bit encoding and adds them to the hash.
         """
         constrained[
             bits <= 3, "Additive hashing can only hash up to 3bit resolution"

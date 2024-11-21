@@ -407,7 +407,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
     fn __str__(self) -> String:
         var out = Tensor[U8](self.len())
         cpy_tensor[U8](out, self.buf, self.len(), 0, self.head)
-        return String(ptr = out._steal_ptr().bitcast[DType.uint8](), length = self.len())
+        return String(ptr = out._steal_ptr().bitcast[UInt8](), length = self.len())
 
     fn __getitem__(self, index: Int) raises -> Scalar[U8]:
         if self.head <= index <= self.end:
