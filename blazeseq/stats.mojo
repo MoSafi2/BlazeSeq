@@ -181,10 +181,9 @@ struct CGContent(Analyser):
     fn __init__(inout self):
         self.cg_content = Tensor[DType.int64](101)
         self.theoritical_distribution = Tensor[DType.int64](101)
-        self.cached_models = List[GCmodel](capacity = 200)
+        self.cached_models = List[GCmodel](capacity=200)
         for i in range(200):
-            self.cached_models[i] = GCmodel()
-        
+            self.cached_models[i] = GCmodel(100)
 
     fn tally_read(inout self, record: FastqRecord):
         var cg_num = 0
@@ -198,8 +197,12 @@ struct CGContent(Analyser):
                 or record.SeqStr[index] & 0b111 == 7
             ):
                 cg_num += 1
-        
-        
+
+        var values = self.cached_models[record.len_record()]
+        #for i in range(values.percentage[cg_num]):
+
+
+
 
         var read_cg_content = int(round(cg_num * 100 / record.len_record()))
         self.cg_content[read_cg_content] += 1

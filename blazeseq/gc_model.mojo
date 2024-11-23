@@ -13,9 +13,9 @@ struct GCmodel(CollectionElement):
         self.increment = List[Tensor[DType.float64]](capacity=read_length)
 
         claimingCounts = List[Int](capacity=101)
-        for i in range(read_length + 1):
-            low_count = i - 0.5
-            high_count = i + 0.5
+        for pos in range(read_length + 1):
+            low_count = pos - 0.5
+            high_count = pos + 0.5
             if low_count < 0:
                 low_count = 0
             if high_count < 0:
@@ -25,12 +25,12 @@ struct GCmodel(CollectionElement):
             var low_percentage = int(round((low_count * 100) / read_length))
             var high_percentage = int(round((high_count * 100) / read_length))
 
-            for j in range(low_percentage, high_percentage):
-                claimingCounts[j] += 1
+            for p in range(low_percentage, high_percentage):
+                claimingCounts[p] += 1
 
-        for i in range(read_length + 1):
-            low_count = i - 0.5
-            high_count = i + 0.5
+        for pos in range(read_length + 1):
+            low_count = pos - 0.5
+            high_count = pos + 0.5
             if low_count < 0:
                 low_count = 0
             if high_count < 0:
@@ -39,8 +39,21 @@ struct GCmodel(CollectionElement):
                 low_count = read_length
             var low_percentage = int(round((low_count * 100) / read_length))
             var high_percentage = int(round((high_count * 100) / read_length))
+            var percentage_row = Tensor[DType.int64](
+                (high_percentage - low_percentage) + 1
+            )
+            var increment_row = Tensor[DType.float64](
+                (high_percentage - low_percentage) + 1
+            )
+
+            for p in range(low_percentage, high_percentage):
+                percentage_row[p - low_percentage] = p
+                increment_row[p - low_percentage] = Float64(
+                    1 / claimingCounts[p]
+                )
+
+            # TODO: Consider Changing this to a struct to avoid accessing two pointers
+            self.percentage[pos] = percentage_row
+            self.increment[pos] = increment_row
 
 
-@value
-struct GCValue(CollectionElement):
-    pass
