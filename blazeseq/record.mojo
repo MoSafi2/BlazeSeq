@@ -242,7 +242,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         return hash
 
     # Change to a better hashing Algorithm
-    @staticmethod  
+    @staticmethod
     @always_inline
     fn _hash_additive[
         bits: Int = 3
@@ -288,27 +288,28 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
 
 
 @value
-struct RecordCoord(Sized, Stringable, CollectionElement):
+struct RecordCoord[origin: ImmutableOrigin](
+    Sized, Writable, CollectionElement
+):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Slice
-    var SeqStr: Slice
-    var QuHeader: Slice
-    var QuStr: Slice
+    var SeqHeader: Span[Byte, origin=origin]
+    var SeqStr: Span[Byte, origin=origin]
+    var QuHeader: Span[Byte, origin=origin]
+    var QuStr: Span[Byte, origin=origin]
 
     fn __init__(
         inout self,
-        SH: Slice,
-        SS: Slice,
-        QH: Slice,
-        QS: Slice,
+        borrowed SH: Span[Byte, origin=origin],
+        borrowed SS: Span[Byte, origin=origin],
+        borrowed QH: Span[Byte, origin=origin],
+        borrowed QS: Span[Byte, origin=origin],
     ):
         self.SeqHeader = SH
         self.SeqStr = SS
         self.QuHeader = QH
         self.QuStr = QS
-
 
     @always_inline
     fn validate(self) raises:
@@ -322,39 +323,29 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
 
     @always_inline
     fn seq_len(self) -> Int32:
-        return self.SeqStr.end.or_else(0) - self.SeqStr.start.or_else(0)
+        return len(self.SeqStr)
+
 
     @always_inline
     fn qu_len(self) -> Int32:
-        return self.QuStr.end.or_else(0) - self.QuStr.start.or_else(0)
+        return len(self.QuStr)
 
     @always_inline
     fn qu_header_len(self) -> Int32:
-        return self.QuHeader.end.or_else(0) - self.QuHeader.start.or_else(0)
+        return len(self.QuHeader)
 
     @always_inline
     fn seq_header_len(self) -> Int32:
-        return self.SeqHeader.end.or_else(0) - self.SeqHeader.start.or_else(0)
+        return len(self.SeqHeader)
 
     fn __len__(self) -> Int:
         return int(self.seq_len())
 
-    fn __str__(self) -> String:
-        return (
-            String("SeqHeader: ")
-            + str(self.SeqHeader.start.or_else(0))
-            + "..."
-            + str(self.SeqHeader.end.or_else(0))
-            + "\nSeqStr: "
-            + str(self.SeqStr.start.or_else(0))
-            + "..."
-            + str(self.SeqStr.end.or_else(0))
-            + "\nQuHeader: "
-            + str(self.QuHeader.start.or_else(0))
-            + "..."
-            + str(self.QuHeader.end.or_else(0))
-            + "\nQuStr: "
-            + str(self.QuStr.start.or_else(0))
-            + "..."
-            + str(self.QuStr.end.or_else(0))
-        )
+    fn write_to[w: Writer](self, inout writer: w):
+        writer.write_bytes(self.SeqHeader)
+        writer.write("/n")
+        writer.write_bytes(self.SeqStr)
+        writer.write("/n")
+        writer.write_bytes(self.QuHeader)
+        writer.write("/n")
+        writer.write_bytes(self.QuStr)

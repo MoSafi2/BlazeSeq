@@ -1,5 +1,5 @@
 from memory import memcpy, UnsafePointer
-from utils import StringRef
+from utils import StringRef, Span, StringSlice
 from blazeseq.helpers import get_next_line_index, slice_tensor, cpy_tensor
 from blazeseq.CONSTS import (
     simd_width,
@@ -152,12 +152,13 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
         )
 
     @always_inline
-    fn read_next_coord(inout self) raises -> Slice:
+    fn read_next_coord(
+        inout self,
+    ) raises -> Span[T=Byte, origin = __origin_of(self)]:
         var line_coord = self._line_coord()
-        return slice(
-            line_coord.start.or_else(0) + self.consumed,
-            line_coord.end.or_else(0) + self.consumed,
-        )
+        var ptr = self.buf.unsafe_ptr() + line_coord.start.or_else(0)
+        var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
+        return Span[T=Byte, origin = __origin_of(self)](ptr=ptr, length=length)
 
     @always_inline
     fn read_n_coords[lines: Int](inout self) raises -> List[Slice]:
@@ -407,7 +408,7 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
     fn __str__(self) -> String:
         var out = Tensor[U8](self.len())
         cpy_tensor[U8](out, self.buf, self.len(), 0, self.head)
-        return String(ptr = out._steal_ptr().bitcast[UInt8](), length = self.len())
+        return String(ptr=out._steal_ptr().bitcast[UInt8](), length=self.len())
 
     fn __getitem__(self, index: Int) raises -> Scalar[U8]:
         if self.head <= index <= self.end:
@@ -482,8 +483,6 @@ struct BufferedWriter:
         self.sink.close()
 
 
-
-    
 fn main() raises:
     var path = Path("data/M_abscessus_HiSeq.fq")
     var reader = BufferedLineIterator[FileReader](path)
@@ -500,6 +499,3 @@ fn main() raises:
             break
     t2 = time.now()
     print("Time taken:", (t2 - t1) / 1e6)
-
-
-

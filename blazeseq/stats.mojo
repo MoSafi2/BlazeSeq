@@ -1,6 +1,6 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
-from blazeseq.record import FastqRecord
+from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.helpers import write_to_buff
 from blazeseq.helpers import cpy_tensor
 from tensor import TensorShape
@@ -9,6 +9,7 @@ import time
 from tensor import Tensor
 from python import Python, PythonObject
 from utils.static_tuple import StaticTuple
+from blazeseq.gc_model import GCmodel, GCValue
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
@@ -67,23 +68,23 @@ struct FullStats(Stringable, CollectionElement):
         self.num_reads += 1
         self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
-        self.dup_reads.tally_read(record)
-        self.kmer_content.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)  # Almost Free
+        # self.dup_reads.tally_read(record)
+        # self.kmer_content.tally_read(record)
 
-        # BUG: There is a bug here which causes core dumped
-        self.qu_dist.tally_read(
-            record
-        )  # Expensive operation, a lot of memory access
+        # # BUG: There is a bug here which causes core dumped
+        # self.qu_dist.tally_read(
+        #     record
+        # )  # Expensive operation, a lot of memory access
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot()
-        self.cg_content.plot()
-        self.len_dist.plot()
-        self.qu_dist.plot()
-        self.dup_reads.plot()
+        self.bp_dist.plot(self.num_reads)
+        # self.cg_content.plot()
+        # self.len_dist.plot()
+        # self.qu_dist.plot()
+        # self.dup_reads.plot()
 
     fn __str__(self) -> String:
         return (
@@ -99,7 +100,6 @@ struct FullStats(Stringable, CollectionElement):
             + str(self.kmer_content)
             + str(self.dup_reads)
         )
-        
 
 
 @value
@@ -126,18 +126,47 @@ struct BasepairDistribution(Analyser):
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
+    fn tally_read(inout self, record: RecordCoord):
+        if record.seq_len() > self.max_length:
+            self.max_length = int(record.seq_len())
+            var new_tensor = grow_matrix(
+                self.bp_dist, TensorShape(self.max_length, WIDTH)
+            )
+            swap(self.bp_dist, new_tensor)
+
+        for i in range(int(record.seq_len())):
+            # Remineder of first 5 bits seperates N from T
+            var base_val = int((record.SeqStr[i] & 0b11111) % WIDTH)
+            var index = VariadicList[Int](i, base_val)
+            self.bp_dist[index] += 1
+
     fn report(self) -> Tensor[DType.int64]:
         return self.bp_dist
 
-    fn plot(self) raises:
+    # Should Plot BP distrubution  line plot & Per base N content
+    # DONE!
+    fn plot(self, total_reads: Int64) raises:
         Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = matrix_to_numpy(self.bp_dist)
+        arr = (arr / total_reads) * 100
+        var arr1 = arr[:, 0:4]
+        var arr2 = arr[:, 4:5]
         var x = plt.subplots()  # Create a figure
         var fig = x[0]
         var ax = x[1]
-        ax.plot(arr)
+        ax.plot(arr1)
+        ax.set_ylim(0, 100)
+        plt.legend(["%T", "%A", "%G", "%C"])
         fig.savefig("BasepairDistribution.png")
+
+        var y = plt.subplots()  # Create a figure
+        var fig2 = y[0]
+        var ax2 = y[1]
+        ax2.plot(arr2)
+        ax2.set_ylim(0, 100)
+        plt.legend(["%N"])
+        fig2.savefig("NContent.png")
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + str(self.report())
@@ -146,18 +175,31 @@ struct BasepairDistribution(Analyser):
 @value
 struct CGContent(Analyser):
     var cg_content: Tensor[DType.int64]
+    var theoritical_distribution: Tensor[DType.int64]
+    var cached_models: List[GCmodel]
 
     fn __init__(inout self):
-        self.cg_content = Tensor[DType.int64](100)
+        self.cg_content = Tensor[DType.int64](101)
+        self.theoritical_distribution = Tensor[DType.int64](101)
+        self.cached_models = List[GCmodel](capacity = 200)
+        for i in range(200):
+            self.cached_models[i] = GCmodel()
+        
 
     fn tally_read(inout self, record: FastqRecord):
         var cg_num = 0
+
+        if record.len_record() == 0:
+            return
+
         for index in range(0, record.len_record()):
             if (
                 record.SeqStr[index] & 0b111 == 3
                 or record.SeqStr[index] & 0b111 == 7
             ):
                 cg_num += 1
+        
+        
 
         var read_cg_content = int(round(cg_num * 100 / record.len_record()))
         self.cg_content[read_cg_content] += 1
@@ -169,7 +211,7 @@ struct CGContent(Analyser):
         Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
-        var x = plt.subplots()  # Create a figure
+        var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
         ax.plot(arr)
@@ -298,6 +340,8 @@ struct DupReads(Analyser):
         np.save("arr_DupReads.npy", arr)
 
 
+# Sequence Length Distribution.
+# DONE!
 @value
 struct LengthDistribution(Analyser):
     var length_vector: Tensor[DType.int64]
