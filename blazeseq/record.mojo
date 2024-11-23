@@ -235,15 +235,14 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         alias width = simdwidthof[Byte]()
         var hash: UInt64 = 0
         var mask = (0b1 << bits) - 1
-        for i in range(0, min(rnge, length), width):
+        for i in range(min(rnge, length)):
             # Mask for for first <n> significant bits, vectorized operation.
-            var base_vals = bytes.load[width=width](i) & mask
-            for j in range(len(base_vals)):
-                hash = (hash << bits) | int(base_vals[j])
+            var base_val = bytes[i] & mask
+            hash = (hash << bits) | int(base_val[i])
         return hash
 
-    # Can be Vectorized
-    @staticmethod
+    # Change to a better hashing Algorithm
+    @staticmethod  
     @always_inline
     fn _hash_additive[
         bits: Int = 3
@@ -309,6 +308,7 @@ struct RecordCoord(Sized, Stringable, CollectionElement):
         self.SeqStr = SS
         self.QuHeader = QH
         self.QuStr = QS
+
 
     @always_inline
     fn validate(self) raises:
