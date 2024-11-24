@@ -9,7 +9,7 @@ import time
 from tensor import Tensor
 from python import Python, PythonObject
 from utils.static_tuple import StaticTuple
-from blazeseq.gc_model import GCmodel, GCValue
+from blazeseq.gc_model import GCmodel
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
@@ -199,10 +199,12 @@ struct CGContent(Analyser):
                 cg_num += 1
 
         var values = self.cached_models[record.len_record()]
-        #for i in range(values.percentage[cg_num]):
+        var percentage = values.percentage[cg_num]
+        var increment = values.increment[cg_num]
 
-
-
+        for i in range(percentage.num_elements()):
+            # TODO: Add GC distribution
+            percentage[i] += int(increment[i])
 
         var read_cg_content = int(round(cg_num * 100 / record.len_record()))
         self.cg_content[read_cg_content] += 1
