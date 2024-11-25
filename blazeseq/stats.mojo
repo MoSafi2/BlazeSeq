@@ -67,9 +67,9 @@ struct FullStats(Stringable, CollectionElement):
     fn tally(inout self, record: FastqRecord):
         self.num_reads += 1
         self.total_bases += record.len_record()
-        self.bp_dist.tally_read(record)
+        # self.bp_dist.tally_read(record)
         # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)  # Almost Free
+        self.cg_content.tally_read(record)  # Almost Free
         # self.dup_reads.tally_read(record)
         # self.kmer_content.tally_read(record)
 
@@ -80,8 +80,8 @@ struct FullStats(Stringable, CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot(self.num_reads)
-        # self.cg_content.plot()
+        # self.bp_dist.plot(self.num_reads)
+        self.cg_content.plot()
         # self.len_dist.plot()
         # self.qu_dist.plot()
         # self.dup_reads.plot()
@@ -171,7 +171,7 @@ struct BasepairDistribution(Analyser):
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + str(self.report())
 
-
+# Done!
 @value
 struct CGContent(Analyser):
     var cg_content: Tensor[DType.int64]
@@ -181,14 +181,20 @@ struct CGContent(Analyser):
         self.cg_content = Tensor[DType.int64](101)
         self.theoritical_distribution = Tensor[DType.int64](101)
 
-    # TODO: Add theoricial distribution
-    # The theoritical distribution is calculated as a guassian distrbution with the mode (instead of mean) and standard deviation of the gc_content variable.
-    # All can be done with NumPy as SciPy.
+    
     fn tally_read(inout self, record: FastqRecord):
-        var cg_num = 0
-
+        
         if record.len_record() == 0:
             return
+        
+        var cg_num = 0
+        
+        for index in range(0, record.len_record()):
+            if (
+                record.SeqStr[index] & 0b111 == 3
+                or record.SeqStr[index] & 0b111 == 7
+            ):
+                cg_num += 1
 
         var read_cg_content = int(round(cg_num * 100 / record.len_record()))
         self.cg_content[read_cg_content] += 1
