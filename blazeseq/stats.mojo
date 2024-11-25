@@ -340,8 +340,6 @@ struct DupReads(Analyser):
         )
         var i = 0
         for index in self.corrected_counts:
-            print(index[])
-            print(self.corrected_counts[index[]])
             temp_tensor[i * 2] = index[]
             temp_tensor[i * 2 + 1] = int(self.corrected_counts[index[]])
             i += 1
@@ -412,8 +410,9 @@ struct QualityDistribution(Analyser):
 
     fn __init__(inout self):
         var shape = TensorShape(1, 40)
+        var shape2 = TensorShape(1, 93)
         self.qu_dist = Tensor[DType.int64](shape)
-        self.qu_dist_seq = Tensor[DType.int64](shape)
+        self.qu_dist_seq = Tensor[DType.int64](shape2)
         self.max_length = 0
         self.max_qu = 0
 
@@ -423,8 +422,6 @@ struct QualityDistribution(Analyser):
             var new_shape = TensorShape(self.max_length, 40)
             var new_qu_dist = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_qu_dist)
-            var new_qu_dist_seq = grow_matrix(self.qu_dist_seq, new_shape)
-            swap(self.qu_dist_seq, new_qu_dist_seq)
 
         for i in range(record.len_quality()):
             var base_qu = int(record.QuStr[i] - record.quality_schema.OFFSET)
