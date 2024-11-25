@@ -9,7 +9,7 @@ import time
 from tensor import Tensor
 from python import Python, PythonObject
 from collections import Optional
-from blazeseq.gc_model import GCmodel
+import math
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
@@ -175,41 +175,38 @@ struct BasepairDistribution(Analyser):
 @value
 struct CGContent(Analyser):
     var cg_content: Tensor[DType.int64]
-    var gc_distribution: Tensor[DType.float64]
     var theoritical_distribution: Tensor[DType.int64]
-    var cached_models: List[Optional[GCmodel]]
 
     fn __init__(inout self):
         self.cg_content = Tensor[DType.int64](101)
         self.theoritical_distribution = Tensor[DType.int64](101)
-        self.gc_distribution = Tensor[DType.float64](101)
-        self.cached_models = List[Optional[GCmodel]](capacity=200)
-        for i in range(200):
-            self.cached_models[i] = None
 
+    # TODO: Add theoricial distribution
+    # The theoritical distribution is calculated as a guassian distrbution with the mode (instead of mean) and standard deviation of the gc_content variable.
+    # All can be done with NumPy as SciPy.
     fn tally_read(inout self, record: FastqRecord):
         var cg_num = 0
 
         if record.len_record() == 0:
             return
 
-        for index in range(0, record.len_record()):
-            if (
-                record.SeqStr[index] & 0b111 == 3
-                or record.SeqStr[index] & 0b111 == 7
-            ):
-                cg_num += 1
-
-        var values = self.cached_models[record.len_record()]
-        var percentage = values.unsafe_take().percentage[cg_num]
-        var increment = values.unsafe_take().increment[cg_num]
-
-        for i in range(percentage.num_elements()):
-            # TODO: Add GC distribution
-            self.gc_distribution[int(percentage[i])] += increment[i]
-
         var read_cg_content = int(round(cg_num * 100 / record.len_record()))
         self.cg_content[read_cg_content] += 1
+
+    fn calculate_theoritical_distribution(self) raises -> PythonObject:
+        np = Python.import_module("numpy")
+        sc = Python.import_module("scipy")
+        var arr = tensor_to_numpy_1d(self.cg_content)
+        var total_counts = np.sum(arr)
+        var x_categories = np.arange(len(arr))
+        var mode = np.argmax(arr)
+
+        var stdev = np.sqrt(
+            np.sum((x_categories - mode) ** 2 * arr) / (total_counts - 1)
+        )
+        var nd = sc.stats.norm(loc=mode, scale=stdev)
+        var theoritical_distribution = nd.pdf(x_categories) * total_counts
+        return theoritical_distribution
 
     fn report(self) -> Tensor[DType.int64]:
         return self.cg_content
@@ -218,10 +215,12 @@ struct CGContent(Analyser):
         Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
+        var theoritical_distribution = self.calculate_theoritical_distribution()
         var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
         ax.plot(arr)
+        ax.plot(theoritical_distribution)
         fig.savefig("CGContent.png")
 
     fn __str__(self) -> String:
