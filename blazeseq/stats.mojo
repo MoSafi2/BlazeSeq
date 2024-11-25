@@ -491,10 +491,22 @@ struct QualityDistribution(Analyser):
         fig2.savefig("QualityDistributionHeatMap.png")
 
         ###############################################################
-        ###                 Average quality /seq                   ####
+        ####                Average quality /seq                   ####
         ###############################################################
+        
+        # Finding the last non-zero index
+        var index = 0
+        for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
+            if self.qu_dist_seq[i] != 0:
+                index = i
+                break
 
         arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
+        var z = plt.subplots()
+        var fig3 = z[0]
+        var ax3 = z[1]
+        ax3.plot(arr2[:index+2])
+        fig3.savefig("Average_quality_sequence.png")
         np.save("arr_qu_seq.npy", arr2)
 
     fn report(self) -> Tensor[DType.int64]:

@@ -7,10 +7,10 @@
 - [x] Per base N content
 - [x] Per sequence GC content
 - [x] Sequence Length Distribution
+- [x] Per sequence quality scores
 - [ ] Per base sequence quality [#Buggy]
 - [ ] Per tile sequence quality [#Buggy]
 - [ ] Sequence Duplication Levels [#Buggy]
-- [ ] Per sequence quality scores [#Tracking implemented, not plotting]
 - [ ] Overrepresented sequences [#No support yet]
 - [ ] Adapter Content [#No support yet]
 
