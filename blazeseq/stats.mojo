@@ -27,7 +27,7 @@ fn hash_list() -> List[UInt64]:
 
 
 alias WIDTH = 5
-alias MAX_READS = 1_000_000
+alias MAX_READS = 100_000
 alias MAX_QUALITY = 93
 
 
@@ -67,24 +67,24 @@ struct FullStats(Stringable, CollectionElement):
     fn tally(inout self, record: FastqRecord):
         self.num_reads += 1
         self.total_bases += record.len_record()
-        # self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
-        # self.dup_reads.tally_read(record)
-        # self.kmer_content.tally_read(record)
+        self.dup_reads.tally_read(record)
+        self.kmer_content.tally_read(record)
 
-        # # BUG: There is a bug here which causes core dumped
-        # self.qu_dist.tally_read(
-        #     record
-        # )  # Expensive operation, a lot of memory access
+        # BUG: There is a bug here which causes core dumped
+        self.qu_dist.tally_read(
+            record
+        )  # Expensive operation, a lot of memory access
 
     @always_inline
     fn plot(inout self) raises:
-        # self.bp_dist.plot(self.num_reads)
+        self.bp_dist.plot(self.num_reads)
         self.cg_content.plot()
-        # self.len_dist.plot()
-        # self.qu_dist.plot()
-        # self.dup_reads.plot()
+        self.len_dist.plot()
+        self.qu_dist.plot()
+        self.dup_reads.plot()
 
     fn __str__(self) -> String:
         return (
@@ -171,6 +171,7 @@ struct BasepairDistribution(Analyser):
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + str(self.report())
 
+
 # Done!
 @value
 struct CGContent(Analyser):
@@ -181,14 +182,12 @@ struct CGContent(Analyser):
         self.cg_content = Tensor[DType.int64](101)
         self.theoritical_distribution = Tensor[DType.int64](101)
 
-    
     fn tally_read(inout self, record: FastqRecord):
-        
         if record.len_record() == 0:
             return
-        
+
         var cg_num = 0
-        
+
         for index in range(0, record.len_record()):
             if (
                 record.SeqStr[index] & 0b111 == 3
@@ -449,7 +448,7 @@ struct QualityDistribution(Analyser):
             arr, axis=1
         )
         var cum_sum = np.cumsum(arr, axis=1)
-        var total_counts = np.reshape(np.sum(arr, axis=1), (100, 1))
+        var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
         var median = np.argmax(cum_sum > total_counts / 2, axis=1)
         var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
         var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
