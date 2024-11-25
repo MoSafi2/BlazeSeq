@@ -6,7 +6,7 @@ blazeseq/*
 !blazeseq/*.mojo
 !.gitignore
 !cli.mojo
-
+!todo.md
 # pixi environments
 .pixi
 

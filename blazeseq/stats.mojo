@@ -9,7 +9,7 @@ import time
 from tensor import Tensor
 from python import Python, PythonObject
 from collections import Optional
-import math
+from algorithm import sum
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
@@ -406,12 +406,14 @@ struct LengthDistribution(Analyser):
 @value
 struct QualityDistribution(Analyser):
     var qu_dist: Tensor[DType.int64]
+    var qu_dist_seq: Tensor[DType.int64]
     var max_length: Int
     var max_qu: Int
 
     fn __init__(inout self):
         var shape = TensorShape(1, 40)
         self.qu_dist = Tensor[DType.int64](shape)
+        self.qu_dist_seq = Tensor[DType.int64](shape)
         self.max_length = 0
         self.max_qu = 0
 
@@ -419,8 +421,11 @@ struct QualityDistribution(Analyser):
         if record.len_quality() > self.max_length:
             self.max_length = record.len_record()
             var new_shape = TensorShape(self.max_length, 40)
-            var new_tensor = grow_matrix(self.qu_dist, new_shape)
-            swap(self.qu_dist, new_tensor)
+            var new_qu_dist = grow_matrix(self.qu_dist, new_shape)
+            swap(self.qu_dist, new_qu_dist)
+            var new_qu_dist_seq = grow_matrix(self.qu_dist_seq, new_shape)
+            swap(self.qu_dist_seq, new_qu_dist_seq)
+
 
         for i in range(record.len_quality()):
             var base_qu = int(record.QuStr[i] - record.quality_schema.OFFSET)
@@ -428,6 +433,9 @@ struct QualityDistribution(Analyser):
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
+        var average = int(sum_tensor((record.QuStr - record.quality_schema.OFFSET)) / record.len_quality())
+        self.qu_dist_seq[average] += 1
+
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     # TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
@@ -613,6 +621,14 @@ fn grow_matrix[
         for j in range(old_tensor.shape()[1]):
             new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
     return new_tensor
+
+
+
+fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
+    acc = 0
+    for i in range(tensor.num_elements()):
+        acc += int(tensor[i])
+    return acc
 
 
 # TODO: Add module for adapter content
