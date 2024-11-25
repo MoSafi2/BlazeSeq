@@ -426,16 +426,17 @@ struct QualityDistribution(Analyser):
             var new_qu_dist_seq = grow_matrix(self.qu_dist_seq, new_shape)
             swap(self.qu_dist_seq, new_qu_dist_seq)
 
-
         for i in range(record.len_quality()):
             var base_qu = int(record.QuStr[i] - record.quality_schema.OFFSET)
             var index = VariadicList[Int](i, base_qu)
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
-        var average = int(sum_tensor((record.QuStr - record.quality_schema.OFFSET)) / record.len_quality())
+        var average = int(
+            sum_tensor((record.QuStr - record.quality_schema.OFFSET))
+            / record.len_quality()
+        )
         self.qu_dist_seq[average] += 1
-
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     # TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
@@ -491,6 +492,13 @@ struct QualityDistribution(Analyser):
         var ax2 = y[1]
         sns.heatmap(np.flipud(arr).T, cmap="Blues", robust=True, ax=ax2)
         fig2.savefig("QualityDistributionHeatMap.png")
+
+        ###############################################################
+        ###                 Average quality /seq                   ####
+        ###############################################################
+
+        arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
+        np.save("arr_qu_seq.npy", arr2)
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(self.max_qu, self.max_length)
@@ -621,7 +629,6 @@ fn grow_matrix[
         for j in range(old_tensor.shape()[1]):
             new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
     return new_tensor
-
 
 
 fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:

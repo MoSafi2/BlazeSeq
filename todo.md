@@ -20,5 +20,3 @@
 - [ ] JSON
 - [ ] Text
 - [ ] CLI tool
-
-
