@@ -8,7 +8,7 @@ from collections import Dict, KeyElement
 import time
 from tensor import Tensor
 from python import Python, PythonObject
-from utils.static_tuple import StaticTuple
+from collections import Optional
 from blazeseq.gc_model import GCmodel
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
@@ -175,15 +175,17 @@ struct BasepairDistribution(Analyser):
 @value
 struct CGContent(Analyser):
     var cg_content: Tensor[DType.int64]
+    var gc_distribution: Tensor[DType.float64]
     var theoritical_distribution: Tensor[DType.int64]
-    var cached_models: List[GCmodel]
+    var cached_models: List[Optional[GCmodel]]
 
     fn __init__(inout self):
         self.cg_content = Tensor[DType.int64](101)
         self.theoritical_distribution = Tensor[DType.int64](101)
-        self.cached_models = List[GCmodel](capacity=200)
+        self.gc_distribution = Tensor[DType.float64](101)
+        self.cached_models = List[Optional[GCmodel]](capacity=200)
         for i in range(200):
-            self.cached_models[i] = GCmodel(100)
+            self.cached_models[i] = None
 
     fn tally_read(inout self, record: FastqRecord):
         var cg_num = 0
@@ -199,12 +201,12 @@ struct CGContent(Analyser):
                 cg_num += 1
 
         var values = self.cached_models[record.len_record()]
-        var percentage = values.percentage[cg_num]
-        var increment = values.increment[cg_num]
+        var percentage = values.unsafe_take().percentage[cg_num]
+        var increment = values.unsafe_take().increment[cg_num]
 
         for i in range(percentage.num_elements()):
             # TODO: Add GC distribution
-            percentage[i] += int(increment[i])
+            self.gc_distribution[int(percentage[i])] += increment[i]
 
         var read_cg_content = int(round(cg_num * 100 / record.len_record()))
         self.cg_content[read_cg_content] += 1
