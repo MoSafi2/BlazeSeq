@@ -68,7 +68,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         elif quality_format == "illumina_1.5":
             schema = illumina_1_5_schema
         elif quality_format == "illumina_1.8":
-            schema = illumina_1_8
+            schema = illumina_1_8_schema
         elif quality_format == "generic":
             schema = generic_schema
         else:

@@ -1,8 +1,7 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
 from blazeseq.record import FastqRecord, RecordCoord
-from blazeseq.helpers import write_to_buff
-from blazeseq.helpers import cpy_tensor
+from blazeseq.helpers import write_to_buff, cpy_tensor, QualitySchema
 from tensor import TensorShape
 from collections import Dict, KeyElement
 import time
@@ -10,6 +9,13 @@ from tensor import Tensor
 from python import Python, PythonObject
 from collections import Optional
 from algorithm import sum
+from blazeseq.CONSTS import (
+    illumina_1_5_schema,
+    illumina_1_3_schema,
+    illumina_1_8_schema,
+    generic_schema,
+)
+
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
@@ -410,8 +416,8 @@ struct QualityDistribution(Analyser):
     var min_qu: UInt8
 
     fn __init__(inout self):
-        var shape = TensorShape(1, 150)
-        var shape2 = TensorShape(150)
+        var shape = TensorShape(1, 128)
+        var shape2 = TensorShape(128)
         self.qu_dist = Tensor[DType.int64](shape)
         self.qu_dist_seq = Tensor[DType.int64](shape2)
         self.max_length = 0
@@ -421,7 +427,7 @@ struct QualityDistribution(Analyser):
     fn tally_read(inout self, record: FastqRecord):
         if record.len_quality() > self.max_length:
             self.max_length = record.len_record()
-            var new_shape = TensorShape(self.max_length, 150)
+            var new_shape = TensorShape(self.max_length, 128)
             var new_qu_dist = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_qu_dist)
 
@@ -434,31 +440,39 @@ struct QualityDistribution(Analyser):
             if base_qu < self.min_qu:
                 self.min_qu = base_qu
 
-        # How to Avoid determining the OFFSET for each 
-        var average = int(
-            sum_tensor((record.QuStr))
-            / record.len_quality()
-        )
+        var average = int(sum_tensor(record.QuStr) / record.len_quality())
         self.qu_dist_seq[average] += 1
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     # TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
     # TODO: Stylize the plot
-    fn plot(self) raises:
-        var arr = matrix_to_numpy(self.qu_dist)
 
+    fn slice_array(
+        self, arr: PythonObject, min_index: Int, max_index: Int
+    ) raises -> PythonObject:
+        var np = Python.import_module("numpy")
+        var indices = np.arange(min_index, max_index)
+        return np.take(arr, indices, axis=1)
+
+    fn plot(self) raises:
         Python.add_to_path(py_lib)
         var np = Python.import_module("numpy")
         var plt = Python.import_module("matplotlib.pyplot")
         var sns = Python.import_module("seaborn")
         var py_builtin = Python.import_module("builtins")
+
+        var schema = self._guess_schema()
+        var arr = matrix_to_numpy(self.qu_dist)
+        min_index = schema.OFFSET
+        max_index = max(40, self.max_qu)
+        arr = self.slice_array(arr, int(min_index), int(max_index))
         np.save("arr_qu.npy", arr)
 
-        ################# Quality Histogram ##################
+        ################ Quality Histogram ##################
 
-        # var mean_line = np.sum(arr * np.arange(1, 41), axis=1) / np.sum(
-        #     arr, axis=1
-        # )
+        # var mean_line = np.sum(
+        #     arr * np.arange(1, max_index - schema.OFFSET), axis=1
+        # ) / np.sum(arr, axis=1)
         # var cum_sum = np.cumsum(arr, axis=1)
         # var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
         # var median = np.argmax(cum_sum > total_counts / 2, axis=1)
@@ -486,34 +500,34 @@ struct QualityDistribution(Analyser):
         # ax.plot(mean_line)
         # fig.savefig("QualityDistribution.png")
 
-        ###############################################################
-        ###                    Quality  Heatmap                     ###
-        ###############################################################
+        # ##############################################################
+        # ##                    Quality  Heatmap                     ###
+        # ##############################################################
 
-        var y = plt.subplots()
-        var fig2 = y[0]
-        var ax2 = y[1]
-        sns.heatmap(np.flipud(arr).T, cmap="Blues", robust=True, ax=ax2)
-        fig2.savefig("QualityDistributionHeatMap.png")
+        # var y = plt.subplots()
+        # var fig2 = y[0]
+        # var ax2 = y[1]
+        # sns.heatmap(np.flipud(arr).T, cmap="Blues", robust=True, ax=ax2)
+        # fig2.savefig("QualityDistributionHeatMap.png")
 
         ###############################################################
         ####                Average quality /seq                   ####
         ###############################################################
 
-        # Finding the last non-zero index
-        var index = 0
-        for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
-            if self.qu_dist_seq[i] != 0:
-                index = i
-                break
+        # # Finding the last non-zero index
+        # var index = 0
+        # for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
+        #     if self.qu_dist_seq[i] != 0:
+        #         index = i
+        #         break
 
-        arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
-        var z = plt.subplots()
-        var fig3 = z[0]
-        var ax3 = z[1]
-        ax3.plot(arr2[: index + 2])
-        fig3.savefig("Average_quality_sequence.png")
-        np.save("arr_qu_seq.npy", arr2)
+        # arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
+        # var z = plt.subplots()
+        # var fig3 = z[0]
+        # var ax3 = z[1]
+        # ax3.plot(arr2[: index + 2])
+        # fig3.savefig("Average_quality_sequence.png")
+        # np.save("arr_qu_seq.npy", arr2)
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(int(self.max_qu), self.max_length)
@@ -528,11 +542,19 @@ struct QualityDistribution(Analyser):
     fn __str__(self) -> String:
         return String("\nQuality_dist_matrix: ") + str(self.report())
 
-    fn _guess_encoding(self) -> UInt8:
-        alias SANGER = 33
-        alias ILLUMINA_1 = 64
-        alias ILLUMINA_2 = 33
-        return 0
+    fn _guess_schema(self) -> QualitySchema:
+        alias SANGER_ENCODING_OFFSET = 33
+        alias ILLUMINA_1_3_ENCODING_OFFSET = 64
+
+        if self.min_qu < 64:
+            return illumina_1_8_schema
+        elif self.min_qu == ILLUMINA_1_3_ENCODING_OFFSET + 1:
+            return illumina_1_3_schema
+        elif self.min_qu <= 126:
+            return illumina_1_5_schema
+        else:
+            print("Unable to parse Quality Schema, returning generic schema")
+            return generic_schema
 
 
 @value
