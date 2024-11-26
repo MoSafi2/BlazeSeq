@@ -8,7 +8,7 @@
 - [x] Per sequence GC content
 - [x] Sequence Length Distribution
 - [x] Per sequence quality scores
-- [ ] Per base sequence quality [#Buggy]
+- [x] Per base sequence quality
 - [ ] Per tile sequence quality [#Buggy]
 - [ ] Sequence Duplication Levels [#Buggy]
 - [ ] Overrepresented sequences [#No support yet]

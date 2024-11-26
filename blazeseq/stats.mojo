@@ -83,6 +83,7 @@ struct FullStats(Stringable, CollectionElement):
         self.qu_dist.tally_read(
             record
         )  # Expensive operation, a lot of memory access
+        pass
 
     @always_inline
     fn plot(inout self) raises:
@@ -91,6 +92,7 @@ struct FullStats(Stringable, CollectionElement):
         # self.len_dist.plot()
         self.qu_dist.plot()
         # self.dup_reads.plot()
+        pass
 
     fn __str__(self) -> String:
         return (
@@ -470,64 +472,65 @@ struct QualityDistribution(Analyser):
 
         ################ Quality Histogram ##################
 
-        # var mean_line = np.sum(
-        #     arr * np.arange(1, max_index - schema.OFFSET), axis=1
-        # ) / np.sum(arr, axis=1)
-        # var cum_sum = np.cumsum(arr, axis=1)
-        # var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
-        # var median = np.argmax(cum_sum > total_counts / 2, axis=1)
-        # var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
-        # var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
-        # var IQR = Q75 - Q25
+        var mean_line = np.sum(
+            arr * np.arange(1, arr.shape[1] + 1), axis=1
+        ) / np.sum(arr, axis=1)
+        var cum_sum = np.cumsum(arr, axis=1)
+        var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
+        var median = np.argmax(cum_sum > total_counts / 2, axis=1)
+        var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
+        var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
+        var IQR = Q75 - Q25
 
-        # var whislo = np.full(len(IQR), None)
-        # var whishi = np.full(len(IQR), None)
+        var whislo = np.full(len(IQR), None)
+        var whishi = np.full(len(IQR), None)
 
-        # var x = plt.subplots()
-        # var fig = x[0]
-        # var ax = x[1]
-        # var l = py_builtin.list()
-        # for i in range(len(IQR)):
-        #     var stat: PythonObject = py_builtin.dict()
-        #     stat["med"] = median[i]
-        #     stat["q1"] = Q25[i]
-        #     stat["q3"] = Q75[i]
-        #     stat["whislo"] = whislo[i]
-        #     stat["whishi"] = whishi[i]
-        #     l.append(stat)
+        var x = plt.subplots()
+        var fig = x[0]
+        var ax = x[1]
+        var l = py_builtin.list()
+        for i in range(len(IQR)):
+            var stat: PythonObject = py_builtin.dict()
+            stat["med"] = median[i]
+            stat["q1"] = Q25[i]
+            stat["q3"] = Q75[i]
+            stat["whislo"] = whislo[i]
+            stat["whishi"] = whishi[i]
+            l.append(stat)
 
-        # ax.bxp(l, showfliers=False)
-        # ax.plot(mean_line)
-        # fig.savefig("QualityDistribution.png")
+        ax.bxp(l, showfliers=False)
+        ax.plot(mean_line)
+        fig.savefig("QualityDistribution.png")
 
         # ##############################################################
         # ##                    Quality  Heatmap                     ###
         # ##############################################################
 
-        # var y = plt.subplots()
-        # var fig2 = y[0]
-        # var ax2 = y[1]
-        # sns.heatmap(np.flipud(arr).T, cmap="Blues", robust=True, ax=ax2)
-        # fig2.savefig("QualityDistributionHeatMap.png")
+        var y = plt.subplots()
+        var fig2 = y[0]
+        var ax2 = y[1]
+        sns.heatmap(np.flipud(arr).T, cmap="Blues", robust=True, ax=ax2)
+        fig2.savefig("QualityDistributionHeatMap.png")
 
         ###############################################################
         ####                Average quality /seq                   ####
         ###############################################################
 
-        # # Finding the last non-zero index
-        # var index = 0
-        # for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
-        #     if self.qu_dist_seq[i] != 0:
-        #         index = i
-        #         break
+        # Finding the last non-zero index
+        var index = 0
+        for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
+            if self.qu_dist_seq[i] != 0:
+                index = i
+                break
 
-        # arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
-        # var z = plt.subplots()
-        # var fig3 = z[0]
-        # var ax3 = z[1]
-        # ax3.plot(arr2[: index + 2])
-        # fig3.savefig("Average_quality_sequence.png")
-        # np.save("arr_qu_seq.npy", arr2)
+        arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
+        arr2 = arr2[int(schema.OFFSET) : index + 2]
+        var z = plt.subplots()
+        var fig3 = z[0]
+        var ax3 = z[1]
+        ax3.plot(arr2)
+        fig3.savefig("Average_quality_sequence.png")
+        np.save("arr_qu_seq.npy", arr2)
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(int(self.max_qu), self.max_length)
