@@ -65,13 +65,13 @@ struct FullStats(Stringable, CollectionElement):
 
     @always_inline
     fn tally(inout self, record: FastqRecord):
-        self.num_reads += 1
-        self.total_bases += record.len_record()
-        self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
-        self.dup_reads.tally_read(record)
-        self.kmer_content.tally_read(record)
+        # self.num_reads += 1
+        # self.total_bases += record.len_record()
+        # self.bp_dist.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)  # Almost Free
+        # self.dup_reads.tally_read(record)
+        # self.kmer_content.tally_read(record)
 
         # BUG: There is a bug here which causes core dumped
         self.qu_dist.tally_read(
@@ -80,11 +80,11 @@ struct FullStats(Stringable, CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot(self.num_reads)
-        self.cg_content.plot()
-        self.len_dist.plot()
+        # self.bp_dist.plot(self.num_reads)
+        # self.cg_content.plot()
+        # self.len_dist.plot()
         self.qu_dist.plot()
-        self.dup_reads.plot()
+        # self.dup_reads.plot()
 
     fn __str__(self) -> String:
         return (
@@ -406,31 +406,37 @@ struct QualityDistribution(Analyser):
     var qu_dist: Tensor[DType.int64]
     var qu_dist_seq: Tensor[DType.int64]
     var max_length: Int
-    var max_qu: Int
+    var max_qu: UInt8
+    var min_qu: UInt8
 
     fn __init__(inout self):
-        var shape = TensorShape(1, 40)
-        var shape2 = TensorShape(1, 93)
+        var shape = TensorShape(1, 150)
+        var shape2 = TensorShape(150)
         self.qu_dist = Tensor[DType.int64](shape)
         self.qu_dist_seq = Tensor[DType.int64](shape2)
         self.max_length = 0
         self.max_qu = 0
+        self.min_qu = 128
 
     fn tally_read(inout self, record: FastqRecord):
         if record.len_quality() > self.max_length:
             self.max_length = record.len_record()
-            var new_shape = TensorShape(self.max_length, 40)
+            var new_shape = TensorShape(self.max_length, 150)
             var new_qu_dist = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_qu_dist)
 
         for i in range(record.len_quality()):
-            var base_qu = int(record.QuStr[i] - record.quality_schema.OFFSET)
-            var index = VariadicList[Int](i, base_qu)
+            var base_qu = record.QuStr[i]
+            var index = VariadicList[Int](i, int(base_qu))
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
+            if base_qu < self.min_qu:
+                self.min_qu = base_qu
+
+        # How to Avoid determining the OFFSET for each 
         var average = int(
-            sum_tensor((record.QuStr - record.quality_schema.OFFSET))
+            sum_tensor((record.QuStr))
             / record.len_quality()
         )
         self.qu_dist_seq[average] += 1
@@ -450,35 +456,35 @@ struct QualityDistribution(Analyser):
 
         ################# Quality Histogram ##################
 
-        var mean_line = np.sum(arr * np.arange(1, 41), axis=1) / np.sum(
-            arr, axis=1
-        )
-        var cum_sum = np.cumsum(arr, axis=1)
-        var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
-        var median = np.argmax(cum_sum > total_counts / 2, axis=1)
-        var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
-        var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
-        var IQR = Q75 - Q25
+        # var mean_line = np.sum(arr * np.arange(1, 41), axis=1) / np.sum(
+        #     arr, axis=1
+        # )
+        # var cum_sum = np.cumsum(arr, axis=1)
+        # var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
+        # var median = np.argmax(cum_sum > total_counts / 2, axis=1)
+        # var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
+        # var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
+        # var IQR = Q75 - Q25
 
-        var whislo = np.full(len(IQR), None)
-        var whishi = np.full(len(IQR), None)
+        # var whislo = np.full(len(IQR), None)
+        # var whishi = np.full(len(IQR), None)
 
-        var x = plt.subplots()
-        var fig = x[0]
-        var ax = x[1]
-        var l = py_builtin.list()
-        for i in range(len(IQR)):
-            var stat: PythonObject = py_builtin.dict()
-            stat["med"] = median[i]
-            stat["q1"] = Q25[i]
-            stat["q3"] = Q75[i]
-            stat["whislo"] = whislo[i]
-            stat["whishi"] = whishi[i]
-            l.append(stat)
+        # var x = plt.subplots()
+        # var fig = x[0]
+        # var ax = x[1]
+        # var l = py_builtin.list()
+        # for i in range(len(IQR)):
+        #     var stat: PythonObject = py_builtin.dict()
+        #     stat["med"] = median[i]
+        #     stat["q1"] = Q25[i]
+        #     stat["q3"] = Q75[i]
+        #     stat["whislo"] = whislo[i]
+        #     stat["whishi"] = whishi[i]
+        #     l.append(stat)
 
-        ax.bxp(l, showfliers=False)
-        ax.plot(mean_line)
-        fig.savefig("QualityDistribution.png")
+        # ax.bxp(l, showfliers=False)
+        # ax.plot(mean_line)
+        # fig.savefig("QualityDistribution.png")
 
         ###############################################################
         ###                    Quality  Heatmap                     ###
@@ -493,7 +499,7 @@ struct QualityDistribution(Analyser):
         ###############################################################
         ####                Average quality /seq                   ####
         ###############################################################
-        
+
         # Finding the last non-zero index
         var index = 0
         for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
@@ -505,22 +511,28 @@ struct QualityDistribution(Analyser):
         var z = plt.subplots()
         var fig3 = z[0]
         var ax3 = z[1]
-        ax3.plot(arr2[:index+2])
+        ax3.plot(arr2[: index + 2])
         fig3.savefig("Average_quality_sequence.png")
         np.save("arr_qu_seq.npy", arr2)
 
     fn report(self) -> Tensor[DType.int64]:
-        var final_shape = TensorShape(self.max_qu, self.max_length)
+        var final_shape = TensorShape(int(self.max_qu), self.max_length)
         var final_t = Tensor[DType.int64](final_shape)
 
         for i in range(self.max_qu):
             for j in range(self.max_length):
-                var index = VariadicList[Int](i, j)
+                var index = VariadicList[Int](int(i), j)
                 final_t[index] = self.qu_dist[index]
         return final_t
 
     fn __str__(self) -> String:
         return String("\nQuality_dist_matrix: ") + str(self.report())
+
+    fn _guess_encoding(self) -> UInt8:
+        alias SANGER = 33
+        alias ILLUMINA_1 = 64
+        alias ILLUMINA_2 = 33
+        return 0
 
 
 @value
