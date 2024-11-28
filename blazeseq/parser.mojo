@@ -81,40 +81,39 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         return schema
 
 
-# struct CoordParser:
-#     var stream: BufferedLineIterator[FileReader]
+struct CoordParser:
+    var stream: BufferedLineIterator[FileReader]
 
-#     fn __init__(inout self, path: String) raises -> None:
-#         self.stream = BufferedLineIterator[FileReader](path, DEFAULT_CAPACITY)
+    fn __init__(inout self, path: String) raises -> None:
+        self.stream = BufferedLineIterator[FileReader](path, DEFAULT_CAPACITY)
 
-#     @always_inline
-#     fn parse_all(inout self) raises:
-#         while True:
-#             var record: RecordCoord[origin = __origin_of(self.stream)]
-#             record = self._parse_record()
-#             record.validate()
+    @always_inline
+    fn parse_all(inout self) raises:
+        while True:
+            var record: RecordCoord
+            record = self._parse_record()
+            record.validate()
 
-#     @always_inline
-#     fn next(inout self) raises -> RecordCoord[__origin_of(self.stream)]:
-#         var read: RecordCoord[__origin_of(self.stream)]
-#         read = self._parse_record()
-#         read.validate()
-#         return read
+    @always_inline
+    fn next(inout self) raises -> RecordCoord:
+        read = self._parse_record()
+        read.validate()
+        return read
 
-#     @always_inline
-#     fn _parse_record(
-#         inout self,
-#     ) raises -> RecordCoord[origin = __origin_of(self.stream)]:
-#         var line1 = self.stream.read_next_coord()
-#         if line1[0] != read_header:
-#             raise Error("Sequence Header is corrupt")
-#         var line2 = self.stream.read_next_coord()
-#         var line3 = self.stream.read_next_coord()
-#         if line3[0] != quality_header:
-#             raise Error("Quality Header is corrupt")
-#         var line4 = self.stream.read_next_coord()
+    @always_inline
+    fn _parse_record(
+        inout self,
+    ) raises -> RecordCoord:
+        var line1 = self.stream.read_next_coord()
+        if line1[0] != read_header:
+            raise Error("Sequence Header is corrupt")
+        var line2 = self.stream.read_next_coord()
+        var line3 = self.stream.read_next_coord()
+        if line3[0] != quality_header:
+            raise Error("Quality Header is corrupt")
+        var line4 = self.stream.read_next_coord()
 
-#         return RecordCoord[origin = __origin_of(line1)](line1, line2, line3, line4)
+        return RecordCoord(line1, line2, line3, line4)
 
     # @always_inline
     # fn _parse_record2(inout self) raises -> RecordCoord:

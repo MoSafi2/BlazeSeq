@@ -9,7 +9,7 @@
 - [x] Sequence Length Distribution
 - [x] Per sequence quality scores
 - [x] Per base sequence quality
-- [ ] Per tile sequence quality [#Buggy]
+- [ ] Per tile sequence quality
 - [ ] Sequence Duplication Levels [#Buggy]
 - [ ] Overrepresented sequences [#No support yet]
 - [ ] Adapter Content [#No support yet]

@@ -288,23 +288,23 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
 
 
 @value
-struct RecordCoord[origin: ImmutableOrigin](
+struct RecordCoord(
     Sized, Writable, CollectionElement
 ):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Span[Byte, origin=origin]
-    var SeqStr: Span[Byte, origin=origin]
-    var QuHeader: Span[Byte, origin=origin]
-    var QuStr: Span[Byte, origin=origin]
+    var SeqHeader: Span[Byte, StaticConstantOrigin]
+    var SeqStr: Span[Byte, StaticConstantOrigin]
+    var QuHeader: Span[Byte, StaticConstantOrigin]
+    var QuStr: Span[Byte, StaticConstantOrigin]
 
     fn __init__(
         inout self,
-        borrowed SH: Span[Byte, origin=origin],
-        borrowed SS: Span[Byte, origin=origin],
-        borrowed QH: Span[Byte, origin=origin],
-        borrowed QS: Span[Byte, origin=origin],
+        borrowed SH: Span[Byte, StaticConstantOrigin],
+        borrowed SS: Span[Byte, StaticConstantOrigin],
+        borrowed QH: Span[Byte, StaticConstantOrigin],
+        borrowed QS: Span[Byte, StaticConstantOrigin],
     ):
         self.SeqHeader = SH
         self.SeqStr = SS

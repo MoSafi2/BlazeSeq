@@ -1,7 +1,5 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
-from blazeseq.record import FastqRecord, RecordCoord
-from blazeseq.helpers import write_to_buff, cpy_tensor, QualitySchema
 from tensor import TensorShape
 from collections import Dict, KeyElement
 import time
@@ -9,13 +7,14 @@ from tensor import Tensor
 from python import Python, PythonObject
 from collections import Optional
 from algorithm import sum
+from blazeseq.record import FastqRecord, RecordCoord
+from blazeseq.helpers import write_to_buff, cpy_tensor, QualitySchema
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
     illumina_1_8_schema,
     generic_schema,
 )
-
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
@@ -417,9 +416,9 @@ struct QualityDistribution(Analyser):
     var max_qu: UInt8
     var min_qu: UInt8
 
-    fn __init__(inout self):
-        var shape = TensorShape(1, 128)
-        var shape2 = TensorShape(128)
+    fn __init__(out self):
+        shape = TensorShape(1, 128)
+        shape2 = TensorShape(128)
         self.qu_dist = Tensor[DType.int64](shape)
         self.qu_dist_seq = Tensor[DType.int64](shape2)
         self.max_length = 0
@@ -429,42 +428,40 @@ struct QualityDistribution(Analyser):
     fn tally_read(inout self, record: FastqRecord):
         if record.len_quality() > self.max_length:
             self.max_length = record.len_record()
-            var new_shape = TensorShape(self.max_length, 128)
-            var new_qu_dist = grow_matrix(self.qu_dist, new_shape)
+            new_shape = TensorShape(self.max_length, 128)
+            new_qu_dist = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_qu_dist)
 
         for i in range(record.len_quality()):
-            var base_qu = record.QuStr[i]
-            var index = VariadicList[Int](i, int(base_qu))
+            base_qu = record.QuStr[i]
+            index = VariadicList[Int](i, int(base_qu))
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
             if base_qu < self.min_qu:
                 self.min_qu = base_qu
 
-        var average = int(sum_tensor(record.QuStr) / record.len_quality())
+        average = int(sum_tensor(record.QuStr) / record.len_quality())
         self.qu_dist_seq[average] += 1
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     # TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
-    # TODO: Stylize the plot
-
     fn slice_array(
         self, arr: PythonObject, min_index: Int, max_index: Int
     ) raises -> PythonObject:
-        var np = Python.import_module("numpy")
-        var indices = np.arange(min_index, max_index)
+        np = Python.import_module("numpy")
+        indices = np.arange(min_index, max_index)
         return np.take(arr, indices, axis=1)
 
     fn plot(self) raises:
         Python.add_to_path(py_lib)
-        var np = Python.import_module("numpy")
-        var plt = Python.import_module("matplotlib.pyplot")
-        var sns = Python.import_module("seaborn")
-        var py_builtin = Python.import_module("builtins")
+        np = Python.import_module("numpy")
+        plt = Python.import_module("matplotlib.pyplot")
+        sns = Python.import_module("seaborn")
+        py_builtin = Python.import_module("builtins")
 
-        var schema = self._guess_schema()
-        var arr = matrix_to_numpy(self.qu_dist)
+        schema = self._guess_schema()
+        arr = matrix_to_numpy(self.qu_dist)
         min_index = schema.OFFSET
         max_index = max(40, self.max_qu)
         arr = self.slice_array(arr, int(min_index), int(max_index))
@@ -472,23 +469,23 @@ struct QualityDistribution(Analyser):
 
         ################ Quality Histogram ##################
 
-        var mean_line = np.sum(
+        mean_line = np.sum(
             arr * np.arange(1, arr.shape[1] + 1), axis=1
         ) / np.sum(arr, axis=1)
-        var cum_sum = np.cumsum(arr, axis=1)
-        var total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
-        var median = np.argmax(cum_sum > total_counts / 2, axis=1)
-        var Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
-        var Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
-        var IQR = Q75 - Q25
+        cum_sum = np.cumsum(arr, axis=1)
+        total_counts = np.reshape(np.sum(arr, axis=1), (len(arr), 1))
+        median = np.argmax(cum_sum > total_counts / 2, axis=1)
+        Q75 = np.argmax(cum_sum > total_counts * 0.75, axis=1)
+        Q25 = np.argmax(cum_sum > total_counts * 0.25, axis=1)
+        IQR = Q75 - Q25
 
-        var whislo = np.full(len(IQR), None)
-        var whishi = np.full(len(IQR), None)
+        whislo = np.full(len(IQR), None)
+        whishi = np.full(len(IQR), None)
 
-        var x = plt.subplots()
-        var fig = x[0]
-        var ax = x[1]
-        var l = py_builtin.list()
+        x = plt.subplots()
+        fig = x[0]
+        ax = x[1]
+        l = py_builtin.list()
         for i in range(len(IQR)):
             var stat: PythonObject = py_builtin.dict()
             stat["med"] = median[i]
@@ -502,22 +499,12 @@ struct QualityDistribution(Analyser):
         ax.plot(mean_line)
         fig.savefig("QualityDistribution.png")
 
-        # ##############################################################
-        # ##                    Quality  Heatmap                     ###
-        # ##############################################################
-
-        var y = plt.subplots()
-        var fig2 = y[0]
-        var ax2 = y[1]
-        sns.heatmap(np.flipud(arr).T, cmap="Blues", robust=True, ax=ax2)
-        fig2.savefig("QualityDistributionHeatMap.png")
-
         ###############################################################
         ####                Average quality /seq                   ####
         ###############################################################
 
         # Finding the last non-zero index
-        var index = 0
+        index = 0
         for i in range(self.qu_dist_seq.num_elements() - 1, -1, -1):
             if self.qu_dist_seq[i] != 0:
                 index = i
@@ -525,9 +512,9 @@ struct QualityDistribution(Analyser):
 
         arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
         arr2 = arr2[int(schema.OFFSET) : index + 2]
-        var z = plt.subplots()
-        var fig3 = z[0]
-        var ax3 = z[1]
+        z = plt.subplots()
+        fig3 = z[0]
+        ax3 = z[1]
         ax3.plot(arr2)
         fig3.savefig("Average_quality_sequence.png")
         np.save("arr_qu_seq.npy", arr2)
@@ -558,6 +545,70 @@ struct QualityDistribution(Analyser):
         else:
             print("Unable to parse Quality Schema, returning generic schema")
             return generic_schema
+
+
+@value
+struct PerTileQuality(Analyser):
+    var count_map: Dict[Int, Tensor[DType.uint64]]
+    var qual_map: Dict[Int, Tensor[DType.float64]]
+
+    fn __init__(out self):
+        self.count_map = Dict[Int, Tensor[DType.uint64]](
+            power_of_two_initial_capacity=2048
+        )
+        self.qual_map = Dict[Int, Tensor[DType.float64]]()
+
+    fn tally_read(inout self, record: FastqRecord):
+        pass
+
+    fn report(self) -> Tensor[DType.int64]:
+        return Tensor[DType.int64]()
+
+    fn __str__(self) -> String:
+        return ""
+
+    # TODO: This function should return tile information
+    @always_inline
+    fn _find_tile_info(self, record: FastqRecord) -> Int:
+        header = record.get_header().as_bytes()
+        alias sep: UInt8 = ord(":")
+        count = 0
+        for i in range(len(header)):
+            if header[i] == sep:
+                count += 1
+        split_position = 0
+        if count >= 6:
+            split_position = 4
+        elif count >= 4:
+            split_position = 2
+        else:
+            return -1
+        return -1
+
+    @always_inline
+    fn _find_tile_value(self, record: FastqRecord, pos: Int) -> Int:
+        alias sep: UInt8 = ord(":")
+        var index_1 = 0
+        var index_2 = 0
+        var count = 0
+        var header = record.get_header().as_bytes()
+        var header_slice = record.get_header()
+        # TODO: Add Error Handling
+        for i in range(len(header)):
+            if header[i] == sep: 
+                count += 1
+                if count == pos:
+                    index_1 = i+1
+                if count == pos +1:
+                    index_2 = i
+                    break
+
+        var s = str(header_slice)
+
+        try:
+            return atol(s[index_1:index_2])
+        except:
+            return 0
 
 
 @value
