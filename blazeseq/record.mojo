@@ -288,7 +288,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
 
 
 @value
-struct RecordCoord(
+struct RecordCoord[validate_quality: Bool = False](
     Sized, Writable, CollectionElement
 ):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
@@ -325,7 +325,6 @@ struct RecordCoord(
     fn seq_len(self) -> Int32:
         return len(self.SeqStr)
 
-
     @always_inline
     fn qu_len(self) -> Int32:
         return len(self.QuStr)
@@ -337,6 +336,14 @@ struct RecordCoord(
     @always_inline
     fn seq_header_len(self) -> Int32:
         return len(self.SeqHeader)
+
+    @always_inline
+    fn validate_quality_schema(self) raises:
+        for i in range(int(self.qu_len())):
+            if self.QuStr[i] > 126 or self.QuStr[i] < 33:
+                raise Error(
+                    "Corrput quality score according to proivded schema"
+                )
 
     fn __len__(self) -> Int:
         return int(self.seq_len())

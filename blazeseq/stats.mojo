@@ -70,25 +70,36 @@ struct FullStats(Stringable, CollectionElement):
 
     @always_inline
     fn tally(inout self, record: FastqRecord):
-        # self.num_reads += 1
-        # self.total_bases += record.len_record()
-        # self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)  # Almost Free
+        self.num_reads += 1
+        self.total_bases += record.len_record()
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)  # Almost Free
         # self.dup_reads.tally_read(record)
         # self.kmer_content.tally_read(record)
+
+        # BUG: There is a bug here which causes core dumped
+        self.qu_dist.tally_read(record)
+        pass
+
+    @always_inline
+    fn tally(inout self, record: RecordCoord):
+        self.num_reads += 1
+        self.total_bases += int(record.seq_len())
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)  # Almost Free
 
         # BUG: There is a bug here which causes core dumped
         self.qu_dist.tally_read(
             record
         )  # Expensive operation, a lot of memory access
-        pass
 
     @always_inline
     fn plot(inout self) raises:
-        # self.bp_dist.plot(self.num_reads)
-        # self.cg_content.plot()
-        # self.len_dist.plot()
+        self.bp_dist.plot(self.num_reads)
+        self.cg_content.plot()
+        self.len_dist.plot()
         self.qu_dist.plot()
         # self.dup_reads.plot()
         pass
@@ -202,7 +213,24 @@ struct CGContent(Analyser):
             ):
                 cg_num += 1
 
-        var read_cg_content = int(round(cg_num * 100 / record.len_record()))
+        var read_cg_content = int(
+            round(cg_num * 100 / int(record.len_record()))
+        )
+        self.cg_content[read_cg_content] += 1
+
+    fn tally_read(inout self, record: RecordCoord):
+        if record.seq_len() == 0:
+            return
+        var cg_num = 0
+
+        for index in range(0, record.seq_len()):
+            if (
+                record.SeqStr[index] & 0b111 == 3
+                or record.SeqStr[index] & 0b111 == 7
+            ):
+                cg_num += 1
+
+        var read_cg_content = int(round(cg_num * 100 / int(record.seq_len())))
         self.cg_content[read_cg_content] += 1
 
     fn calculate_theoritical_distribution(self) raises -> PythonObject:
@@ -373,6 +401,14 @@ struct LengthDistribution(Analyser):
             swap(self.length_vector, new_tensor)
         self.length_vector[record.len_record() - 1] += 1
 
+    fn tally_read(inout self, record: RecordCoord):
+        if record.seq_len() > self.length_vector.num_elements():
+            var new_tensor = grow_tensor(
+                self.length_vector, int(record.seq_len())
+            )
+            swap(self.length_vector, new_tensor)
+        self.length_vector[int(record.seq_len() - 1)] += 1
+
     @always_inline
     fn length_average(self, num_reads: Int) -> Float64:
         var cum: Int64 = 0
@@ -444,6 +480,27 @@ struct QualityDistribution(Analyser):
         average = int(sum_tensor(record.QuStr) / record.len_quality())
         self.qu_dist_seq[average] += 1
 
+    fn tally_read(inout self, record: RecordCoord):
+        if record.qu_len() > self.max_length:
+            self.max_length = int(record.seq_len())
+            new_shape = TensorShape(self.max_length, 128)
+            new_qu_dist = grow_matrix(self.qu_dist, new_shape)
+            swap(self.qu_dist, new_qu_dist)
+
+        for i in range(int(record.qu_len())):
+            base_qu = record.QuStr[i]
+            index = VariadicList[Int](i, int(base_qu))
+            self.qu_dist[index] += 1
+            if base_qu > self.max_qu:
+                self.max_qu = base_qu
+            if base_qu < self.min_qu:
+                self.min_qu = base_qu
+        var sum: Int = 0
+        for i in range(int(record.qu_len())):
+            sum += int(record.QuStr[i])
+        average = int(sum / record.qu_len())
+        self.qu_dist_seq[average] += 1
+
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
     # TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
     fn slice_array(
@@ -457,7 +514,6 @@ struct QualityDistribution(Analyser):
         Python.add_to_path(py_lib)
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
-        sns = Python.import_module("seaborn")
         py_builtin = Python.import_module("builtins")
 
         schema = self._guess_schema()
@@ -595,11 +651,11 @@ struct PerTileQuality(Analyser):
         var header_slice = record.get_header()
         # TODO: Add Error Handling
         for i in range(len(header)):
-            if header[i] == sep: 
+            if header[i] == sep:
                 count += 1
                 if count == pos:
-                    index_1 = i+1
-                if count == pos +1:
+                    index_1 = i + 1
+                if count == pos + 1:
                     index_2 = i
                     break
 
