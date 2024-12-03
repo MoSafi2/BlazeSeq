@@ -129,7 +129,7 @@ fn slice_tensor_iter[
 
 
 @always_inline
-fn write_to_buff[T: DType](src: Tensor[T], inout dest: Tensor[T], start: Int):
+fn write_to_buff[T: DType](src: Tensor[T], mut dest: Tensor[T], start: Int):
     """
     Copy a small tensor into a larger tensor given an index at the large tensor.
     Implemented iteratively due to small gain from copying less then 1MB tensor using SIMD.

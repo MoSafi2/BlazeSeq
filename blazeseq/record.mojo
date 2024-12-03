@@ -301,10 +301,10 @@ struct RecordCoord[validate_quality: Bool = False](
 
     fn __init__(
         inout self,
-        borrowed SH: Span[Byte, StaticConstantOrigin],
-        borrowed SS: Span[Byte, StaticConstantOrigin],
-        borrowed QH: Span[Byte, StaticConstantOrigin],
-        borrowed QS: Span[Byte, StaticConstantOrigin],
+        SH: Span[Byte, StaticConstantOrigin],
+        SS: Span[Byte, StaticConstantOrigin],
+        QH: Span[Byte, StaticConstantOrigin],
+        QS: Span[Byte, StaticConstantOrigin],
     ):
         self.SeqHeader = SH
         self.SeqStr = SS

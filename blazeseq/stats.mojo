@@ -2,6 +2,7 @@
 
 from tensor import TensorShape
 from collections import Dict, KeyElement
+from utils import StringSlice, StringRef
 import time
 from tensor import Tensor
 from python import Python, PythonObject
@@ -57,6 +58,7 @@ struct FullStats(Stringable, CollectionElement):
     var cg_content: CGContent
     var dup_reads: DupReads
     var kmer_content: KmerContent
+    var tile_qual: PerTileQuality
 
     fn __init__(inout self):
         self.num_reads = 0
@@ -67,41 +69,38 @@ struct FullStats(Stringable, CollectionElement):
         self.cg_content = CGContent()
         self.dup_reads = DupReads()
         self.kmer_content = KmerContent(hash_list(), 12)
+        self.tile_qual = PerTileQuality()
 
     @always_inline
     fn tally(inout self, record: FastqRecord):
-        self.num_reads += 1
-        self.total_bases += record.len_record()
-        self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
+        # self.num_reads += 1
+        # self.total_bases += record.len_record()
+        # self.bp_dist.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)  # Almost Free
         # self.dup_reads.tally_read(record)
         # self.kmer_content.tally_read(record)
-
-        # BUG: There is a bug here which causes core dumped
-        self.qu_dist.tally_read(record)
-        pass
+        # self.qu_dist.tally_read(record)
+        self.tile_qual.tally_read(record)
 
     @always_inline
     fn tally(inout self, record: RecordCoord):
-        self.num_reads += 1
-        self.total_bases += int(record.seq_len())
-        self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
-
-        # BUG: There is a bug here which causes core dumped
-        self.qu_dist.tally_read(
-            record
-        )  # Expensive operation, a lot of memory access
+        # self.num_reads += 1
+        # self.total_bases += int(record.seq_len())
+        # self.bp_dist.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)
+        # self.qu_dist.tally_read(record)
+        pass
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot(self.num_reads)
-        self.cg_content.plot()
-        self.len_dist.plot()
-        self.qu_dist.plot()
+        # self.bp_dist.plot(self.num_reads)
+        # self.cg_content.plot()
+        # self.len_dist.plot()
+        # self.qu_dist.plot()
         # self.dup_reads.plot()
+        self.tile_qual.plot()
         pass
 
     fn __str__(self) -> String:
@@ -605,17 +604,58 @@ struct QualityDistribution(Analyser):
 
 @value
 struct PerTileQuality(Analyser):
-    var count_map: Dict[Int, Tensor[DType.uint64]]
-    var qual_map: Dict[Int, Tensor[DType.float64]]
+    var n: Int
+    var count_map: Dict[Int, Int]
+    var qual_map: Dict[Int, Tensor[DType.int64]]
 
     fn __init__(out self):
-        self.count_map = Dict[Int, Tensor[DType.uint64]](
-            power_of_two_initial_capacity=2048
-        )
-        self.qual_map = Dict[Int, Tensor[DType.float64]]()
+        self.count_map = Dict[Int, Int](power_of_two_initial_capacity=2048)
+        self.qual_map = Dict[Int, Tensor[DType.int64]]()
+        self.n = 0
 
     fn tally_read(inout self, record: FastqRecord):
-        pass
+        self.n += 1
+        if self.n >= 10_000:
+            if not self.n % 10 == 0:
+                return
+
+        var x = self._find_tile_info(record)
+        var val = self._find_tile_value(record, x)
+
+        if val in self.count_map:
+            try:
+                self.count_map[val] += 1
+            except:
+                pass
+        else:
+            self.count_map[val] = 1
+
+        # TODO: Make the length Adjustible via swap
+        if val not in self.qual_map:
+            self.qual_map[val] = Tensor[DType.int64](150)
+
+        try:
+            if self.qual_map[val].num_elements() < record.len_record():
+                new_tensor = Tensor[DType.int64](record.len_record())
+                for i in range(self.qual_map[val].num_elements()):
+                    new_tensor[i] = self.qual_map[val][i]
+                self.qual_map[val] = new_tensor
+        except:
+            pass
+
+        for i in range(record.len_record()):
+            try:
+                self.qual_map[val][i] += int(record.QuStr[i])
+            except:
+                pass
+
+    fn plot(self) raises:
+        Python.add_to_path(py_lib)
+        np = Python.import_module("numpy")
+        for i in self.qual_map.keys():
+            print(i[])
+            arr = tensor_to_numpy_1d(self.qual_map[i[]])
+            np.save(String("Arr_quali_map_") + str(i[]), arr)
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
@@ -632,14 +672,14 @@ struct PerTileQuality(Analyser):
         for i in range(len(header)):
             if header[i] == sep:
                 count += 1
-        split_position = 0
+        var split_position: Int
         if count >= 6:
             split_position = 4
         elif count >= 4:
             split_position = 2
         else:
             return -1
-        return -1
+        return split_position
 
     @always_inline
     fn _find_tile_value(self, record: FastqRecord, pos: Int) -> Int:
