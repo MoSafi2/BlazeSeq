@@ -613,6 +613,7 @@ struct PerTileQuality(Analyser):
         self.qual_map = Dict[Int, Tensor[DType.int64]]()
         self.n = 0
 
+    # TODO: Add tracking for the number of items inside the hashmaps to limit it to 2_500 items.
     fn tally_read(inout self, record: FastqRecord):
         self.n += 1
         if self.n >= 10_000:
