@@ -609,6 +609,7 @@ struct PerTileQuality(Analyser):
     var qual_map: Dict[Int, Tensor[DType.int64]]
 
     fn __init__(out self):
+        # TODO: Swap the Dict with a Tensor as the Dict lookup is currently very expensive.
         self.count_map = Dict[Int, Int](power_of_two_initial_capacity=2048)
         self.qual_map = Dict[Int, Tensor[DType.int64]]()
         self.n = 0
@@ -651,12 +652,13 @@ struct PerTileQuality(Analyser):
                 pass
 
     fn plot(self) raises:
+        print("tile _plot")
         Python.add_to_path(py_lib)
         np = Python.import_module("numpy")
+        arr = np.arange(0, 150, 1)
         for i in self.qual_map.keys():
-            print(i[])
-            arr = tensor_to_numpy_1d(self.qual_map[i[]])
-            np.save(String("Arr_quali_map_") + str(i[]), arr)
+            arr = np.vstack((arr, tensor_to_numpy_1d(self.qual_map[i[]])))
+        np.save("tile_arr.npy", arr)
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()

@@ -1,5 +1,5 @@
-from memory import memcpy, UnsafePointer
-from utils import StringRef, Span, StringSlice
+from memory import memcpy, UnsafePointer, Span
+from utils import StringRef, StringSlice
 from blazeseq.helpers import get_next_line_index, slice_tensor, cpy_tensor
 from blazeseq.CONSTS import (
     simd_width,

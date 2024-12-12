@@ -13,9 +13,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(
-        inout self, path: String, schema: String = "generic"
-    ) raises -> None:
+    fn __init__(out self, path: String, schema: String = "generic") raises:
         self.stream = BufferedLineIterator[
             FileReader, check_ascii=validate_ascii
         ](path, DEFAULT_CAPACITY)
@@ -84,7 +82,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
 struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
     var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
 
-    fn __init__(inout self, path: String) raises -> None:
+    fn __init__(out self, path: String) raises:
         self.stream = BufferedLineIterator[
             FileReader, check_ascii=validate_ascii
         ](path, DEFAULT_CAPACITY)
