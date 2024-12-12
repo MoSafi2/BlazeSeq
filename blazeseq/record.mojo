@@ -3,7 +3,7 @@ from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant
 from tensor import Tensor
-from utils import Span
+from memory import Span
 from math import align_down, remainder
 from memory import UnsafePointer
 from utils import Writable, StringSlice

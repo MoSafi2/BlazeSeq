@@ -73,33 +73,33 @@ struct FullStats(Stringable, CollectionElement):
 
     @always_inline
     fn tally(inout self, record: FastqRecord):
-        # self.num_reads += 1
-        # self.total_bases += record.len_record()
-        # self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)  # Almost Free
-        # self.dup_reads.tally_read(record)
-        # self.kmer_content.tally_read(record)
-        # self.qu_dist.tally_read(record)
+        self.num_reads += 1
+        self.total_bases += record.len_record()
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)  # Almost Free
+        self.dup_reads.tally_read(record)
+        self.kmer_content.tally_read(record)
+        self.qu_dist.tally_read(record)
         self.tile_qual.tally_read(record)
 
     @always_inline
     fn tally(inout self, record: RecordCoord):
-        # self.num_reads += 1
-        # self.total_bases += int(record.seq_len())
-        # self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)
-        # self.qu_dist.tally_read(record)
+        self.num_reads += 1
+        self.total_bases += int(record.seq_len())
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)
+        self.qu_dist.tally_read(record)
         pass
 
     @always_inline
     fn plot(inout self) raises:
-        # self.bp_dist.plot(self.num_reads)
-        # self.cg_content.plot()
-        # self.len_dist.plot()
-        # self.qu_dist.plot()
-        # self.dup_reads.plot()
+        self.bp_dist.plot(self.num_reads)
+        self.cg_content.plot()
+        self.len_dist.plot()
+        self.qu_dist.plot()
+        self.dup_reads.plot()
         self.tile_qual.plot()
         pass
 

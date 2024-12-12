@@ -154,11 +154,11 @@ struct BufferedLineIterator[T: reader, check_ascii: Bool = False](
     @always_inline
     fn read_next_coord(
         inout self,
-    ) raises -> Span[T=Byte, origin = StaticConstantOrigin]:
+    ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
         var line_coord = self._line_coord()
         var ptr = self.buf.unsafe_ptr() + line_coord.start.or_else(0)
         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
-        return Span[T=Byte, origin = StaticConstantOrigin](ptr=ptr, length=length)
+        return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
     @always_inline
     fn read_n_coords[lines: Int](inout self) raises -> List[Slice]:
@@ -483,19 +483,19 @@ struct BufferedWriter:
         self.sink.close()
 
 
-fn main() raises:
-    var path = Path("data/M_abscessus_HiSeq.fq")
-    var reader = BufferedLineIterator[FileReader](path)
+# fn main() raises:
+#     var path = Path("data/M_abscessus_HiSeq.fq")
+#     var reader = BufferedLineIterator[FileReader](path)
 
-    var n = 0
-    t1 = time.now()
-    while True:
-        try:
-            var line = reader.read_next_coord()
-            n += 1
-        except Error:
-            print("EOF")
-            print(n)
-            break
-    t2 = time.now()
-    print("Time taken:", (t2 - t1) / 1e6)
+#     var n = 0
+#     t1 = time.now()
+#     while True:
+#         try:
+#             var line = reader.read_next_coord()
+#             n += 1
+#         except Error:
+#             print("EOF")
+#             print(n)
+#             break
+#     t2 = time.now()
+#     print("Time taken:", (t2 - t1) / 1e6)
