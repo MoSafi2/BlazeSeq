@@ -1,12 +1,14 @@
 """This module should hold aggregate statistics about all the record which have been queried by the Parser, regardless of the caller function. """
 
+# TODO: Check if you can convert large matrcies to a list of tensors and wether this will result in a better performance. Especially for for Quality Distribution, Tile
+
 from tensor import TensorShape
-from collections import Dict, KeyElement
-from utils import StringSlice, StringRef
+from collections import Dict, KeyElement, Optional
+from utils import StringSlice, StringRef, Index
+from memory import Span
 import time
 from tensor import Tensor
 from python import Python, PythonObject
-from collections import Optional
 from algorithm import sum
 from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.helpers import write_to_buff, cpy_tensor, QualitySchema
@@ -57,7 +59,7 @@ struct FullStats(CollectionElement):
     var qu_dist: QualityDistribution
     var cg_content: CGContent
     var dup_reads: DupReads
-    var kmer_content: KmerContent
+    var kmer_content: KmerContent[7]
     var tile_qual: PerTileQuality
 
     fn __init__(inout self):
@@ -68,7 +70,8 @@ struct FullStats(CollectionElement):
         self.qu_dist = QualityDistribution()
         self.cg_content = CGContent()
         self.dup_reads = DupReads()
-        self.kmer_content = KmerContent(hash_list(), 12)
+        self.kmer_content = KmerContent[7]()
+        # self.kmer_content = KmerContent(hash_list(), 12)
         self.tile_qual = PerTileQuality()
 
     @always_inline
@@ -79,7 +82,7 @@ struct FullStats(CollectionElement):
         self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
         self.dup_reads.tally_read(record)
-        self.kmer_content.tally_read(record)
+        self.kmer_content.tally_read(record, self.num_reads)
         self.qu_dist.tally_read(record)
         self.tile_qual.tally_read(record)
 
@@ -101,6 +104,7 @@ struct FullStats(CollectionElement):
         self.qu_dist.plot()
         self.dup_reads.plot()
         self.tile_qual.plot()
+        self.kmer_content.plot()
         pass
 
 
@@ -269,7 +273,6 @@ struct DupReads(Analyser):
 
     fn tally_read(inout self, record: FastqRecord):
         self.n += 1
-
         if record in self.unique_dict:
             try:
                 self.unique_dict[record] += 1
@@ -505,7 +508,6 @@ struct QualityDistribution(Analyser):
         min_index = schema.OFFSET
         max_index = max(40, self.max_qu)
         arr = self.slice_array(arr, int(min_index), int(max_index))
-        np.save("arr_qu.npy", arr)
 
         ################ Quality Boxplot ##################
 
@@ -557,7 +559,6 @@ struct QualityDistribution(Analyser):
         ax3 = z[1]
         ax3.plot(arr2)
         fig3.savefig("Average_quality_sequence.png")
-        np.save("arr_qu_seq.npy", arr2)
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(int(self.max_qu), self.max_length)
@@ -605,7 +606,7 @@ struct PerTileQuality(Analyser):
     fn tally_read(inout self, record: FastqRecord):
         self.n += 1
         if self.n >= 10_000:
-            if not self.n % 10 == 0:
+            if self.n % 10 != 0:
                 return
 
         var x = self._find_tile_info(record)
@@ -649,7 +650,6 @@ struct PerTileQuality(Analyser):
         sns = Python.import_module("seaborn")
         py_builtin = Python.import_module("builtins")
         plt = Python.import_module("matplotlib.pyplot")
-
 
         arr = np.zeros(self.max_length)
         for i in self.qual_map.keys():
@@ -712,7 +712,79 @@ struct PerTileQuality(Analyser):
 
 
 @value
-struct KmerContent[bits: Int = 3](Analyser):
+struct KmerContent[KMERSIZE: Int]:
+    var kmers: List[Tensor[DType.int64]]
+    var max_length: Int
+
+    fn __init__(out self):
+        self.kmers = List[Tensor[DType.int64]](capacity=pow(4, KMERSIZE))
+        for i in range(pow(4, KMERSIZE)):
+            self.kmers.append(Tensor[DType.int64](TensorShape(100)))
+        self.max_length = 0
+
+    @always_inline
+    fn tally_read(mut self, record: FastqRecord, read_num: Int64):
+        if read_num % 50 != 0:
+            return
+
+        # TODO: Add whole list resizing if the read length is bigger than the previous max length
+        if len(record) > self.max_length:
+            self.max_length = len(record)
+
+        var s = record.get_seq().as_bytes()
+        # INFO: As per FastQC: limit the Kmers to the first 500 BP for long reads
+        for i in range(min(record.len_record(), 500) - KMERSIZE):
+            var kmer = s[i : i + KMERSIZE]
+            self.kmers[self.kmer_to_index(kmer)][i] += 1
+
+    # TODO: Skip KMERS containing N
+    @always_inline
+    fn kmer_to_index(self, kmer: Span[T=Byte]) -> Int:
+        var index: UInt = 0
+        var multiplier = 1
+        for i in range(len(kmer), -1, -1):
+            index += int(base2int(kmer[i]))
+            multiplier *= 4
+        return index
+
+    fn plot(self) raises:
+        Python.add_to_path(py_lib)
+        var np = Python.import_module("numpy")
+        var agg_tensor = Tensor[DType.int64](
+            TensorShape(pow(4, KMERSIZE), self.max_length)
+        )
+        for i in range(len(self.kmers)):
+            for j in range(self.kmers[i].num_elements()):
+                agg_tensor[Index(i, j)] = self.kmers[i][j]
+
+        mat = matrix_to_numpy(agg_tensor)
+        np.save("Kmers.npy", mat)
+
+
+@always_inline
+fn base2int(byte: Byte) -> UInt8:
+    alias A_b = 65
+    alias a_b = 95
+    alias C_b = 67
+    alias c_b = 97
+    alias G_b = 71
+    alias g_b = 103
+    alias T_b = 84
+    alias t_b = 116
+    if byte == A_b or byte == a_b:
+        return 0
+    if byte == C_b or byte == c_b:
+        return 1
+    if byte == G_b or byte == g_b:
+        return 2
+    if byte == T_b or byte == t_b:
+        return 3
+    return 4
+
+
+# TODO: Check how to add the analyzer Trait again
+@value
+struct AdapterContent[bits: Int = 3]():
     var kmer_len: Int
     var hash_counts: Tensor[DType.int64]
     var hash_list: List[UInt64]
@@ -727,7 +799,9 @@ struct KmerContent[bits: Int = 3](Analyser):
 
     # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
     @always_inline
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(inout self, record: FastqRecord, read_no: Int64):
+        if read_no % 50 != 0:
+            return
         var hash: UInt64 = 0
         var end = 0
         # Make a custom bit mask of 1s by certain length
@@ -757,19 +831,6 @@ struct KmerContent[bits: Int = 3](Analyser):
 
     fn __str__(self) -> String:
         return String("\nhash count table is ") + str(self.hash_counts)
-
-
-# TODO: Add module for adapter content
-@value
-struct AdapterContent(Analyser):
-    fn tally_read(inout self, read: FastqRecord):
-        pass
-
-    fn report(self) -> Tensor[DType.int64]:
-        return Tensor[DType.int64]()
-
-    fn __str__(self) -> String:
-        return ""
 
 
 # TODO: Make this also parametrized on the number of bits per bp
