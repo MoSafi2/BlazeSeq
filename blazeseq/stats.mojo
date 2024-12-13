@@ -49,7 +49,7 @@ trait Analyser(CollectionElement, Stringable):
 
 
 @value
-struct FullStats(Stringable, CollectionElement):
+struct FullStats(CollectionElement):
     var num_reads: Int64
     var total_bases: Int64
     var bp_dist: BasepairDistribution
@@ -102,21 +102,6 @@ struct FullStats(Stringable, CollectionElement):
         self.dup_reads.plot()
         self.tile_qual.plot()
         pass
-
-    fn __str__(self) -> String:
-        return (
-            String("Number of Reads: ")
-            + str(self.num_reads)
-            + ". \n"
-            + "Number of bases: "
-            + str(self.total_bases)
-            + str(self.bp_dist)
-            + str(self.len_dist)
-            + str(self.qu_dist)
-            + str(self.cg_content)
-            + str(self.kmer_content)
-            + str(self.dup_reads)
-        )
 
 
 @value
@@ -522,7 +507,7 @@ struct QualityDistribution(Analyser):
         arr = self.slice_array(arr, int(min_index), int(max_index))
         np.save("arr_qu.npy", arr)
 
-        ################ Quality Histogram ##################
+        ################ Quality Boxplot ##################
 
         mean_line = np.sum(
             arr * np.arange(1, arr.shape[1] + 1), axis=1
@@ -607,12 +592,14 @@ struct PerTileQuality(Analyser):
     var n: Int
     var count_map: Dict[Int, Int]
     var qual_map: Dict[Int, Tensor[DType.int64]]
+    var max_length: Int
 
     fn __init__(out self):
         # TODO: Swap the Dict with a Tensor as the Dict lookup is currently very expensive.
         self.count_map = Dict[Int, Int](power_of_two_initial_capacity=2048)
         self.qual_map = Dict[Int, Tensor[DType.int64]]()
         self.n = 0
+        self.max_length = 0
 
     # TODO: Add tracking for the number of items inside the hashmaps to limit it to 2_500 items.
     fn tally_read(inout self, record: FastqRecord):
@@ -634,7 +621,7 @@ struct PerTileQuality(Analyser):
 
         # TODO: Make the length Adjustible via swap
         if val not in self.qual_map:
-            self.qual_map[val] = Tensor[DType.int64](150)
+            self.qual_map[val] = Tensor[DType.int64](record.len_record())
 
         try:
             if self.qual_map[val].num_elements() < record.len_record():
@@ -651,14 +638,28 @@ struct PerTileQuality(Analyser):
             except:
                 pass
 
+        if self.max_length < record.len_record():
+            self.max_length = record.len_record()
+
+    # TODO: Construct a n_keys*max_length array to hold all information.
     fn plot(self) raises:
         print("tile _plot")
         Python.add_to_path(py_lib)
         np = Python.import_module("numpy")
-        arr = np.arange(0, 150, 1)
+        sns = Python.import_module("seaborn")
+        py_builtin = Python.import_module("builtins")
+        plt = Python.import_module("matplotlib.pyplot")
+
+
+        arr = np.zeros(self.max_length)
         for i in self.qual_map.keys():
             arr = np.vstack((arr, tensor_to_numpy_1d(self.qual_map[i[]])))
-        np.save("tile_arr.npy", arr)
+
+        var ks = py_builtin.list()
+        for i in self.qual_map.keys():
+            ks.append(i[])
+        sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks)
+        plt.savefig("TileQuality.png")
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
@@ -758,6 +759,19 @@ struct KmerContent[bits: Int = 3](Analyser):
         return String("\nhash count table is ") + str(self.hash_counts)
 
 
+# TODO: Add module for adapter content
+@value
+struct AdapterContent(Analyser):
+    fn tally_read(inout self, read: FastqRecord):
+        pass
+
+    fn report(self) -> Tensor[DType.int64]:
+        return Tensor[DType.int64]()
+
+    fn __str__(self) -> String:
+        return ""
+
+
 # TODO: Make this also parametrized on the number of bits per bp
 fn _seq_to_hash(seq: String) -> UInt64:
     var hash = 0
@@ -832,16 +846,3 @@ fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
     for i in range(tensor.num_elements()):
         acc += int(tensor[i])
     return acc
-
-
-# TODO: Add module for adapter content
-@value
-struct AdapterContent(Analyser):
-    fn tally_read(inout self, read: FastqRecord):
-        pass
-
-    fn report(self) -> Tensor[DType.int64]:
-        return Tensor[DType.int64]()
-
-    fn __str__(self) -> String:
-        return ""
