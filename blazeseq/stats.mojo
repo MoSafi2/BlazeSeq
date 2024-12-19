@@ -61,6 +61,7 @@ struct FullStats(CollectionElement):
     var dup_reads: DupReads
     var kmer_content: KmerContent[7]
     var tile_qual: PerTileQuality
+    var adpt_cont: AdapterContent
 
     fn __init__(inout self):
         self.num_reads = 0
@@ -71,8 +72,8 @@ struct FullStats(CollectionElement):
         self.cg_content = CGContent()
         self.dup_reads = DupReads()
         self.kmer_content = KmerContent[7]()
-        # self.kmer_content = KmerContent(hash_list(), 12)
         self.tile_qual = PerTileQuality()
+        self.adpt_cont = AdapterContent(hash_list(), 7)
 
     @always_inline
     fn tally(inout self, record: FastqRecord):
@@ -85,6 +86,7 @@ struct FullStats(CollectionElement):
         self.kmer_content.tally_read(record, self.num_reads)
         self.qu_dist.tally_read(record)
         self.tile_qual.tally_read(record)
+        self.adpt_cont.tally_read(record, self.num_reads)
 
     @always_inline
     fn tally(inout self, record: RecordCoord):
@@ -101,10 +103,11 @@ struct FullStats(CollectionElement):
         self.bp_dist.plot(self.num_reads)
         self.cg_content.plot()
         self.len_dist.plot()
-        self.qu_dist.plot()
+        # self.qu_dist.plot()
         self.dup_reads.plot()
-        self.tile_qual.plot()
+        # self.tile_qual.plot()
         self.kmer_content.plot()
+        self.adpt_cont.plot()
         pass
 
 
@@ -711,6 +714,7 @@ struct PerTileQuality(Analyser):
             return 0
 
 
+# TODO: Test if rolling hash function with power of two modulu's would work.
 @value
 struct KmerContent[KMERSIZE: Int]:
     var kmers: List[Tensor[DType.int64]]
@@ -719,25 +723,38 @@ struct KmerContent[KMERSIZE: Int]:
     fn __init__(out self):
         self.kmers = List[Tensor[DType.int64]](capacity=pow(4, KMERSIZE))
         for i in range(pow(4, KMERSIZE)):
-            self.kmers.append(Tensor[DType.int64](TensorShape(100)))
+            self.kmers.append(Tensor[DType.int64](TensorShape(1)))
         self.max_length = 0
 
     @always_inline
     fn tally_read(mut self, record: FastqRecord, read_num: Int64):
+        alias N_b = ord("N")
+        alias n_b = ord("n")
+
         if read_num % 50 != 0:
             return
 
-        # TODO: Add whole list resizing if the read length is bigger than the previous max length
         if len(record) > self.max_length:
             self.max_length = len(record)
+            var new_kmers = List[Tensor[DType.int64]](capacity=pow(4, KMERSIZE))
+            for i in range(pow(4, KMERSIZE)):
+                new_kmers.append(grow_tensor(self.kmers[i], self.max_length))
+
+            self.kmers = new_kmers
 
         var s = record.get_seq().as_bytes()
         # INFO: As per FastQC: limit the Kmers to the first 500 BP for long reads
         for i in range(min(record.len_record(), 500) - KMERSIZE):
             var kmer = s[i : i + KMERSIZE]
+            var contains_n = False
+            # TODO: Check how this optimized in Cpp
+            for l in kmer:
+                if l[] == N_b or l[] == n_b:
+                    contains_n = True
+            if contains_n:
+                continue
             self.kmers[self.kmer_to_index(kmer)][i] += 1
 
-    # TODO: Skip KMERS containing N
     @always_inline
     fn kmer_to_index(self, kmer: Span[T=Byte]) -> Int:
         var index: UInt = 0
@@ -747,6 +764,8 @@ struct KmerContent[KMERSIZE: Int]:
             multiplier *= 4
         return index
 
+    # TODO: Figure out how the enrichment calculation is carried out.
+    # Check: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/Module.cpp#L2068
     fn plot(self) raises:
         Python.add_to_path(py_lib)
         var np = Python.import_module("numpy")
@@ -759,6 +778,69 @@ struct KmerContent[KMERSIZE: Int]:
 
         mat = matrix_to_numpy(agg_tensor)
         np.save("Kmers.npy", mat)
+
+
+# TODO: Check how to add the analyzer Trait again
+@value
+struct AdapterContent[bits: Int = 3]():
+    var kmer_len: Int
+    var hash_counts: Tensor[DType.int64]
+    var hash_list: List[UInt64]
+    var max_length: Int
+
+    fn __init__(inout self, hashes: List[UInt64], kmer_len: Int = 0):
+        self.kmer_len = min(kmer_len, 64 // bits)
+        self.hash_list = hashes
+        shape = TensorShape(len(self.hash_list), 1)
+        self.hash_counts = Tensor[DType.int64](shape)
+        self.max_length = 0
+
+    fn report(self) -> Tensor[DType.int64]:
+        return self.hash_counts
+
+    # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
+    @always_inline
+    fn tally_read(mut self, record: FastqRecord, read_no: Int64):
+        var hash: UInt64 = 0
+        var end = 0
+        # Make a custom bit mask of 1s by certain length
+        var mask: UInt64 = (0b1 << self.kmer_len * bits) - 1
+        var neg_mask = mask >> bits
+        var bit_shift = (0b1 << bits) - 1
+
+        if record.len_record() > self.max_length:
+            self.max_length = record.len_record()
+            new_shape = TensorShape(len(self.hash_list), self.max_length)
+            self.hash_counts = grow_matrix(self.hash_counts, new_shape)
+
+        # Check initial Kmer
+        if len(self.hash_list) > 0:
+            self._check_hashes(hash, 1)
+
+        for i in range(end, record.len_record()):
+            # Remove the most signifcant xx bits
+            hash = hash & neg_mask
+
+            # Mask for the least sig. three bits, add to hash
+            var rem = record.SeqStr[i] & bit_shift
+            hash = (hash << bits) + int(rem)
+            if len(self.hash_list) > 0:
+                self._check_hashes(hash, i + 1)
+
+    @always_inline
+    fn plot(self) raises:
+        np = Python.import_module("numpy")
+        arr = matrix_to_numpy(self.hash_counts)
+        np.save("AdapterContent.npy", arr)
+
+    @always_inline
+    fn _check_hashes(inout self, hash: UInt64, pos: Int):
+        for i in range(len(self.hash_list)):
+            if hash == self.hash_list[i]:
+                self.hash_counts[Index(i, pos)] += 1
+
+    fn __str__(self) -> String:
+        return String("\nhash count table is ") + str(self.hash_counts)
 
 
 @always_inline
@@ -780,57 +862,6 @@ fn base2int(byte: Byte) -> UInt8:
     if byte == T_b or byte == t_b:
         return 3
     return 4
-
-
-# TODO: Check how to add the analyzer Trait again
-@value
-struct AdapterContent[bits: Int = 3]():
-    var kmer_len: Int
-    var hash_counts: Tensor[DType.int64]
-    var hash_list: List[UInt64]
-
-    fn __init__(inout self, hashes: List[UInt64], kmer_len: Int = 0):
-        self.kmer_len = min(kmer_len, 64 // bits)
-        self.hash_list = hashes
-        self.hash_counts = Tensor[DType.int64](len(self.hash_list))
-
-    fn report(self) -> Tensor[DType.int64]:
-        return self.hash_counts
-
-    # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
-    @always_inline
-    fn tally_read(inout self, record: FastqRecord, read_no: Int64):
-        if read_no % 50 != 0:
-            return
-        var hash: UInt64 = 0
-        var end = 0
-        # Make a custom bit mask of 1s by certain length
-        var mask: UInt64 = (0b1 << self.kmer_len * bits) - 1
-        var neg_mask = mask >> bits
-        var bit_shift = (0b1 << bits) - 1
-
-        # Check initial Kmer
-        if len(self.hash_list) > 0:
-            self._check_hashes(hash)
-
-        for i in range(end, record.len_record()):
-            # Remove the most signifcant 3 bits
-            hash = hash & neg_mask
-
-            # Mask for the least sig. three bits, add to hash
-            var rem = record.SeqStr[i] & bit_shift
-            hash = (hash << bits) + int(rem)
-            if len(self.hash_list) > 0:
-                self._check_hashes(hash)
-
-    @always_inline
-    fn _check_hashes(inout self, hash: UInt64):
-        for i in range(len(self.hash_list)):
-            if hash == self.hash_list[i]:
-                self.hash_counts[i] += 1
-
-    fn __str__(self) -> String:
-        return String("\nhash count table is ") + str(self.hash_counts)
 
 
 # TODO: Make this also parametrized on the number of bits per bp

@@ -1,4 +1,4 @@
-import time
+from time import perf_counter_ns as now
 from sys import argv
 from utils import StringRef
 from blazeseq.parser import CoordParser, RecordParser
@@ -78,13 +78,13 @@ fn run_record_parser(
 
 fn run_record_parser_session(inout parser: RecordParser) raises:
     var reads = 0
-    var strt = time.now()
+    var strt = now()
     while True:
         try:
             var record = parser.next()
             reads += 1
             if reads % 1_000_000 == 0:
-                var current = time.now()
+                var current = now()
                 var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
                 var rounded = int(round(reads_p_min))
                 print("\33[H")
@@ -93,7 +93,7 @@ fn run_record_parser_session(inout parser: RecordParser) raises:
                 print("Speed:", rounded, "reads/min")
 
         except:
-            var current = time.now()
+            var current = now()
             var elapsed = (current - strt) / 1e9
             var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
             var rounded = int(round(reads_p_min))
@@ -112,13 +112,13 @@ fn run_record_parser_session(inout parser: RecordParser) raises:
 
 fn run_coord_parser(inout parser: CoordParser) raises:
     var reads = 0
-    var strt = time.now()
+    var strt = now()
     while True:
         try:
             var record = parser.next()
             reads += 1
             if reads % 1_000_000 == 0:
-                var current = time.now()
+                var current = now()
                 var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
                 var rounded = int(round(reads_p_min))
                 print("\33[H")
@@ -127,7 +127,7 @@ fn run_coord_parser(inout parser: CoordParser) raises:
                 print("Speed:", rounded, "reads/min")
 
         except:
-            var current = time.now()
+            var current = now()
             var elapsed = (current - strt) / 1e9
             var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
             var rounded = int(round(reads_p_min))
