@@ -73,7 +73,7 @@ struct FullStats(CollectionElement):
         self.dup_reads = DupReads()
         self.kmer_content = KmerContent[7]()
         self.tile_qual = PerTileQuality()
-        self.adpt_cont = AdapterContent(hash_list(), 7)
+        self.adpt_cont = AdapterContent(hash_list(), 12)
 
     @always_inline
     fn tally(inout self, record: FastqRecord):
@@ -794,6 +794,7 @@ struct AdapterContent[bits: Int = 3]():
         shape = TensorShape(len(self.hash_list), 1)
         self.hash_counts = Tensor[DType.int64](shape)
         self.max_length = 0
+        print(self.hash_list.__str__())
 
     fn report(self) -> Tensor[DType.int64]:
         return self.hash_counts
