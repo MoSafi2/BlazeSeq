@@ -34,6 +34,29 @@ fn hash_list() -> List[UInt64]:
     return li
 
 
+# TODO: Check how to unpack this variadic
+def hash_names() -> (
+    ListLiteral[
+        StringLiteral,
+        StringLiteral,
+        StringLiteral,
+        StringLiteral,
+        StringLiteral,
+        StringLiteral,
+    ]
+):
+    var names = [
+        "Illumina Universal Adapter",
+        "Illumina Small RNA 3' Adapter",
+        "Illumina Small RNA 5' Adapter",
+        "Nextera Transposase Sequence",
+        "PolyA",
+        "PolyG",
+    ]
+
+    return names
+
+
 alias WIDTH = 5
 alias MAX_READS = 100_000
 alias MAX_QUALITY = 93
@@ -103,11 +126,11 @@ struct FullStats(CollectionElement):
         self.bp_dist.plot(self.num_reads)
         self.cg_content.plot()
         self.len_dist.plot()
-        # self.qu_dist.plot()
+        self.qu_dist.plot()
         self.dup_reads.plot()
-        # self.tile_qual.plot()
+        self.tile_qual.plot()
         self.kmer_content.plot()
-        self.adpt_cont.plot()
+        self.adpt_cont.plot(self.num_reads)
         pass
 
 
@@ -794,7 +817,6 @@ struct AdapterContent[bits: Int = 3]():
         shape = TensorShape(len(self.hash_list), 1)
         self.hash_counts = Tensor[DType.int64](shape)
         self.max_length = 0
-        print(self.hash_list.__str__())
 
     fn report(self) -> Tensor[DType.int64]:
         return self.hash_counts
@@ -829,10 +851,26 @@ struct AdapterContent[bits: Int = 3]():
                 self._check_hashes(hash, i + 1)
 
     @always_inline
-    fn plot(self) raises:
-        np = Python.import_module("numpy")
+    fn plot(self, total_reads: Int64) raises:
+        plt = Python.import_module("matplotlib.pyplot")
         arr = matrix_to_numpy(self.hash_counts)
-        np.save("AdapterContent.npy", arr)
+        arr = (arr / total_reads) * 100
+        plt.plot(arr.T)
+        plt.ylim(0, 100)
+        plt.legend(
+            [
+                "Illumina Universal Adapter",
+                "Illumina Small RNA 3' Adapter",
+                "Illumina Small RNA 5' Adapter",
+                "Nextera Transposase Sequence",
+                "PolyA",
+                "PolyG",
+            ]
+        )
+        plt.xlabel("Position")
+        plt.ylabel("Percentage of Reads")
+        plt.title("Adapter Content")
+        plt.savefig("AdapterContent.png")
 
     @always_inline
     fn _check_hashes(inout self, hash: UInt64, pos: Int):
