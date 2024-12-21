@@ -4,7 +4,7 @@
 
 from tensor import TensorShape
 from collections import Dict, KeyElement, Optional
-from utils import StringSlice, StringRef, Index
+from utils import StringSlice, Index
 from memory import Span
 import time
 from tensor import Tensor
@@ -108,7 +108,7 @@ struct FullStats(CollectionElement):
         self.dup_reads.tally_read(record)
         self.kmer_content.tally_read(record, self.num_reads)
         self.qu_dist.tally_read(record)
-        self.tile_qual.tally_read(record)
+        # self.tile_qual.tally_read(record)
         self.adpt_cont.tally_read(record, self.num_reads)
 
     @always_inline
@@ -123,12 +123,12 @@ struct FullStats(CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot(self.num_reads)
+        # self.bp_dist.plot(self.num_reads)
         self.cg_content.plot()
         self.len_dist.plot()
         self.qu_dist.plot()
         self.dup_reads.plot()
-        self.tile_qual.plot()
+        # self.tile_qual.plot()
         self.kmer_content.plot()
         self.adpt_cont.plot(self.num_reads)
         pass
@@ -284,14 +284,14 @@ struct CGContent(Analyser):
 # TODO: You should extraplolate from the number of reads in the unique reads to how it would look like for everything.
 @value
 struct DupReads(Analyser):
-    var unique_dict: Dict[FastqRecord, Int64]
+    var unique_dict: Dict[String, Int64]
     var unique_reads: Int
     var count_at_max: Int
     var n: Int
     var corrected_counts: Dict[Int, Float64]
 
     fn __init__(inout self):
-        self.unique_dict = Dict[FastqRecord, Int64]()
+        self.unique_dict = Dict[String, Int64]()
         self.unique_reads = 0
         self.count_at_max = 0
         self.n = 0
@@ -299,21 +299,23 @@ struct DupReads(Analyser):
 
     fn tally_read(inout self, record: FastqRecord):
         self.n += 1
-        if record in self.unique_dict:
+        l = min(record.len_record(), 50)
+        var s = String(record.get_seq().as_bytes()[0:l])
+        if s in self.unique_dict:
             try:
-                self.unique_dict[record] += 1
+                self.unique_dict[s] += 1
                 return
             except:
                 print("error")
                 pass
 
         if self.unique_reads <= MAX_READS:
-            self.unique_dict[record] = 1
+            self.unique_dict[s] = 1
             self.unique_reads += 1
             if self.unique_reads == MAX_READS:
                 self.count_at_max = self.n
         else:
-            pass
+            return
 
     fn predict_reads(inout self):
         # Construct Duplication levels dict
@@ -367,10 +369,36 @@ struct DupReads(Analyser):
                 pNotSeeingAtLimit = 0
                 break
 
+        # BUG: Probable bug here, revise the FastQC calculation
         var pSeeingAtLimit: Float64 = 1 - pNotSeeingAtLimit
         var trueCount = count_at_level / pSeeingAtLimit
 
         return trueCount
+
+    # double get_corrected_count(size_t count_at_limit,
+    #                            size_t num_reads,
+    #                            size_t dup_level,
+    #                            size_t num_obs) {
+    #   if (count_at_limit == num_reads)
+    #     return num_obs;
+
+    #   if (num_reads - num_obs < count_at_limit)
+    #     return num_obs;
+
+    #   double p_not_seeing = 1.0;
+    #   double limit_of_caring = 1.0 - (num_obs/(num_obs + 0.01));
+    #   for (size_t i = 0; i < count_at_limit; ++i) {
+    #     p_not_seeing *= static_cast<double>((num_reads-i)-dup_level) /
+    #                          static_cast<double>(num_reads-i);
+
+    #     if (p_not_seeing < limit_of_caring) {
+    #       p_not_seeing = 0;
+    #       break;
+    #     }
+    #   }
+
+    #   return num_obs/std::max(num_lim<double>::min(), 1.0 - p_not_seeing);
+    # }
 
     fn report(self) -> Tensor[DType.int64]:
         var report = Tensor[DType.int64](1)

@@ -11,8 +11,8 @@
 - [x] Per base sequence quality
 - [x] Per tile sequence quality
 - [ ] Sequence Duplication Levels [#Buggy]
-- [ ] Overrepresented sequences [#No support yet]
-- [ ] Adapter Content [#No support yet]
+- [ ] Overrepresented sequences [#partial support]
+- [x] Adapter Content
 
 ## Output formats
 
