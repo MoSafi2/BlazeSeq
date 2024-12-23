@@ -12,13 +12,28 @@
 - [x] Per tile sequence quality
 - [x] Adapter Content
 - [x] Kmer Content
-- [x] Overrepresented sequences [#partial support]
-- [ ] Sequence Duplication Levels [#Buggy]
+- [ ] Overrepresented sequences [#partial support]
+- [x] Sequence Duplication Levels
 
 ## Output formats
 
-- [ ] Figure
+- [x] Figures
 - [ ] HTML
 - [ ] JSON
 - [ ] Text
 - [ ] CLI tool
+
+## Configuration
+
+- [ ] Custom Contaiminations list
+- [ ] Custom Adapters list
+
+## Issues
+
+- [x]  Sequence Duplication Levels is buggy
+- [ ]  TileQC is extremlly slow
+  
+## Future Work
+
+- [ ] API documentation
+- [ ] Enable multi-threading.
