@@ -14,9 +14,12 @@
 - [x] Kmer Content
 - [ ] Overrepresented sequences [#partial support]
 - [x] Sequence Duplication Levels
+- [ ] Overrepresented sequences [#partial support]
+- [x] Sequence Duplication Levels
 
 ## Output formats
 
+- [x] Figures
 - [x] Figures
 - [ ] HTML
 - [ ] JSON
