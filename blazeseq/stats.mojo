@@ -4,6 +4,7 @@
 
 from tensor import TensorShape
 from collections import Dict, KeyElement, Optional
+from collections.dict import DictEntry
 from utils import StringSlice, Index
 from memory import Span
 import time
@@ -106,9 +107,9 @@ struct FullStats(CollectionElement):
         self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)  # Almost Free
         self.dup_reads.tally_read(record)
-        self.kmer_content.tally_read(record, self.num_reads)
+        # self.kmer_content.tally_read(record, self.num_reads)
         self.qu_dist.tally_read(record)
-        # self.tile_qual.tally_read(record)
+        self.tile_qual.tally_read(record)
         self.adpt_cont.tally_read(record, self.num_reads)
 
     @always_inline
@@ -123,13 +124,13 @@ struct FullStats(CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
-        # self.bp_dist.plot(self.num_reads)
+        self.bp_dist.plot(self.num_reads)
         self.cg_content.plot()
         self.len_dist.plot()
         self.qu_dist.plot()
         self.dup_reads.plot()
-        # self.tile_qual.plot()
-        self.kmer_content.plot()
+        self.tile_qual.plot()
+        # self.kmer_content.plot()
         self.adpt_cont.plot(self.num_reads)
         pass
 
@@ -344,7 +345,6 @@ struct DupReads(Analyser):
 
         self.corrected_counts = corrected_reads
 
-    # Check how it is done in Falco.
     @staticmethod
     fn correct_values(
         dup_level: Int, count_at_level: Int, count_at_max: Int, total_count: Int
@@ -369,36 +369,10 @@ struct DupReads(Analyser):
                 pNotSeeingAtLimit = 0
                 break
 
-        # BUG: Probable bug here, revise the FastQC calculation
         var pSeeingAtLimit: Float64 = 1 - pNotSeeingAtLimit
         var trueCount = count_at_level / pSeeingAtLimit
 
         return trueCount
-
-    # double get_corrected_count(size_t count_at_limit,
-    #                            size_t num_reads,
-    #                            size_t dup_level,
-    #                            size_t num_obs) {
-    #   if (count_at_limit == num_reads)
-    #     return num_obs;
-
-    #   if (num_reads - num_obs < count_at_limit)
-    #     return num_obs;
-
-    #   double p_not_seeing = 1.0;
-    #   double limit_of_caring = 1.0 - (num_obs/(num_obs + 0.01));
-    #   for (size_t i = 0; i < count_at_limit; ++i) {
-    #     p_not_seeing *= static_cast<double>((num_reads-i)-dup_level) /
-    #                          static_cast<double>(num_reads-i);
-
-    #     if (p_not_seeing < limit_of_caring) {
-    #       p_not_seeing = 0;
-    #       break;
-    #     }
-    #   }
-
-    #   return num_obs/std::max(num_lim<double>::min(), 1.0 - p_not_seeing);
-    # }
 
     fn report(self) -> Tensor[DType.int64]:
         var report = Tensor[DType.int64](1)
@@ -409,6 +383,10 @@ struct DupReads(Analyser):
         return String("\nNumber of duplicated reads is") + str(self.report())
 
     fn plot(inout self) raises:
+        ###################################################################
+        ###                     Duplicate Reads                         ###
+        ###################################################################
+
         self.predict_reads()
         # Make this a matrix
         var temp_tensor = Tensor[DType.int64](
@@ -423,6 +401,17 @@ struct DupReads(Analyser):
         var np = Python.import_module("numpy")
         var arr = tensor_to_numpy_1d(temp_tensor)
         np.save("arr_DupReads.npy", arr)
+
+        ################################################################
+        ####               Over-Represented Sequences                ###
+        ################################################################
+
+        # TODO: Check also those over-representing stuff against the contaimination list.
+        overrepresented_seqs = List[Tuple[String, Int64]]()
+        for key in self.unique_dict.items():
+            seq_precent = key[].value / self.n
+            if seq_precent > 0.1:
+                overrepresented_seqs.append((key[].key, seq_precent))
 
 
 # Sequence Length Distribution.
@@ -648,6 +637,7 @@ struct PerTileQuality(Analyser):
     var count_map: Dict[Int, Int]
     var qual_map: Dict[Int, Tensor[DType.int64]]
     var max_length: Int
+    var temp: List[Int]
 
     fn __init__(out self):
         # TODO: Swap the Dict with a Tensor as the Dict lookup is currently very expensive.
@@ -655,6 +645,9 @@ struct PerTileQuality(Analyser):
         self.qual_map = Dict[Int, Tensor[DType.int64]]()
         self.n = 0
         self.max_length = 0
+        self.temp = List[Int](capacity=100)
+        for i in range(100):
+            self.temp.append(0)
 
     # TODO: Add tracking for the number of items inside the hashmaps to limit it to 2_500 items.
     fn tally_read(inout self, record: FastqRecord):
@@ -665,6 +658,11 @@ struct PerTileQuality(Analyser):
 
         var x = self._find_tile_info(record)
         var val = self._find_tile_value(record, x)
+        x = val % 8
+        # self.temp[x] += 1
+
+        # for i in range(record.len_record()):
+        #     self.temp[i] += int(record.QuStr[i])
 
         if val in self.count_map:
             try:
@@ -698,6 +696,7 @@ struct PerTileQuality(Analyser):
 
     # TODO: Construct a n_keys*max_length array to hold all information.
     fn plot(self) raises:
+        print(self.temp.__str__())
         print("tile _plot")
         Python.add_to_path(py_lib)
         np = Python.import_module("numpy")
@@ -806,6 +805,7 @@ struct KmerContent[KMERSIZE: Int]:
                 continue
             self.kmers[self.kmer_to_index(kmer)][i] += 1
 
+    # From: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/smithlab_utils.hpp#L357
     @always_inline
     fn kmer_to_index(self, kmer: Span[T=Byte]) -> Int:
         var index: UInt = 0
@@ -830,8 +830,59 @@ struct KmerContent[KMERSIZE: Int]:
         mat = matrix_to_numpy(agg_tensor)
         np.save("Kmers.npy", mat)
 
+    # TODO: Sort the Kmers to report
+    # Ported from Falco C++ implementation: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/Module.cpp#L2057
+    fn get_kmer_stats(
+        self, kmer_count: PythonObject, num_kmers: Int
+    ) raises -> PythonObject:
+        Python.add_to_path(py_lib)
+        var np = Python.import_module("numpy")
+
+        min_obs_exp_to_report = 1e-2
+
+        num_kmer_bases = min(self.max_length, 500)
+        obs_exp_max = np.zeros(num_kmers, dtype=np.float64)
+        where_obs_exp_is_max = np.zeros(num_kmers, dtype=np.int32)
+        total_kmer_counts = np.zeros(num_kmers, dtype=np.int64)
+
+        total_kmer_counts = kmer_count[:num_kmer_bases, :].sum(axis=0)
+        num_seen_kmers = np.count_nonzero(total_kmer_counts)
+
+        dividend = (
+            float(num_seen_kmers) if num_seen_kmers
+            > 0 else np.finfo(np.float64).eps
+        )
+
+        for pos in range(num_kmer_bases):
+            observed_counts = kmer_count[pos : pos + 1, :]
+            expected_counts = kmer_count[pos : pos + 1, :] / dividend
+            obs_exp_ratios = np.divide(
+                observed_counts,
+                expected_counts,
+                out=np.zeros_like(observed_counts, dtype=np.float64),
+                where=expected_counts > 0,
+            )
+
+            # Update maximum obs/exp ratios and positions
+            mask = obs_exp_ratios > obs_exp_max
+            obs_exp_max = np.where(mask, obs_exp_ratios, obs_exp_max)
+            where_obs_exp_is_max = np.where(
+                mask, pos + 1 - 7, where_obs_exp_is_max
+            )
+
+        kmers_to_report = PythonObject([])
+
+        # Filter and sort k-mers with significant obs/exp ratios
+        significant_mask = obs_exp_max > min_obs_exp_to_report
+        significant_kmers = np.where(significant_mask)[0]
+        for kmer in significant_kmers:
+            kmers_to_report.append((kmer, obs_exp_max[kmer]))
+
+        return kmers_to_report
+
 
 # TODO: Check how to add the analyzer Trait again
+# TODO: Also plot the Over-represented sequences.
 @value
 struct AdapterContent[bits: Int = 3]():
     var kmer_len: Int

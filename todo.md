@@ -10,12 +10,14 @@
 - [x] Per sequence quality scores
 - [x] Per base sequence quality
 - [x] Per tile sequence quality
-- [ ] Sequence Duplication Levels [#Buggy]
-- [ ] Overrepresented sequences [#partial support]
 - [x] Adapter Content
+- [x] Kmer Content
+- [x] Overrepresented sequences [#partial support]
+- [ ] Sequence Duplication Levels [#Buggy]
 
 ## Output formats
 
+- [ ] Figure
 - [ ] HTML
 - [ ] JSON
 - [ ] Text

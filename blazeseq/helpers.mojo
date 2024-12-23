@@ -31,7 +31,8 @@ fn find_chr_next_occurance_simd[
 
     for s in range(start, aligned, simd_width):
         var v = in_tensor.load[width=simd_width](s)
-        var mask = v == chr
+        x = v.cast[DType.uint8]()
+        var mask = x == chr
         if mask.reduce_or():
             return s + arg_true(mask)
 
