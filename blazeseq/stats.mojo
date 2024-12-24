@@ -457,8 +457,6 @@ struct DupReads(Analyser):
                 overrepresented_seqs.append((key[].key, seq_precent))
 
 
-# Sequence Length Distribution.
-# DONE!
 @value
 struct LengthDistribution(Analyser):
     var length_vector: Tensor[DType.int64]
@@ -1030,27 +1028,6 @@ fn _seq_to_hash(seq: String) -> UInt64:
         var rem = ord(seq[i]) & 0b111
         hash = (hash << 3) + int(rem)
     return hash
-
-
-# TODO: Make this also parametrized on the number of bits per bp, this now works only for 3bits
-fn _hash_to_seq(hash: UInt64) -> String:
-    var inner = hash
-    var out: String = ""
-    var sig2bit: UInt64
-
-    for i in range(21, -1, -1):
-        sig2bit = (inner >> (i * 3)) & 0b111
-        if sig2bit == 1:
-            out += "A"
-        if sig2bit == 3:
-            out += "C"
-        if sig2bit == 7:
-            out += "G"
-        if sig2bit == 4:
-            out += "T"
-        if sig2bit == 6:
-            out += "N"
-    return out
 
 
 def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
