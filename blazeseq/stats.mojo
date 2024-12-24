@@ -106,7 +106,7 @@ struct FullStats(CollectionElement):
         self.cg_content.tally_read(record)  # Almost Free
         self.dup_reads.tally_read(record)
         self.qu_dist.tally_read(record)
-        # self.tile_qual.tally_read(record)
+        self.tile_qual.tally_read(record)
         self.adpt_cont.tally_read(record, self.num_reads)
 
     @always_inline
@@ -126,7 +126,6 @@ struct FullStats(CollectionElement):
         self.len_dist.plot()
         self.dup_reads.plot()
         self.tile_qual.plot()
-        # self.kmer_content.plot()
         self.adpt_cont.plot(self.num_reads)
         print(self.num_reads)
         pass
@@ -386,26 +385,72 @@ struct DupReads(Analyser):
         ###################################################################
 
         self.predict_reads()
-        # Make this a matrix
-        var temp_tensor = Tensor[DType.int64](
-            len(self.corrected_counts) * 2 + 1
+        total_percentages = List[Float64](capacity=16)
+        for _ in range(16):
+            total_percentages.append(0)
+        var dedup_total: Float64 = 0
+        var raw_total: Float64 = 0
+        for entry in self.corrected_counts.items():
+            var count = entry[].value
+            var dup_level = entry[].key
+            dedup_total += count
+            raw_total += count * dup_level
+            dup_slot = min(max(dup_level - 1, 0), 15)
+            # Handle edge cases for duplication levels
+            if dup_slot > 9999 or dup_slot < 0:
+                dup_slot = 15
+            elif dup_slot > 4999:
+                dup_slot = 14
+            elif dup_slot > 999:
+                dup_slot = 13
+            elif dup_slot > 499:
+                dup_slot = 12
+            elif dup_slot > 99:
+                dup_slot = 11
+            elif dup_slot > 49:
+                dup_slot = 10
+            elif dup_slot > 9:
+                dup_slot = 9
+            total_percentages[dup_slot] += count * dup_level
+        var plt = Python.import_module("matplotlib.plt")
+        var arr = Tensor[DType.float64](total_percentages)
+        final_arr = tensor_to_numpy_1d(arr)
+        # np.save("arr_DupReads.npy", arr2)
+        f = plt.subplots(figsize=(10, 6))
+        fig = f[0]
+        ax = f[1]
+        ax.plot(final_arr)
+        ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+        ax.set_xticklabels(
+            [
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                ">10",
+                ">50",
+                ">100",
+                ">500",
+                ">1k",
+                ">5k",
+                ">10k+",
+            ]
         )
-        var i = 0
-        for index in self.corrected_counts:
-            temp_tensor[i * 2] = index[]
-            temp_tensor[i * 2 + 1] = int(self.corrected_counts[index[]])
-            i += 1
-
-        var np = Python.import_module("numpy")
-        var arr = tensor_to_numpy_1d(temp_tensor)
-        np.save("arr_DupReads.npy", arr)
+        ax.set_xlabel("Sequence Duplication Level")
+        ax.set_ylim(0, 100)
+        fig.savefig("DuplicateLevels.png")
 
         ################################################################
         ####               Over-Represented Sequences                ###
         ################################################################
 
         # TODO: Check also those over-representing stuff against the contaimination list.
-        overrepresented_seqs = List[Tuple[String, Int64]]()
+        overrepresented_seqs = List[Tuple[String, Float64]]()
         for key in self.unique_dict.items():
             seq_precent = key[].value / self.n
             if seq_precent > 0.1:
@@ -633,13 +678,13 @@ struct QualityDistribution(Analyser):
 struct PerTileQuality(Analyser):
     var n: Int
     var count_map: Dict[Int, Int]
-    var qual_map: Dict[Int, List[Int64]]
+    var qual_map: Dict[Int, Tensor[DType.int64]]
     var max_length: Int
 
     fn __init__(out self):
         # TODO: Swap the Dict with a Tensor as the Dict lookup is currently very expensive.
         self.count_map = Dict[Int, Int](power_of_two_initial_capacity=4096)
-        self.qual_map = Dict[Int, List[Int64]]()
+        self.qual_map = Dict[Int, Tensor[DType.int64]]()
         self.n = 0
         self.max_length = 0
 
@@ -652,23 +697,23 @@ struct PerTileQuality(Analyser):
 
         var x = self._find_tile_info(record)
         var val = self._find_tile_value(record, x)
-        x = val % 8
+        # x = val % 8
         # self.temp[x] += 1
 
         # for i in range(record.len_record()):
         #     self.temp[i] += int(record.QuStr[i])
 
-        # if val in self.count_map:
-        #     try:
-        #         self.count_map[val] += 1
-        #     except:
-        #         pass
-        # else:
-        #     self.count_map[val] = 1
+        if val in self.count_map:
+            try:
+                self.count_map[val] += 1
+            except:
+                pass
+        else:
+            self.count_map[val] = 1
 
-        # # TODO: Make the length Adjustible via swap
-        # if val not in self.qual_map:
-        #     self.qual_map[val] = Tensor[DType.int64](record.len_record())
+        # TODO: Make the length Adjustible via swap
+        if val not in self.qual_map:
+            self.qual_map[val] = Tensor[DType.int64](record.len_record())
 
         try:
             if self.qual_map[val].num_elements() < record.len_record():
@@ -765,7 +810,7 @@ struct KmerContent[KMERSIZE: Int]:
 
     fn __init__(out self):
         self.kmers = List[Tensor[DType.int64]](capacity=pow(4, KMERSIZE))
-        for i in range(pow(4, KMERSIZE)):
+        for _ in range(pow(4, KMERSIZE)):
             self.kmers.append(Tensor[DType.int64](TensorShape(1)))
         self.max_length = 0
 
