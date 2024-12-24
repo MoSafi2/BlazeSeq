@@ -37,3 +37,5 @@
 
 - [ ] API documentation
 - [ ] Enable multi-threading.
+- [ ] Substitute numpy with numojo, matplotlib with JS plotly
+  

@@ -106,7 +106,7 @@ struct FullStats(CollectionElement):
         self.cg_content.tally_read(record)  # Almost Free
         self.dup_reads.tally_read(record)
         self.qu_dist.tally_read(record)
-        # self.tile_qual.tally_read(record)
+        self.tile_qual.tally_read(record)
         self.adpt_cont.tally_read(record, self.num_reads)
 
     @always_inline
@@ -126,9 +126,8 @@ struct FullStats(CollectionElement):
         self.len_dist.plot()
         self.dup_reads.plot()
         self.qu_dist.plot()
-        # self.tile_qual.plot()
+        self.tile_qual.plot()
         self.adpt_cont.plot(self.num_reads)
-        print(self.num_reads)
         pass
 
 
@@ -418,7 +417,7 @@ struct DupReads(Analyser):
 
             total_percentages[dup_slot] += count * dup_level
 
-        var plt = Python.import_module("matplotlib.plt")
+        var plt = Python.import_module("matplotlib.pyplot")
         var arr = Tensor[DType.float64](total_percentages)
         final_arr = tensor_to_numpy_1d(arr)
         # np.save("arr_DupReads.npy", arr2)
@@ -456,11 +455,11 @@ struct DupReads(Analyser):
         ################################################################
 
         # # TODO: Check also those over-representing stuff against the contaimination list.
-        # overrepresented_seqs = List[Tuple[String, Int64]]()
-        # for key in self.unique_dict.items():
-        #     seq_precent = key[].value / self.n
-        #     if seq_precent > 0.1:
-        #         overrepresented_seqs.append((key[].key, seq_precent))
+        overrepresented_seqs = List[Tuple[String, Float64]]()
+        for key in self.unique_dict.items():
+            seq_precent = key[].value / self.n
+            if seq_precent > 0.1:
+                overrepresented_seqs.append((key[].key, seq_precent))
 
 
 # Sequence Length Distribution.
@@ -684,22 +683,18 @@ struct QualityDistribution(Analyser):
 struct PerTileQuality(Analyser):
     var n: Int
     var count_map: Dict[Int, Int]
-    var qual_map: Dict[Int, Tensor[DType.int64]]
+    var qual_map: Dict[Int, List[Int64]]
     var max_length: Int
-    var temp: List[Int]
 
     fn __init__(out self):
         # TODO: Swap the Dict with a Tensor as the Dict lookup is currently very expensive.
-        self.count_map = Dict[Int, Int](power_of_two_initial_capacity=2048)
-        self.qual_map = Dict[Int, Tensor[DType.int64]]()
+        self.count_map = Dict[Int, Int](power_of_two_initial_capacity=4096)
+        self.qual_map = Dict[Int, List[Int64]]()
         self.n = 0
         self.max_length = 0
-        self.temp = List[Int](capacity=100)
-        for i in range(100):
-            self.temp.append(0)
 
     # TODO: Add tracking for the number of items inside the hashmaps to limit it to 2_500 items.
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         self.n += 1
         if self.n >= 10_000:
             if self.n % 10 != 0:
@@ -708,44 +703,40 @@ struct PerTileQuality(Analyser):
         var x = self._find_tile_info(record)
         var val = self._find_tile_value(record, x)
         x = val % 8
-        self.temp[x] += 1
+
+        if val in self.count_map:
+            try:
+                self.count_map[val] += 1
+            except:
+                pass
+        else:
+            self.count_map[val] = 1
+
+        # TODO: Make the length Adjustible via swap
+        if val not in self.qual_map:
+            self.qual_map[val] = List[Int64](capacity=record.len_record())
+
+        try:
+            if len(self.qual_map[val]) < record.len_record():
+                new_tensor = List[Int64](capacity=record.len_record())
+                for i in range(len(self.qual_map[val])):
+                    new_tensor[i] = self.qual_map[val][i]
+                self.qual_map[val] = new_tensor
+        except:
+            pass
 
         for i in range(record.len_record()):
-            self.temp[i] += int(record.QuStr[i])
-
-        # if val in self.count_map:
-        #     try:
-        #         self.count_map[val] += 1
-        #     except:
-        #         pass
-        # else:
-        #     self.count_map[val] = 1
-
-        # # TODO: Make the length Adjustible via swap
-        # if val not in self.qual_map:
-        #     self.qual_map[val] = Tensor[DType.int64](record.len_record())
-
-        # try:
-        #     if self.qual_map[val].num_elements() < record.len_record():
-        #         new_tensor = Tensor[DType.int64](record.len_record())
-        #         for i in range(self.qual_map[val].num_elements()):
-        #             new_tensor[i] = self.qual_map[val][i]
-        #         self.qual_map[val] = new_tensor
-        # except:
-        #     pass
-
-        # for i in range(record.len_record()):
-        #     try:
-        #         self.qual_map[val][i] += int(record.QuStr[i])
-        #     except:
-        #         pass
+            try:
+                var temp = self.qual_map[val][i]
+                self.qual_map[val].unsafe_set(i, temp + int(record.QuStr[i]))
+            except error:
+                print(error._message())
 
         if self.max_length < record.len_record():
             self.max_length = record.len_record()
 
     # TODO: Construct a n_keys*max_length array to hold all information.
     fn plot(self) raises:
-        print(self.temp.__str__())
         print("tile _plot")
         Python.add_to_path(py_lib)
         np = Python.import_module("numpy")
