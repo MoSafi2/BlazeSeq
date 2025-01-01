@@ -23,6 +23,8 @@ from blazeseq.CONSTS import (
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
 
+# TODO: Move those to a config file
+##############
 fn hash_list() -> List[UInt64]:
     var li: List[UInt64] = List[UInt64](
         _seq_to_hash("AGATCGGAAGAG"),
@@ -57,6 +59,8 @@ def hash_names() -> (
 
     return names
 
+
+################
 
 alias WIDTH = 5
 alias MAX_READS = 100_000
@@ -101,33 +105,32 @@ struct FullStats(CollectionElement):
     fn tally(inout self, record: FastqRecord):
         self.num_reads += 1
         self.total_bases += record.len_record()
-        self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
-        self.dup_reads.tally_read(record)
-        self.qu_dist.tally_read(record)
+        # self.bp_dist.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)  # Almost Free
+        # self.dup_reads.tally_read(record)
+        # self.qu_dist.tally_read(record)
+        # self.adpt_cont.tally_read(record, self.num_reads)
         self.tile_qual.tally_read(record)
-        self.adpt_cont.tally_read(record, self.num_reads)
 
     @always_inline
     fn tally(inout self, record: RecordCoord):
         self.num_reads += 1
         self.total_bases += int(record.seq_len())
-        self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)
-        self.qu_dist.tally_read(record)
+        # self.bp_dist.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)
+        # self.qu_dist.tally_read(record)
         pass
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot(self.num_reads)
-        self.cg_content.plot()
-        self.len_dist.plot()
-        self.dup_reads.plot()
-        self.tile_qual.plot()
-        self.adpt_cont.plot(self.num_reads)
-        print(self.num_reads)
+        # self.bp_dist.plot(self.num_reads)
+        # self.cg_content.plot()
+        # self.len_dist.plot()
+        # self.dup_reads.plot()
+        # self.tile_qual.plot()
+        # self.adpt_cont.plot(self.num_reads)
         pass
 
 
@@ -412,7 +415,9 @@ struct DupReads(Analyser):
             elif dup_slot > 9:
                 dup_slot = 9
             total_percentages[dup_slot] += count * dup_level
-        var plt = Python.import_module("matplotlib.plt")
+
+        Python.add_to_path(py_lib)
+        var plt = Python.import_module("matplotlib.pyplot")
         var arr = Tensor[DType.float64](total_percentages)
         final_arr = tensor_to_numpy_1d(arr)
         # np.save("arr_DupReads.npy", arr2)
@@ -680,9 +685,10 @@ struct PerTileQuality(Analyser):
     var max_length: Int
 
     fn __init__(out self):
-        # TODO: Swap the Dict with a Tensor as the Dict lookup is currently very expensive.
-        self.count_map = Dict[Int, Int](power_of_two_initial_capacity=4096)
-        self.qual_map = Dict[Int, Tensor[DType.int64]]()
+        self.count_map = Dict[Int, Int](power_of_two_initial_capacity=2**14)
+        self.qual_map = Dict[Int, Tensor[DType.int64]](
+            power_of_two_initial_capacity=2**14
+        )
         self.n = 0
         self.max_length = 0
 
@@ -695,11 +701,6 @@ struct PerTileQuality(Analyser):
 
         var x = self._find_tile_info(record)
         var val = self._find_tile_value(record, x)
-        # x = val % 8
-        # self.temp[x] += 1
-
-        # for i in range(record.len_record()):
-        #     self.temp[i] += int(record.QuStr[i])
 
         if val in self.count_map:
             try:
@@ -733,7 +734,6 @@ struct PerTileQuality(Analyser):
 
     # TODO: Construct a n_keys*max_length array to hold all information.
     fn plot(self) raises:
-        print("tile _plot")
         Python.add_to_path(py_lib)
         np = Python.import_module("numpy")
         sns = Python.import_module("seaborn")
@@ -967,6 +967,7 @@ struct AdapterContent[bits: Int = 3]():
 
     @always_inline
     fn plot(self, total_reads: Int64) raises:
+        Python.add_to_path(py_lib)
         plt = Python.import_module("matplotlib.pyplot")
         arr = matrix_to_numpy(self.hash_counts)
         arr = (arr / total_reads) * 100
