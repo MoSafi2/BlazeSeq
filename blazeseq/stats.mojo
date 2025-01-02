@@ -105,12 +105,12 @@ struct FullStats(CollectionElement):
     fn tally(inout self, record: FastqRecord):
         self.num_reads += 1
         self.total_bases += record.len_record()
-        # self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)  # Almost Free
-        # self.dup_reads.tally_read(record)
-        # self.qu_dist.tally_read(record)
-        # self.adpt_cont.tally_read(record, self.num_reads)
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)  # Almost Free
+        self.dup_reads.tally_read(record)
+        self.qu_dist.tally_read(record)
+        self.adpt_cont.tally_read(record, self.num_reads)
         self.tile_qual.tally_read(record)
 
     @always_inline
@@ -125,12 +125,12 @@ struct FullStats(CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
-        # self.bp_dist.plot(self.num_reads)
-        # self.cg_content.plot()
-        # self.len_dist.plot()
-        # self.dup_reads.plot()
+        self.bp_dist.plot(self.num_reads)
+        self.cg_content.plot()
+        self.len_dist.plot()
+        self.dup_reads.plot()
         self.tile_qual.plot()
-        # self.adpt_cont.plot(self.num_reads)
+        self.adpt_cont.plot(self.num_reads)
         pass
 
 
