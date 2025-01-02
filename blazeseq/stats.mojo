@@ -291,7 +291,9 @@ struct DupReads(Analyser):
     var corrected_counts: Dict[Int, Float64]
 
     fn __init__(inout self):
-        self.unique_dict = Dict[String, Int]()
+        self.unique_dict = Dict[String, Int](
+            power_of_two_initial_capacity=2**18
+        )
         self.unique_reads = 0
         self.count_at_max = 0
         self.n = 0
