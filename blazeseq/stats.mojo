@@ -129,7 +129,7 @@ struct FullStats(CollectionElement):
         # self.cg_content.plot()
         # self.len_dist.plot()
         # self.dup_reads.plot()
-        # self.tile_qual.plot()
+        self.tile_qual.plot()
         # self.adpt_cont.plot(self.num_reads)
         pass
 
@@ -678,15 +678,34 @@ struct QualityDistribution(Analyser):
 
 
 @value
+struct TileQualityEntry:
+    var tile: Int
+    var count: Int
+    var quality: Tensor[DType.int64]
+
+    fn __init__(out self, tile: Int, count: Int, length: Int):
+        self.tile = tile
+        self.count = count
+        self.quality = Tensor[DType.int64](TensorShape(length))
+
+    fn __hash__(self) -> Int:
+        return self.tile
+
+    fn __add__(self, other: Int) -> Int:
+        return self.count + other
+
+    fn __iadd__(mut self, other: Int):
+        self.count += other
+
+
+@value
 struct PerTileQuality(Analyser):
     var n: Int
-    var count_map: Dict[Int, Int]
-    var qual_map: Dict[Int, Tensor[DType.int64]]
+    var map: Dict[Int, TileQualityEntry]
     var max_length: Int
 
     fn __init__(out self):
-        self.count_map = Dict[Int, Int](power_of_two_initial_capacity=2**14)
-        self.qual_map = Dict[Int, Tensor[DType.int64]](
+        self.map = Dict[Int, TileQualityEntry](
             power_of_two_initial_capacity=2**14
         )
         self.n = 0
@@ -702,32 +721,32 @@ struct PerTileQuality(Analyser):
         var x = self._find_tile_info(record)
         var val = self._find_tile_value(record, x)
 
-        if val in self.count_map:
-            try:
-                self.count_map[val] += 1
-            except:
-                pass
-        else:
-            self.count_map[val] = 1
+        # Low-level access to the hashmap to avoid the overhead of calling `_find_index` multiple times.
+        # Should be considered black magic and should be replcaed with a cleaner version once Mojo dict is more performant.
 
-        # TODO: Make the length Adjustible via swap
-        if val not in self.qual_map:
-            self.qual_map[val] = Tensor[DType.int64](record.len_record())
+        index = self.map._find_index(val.__hash__(), val)
 
-        try:
-            if self.qual_map[val].num_elements() < record.len_record():
+        if index[0]:
+            pos = index[2]
+            entry = self.map._entries[pos]
+
+            entry.unsafe_value().value.count += 1
+            deref_entry = entry.unsafe_value().value
+            if deref_entry.quality.num_elements() < record.len_record():
                 new_tensor = Tensor[DType.int64](record.len_record())
-                for i in range(self.qual_map[val].num_elements()):
-                    new_tensor[i] = self.qual_map[val][i]
-                self.qual_map[val] = new_tensor
-        except:
-            pass
+                for i in range(deref_entry.quality.num_elements()):
+                    new_tensor[i] = deref_entry.quality[i]
+                deref_entry.quality = new_tensor
 
-        for i in range(record.len_record()):
-            try:
-                self.qual_map[val][i] += int(record.QuStr[i])
-            except:
-                pass
+            for i in range(record.len_record()):
+                deref_entry.quality[i] += int(record.QuStr[i])
+
+            self.map._entries[pos] = DictEntry[Int, TileQualityEntry](
+                entry.unsafe_take().key, deref_entry
+            )
+
+        else:
+            self.map[val] = TileQualityEntry(val, 1, record.len_record())
 
         if self.max_length < record.len_record():
             self.max_length = record.len_record()
@@ -741,14 +760,15 @@ struct PerTileQuality(Analyser):
         plt = Python.import_module("matplotlib.pyplot")
 
         arr = np.zeros(self.max_length)
-        for i in self.qual_map.keys():
-            arr = np.vstack((arr, tensor_to_numpy_1d(self.qual_map[i[]])))
+        for i in self.map.keys():
+            temp_arr = tensor_to_numpy_1d(self.map[i[]].quality)
+            arr = np.vstack((arr, temp_arr))
 
         var ks = py_builtin.list()
-        for i in self.qual_map.keys():
+        for i in self.map.keys():
             ks.append(i[])
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks)
-        # plt.savefig("TileQuality.png")
+        plt.savefig("TileQuality.png")
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
