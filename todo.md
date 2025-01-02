@@ -20,7 +20,6 @@
 ## Output formats
 
 - [x] Figures
-- [x] Figures
 - [ ] HTML
 - [ ] JSON
 - [ ] Text

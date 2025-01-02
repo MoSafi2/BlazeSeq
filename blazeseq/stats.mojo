@@ -190,7 +190,7 @@ struct BasepairDistribution(Analyser):
         ax.plot(arr1)
         ax.set_ylim(0, 100)
         plt.legend(["%T", "%A", "%G", "%C"])
-        fig.savefig("BasepairDistribution.png")
+        # fig.savefig("BasepairDistribution.png")
 
         var y = plt.subplots()  # Create a figure
         var fig2 = y[0]
@@ -198,7 +198,7 @@ struct BasepairDistribution(Analyser):
         ax2.plot(arr2)
         ax2.set_ylim(0, 100)
         plt.legend(["%N"])
-        fig2.savefig("NContent.png")
+        # fig2.savefig("NContent.png")
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + str(self.report())
@@ -275,7 +275,7 @@ struct CGContent(Analyser):
         var ax = x[1]
         ax.plot(arr)
         ax.plot(theoritical_distribution)
-        fig.savefig("CGContent.png")
+        # fig.savefig("CGContent.png")
 
     fn __str__(self) -> String:
         return String("\nThe CpG content tensor is: ") + str(self.cg_content)
@@ -448,7 +448,7 @@ struct DupReads(Analyser):
         )
         ax.set_xlabel("Sequence Duplication Level")
         ax.set_ylim(0, 100)
-        fig.savefig("DuplicateLevels.png")
+        # fig.savefig("DuplicateLevels.png")
 
         ################################################################
         ####               Over-Represented Sequences                ###
@@ -513,7 +513,7 @@ struct LengthDistribution(Analyser):
         ax.xaxis.set_major_locator(mtp.ticker.MaxNLocator(integer=True))
         ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
         ax.set_ylim(0)
-        fig.savefig("LengthDistribution.png")
+        # fig.savefig("LengthDistribution.png")
 
     fn __str__(self) -> String:
         return String("\nLength Distribution: ") + str(self.length_vector)
@@ -628,7 +628,7 @@ struct QualityDistribution(Analyser):
 
         ax.bxp(l, showfliers=False)
         ax.plot(mean_line)
-        fig.savefig("QualityDistribution.png")
+        # fig.savefig("QualityDistribution.png")
 
         ###############################################################
         ####                Average quality /seq                   ####
@@ -647,7 +647,7 @@ struct QualityDistribution(Analyser):
         fig3 = z[0]
         ax3 = z[1]
         ax3.plot(arr2)
-        fig3.savefig("Average_quality_sequence.png")
+        # fig3.savefig("Average_quality_sequence.png")
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(int(self.max_qu), self.max_length)
@@ -748,7 +748,7 @@ struct PerTileQuality(Analyser):
         for i in self.qual_map.keys():
             ks.append(i[])
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks)
-        plt.savefig("TileQuality.png")
+        # plt.savefig("TileQuality.png")
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
@@ -864,7 +864,7 @@ struct KmerContent[KMERSIZE: Int]:
                 agg_tensor[Index(i, j)] = self.kmers[i][j]
 
         mat = matrix_to_numpy(agg_tensor)
-        np.save("Kmers.npy", mat)
+        # np.save("Kmers.npy", mat)
 
     # TODO: Sort the Kmers to report
     # Ported from Falco C++ implementation: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/Module.cpp#L2057
@@ -986,7 +986,7 @@ struct AdapterContent[bits: Int = 3]():
         plt.xlabel("Position")
         plt.ylabel("Percentage of Reads")
         plt.title("Adapter Content")
-        plt.savefig("AdapterContent.png")
+        # plt.savefig("AdapterContent.png")
 
     @always_inline
     fn _check_hashes(inout self, hash: UInt64, pos: Int):
