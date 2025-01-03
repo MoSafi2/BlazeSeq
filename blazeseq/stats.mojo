@@ -778,7 +778,7 @@ struct PerTileQuality(Analyser):
     # TODO: This function should return tile information
     @always_inline
     fn _find_tile_info(self, record: FastqRecord) -> Int:
-        header = record.get_header().as_bytes()
+        header = record.get_header_string().as_bytes()
         alias sep: UInt8 = ord(":")
         count = 0
         for i in range(len(header)):
@@ -799,8 +799,8 @@ struct PerTileQuality(Analyser):
         var index_1 = 0
         var index_2 = 0
         var count = 0
-        var header = record.get_header().as_bytes()
-        var header_slice = record.get_header()
+        var header = record.get_header_string().as_bytes()
+        var header_slice = record.get_header_string()
         # TODO: Add Error Handling
         for i in range(len(header)):
             if header[i] == sep:
