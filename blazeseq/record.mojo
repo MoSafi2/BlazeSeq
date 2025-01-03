@@ -65,7 +65,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         )
 
     @always_inline
-    fn get_qulity(self) -> StringSlice[__origin_of(self)]:
+    fn get_quality_string(self) -> StringSlice[__origin_of(self)]:
         return StringSlice[__origin_of(self)](
             ptr=self.QuStr._ptr, length=self.QuStr.num_elements()
         )
@@ -84,7 +84,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         return self.QuStr - offset
 
     @always_inline
-    fn get_header(self) -> StringSlice[__origin_of(self)]:
+    fn get_header_string(self) -> StringSlice[__origin_of(self)]:
         return StringSlice[__origin_of(self)](
             ptr=self.SeqHeader._ptr, length=self.SeqHeader.num_elements()
         )
@@ -185,7 +185,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
 
     @always_inline
     fn __len__(self) -> Int:
-        return self.SeqStr.num_elements()
+        return self.len_record()
 
     @always_inline
     fn len_record(self) -> Int:

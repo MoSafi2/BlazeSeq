@@ -2,17 +2,14 @@
 
 # TODO: Check if you can convert large matrcies to a list of tensors and wether this will result in a better performance. Especially for for Quality Distribution, Tile
 
-from tensor import TensorShape
-from collections import Dict, KeyElement, Optional
-from collections.dict import DictEntry
-from utils import StringSlice, Index
+from tensor import TensorShape, Tensor
+from collections.dict import DictEntry, Dict
+from utils import Index
 from memory import Span
-import time
-from tensor import Tensor
 from python import Python, PythonObject
 from algorithm import sum
 from blazeseq.record import FastqRecord, RecordCoord
-from blazeseq.helpers import write_to_buff, cpy_tensor, QualitySchema
+from blazeseq.helpers import cpy_tensor, QualitySchema
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -117,10 +114,10 @@ struct FullStats(CollectionElement):
     fn tally(inout self, record: RecordCoord):
         self.num_reads += 1
         self.total_bases += int(record.seq_len())
-        # self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)
-        # self.qu_dist.tally_read(record)
+        self.bp_dist.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)
+        self.qu_dist.tally_read(record)
         pass
 
     @always_inline
