@@ -728,20 +728,19 @@ struct PerTileQuality(Analyser):
         if index[0]:
             pos = index[2]
             entry = self.map._entries[pos]
-
-            entry.unsafe_value().value.count += 1
-            deref_entry = entry.unsafe_value().value
-            if deref_entry.quality.num_elements() < record.len_record():
+            deref_value = entry.unsafe_value().value
+            deref_value.count += 1
+            if deref_value.quality.num_elements() < record.len_record():
                 new_tensor = Tensor[DType.int64](record.len_record())
-                for i in range(deref_entry.quality.num_elements()):
-                    new_tensor[i] = deref_entry.quality[i]
-                deref_entry.quality = new_tensor
+                for i in range(deref_value.quality.num_elements()):
+                    new_tensor[i] = deref_value.quality[i]
+                deref_value.quality = new_tensor
 
             for i in range(record.len_record()):
-                deref_entry.quality[i] += int(record.QuStr[i])
+                deref_value.quality[i] += int(record.QuStr[i])
 
             self.map._entries[pos] = DictEntry[Int, TileQualityEntry](
-                entry.unsafe_take().key, deref_entry
+                entry.unsafe_take().key, deref_value
             )
 
         else:
