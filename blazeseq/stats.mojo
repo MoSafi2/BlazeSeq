@@ -10,6 +10,7 @@ from python import Python, PythonObject
 from algorithm import sum
 from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.helpers import cpy_tensor, QualitySchema
+from blazeseq.html_maker import html_template, insert_image_into_template
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -104,11 +105,11 @@ struct FullStats(CollectionElement):
         self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
-        self.dup_reads.tally_read(record)
-        self.qu_dist.tally_read(record)
-        self.adpt_cont.tally_read(record, self.num_reads)
-        self.tile_qual.tally_read(record)
+        # self.cg_content.tally_read(record)  # Almost Free
+        # self.dup_reads.tally_read(record)
+        # self.qu_dist.tally_read(record)
+        # self.adpt_cont.tally_read(record, self.num_reads)
+        # self.tile_qual.tally_read(record)
 
     @always_inline
     fn tally(inout self, record: RecordCoord):
@@ -122,12 +123,22 @@ struct FullStats(CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
-        self.bp_dist.plot(self.num_reads)
-        self.cg_content.plot()
-        self.len_dist.plot()
-        self.dup_reads.plot()
-        self.tile_qual.plot()
-        self.adpt_cont.plot(self.num_reads)
+        img1, img2 = self.bp_dist.plot(self.num_reads)
+        var html = insert_image_into_template(
+            html_template, encode_img_b64(img1)
+        )
+        html = insert_image_into_template(html, encode_img_b64(img2))
+
+        with open("output.html", "rb") as file:
+            print(html)
+            file.write(html)
+            file.close()
+
+        # self.cg_content.plot()
+        # self.len_dist.plot()
+        # self.dup_reads.plot()
+        # self.tile_qual.plot()
+        # self.adpt_cont.plot(self.num_reads)
         pass
 
 
@@ -174,9 +185,12 @@ struct BasepairDistribution(Analyser):
 
     # Should Plot BP distrubution  line plot & Per base N content
     # DONE!
-    fn plot(self, total_reads: Int64) raises:
+    fn plot(self, total_reads: Int64) raises -> Tuple[String, String]:
         Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
+        var py_base64 = Python.import_module("base64")
+        var py_io = Python.import_module("io")
+
         var arr = matrix_to_numpy(self.bp_dist)
         arr = (arr / total_reads) * 100
         var arr1 = arr[:, 0:4]
@@ -187,7 +201,14 @@ struct BasepairDistribution(Analyser):
         ax.plot(arr1)
         ax.set_ylim(0, 100)
         plt.legend(["%T", "%A", "%G", "%C"])
-        # fig.savefig("BasepairDistribution.png")
+
+        buf = py_io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close(fig)  # Close the figure to free memory
+        buf.seek(0)
+        # Encode the image to base64
+        base64_image1 = py_base64.b64encode(buf.read()).decode("utf-8")
+        buf.close()
 
         var y = plt.subplots()  # Create a figure
         var fig2 = y[0]
@@ -195,7 +216,16 @@ struct BasepairDistribution(Analyser):
         ax2.plot(arr2)
         ax2.set_ylim(0, 100)
         plt.legend(["%N"])
-        # fig2.savefig("NContent.png")
+
+        buf2 = py_io.BytesIO()
+        plt.savefig(buf2, format="png")
+        plt.close(fig2)  # Close the figure to free memory
+        buf2.seek(0)
+        # Encode the image to base64
+        base64_image2 = py_base64.b64encode(buf2.read()).decode("utf-8")
+        buf2.close()
+
+        return base64_image1.__str__(), base64_image2.__str__()
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + str(self.report())
@@ -262,7 +292,7 @@ struct CGContent(Analyser):
     fn report(self) -> Tensor[DType.int64]:
         return self.cg_content
 
-    fn plot(self) raises:
+    fn plot(self) raises -> PythonObject:
         Python.add_to_path(py_lib)
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
@@ -272,7 +302,8 @@ struct CGContent(Analyser):
         var ax = x[1]
         ax.plot(arr)
         ax.plot(theoritical_distribution)
-        # fig.savefig("CGContent.png")
+
+        return fig
 
     fn __str__(self) -> String:
         return String("\nThe CpG content tensor is: ") + str(self.cg_content)
@@ -1090,3 +1121,19 @@ fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
     for i in range(tensor.num_elements()):
         acc += int(tensor[i])
     return acc
+
+
+fn encode_img_b64(fig: PythonObject) raises -> PythonObject:
+    Python.add_to_path(py_lib)
+    py_io = Python.import_module("io")
+    py_base64 = Python.import_module("base64")
+    plt = Python.import_module("matplotlib.pyplot")
+
+    buf = py_io.BytesIO()
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    base64_image = py_base64.b64encode(buf.read()).decode("utf-8")
+    buf.close()
+
+    return base64_image
