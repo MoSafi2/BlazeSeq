@@ -3,7 +3,8 @@ import python
 from python import PythonObject, Python
 
 
-alias html_template: String = """
+fn create_html_template() -> PythonObject:
+    return """
     <!DOCTYPE html>
     <html lang="en">
     <head>

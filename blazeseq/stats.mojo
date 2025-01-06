@@ -10,7 +10,7 @@ from python import Python, PythonObject
 from algorithm import sum
 from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.helpers import cpy_tensor, QualitySchema
-from blazeseq.html_maker import html_template, insert_image_into_template
+from blazeseq.html_maker import create_html_template, insert_image_into_template
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -123,16 +123,16 @@ struct FullStats(CollectionElement):
 
     @always_inline
     fn plot(inout self) raises:
+        py_builtin = Python.import_module("builtins")
         img1, img2 = self.bp_dist.plot(self.num_reads)
+
         var html = insert_image_into_template(
-            html_template, encode_img_b64(img1)
+            create_html_template(), encode_img_b64(img1)
         )
         html = insert_image_into_template(html, encode_img_b64(img2))
-
-        with open("output.html", "rb") as file:
-            print(html)
-            file.write(html)
-            file.close()
+        file = py_builtin.open("output3.html", "w")
+        file.write(html)
+        file.close()
 
         # self.cg_content.plot()
         # self.len_dist.plot()
