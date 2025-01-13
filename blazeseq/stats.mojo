@@ -19,6 +19,7 @@ from blazeseq.CONSTS import (
 )
 
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
+alias plt_figure = PythonObject
 
 
 # TODO: Move those to a config file
@@ -123,7 +124,6 @@ struct FullStats(CollectionElement):
 
     @always_inline
     fn plot(mut self) raises:
-        py_builtin = Python.import_module("builtins")
         img1, img2 = self.bp_dist.plot(self.num_reads)
 
         var html = insert_image_into_template(
@@ -186,13 +186,9 @@ struct BasepairDistribution(Analyser):
 
     # Should Plot BP distrubution  line plot & Per base N content
     # DONE!
-    fn plot(
-        self, total_reads: Int64
-    ) raises -> Tuple[PythonObject, PythonObject]:
+    fn plot(self, total_reads: Int64) raises -> Tuple[plt_figure, plt_figure]:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
-        var py_base64 = Python.import_module("base64")
-        var py_io = Python.import_module("io")
 
         var arr = matrix_to_numpy(self.bp_dist)
         arr = (arr / total_reads) * 100
@@ -205,14 +201,6 @@ struct BasepairDistribution(Analyser):
         ax.set_ylim(0, 100)
         plt.legend(["%T", "%A", "%G", "%C"])
 
-        # buf = py_io.BytesIO()
-        # plt.savefig(buf, format="png")
-        # plt.close(fig)  # Close the figure to free memory
-        # buf.seek(0)
-        # # Encode the image to base64
-        # base64_image1 = py_base64.b64encode(buf.read()).decode("utf-8")
-        # buf.close()
-
         var y = plt.subplots()  # Create a figure
         var fig2 = y[0]
         var ax2 = y[1]
@@ -220,15 +208,6 @@ struct BasepairDistribution(Analyser):
         ax2.set_ylim(0, 100)
         plt.legend(["%N"])
 
-        # buf2 = py_io.BytesIO()
-        # plt.savefig(buf2, format="png")
-        # plt.close(fig2)  # Close the figure to free memory
-        # buf2.seek(0)
-        # # Encode the image to base64
-        # base64_image2 = py_base64.b64encode(buf2.read()).decode("utf-8")
-        # buf2.close()
-
-        # return base64_image1.__str__(), base64_image2.__str__()
         return fig, fig2
 
     fn __str__(self) -> String:
@@ -296,7 +275,7 @@ struct CGContent(Analyser):
     fn report(self) -> Tensor[DType.int64]:
         return self.cg_content
 
-    fn plot(self) raises -> PythonObject:
+    fn plot(self) raises -> plt_figure:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
@@ -418,7 +397,9 @@ struct DupReads(Analyser):
     fn __str__(self) -> String:
         return String("\nNumber of duplicated reads is") + str(self.report())
 
-    fn plot(mut self) raises:
+    fn plot(
+        mut self,
+    ) raises -> Tuple[plt_figure, List[Tuple[String, Float64]]]:
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
@@ -484,7 +465,6 @@ struct DupReads(Analyser):
         )
         ax.set_xlabel("Sequence Duplication Level")
         ax.set_ylim(0, 100)
-        # fig.savefig("DuplicateLevels.png")
 
         ################################################################
         ####               Over-Represented Sequences                ###
@@ -496,6 +476,8 @@ struct DupReads(Analyser):
             seq_precent = key[].value / self.n
             if seq_precent > 0.1:
                 overrepresented_seqs.append((key[].key, seq_precent))
+
+        return fig, overrepresented_seqs
 
 
 @value
@@ -531,7 +513,7 @@ struct LengthDistribution(Analyser):
     fn report(self) -> Tensor[DType.int64]:
         return self.length_vector
 
-    fn plot(self) raises:
+    fn plot(self) raises -> plt_figure:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
@@ -549,7 +531,8 @@ struct LengthDistribution(Analyser):
         ax.xaxis.set_major_locator(mtp.ticker.MaxNLocator(integer=True))
         ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
         ax.set_ylim(0)
-        # fig.savefig("LengthDistribution.png")
+
+        return fig
 
     fn __str__(self) -> String:
         return String("\nLength Distribution: ") + str(self.length_vector)
@@ -622,7 +605,7 @@ struct QualityDistribution(Analyser):
         indices = np.arange(min_index, max_index)
         return np.take(arr, indices, axis=1)
 
-    fn plot(self) raises:
+    fn plot(self) raises -> Tuple[plt_figure, plt_figure]:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
@@ -664,7 +647,6 @@ struct QualityDistribution(Analyser):
 
         ax.bxp(l, showfliers=False)
         ax.plot(mean_line)
-        # fig.savefig("QualityDistribution.png")
 
         ###############################################################
         ####                Average quality /seq                   ####
@@ -683,7 +665,8 @@ struct QualityDistribution(Analyser):
         fig3 = z[0]
         ax3 = z[1]
         ax3.plot(arr2)
-        # fig3.savefig("Average_quality_sequence.png")
+
+        return Tuple(fig, fig3)
 
     fn report(self) -> Tensor[DType.int64]:
         var final_shape = TensorShape(Int(self.max_qu), self.max_length)
@@ -725,7 +708,7 @@ struct TileQualityEntry:
         self.quality = Tensor[DType.int64](TensorShape(length))
 
     fn __hash__(self) -> Int:
-        return self.tile
+        return hash(self.tile)
 
     fn __add__(self, other: Int) -> Int:
         return self.count + other
@@ -758,7 +741,7 @@ struct PerTileQuality(Analyser):
         var val = self._find_tile_value(record, x)
 
         # Low-level access to the hashmap to avoid the overhead of calling `_find_index` multiple times.
-        # Should be considered black magic and should be replcaed with a cleaner version once Mojo dict is more performant.
+        # Should be replcaed with a cleaner version once Mojo dict is more performant.
 
         index = self.map._find_index(val.__hash__(), val)
 
@@ -787,7 +770,7 @@ struct PerTileQuality(Analyser):
             self.max_length = record.len_record()
 
     # TODO: Construct a n_keys*max_length array to hold all information.
-    fn plot(self) raises:
+    fn plot(self) raises -> plt_figure:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         sns = Python.import_module("seaborn")
@@ -803,7 +786,8 @@ struct PerTileQuality(Analyser):
         for i in self.map.keys():
             ks.append(i[])
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks)
-        plt.savefig("TileQuality.png")
+        
+        return plt.gcf()
 
     fn report(self) -> Tensor[DType.int64]:
         return Tensor[DType.int64]()
@@ -1021,7 +1005,7 @@ struct AdapterContent[bits: Int = 3]():
                 self._check_hashes(hash, i + 1)
 
     @always_inline
-    fn plot(self, total_reads: Int64) raises:
+    fn plot(self, total_reads: Int64) raises -> plt_figure:
         Python.add_to_path(py_lib.as_string_slice())
         plt = Python.import_module("matplotlib.pyplot")
         arr = matrix_to_numpy(self.hash_counts)
@@ -1041,7 +1025,8 @@ struct AdapterContent[bits: Int = 3]():
         plt.xlabel("Position")
         plt.ylabel("Percentage of Reads")
         plt.title("Adapter Content")
-        # plt.savefig("AdapterContent.png")
+        
+        return plt.gcf()
 
     @always_inline
     fn _check_hashes(mut self, hash: UInt64, pos: Int):

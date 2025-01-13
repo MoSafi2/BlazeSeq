@@ -12,10 +12,8 @@
 - [x] Per tile sequence quality
 - [x] Adapter Content
 - [x] Kmer Content
-- [ ] Overrepresented sequences [#partial support]
 - [x] Sequence Duplication Levels
-- [ ] Overrepresented sequences [#partial support]
-- [x] Sequence Duplication Levels
+- [x] Overrepresented sequences [#partial support]
 
 ## Output formats
 
@@ -30,11 +28,6 @@
 - [ ] Custom Contaiminations list
 - [ ] Custom Adapters list
 
-## Issues
-
-- [x]  Sequence Duplication Levels is buggy
-- [ ]  TileQC is extremlly slow
-  
 ## Future Work
 
 - [ ] API documentation
