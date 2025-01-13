@@ -23,7 +23,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
     var quality_schema: QualitySchema
 
     fn __init__(
-        inout self,
+        out self,
         SH: TU8,
         SS: TU8,
         QH: TU8,
@@ -41,7 +41,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
             self.quality_schema = quality_schema[QualitySchema]
 
     fn __init__(
-        inout self,
+        out self,
         SH: String,
         SS: String,
         QH: String,
@@ -130,7 +130,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
             + 4
         )
 
-    fn write_to[w: Writer](self, inout writer: w):
+    fn write_to[w: Writer](self, mut writer: w):
         var l1 = Span[origin = __origin_of(self.SeqHeader)](
             ptr=self.SeqHeader.unsafe_ptr(),
             length=self.SeqHeader.num_elements(),
@@ -238,7 +238,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         for i in range(min(rnge, length)):
             # Mask for for first <n> significant bits, vectorized operation.
             var base_val = bytes[i] & mask
-            hash = (hash << bits) | int(base_val[i])
+            hash = (hash << bits) | Int(base_val[i])
         return hash
 
     # Change to a better hashing Algorithm
@@ -263,21 +263,21 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
             @parameter
             for i in range(16):
                 var base_val = bytes[i + 16 * round] & mask
-                interim_hash = interim_hash << bits | int(base_val)
+                interim_hash = interim_hash << bits | Int(base_val)
             full_hash = full_hash + interim_hash
 
         if rem > 0:
             var interim_hash: UInt64 = 0
             for i in range(rem):
                 var base_val = bytes[i + 16 * rounds] & mask
-                interim_hash = interim_hash << bits | int(base_val)
+                interim_hash = interim_hash << bits | Int(base_val)
             full_hash = full_hash + interim_hash
 
         return full_hash
 
     @always_inline
     fn __hash__(self) -> UInt:
-        return int(self.hash())
+        return Int(self.hash())
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -300,7 +300,7 @@ struct RecordCoord[validate_quality: Bool = False](
     var QuStr: Span[Byte, StaticConstantOrigin]
 
     fn __init__(
-        inout self,
+        out self,
         SH: Span[Byte, StaticConstantOrigin],
         SS: Span[Byte, StaticConstantOrigin],
         QH: Span[Byte, StaticConstantOrigin],
@@ -339,16 +339,16 @@ struct RecordCoord[validate_quality: Bool = False](
 
     @always_inline
     fn validate_quality_schema(self) raises:
-        for i in range(int(self.qu_len())):
+        for i in range(Int(self.qu_len())):
             if self.QuStr[i] > 126 or self.QuStr[i] < 33:
                 raise Error(
                     "Corrput quality score according to proivded schema"
                 )
 
     fn __len__(self) -> Int:
-        return int(self.seq_len())
+        return Int(self.seq_len())
 
-    fn write_to[w: Writer](self, inout writer: w):
+    fn write_to[w: Writer](self, mut writer: w):
         writer.write_bytes(self.SeqHeader)
         writer.write("/n")
         writer.write_bytes(self.SeqStr)

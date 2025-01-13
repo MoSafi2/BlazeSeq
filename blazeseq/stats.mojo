@@ -4,7 +4,7 @@
 
 from tensor import TensorShape, Tensor
 from collections.dict import DictEntry, Dict
-from utils import Index
+from utils import Index, StringSlice
 from memory import Span
 from python import Python, PythonObject
 from algorithm import sum
@@ -66,7 +66,7 @@ alias MAX_QUALITY = 93
 
 
 trait Analyser(CollectionElement, Stringable):
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         ...
 
     fn report(self) -> Tensor[DType.int64]:
@@ -88,7 +88,7 @@ struct FullStats(CollectionElement):
     var tile_qual: PerTileQuality
     var adpt_cont: AdapterContent
 
-    fn __init__(inout self):
+    fn __init__(out self):
         self.num_reads = 0
         self.total_bases = 0
         self.len_dist = LengthDistribution()
@@ -100,7 +100,7 @@ struct FullStats(CollectionElement):
         self.adpt_cont = AdapterContent(hash_list(), 12)
 
     @always_inline
-    fn tally(inout self, record: FastqRecord):
+    fn tally(mut self, record: FastqRecord):
         self.num_reads += 1
         self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
@@ -112,9 +112,9 @@ struct FullStats(CollectionElement):
         # self.tile_qual.tally_read(record)
 
     @always_inline
-    fn tally(inout self, record: RecordCoord):
+    fn tally(mut self, record: RecordCoord):
         self.num_reads += 1
-        self.total_bases += int(record.seq_len())
+        self.total_bases += Int(record.seq_len())
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)
@@ -122,17 +122,18 @@ struct FullStats(CollectionElement):
         pass
 
     @always_inline
-    fn plot(inout self) raises:
+    fn plot(mut self) raises:
         py_builtin = Python.import_module("builtins")
         img1, img2 = self.bp_dist.plot(self.num_reads)
 
         var html = insert_image_into_template(
             create_html_template(), encode_img_b64(img1)
         )
-        html = insert_image_into_template(html, encode_img_b64(img2))
-        file = py_builtin.open("output3.html", "w")
-        file.write(html)
-        file.close()
+        print(html)
+        # html = insert_image_into_template(html, encode_img_b64(img2))
+        # file = py_builtin.open("output3.html", "w")
+        # file.write(html)
+        # file.close()
 
         # self.cg_content.plot()
         # self.len_dist.plot()
@@ -147,12 +148,12 @@ struct BasepairDistribution(Analyser):
     var bp_dist: Tensor[DType.int64]
     var max_length: Int
 
-    fn __init__(inout self):
+    fn __init__(out self):
         var shape = TensorShape(VariadicList[Int](1, WIDTH))
         self.bp_dist = Tensor[DType.int64](shape)
         self.max_length = 0
 
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         if record.len_record() > self.max_length:
             self.max_length = record.len_record()
             var new_tensor = grow_matrix(
@@ -162,21 +163,21 @@ struct BasepairDistribution(Analyser):
 
         for i in range(record.len_record()):
             # Remineder of first 5 bits seperates N from T
-            var base_val = int((record.SeqStr[i] & 0b11111) % WIDTH)
+            var base_val = Int((record.SeqStr[i] & 0b11111) % WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
-    fn tally_read(inout self, record: RecordCoord):
+    fn tally_read(mut self, record: RecordCoord):
         if record.seq_len() > self.max_length:
-            self.max_length = int(record.seq_len())
+            self.max_length = Int(record.seq_len())
             var new_tensor = grow_matrix(
                 self.bp_dist, TensorShape(self.max_length, WIDTH)
             )
             swap(self.bp_dist, new_tensor)
 
-        for i in range(int(record.seq_len())):
+        for i in range(Int(record.seq_len())):
             # Remineder of first 5 bits seperates N from T
-            var base_val = int((record.SeqStr[i] & 0b11111) % WIDTH)
+            var base_val = Int((record.SeqStr[i] & 0b11111) % WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
@@ -185,8 +186,10 @@ struct BasepairDistribution(Analyser):
 
     # Should Plot BP distrubution  line plot & Per base N content
     # DONE!
-    fn plot(self, total_reads: Int64) raises -> Tuple[String, String]:
-        Python.add_to_path(py_lib)
+    fn plot(
+        self, total_reads: Int64
+    ) raises -> Tuple[PythonObject, PythonObject]:
+        Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var py_base64 = Python.import_module("base64")
         var py_io = Python.import_module("io")
@@ -202,13 +205,13 @@ struct BasepairDistribution(Analyser):
         ax.set_ylim(0, 100)
         plt.legend(["%T", "%A", "%G", "%C"])
 
-        buf = py_io.BytesIO()
-        plt.savefig(buf, format="png")
-        plt.close(fig)  # Close the figure to free memory
-        buf.seek(0)
-        # Encode the image to base64
-        base64_image1 = py_base64.b64encode(buf.read()).decode("utf-8")
-        buf.close()
+        # buf = py_io.BytesIO()
+        # plt.savefig(buf, format="png")
+        # plt.close(fig)  # Close the figure to free memory
+        # buf.seek(0)
+        # # Encode the image to base64
+        # base64_image1 = py_base64.b64encode(buf.read()).decode("utf-8")
+        # buf.close()
 
         var y = plt.subplots()  # Create a figure
         var fig2 = y[0]
@@ -217,15 +220,16 @@ struct BasepairDistribution(Analyser):
         ax2.set_ylim(0, 100)
         plt.legend(["%N"])
 
-        buf2 = py_io.BytesIO()
-        plt.savefig(buf2, format="png")
-        plt.close(fig2)  # Close the figure to free memory
-        buf2.seek(0)
-        # Encode the image to base64
-        base64_image2 = py_base64.b64encode(buf2.read()).decode("utf-8")
-        buf2.close()
+        # buf2 = py_io.BytesIO()
+        # plt.savefig(buf2, format="png")
+        # plt.close(fig2)  # Close the figure to free memory
+        # buf2.seek(0)
+        # # Encode the image to base64
+        # base64_image2 = py_base64.b64encode(buf2.read()).decode("utf-8")
+        # buf2.close()
 
-        return base64_image1.__str__(), base64_image2.__str__()
+        # return base64_image1.__str__(), base64_image2.__str__()
+        return fig, fig2
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ") + str(self.report())
@@ -237,11 +241,11 @@ struct CGContent(Analyser):
     var cg_content: Tensor[DType.int64]
     var theoritical_distribution: Tensor[DType.int64]
 
-    fn __init__(inout self):
+    fn __init__(out self):
         self.cg_content = Tensor[DType.int64](101)
         self.theoritical_distribution = Tensor[DType.int64](101)
 
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         if record.len_record() == 0:
             return
 
@@ -254,12 +258,12 @@ struct CGContent(Analyser):
             ):
                 cg_num += 1
 
-        var read_cg_content = int(
-            round(cg_num * 100 / int(record.len_record()))
+        var read_cg_content = Int(
+            round(cg_num * 100 / Int(record.len_record()))
         )
         self.cg_content[read_cg_content] += 1
 
-    fn tally_read(inout self, record: RecordCoord):
+    fn tally_read(mut self, record: RecordCoord):
         if record.seq_len() == 0:
             return
         var cg_num = 0
@@ -271,7 +275,7 @@ struct CGContent(Analyser):
             ):
                 cg_num += 1
 
-        var read_cg_content = int(round(cg_num * 100 / int(record.seq_len())))
+        var read_cg_content = Int(round(cg_num * 100 / Int(record.seq_len())))
         self.cg_content[read_cg_content] += 1
 
     fn calculate_theoritical_distribution(self) raises -> PythonObject:
@@ -293,7 +297,7 @@ struct CGContent(Analyser):
         return self.cg_content
 
     fn plot(self) raises -> PythonObject:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
         var theoritical_distribution = self.calculate_theoritical_distribution()
@@ -318,7 +322,7 @@ struct DupReads(Analyser):
     var n: Int
     var corrected_counts: Dict[Int, Float64]
 
-    fn __init__(inout self):
+    fn __init__(out self):
         self.unique_dict = Dict[String, Int](
             power_of_two_initial_capacity=2**18
         )
@@ -327,10 +331,12 @@ struct DupReads(Analyser):
         self.n = 0
         self.corrected_counts = Dict[Int, Float64]()
 
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         self.n += 1
         read_len = min(record.len_record(), 50)
-        var s = String(record.get_seq().as_bytes()[0:read_len])
+        s_ = List(record.get_seq().as_bytes()[0:read_len])
+        s_.append(0)
+        var s = String(s_)
         if s in self.unique_dict:
             try:
                 self.unique_dict[s] += 1
@@ -348,17 +354,17 @@ struct DupReads(Analyser):
         else:
             return
 
-    fn predict_reads(inout self):
+    fn predict_reads(mut self):
         # Construct Duplication levels dict
         var dup_dict = Dict[Int, Int]()
         for entry in self.unique_dict.items():
-            if int(entry[].value) in dup_dict:
+            if Int(entry[].value) in dup_dict:
                 try:
-                    dup_dict[int(entry[].value)] += 1
+                    dup_dict[Int(entry[].value)] += 1
                 except error:
                     print(error._message())
             else:
-                dup_dict[int(entry[].value)] = 1
+                dup_dict[Int(entry[].value)] = 1
 
         # Correct reads levels
         var corrected_reads = Dict[Int, Float64]()
@@ -412,7 +418,7 @@ struct DupReads(Analyser):
     fn __str__(self) -> String:
         return String("\nNumber of duplicated reads is") + str(self.report())
 
-    fn plot(inout self) raises:
+    fn plot(mut self) raises:
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
@@ -446,7 +452,7 @@ struct DupReads(Analyser):
                 dup_slot = 9
             total_percentages[dup_slot] += count * dup_level
 
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = Tensor[DType.float64](total_percentages)
         final_arr = tensor_to_numpy_1d(arr)
@@ -496,10 +502,10 @@ struct DupReads(Analyser):
 struct LengthDistribution(Analyser):
     var length_vector: Tensor[DType.int64]
 
-    fn __init__(inout self):
+    fn __init__(out self):
         self.length_vector = Tensor[DType.int64](0)
 
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         if record.len_record() > self.length_vector.num_elements():
             var new_tensor = grow_tensor(
                 self.length_vector, record.len_record()
@@ -507,26 +513,26 @@ struct LengthDistribution(Analyser):
             swap(self.length_vector, new_tensor)
         self.length_vector[record.len_record() - 1] += 1
 
-    fn tally_read(inout self, record: RecordCoord):
+    fn tally_read(mut self, record: RecordCoord):
         if record.seq_len() > self.length_vector.num_elements():
             var new_tensor = grow_tensor(
-                self.length_vector, int(record.seq_len())
+                self.length_vector, Int(record.seq_len())
             )
             swap(self.length_vector, new_tensor)
-        self.length_vector[int(record.seq_len() - 1)] += 1
+        self.length_vector[Int(record.seq_len() - 1)] += 1
 
     @always_inline
     fn length_average(self, num_reads: Int) -> Float64:
         var cum: Int64 = 0
         for i in range(self.length_vector.num_elements()):
             cum += self.length_vector[i] * (i + 1)
-        return int(cum) / num_reads
+        return Int(cum) / num_reads
 
     fn report(self) -> Tensor[DType.int64]:
         return self.length_vector
 
     fn plot(self) raises:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
         var mtp = Python.import_module("matplotlib")
@@ -567,7 +573,7 @@ struct QualityDistribution(Analyser):
         self.max_qu = 0
         self.min_qu = 128
 
-    fn tally_read(inout self, record: FastqRecord):
+    fn tally_read(mut self, record: FastqRecord):
         if record.len_quality() > self.max_length:
             self.max_length = record.len_record()
             new_shape = TensorShape(self.max_length, 128)
@@ -576,35 +582,35 @@ struct QualityDistribution(Analyser):
 
         for i in range(record.len_quality()):
             base_qu = record.QuStr[i]
-            index = VariadicList[Int](i, int(base_qu))
+            index = VariadicList[Int](i, Int(base_qu))
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
             if base_qu < self.min_qu:
                 self.min_qu = base_qu
 
-        average = int(sum_tensor(record.QuStr) / record.len_quality())
+        average = Int(sum_tensor(record.QuStr) / record.len_quality())
         self.qu_dist_seq[average] += 1
 
-    fn tally_read(inout self, record: RecordCoord):
+    fn tally_read(mut self, record: RecordCoord):
         if record.qu_len() > self.max_length:
-            self.max_length = int(record.seq_len())
+            self.max_length = Int(record.seq_len())
             new_shape = TensorShape(self.max_length, 128)
             new_qu_dist = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_qu_dist)
 
-        for i in range(int(record.qu_len())):
+        for i in range(Int(record.qu_len())):
             base_qu = record.QuStr[i]
-            index = VariadicList[Int](i, int(base_qu))
+            index = VariadicList[Int](i, Int(base_qu))
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
             if base_qu < self.min_qu:
                 self.min_qu = base_qu
         var sum: Int = 0
-        for i in range(int(record.qu_len())):
-            sum += int(record.QuStr[i])
-        average = int(sum / record.qu_len())
+        for i in range(Int(record.qu_len())):
+            sum += Int(record.QuStr[i])
+        average = Int(sum / record.qu_len())
         self.qu_dist_seq[average] += 1
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
@@ -617,7 +623,7 @@ struct QualityDistribution(Analyser):
         return np.take(arr, indices, axis=1)
 
     fn plot(self) raises:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
         py_builtin = Python.import_module("builtins")
@@ -626,7 +632,7 @@ struct QualityDistribution(Analyser):
         arr = matrix_to_numpy(self.qu_dist)
         min_index = schema.OFFSET
         max_index = max(40, self.max_qu)
-        arr = self.slice_array(arr, int(min_index), int(max_index))
+        arr = self.slice_array(arr, Int(min_index), Int(max_index))
 
         ################ Quality Boxplot ##################
 
@@ -672,7 +678,7 @@ struct QualityDistribution(Analyser):
                 break
 
         arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
-        arr2 = arr2[int(schema.OFFSET) : index + 2]
+        arr2 = arr2[Int(schema.OFFSET) : index + 2]
         z = plt.subplots()
         fig3 = z[0]
         ax3 = z[1]
@@ -680,12 +686,12 @@ struct QualityDistribution(Analyser):
         # fig3.savefig("Average_quality_sequence.png")
 
     fn report(self) -> Tensor[DType.int64]:
-        var final_shape = TensorShape(int(self.max_qu), self.max_length)
+        var final_shape = TensorShape(Int(self.max_qu), self.max_length)
         var final_t = Tensor[DType.int64](final_shape)
 
         for i in range(self.max_qu):
             for j in range(self.max_length):
-                var index = VariadicList[Int](int(i), j)
+                var index = VariadicList[Int](Int(i), j)
                 final_t[index] = self.qu_dist[index]
         return final_t
 
@@ -768,7 +774,7 @@ struct PerTileQuality(Analyser):
                 deref_value.quality = new_tensor
 
             for i in range(record.len_record()):
-                deref_value.quality[i] += int(record.QuStr[i])
+                deref_value.quality[i] += Int(record.QuStr[i])
 
             self.map._entries[pos] = DictEntry[Int, TileQualityEntry](
                 entry.unsafe_take().key, deref_value
@@ -782,7 +788,7 @@ struct PerTileQuality(Analyser):
 
     # TODO: Construct a n_keys*max_length array to hold all information.
     fn plot(self) raises:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         sns = Python.import_module("seaborn")
         py_builtin = Python.import_module("builtins")
@@ -896,14 +902,14 @@ struct KmerContent[KMERSIZE: Int]:
         var index: UInt = 0
         var multiplier = 1
         for i in range(len(kmer), -1, -1):
-            index += int(base2int(kmer[i]))
+            index += Int(base2int(kmer[i]))
             multiplier *= 4
         return index
 
     # TODO: Figure out how the enrichment calculation is carried out.
     # Check: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/Module.cpp#L2068
     fn plot(self) raises:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         var np = Python.import_module("numpy")
         var agg_tensor = Tensor[DType.int64](
             TensorShape(pow(4, KMERSIZE), self.max_length)
@@ -920,7 +926,7 @@ struct KmerContent[KMERSIZE: Int]:
     fn get_kmer_stats(
         self, kmer_count: PythonObject, num_kmers: Int
     ) raises -> PythonObject:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         var np = Python.import_module("numpy")
 
         min_obs_exp_to_report = 1e-2
@@ -975,7 +981,7 @@ struct AdapterContent[bits: Int = 3]():
     var hash_list: List[UInt64]
     var max_length: Int
 
-    fn __init__(inout self, hashes: List[UInt64], kmer_len: Int = 0):
+    fn __init__(out self, hashes: List[UInt64], kmer_len: Int = 0):
         self.kmer_len = min(kmer_len, 64 // bits)
         self.hash_list = hashes
         shape = TensorShape(len(self.hash_list), 1)
@@ -1010,13 +1016,13 @@ struct AdapterContent[bits: Int = 3]():
 
             # Mask for the least sig. three bits, add to hash
             var rem = record.SeqStr[i] & bit_shift
-            hash = (hash << bits) + int(rem)
+            hash = (hash << bits) + Int(rem)
             if len(self.hash_list) > 0:
                 self._check_hashes(hash, i + 1)
 
     @always_inline
     fn plot(self, total_reads: Int64) raises:
-        Python.add_to_path(py_lib)
+        Python.add_to_path(py_lib.as_string_slice())
         plt = Python.import_module("matplotlib.pyplot")
         arr = matrix_to_numpy(self.hash_counts)
         arr = (arr / total_reads) * 100
@@ -1038,7 +1044,7 @@ struct AdapterContent[bits: Int = 3]():
         # plt.savefig("AdapterContent.png")
 
     @always_inline
-    fn _check_hashes(inout self, hash: UInt64, pos: Int):
+    fn _check_hashes(mut self, hash: UInt64, pos: Int):
         for i in range(len(self.hash_list)):
             if hash == self.hash_list[i]:
                 self.hash_counts[Index(i, pos)] += 1
@@ -1076,12 +1082,12 @@ fn _seq_to_hash(seq: String) -> UInt64:
         hash = hash & 0x1FFFFFFFFFFFFFFF
         # Mask for the least sig. three bits, add to hash
         var rem = ord(seq[i]) & 0b111
-        hash = (hash << 3) + int(rem)
+        hash = (hash << 3) + Int(rem)
     return hash
 
 
 def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
-    Python.add_to_path(py_lib)
+    Python.add_to_path(py_lib.as_string_slice())
     np = Python.import_module("numpy")
     ar = np.zeros(tensor.num_elements())
     for i in range(tensor.num_elements()):
@@ -1119,21 +1125,19 @@ fn grow_matrix[
 fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
     acc = 0
     for i in range(tensor.num_elements()):
-        acc += int(tensor[i])
+        acc += Int(tensor[i])
     return acc
 
 
-fn encode_img_b64(fig: PythonObject) raises -> PythonObject:
-    Python.add_to_path(py_lib)
+fn encode_img_b64(fig: PythonObject) raises -> String:
+    Python.add_to_path(py_lib.as_string_slice())
     py_io = Python.import_module("io")
     py_base64 = Python.import_module("base64")
     plt = Python.import_module("matplotlib.pyplot")
 
     buf = py_io.BytesIO()
     plt.savefig(buf, format="png")
-    plt.close(fig)
     buf.seek(0)
     base64_image = py_base64.b64encode(buf.read()).decode("utf-8")
     buf.close()
-
-    return base64_image
+    return str(base64_image)

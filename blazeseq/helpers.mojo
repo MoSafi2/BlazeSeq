@@ -146,7 +146,7 @@ fn cpy_tensor[
     T: DType
     # simd_width: Int
 ](
-    inout dest: Tensor[T],
+    mut dest: Tensor[T],
     src: Tensor[T],
     num_elements: Int,
     dest_strt: Int = 0,
@@ -261,7 +261,7 @@ struct QualitySchema(Stringable, CollectionElement):
     var OFFSET: UInt8
 
     fn __init__(
-        inout self, schema: StringLiteral, lower: Int, upper: Int, offset: Int
+        mut self, schema: StringLiteral, lower: Int, upper: Int, offset: Int
     ):
         self.SCHEMA = schema
         self.UPPER = upper

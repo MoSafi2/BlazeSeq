@@ -3,7 +3,7 @@ import python
 from python import PythonObject, Python
 
 
-fn create_html_template() -> PythonObject:
+fn create_html_template() -> String:
     return """
     <!DOCTYPE html>
     <html lang="en">
@@ -34,8 +34,8 @@ fn create_html_template() -> PythonObject:
 
 
 fn insert_image_into_template(
-    owned html: PythonObject, base64_image: PythonObject
-) raises -> PythonObject:
+    owned html: String, base64_image: String
+) raises -> String:
     """
     Inserts a base64-encoded image into the HTML template.
 
@@ -46,12 +46,17 @@ fn insert_image_into_template(
     Returns:
         String: The updated HTML template with the image inserted.
     """
-    var py_str: PythonObject = '<img src="data:image/jpeg;base64,{}" alt="Image">'
-    var image_html: PythonObject = py_str.format(base64_image)
+    # var py_str: PythonObject = '<img src="data:image/jpeg;base64,{}" alt="Image">'
+    # var image_html: PythonObject = py_str.format(base64_image)
 
     var marker: String = '<div class="image-container">'
     if marker in html:
         html = html.replace(
-            marker, image_html + "\n            " + marker + "\n  </div>"
+            marker,
+            '<img src="data:image/jpeg;base64,'
+            + base64_image
+            + '" alt="Image">'
+            + "\n"
+            + marker,
         )
     return html

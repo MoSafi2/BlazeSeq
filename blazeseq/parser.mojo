@@ -19,7 +19,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         ](path, DEFAULT_CAPACITY)
         self.quality_schema = self._parse_schema(schema)
 
-    fn parse_all(inout self) raises:
+    fn parse_all(mut self) raises:
         while True:
             var record: FastqRecord
             record = self._parse_record()
@@ -32,7 +32,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
                 record.validate_quality_schema()
 
     @always_inline
-    fn next(inout self) raises -> FastqRecord:
+    fn next(mut self) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
         var record: FastqRecord
         record = self._parse_record()
@@ -45,7 +45,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         return record
 
     @always_inline
-    fn _parse_record(inout self) raises -> FastqRecord:
+    fn _parse_record(mut self) raises -> FastqRecord:
         var line1 = self.stream.read_next_line()
         var line2 = self.stream.read_next_line()
         var line3 = self.stream.read_next_line()
@@ -88,7 +88,7 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         ](path, DEFAULT_CAPACITY)
 
     @always_inline
-    fn parse_all(inout self) raises:
+    fn parse_all(mut self) raises:
         while True:
             var record: RecordCoord
             record = self._parse_record()
@@ -99,7 +99,7 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
                 record.validate_quality_schema()
 
     @always_inline
-    fn next(inout self) raises -> RecordCoord:
+    fn next(mut self) raises -> RecordCoord:
         read = self._parse_record()
         read.validate()
 
@@ -110,7 +110,7 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
 
     @always_inline
     fn _parse_record(
-        inout self,
+        mut self,
     ) raises -> RecordCoord:
         var line1 = self.stream.read_next_coord()
         var line2 = self.stream.read_next_coord()
