@@ -1,6 +1,10 @@
 import base64
 import python
 from python import PythonObject, Python
+from utils import Variant
+
+
+alias encoded_imgs = Variant[String, List[String]]
 
 
 fn create_html_template() -> String:

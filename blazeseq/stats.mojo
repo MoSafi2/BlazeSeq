@@ -18,6 +18,7 @@ from blazeseq.CONSTS import (
     generic_schema,
 )
 
+# TODO: Make this dynamic
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 alias plt_figure = PythonObject
 
@@ -77,6 +78,11 @@ trait Analyser(CollectionElement, Stringable):
         ...
 
 
+trait HTMLMaker(CollectionElement):
+    fn html_output(self) -> String:
+        ...
+
+
 @value
 struct FullStats(CollectionElement):
     var num_reads: Int64
@@ -106,11 +112,11 @@ struct FullStats(CollectionElement):
         self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)  # Almost Free
-        # self.dup_reads.tally_read(record)
-        # self.qu_dist.tally_read(record)
-        # self.adpt_cont.tally_read(record, self.num_reads)
-        # self.tile_qual.tally_read(record)
+        self.cg_content.tally_read(record)  # Almost Free
+        self.dup_reads.tally_read(record)
+        self.qu_dist.tally_read(record)
+        self.adpt_cont.tally_read(record, self.num_reads)
+        self.tile_qual.tally_read(record)
 
     @always_inline
     fn tally(mut self, record: RecordCoord):
@@ -123,24 +129,32 @@ struct FullStats(CollectionElement):
         pass
 
     @always_inline
-    fn plot(mut self) raises:
+    fn plot(mut self) raises -> List[PythonObject]:
+        plots = List[PythonObject]()
+
         img1, img2 = self.bp_dist.plot(self.num_reads)
+        plots.append(img1)
+        plots.append(img2)
 
-        var html = insert_image_into_template(
-            create_html_template(), encode_img_b64(img1)
-        )
-        print(html)
-        # html = insert_image_into_template(html, encode_img_b64(img2))
-        # file = py_builtin.open("output3.html", "w")
-        # file.write(html)
-        # file.close()
+        plots.append(self.cg_content.plot())
+        plots.append(self.len_dist.plot())
+        img, _ = self.dup_reads.plot()
+        plots.append(img)
+        plots.append(self.tile_qual.plot())
+        plots.append(self.adpt_cont.plot(self.num_reads))
 
-        # self.cg_content.plot()
-        # self.len_dist.plot()
-        # self.dup_reads.plot()
-        # self.tile_qual.plot()
-        # self.adpt_cont.plot(self.num_reads)
-        pass
+        return plots
+
+    fn make_html(mut self) raises:
+        plots = self.plot()
+        var template = create_html_template()
+        for plot in plots:
+            template = insert_image_into_template(
+                template, encode_img_b64(plot[])
+            )
+
+        with open("test.html", "w") as f:
+            f.write(template)
 
 
 @value
@@ -786,7 +800,7 @@ struct PerTileQuality(Analyser):
         for i in self.map.keys():
             ks.append(i[])
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks)
-        
+
         return plt.gcf()
 
     fn report(self) -> Tensor[DType.int64]:
@@ -892,9 +906,8 @@ struct KmerContent[KMERSIZE: Int]:
 
     # TODO: Figure out how the enrichment calculation is carried out.
     # Check: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/Module.cpp#L2068
-    fn plot(self) raises:
+    fn plot(self) raises -> PythonObject:
         Python.add_to_path(py_lib.as_string_slice())
-        var np = Python.import_module("numpy")
         var agg_tensor = Tensor[DType.int64](
             TensorShape(pow(4, KMERSIZE), self.max_length)
         )
@@ -903,7 +916,7 @@ struct KmerContent[KMERSIZE: Int]:
                 agg_tensor[Index(i, j)] = self.kmers[i][j]
 
         mat = matrix_to_numpy(agg_tensor)
-        # np.save("Kmers.npy", mat)
+        return mat
 
     # TODO: Sort the Kmers to report
     # Ported from Falco C++ implementation: https://github.com/smithlabcode/falco/blob/f4f0e6ca35e262cbeffc81fdfc620b3413ecfe2c/src/Module.cpp#L2057
@@ -1025,7 +1038,7 @@ struct AdapterContent[bits: Int = 3]():
         plt.xlabel("Position")
         plt.ylabel("Percentage of Reads")
         plt.title("Adapter Content")
-        
+
         return plt.gcf()
 
     @always_inline
