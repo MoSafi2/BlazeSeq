@@ -1136,6 +1136,8 @@ fn encode_img_b64(fig: PythonObject) raises -> String:
     buf = py_io.BytesIO()
     plt.savefig(buf, format="png")
     buf.seek(0)
+    plt.close()
     base64_image = py_base64.b64encode(buf.read()).decode("utf-8")
     buf.close()
+
     return str(base64_image)
