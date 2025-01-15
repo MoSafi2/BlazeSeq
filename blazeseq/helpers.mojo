@@ -340,7 +340,7 @@ fn encode_img_b64(fig: PythonObject) raises -> String:
     plt = Python.import_module("matplotlib.pyplot")
 
     buf = py_io.BytesIO()
-    plt.savefig(buf, format="png")
+    plt.savefig(buf, format="png", dpi = 300)
     buf.seek(0)
     plt.close()
     base64_image = py_base64.b64encode(buf.read()).decode("utf-8")

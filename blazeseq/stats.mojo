@@ -4,10 +4,9 @@
 
 from tensor import TensorShape, Tensor
 from collections.dict import DictEntry, Dict
-from utils import Index, StringSlice
+from utils import Index
 from memory import Span
 from python import Python, PythonObject
-from algorithm import sum
 from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.helpers import (
     cpy_tensor,
@@ -21,7 +20,11 @@ from blazeseq.helpers import (
     sum_tensor,
     encode_img_b64,
 )
-from blazeseq.html_maker import create_html_template, insert_image_into_template
+from blazeseq.html_maker import (
+    create_html_template,
+    insert_image_into_template,
+    result_panel,
+)
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -41,13 +44,6 @@ alias plt_figure = PythonObject
 trait Analyser(CollectionElement, Stringable):
     fn tally_read(mut self, record: FastqRecord):
         ...
-
-    fn report(self) -> Tensor[DType.int64]:
-        ...
-
-    fn __str__(self) -> String:
-        ...
-
 
 
 @value
@@ -96,8 +92,8 @@ struct FullStats(CollectionElement):
         pass
 
     @always_inline
-    fn plot(mut self) raises -> List[PythonObject]:
-        plots = List[PythonObject]()
+    fn plot(mut self) raises -> List[result_panel]:
+        plots = List[result_panel]()
 
         img1, img2 = self.bp_dist.plot(self.num_reads)
         plots.append(img1)
@@ -112,15 +108,16 @@ struct FullStats(CollectionElement):
 
         return plots
 
-    fn make_html(mut self) raises:
+    fn make_html(mut self, file_name: String) raises:
         plots = self.plot()
         var template = create_html_template()
         for plot in plots:
+            print(plot[].plot)
             template = insert_image_into_template(
-                template, encode_img_b64(plot[])
+                template, encode_img_b64(plot[].plot), plot[]
             )
 
-        with open("test.html", "w") as f:
+        with open(file_name, "w") as f:
             f.write(template)
 
 
@@ -163,12 +160,11 @@ struct BasepairDistribution(Analyser):
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
-    fn report(self) -> Tensor[DType.int64]:
-        return self.bp_dist
-
     # Should Plot BP distrubution  line plot & Per base N content
     # DONE!
-    fn plot(self, total_reads: Int64) raises -> Tuple[plt_figure, plt_figure]:
+    fn plot(
+        self, total_reads: Int64
+    ) raises -> Tuple[result_panel, result_panel]:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
 
@@ -181,19 +177,23 @@ struct BasepairDistribution(Analyser):
         var ax = x[1]
         ax.plot(arr1)
         ax.set_ylim(0, 100)
-        plt.legend(["%T", "%A", "%G", "%C"])
+        ax.set_label(["%T", "%A", "%G", "%C"])
+        ax.set_title("Base Distribution")
 
         var y = plt.subplots()  # Create a figure
         var fig2 = y[0]
         var ax2 = y[1]
         ax2.plot(arr2)
         ax2.set_ylim(0, 100)
-        plt.legend(["%N"])
+        ax2.set_label(["%N"])
+        ax2.set_title("N percentage")
 
-        return fig, fig2
+        res1 = result_panel("Base Distribution", (1024, 1024), fig)
+        res2 = result_panel("N percentage", (1024, 1024), fig2)
+        return res1, res2
 
     fn __str__(self) -> String:
-        return String("\nBase_pair_dist_matrix: ") + str(self.report())
+        return String("\nBase_pair_dist_matrix: ")
 
 
 # Done!
@@ -254,10 +254,7 @@ struct CGContent(Analyser):
         var theoritical_distribution = nd.pdf(x_categories) * total_counts
         return theoritical_distribution
 
-    fn report(self) -> Tensor[DType.int64]:
-        return self.cg_content
-
-    fn plot(self) raises -> plt_figure:
+    fn plot(self) raises -> result_panel:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
@@ -265,10 +262,13 @@ struct CGContent(Analyser):
         var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
-        ax.plot(arr)
-        ax.plot(theoritical_distribution)
+        ax.plot(arr, label="GC count per read")
+        ax.plot(theoritical_distribution, label="Theoritical Distribution")
+        ax.set_title("Per sequence GC content")
 
-        return fig
+        res = result_panel("CG distribution", (1024, 1024), fig)
+
+        return res
 
     fn __str__(self) -> String:
         return String("\nThe CpG content tensor is: ") + str(self.cg_content)
@@ -372,17 +372,12 @@ struct DupReads(Analyser):
 
         return trueCount
 
-    fn report(self) -> Tensor[DType.int64]:
-        var report = Tensor[DType.int64](1)
-        report[0] = len(self.unique_dict)
-        return report
-
     fn __str__(self) -> String:
-        return String("\nNumber of duplicated reads is") + str(self.report())
+        return String("\nNumber of duplicated reads is")
 
     fn plot(
         mut self,
-    ) raises -> Tuple[plt_figure, List[Tuple[String, Float64]]]:
+    ) raises -> Tuple[result_panel, List[Tuple[String, Float64]]]:
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
@@ -460,7 +455,9 @@ struct DupReads(Analyser):
             if seq_precent > 0.1:
                 overrepresented_seqs.append((key[].key, seq_precent))
 
-        return fig, overrepresented_seqs
+        duplicate_reads = result_panel("Duplicate Reads", (1024, 1024), fig)
+
+        return duplicate_reads, overrepresented_seqs
 
 
 @value
@@ -493,10 +490,7 @@ struct LengthDistribution(Analyser):
             cum += self.length_vector[i] * (i + 1)
         return Int(cum) / num_reads
 
-    fn report(self) -> Tensor[DType.int64]:
-        return self.length_vector
-
-    fn plot(self) raises -> plt_figure:
+    fn plot(self) raises -> result_panel:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
@@ -515,7 +509,9 @@ struct LengthDistribution(Analyser):
         ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
         ax.set_ylim(0)
 
-        return fig
+        len_dis = result_panel("Length Distribution", (1024, 1024), fig)
+
+        return len_dis
 
     fn __str__(self) -> String:
         return String("\nLength Distribution: ") + str(self.length_vector)
@@ -588,7 +584,7 @@ struct QualityDistribution(Analyser):
         indices = np.arange(min_index, max_index)
         return np.take(arr, indices, axis=1)
 
-    fn plot(self) raises -> Tuple[plt_figure, plt_figure]:
+    fn plot(self) raises -> Tuple[result_panel, result_panel]:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
@@ -631,6 +627,10 @@ struct QualityDistribution(Analyser):
         ax.bxp(l, showfliers=False)
         ax.plot(mean_line)
 
+        qua_boxplot = result_panel(
+            "Per base sequence quality", (1024, 1024), fig
+        )
+
         ###############################################################
         ####                Average quality /seq                   ####
         ###############################################################
@@ -645,24 +645,16 @@ struct QualityDistribution(Analyser):
         arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
         arr2 = arr2[Int(schema.OFFSET) : index + 2]
         z = plt.subplots()
-        fig3 = z[0]
-        ax3 = z[1]
-        ax3.plot(arr2)
+        fig2 = z[0]
+        ax2 = z[1]
+        ax2.plot(arr2)
 
-        return Tuple(fig, fig3)
+        avg_qu = result_panel("Per sequence quality scores", (1024, 1024), fig2)
 
-    fn report(self) -> Tensor[DType.int64]:
-        var final_shape = TensorShape(Int(self.max_qu), self.max_length)
-        var final_t = Tensor[DType.int64](final_shape)
-
-        for i in range(self.max_qu):
-            for j in range(self.max_length):
-                var index = VariadicList[Int](Int(i), j)
-                final_t[index] = self.qu_dist[index]
-        return final_t
+        return Tuple(qua_boxplot, avg_qu)
 
     fn __str__(self) -> String:
-        return String("\nQuality_dist_matrix: ") + str(self.report())
+        return String("\nQuality_dist_matrix: ")
 
     fn _guess_schema(self) -> QualitySchema:
         alias SANGER_ENCODING_OFFSET = 33
@@ -753,12 +745,16 @@ struct PerTileQuality(Analyser):
             self.max_length = record.len_record()
 
     # TODO: Construct a n_keys*max_length array to hold all information.
-    fn plot(self) raises -> plt_figure:
+    fn plot(self) raises -> result_panel:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         sns = Python.import_module("seaborn")
         py_builtin = Python.import_module("builtins")
         plt = Python.import_module("matplotlib.pyplot")
+
+        z = plt.subplots()
+        fig = z[0]
+        ax = z[1]
 
         arr = np.zeros(self.max_length)
         for i in self.map.keys():
@@ -768,12 +764,13 @@ struct PerTileQuality(Analyser):
         var ks = py_builtin.list()
         for i in self.map.keys():
             ks.append(i[])
-        sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks)
+        sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks, ax=ax)
 
-        return plt.gcf()
+        tile_quality = result_panel(
+            "Per tile sequence quality", (1024, 1024), fig
+        )
 
-    fn report(self) -> Tensor[DType.int64]:
-        return Tensor[DType.int64]()
+        return tile_quality
 
     fn __str__(self) -> String:
         return ""
@@ -987,13 +984,18 @@ struct AdapterContent[bits: Int = 3]():
                 self._check_hashes(hash, i + 1)
 
     @always_inline
-    fn plot(self, total_reads: Int64) raises -> plt_figure:
+    fn plot(self, total_reads: Int64) raises -> result_panel:
         Python.add_to_path(py_lib.as_string_slice())
         plt = Python.import_module("matplotlib.pyplot")
         arr = matrix_to_numpy(self.hash_counts)
         arr = (arr / total_reads) * 100
-        plt.plot(arr.T)
-        plt.ylim(0, 100)
+
+        z = plt.subplots()
+        fig = z[0]
+        ax = z[1]
+
+        ax.plot(arr.T)
+        ax.set_ylim(0, 100)
         plt.legend(
             [
                 "Illumina Universal Adapter",
@@ -1008,13 +1010,14 @@ struct AdapterContent[bits: Int = 3]():
         plt.ylabel("Percentage of Reads")
         plt.title("Adapter Content")
 
-        return plt.gcf()
+        adapter_cont = result_panel(
+            "Per tile sequence quality", (1024, 1024), fig
+        )
+
+        return adapter_cont
 
     @always_inline
     fn _check_hashes(mut self, hash: UInt64, pos: Int):
         for i in range(len(self.hash_list)):
             if hash == self.hash_list[i]:
                 self.hash_counts[Index(i, pos)] += 1
-
-    fn __str__(self) -> String:
-        return String("\nhash count table is ") + str(self.hash_counts)

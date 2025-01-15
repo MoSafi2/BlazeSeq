@@ -4,12 +4,16 @@ from python import PythonObject, Python
 from utils import Variant
 
 
-alias encoded_imgs = Variant[String, List[String]]
-
-
 trait HTMLMaker(CollectionElement):
     fn html_output(self) -> String:
         ...
+
+
+@value
+struct result_panel:
+    var name: String
+    var size: Tuple[Int, Int]
+    var plot: PythonObject
 
 
 fn create_html_template() -> String:
@@ -35,7 +39,9 @@ fn create_html_template() -> String:
         </style>
     </head>
     <body>
+    \n
         <div class="image-container">
+    \n
         </div>
     </body>
     </html>
@@ -43,7 +49,7 @@ fn create_html_template() -> String:
 
 
 fn insert_image_into_template(
-    owned html: String, base64_image: String
+    owned html: String, base64_image: String, plot_info: result_panel
 ) raises -> String:
     """
     Inserts a base64-encoded image into the HTML template.
@@ -51,6 +57,7 @@ fn insert_image_into_template(
     Args:
         html: The HTML template string.
         base64_image: The base64-encoded image string.
+        plot_info: Info about the plot
 
     Returns:
         String: The updated HTML template with the image inserted.
