@@ -9,7 +9,18 @@ from memory import Span
 from python import Python, PythonObject
 from algorithm import sum
 from blazeseq.record import FastqRecord, RecordCoord
-from blazeseq.helpers import cpy_tensor, QualitySchema
+from blazeseq.helpers import (
+    cpy_tensor,
+    QualitySchema,
+    base2int,
+    _seq_to_hash,
+    tensor_to_numpy_1d,
+    matrix_to_numpy,
+    grow_tensor,
+    grow_matrix,
+    sum_tensor,
+    encode_img_b64,
+)
 from blazeseq.html_maker import create_html_template, insert_image_into_template
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
@@ -17,54 +28,14 @@ from blazeseq.CONSTS import (
     illumina_1_8_schema,
     generic_schema,
 )
+from blazeseq.config import hash_list, hash_names
 
 # TODO: Make this dynamic
 alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 alias plt_figure = PythonObject
 
 
-# TODO: Move those to a config file
-##############
-fn hash_list() -> List[UInt64]:
-    var li: List[UInt64] = List[UInt64](
-        _seq_to_hash("AGATCGGAAGAG"),
-        _seq_to_hash("TGGAATTCTCGG"),
-        _seq_to_hash("GATCGTCGGACT"),
-        _seq_to_hash("CTGTCTCTTATA"),
-        _seq_to_hash("AAAAAAAAAAAA"),
-        _seq_to_hash("GGGGGGGGGGGG"),
-    )
-    return li
-
-
-# TODO: Check how to unpack this variadic
-def hash_names() -> (
-    ListLiteral[
-        StringLiteral,
-        StringLiteral,
-        StringLiteral,
-        StringLiteral,
-        StringLiteral,
-        StringLiteral,
-    ]
-):
-    var names = [
-        "Illumina Universal Adapter",
-        "Illumina Small RNA 3' Adapter",
-        "Illumina Small RNA 5' Adapter",
-        "Nextera Transposase Sequence",
-        "PolyA",
-        "PolyG",
-    ]
-
-    return names
-
-
 ################
-
-alias WIDTH = 5
-alias MAX_READS = 100_000
-alias MAX_QUALITY = 93
 
 
 trait Analyser(CollectionElement, Stringable):
@@ -77,10 +48,6 @@ trait Analyser(CollectionElement, Stringable):
     fn __str__(self) -> String:
         ...
 
-
-trait HTMLMaker(CollectionElement):
-    fn html_output(self) -> String:
-        ...
 
 
 @value
@@ -161,9 +128,10 @@ struct FullStats(CollectionElement):
 struct BasepairDistribution(Analyser):
     var bp_dist: Tensor[DType.int64]
     var max_length: Int
+    alias WIDTH = 5
 
     fn __init__(out self):
-        var shape = TensorShape(VariadicList[Int](1, WIDTH))
+        var shape = TensorShape(VariadicList[Int](1, self.WIDTH))
         self.bp_dist = Tensor[DType.int64](shape)
         self.max_length = 0
 
@@ -171,13 +139,13 @@ struct BasepairDistribution(Analyser):
         if record.len_record() > self.max_length:
             self.max_length = record.len_record()
             var new_tensor = grow_matrix(
-                self.bp_dist, TensorShape(self.max_length, WIDTH)
+                self.bp_dist, TensorShape(self.max_length, self.WIDTH)
             )
             swap(self.bp_dist, new_tensor)
 
         for i in range(record.len_record()):
             # Remineder of first 5 bits seperates N from T
-            var base_val = Int((record.SeqStr[i] & 0b11111) % WIDTH)
+            var base_val = Int((record.SeqStr[i] & 0b11111) % self.WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
@@ -185,13 +153,13 @@ struct BasepairDistribution(Analyser):
         if record.seq_len() > self.max_length:
             self.max_length = Int(record.seq_len())
             var new_tensor = grow_matrix(
-                self.bp_dist, TensorShape(self.max_length, WIDTH)
+                self.bp_dist, TensorShape(self.max_length, self.WIDTH)
             )
             swap(self.bp_dist, new_tensor)
 
         for i in range(Int(record.seq_len())):
             # Remineder of first 5 bits seperates N from T
-            var base_val = Int((record.SeqStr[i] & 0b11111) % WIDTH)
+            var base_val = Int((record.SeqStr[i] & 0b11111) % self.WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
@@ -314,6 +282,7 @@ struct DupReads(Analyser):
     var count_at_max: Int
     var n: Int
     var corrected_counts: Dict[Int, Float64]
+    alias MAX_READS = 100_000
 
     fn __init__(out self):
         self.unique_dict = Dict[String, Int](
@@ -338,11 +307,11 @@ struct DupReads(Analyser):
                 print(error._message())
                 pass
 
-        if self.unique_reads <= MAX_READS:
+        if self.unique_reads <= self.MAX_READS:
             self.unique_dict[s] = 1
             self.unique_reads += 1
 
-            if self.unique_reads == MAX_READS:
+            if self.unique_reads == self.MAX_READS:
                 self.count_at_max = self.n
         else:
             return
@@ -1049,95 +1018,3 @@ struct AdapterContent[bits: Int = 3]():
 
     fn __str__(self) -> String:
         return String("\nhash count table is ") + str(self.hash_counts)
-
-
-@always_inline
-fn base2int(byte: Byte) -> UInt8:
-    alias A_b = 65
-    alias a_b = 95
-    alias C_b = 67
-    alias c_b = 97
-    alias G_b = 71
-    alias g_b = 103
-    alias T_b = 84
-    alias t_b = 116
-    if byte == A_b or byte == a_b:
-        return 0
-    if byte == C_b or byte == c_b:
-        return 1
-    if byte == G_b or byte == g_b:
-        return 2
-    if byte == T_b or byte == t_b:
-        return 3
-    return 4
-
-
-# TODO: Make this also parametrized on the number of bits per bp
-fn _seq_to_hash(seq: String) -> UInt64:
-    var hash = 0
-    for i in range(0, len(seq)):
-        # Remove the most signifcant 3 bits
-        hash = hash & 0x1FFFFFFFFFFFFFFF
-        # Mask for the least sig. three bits, add to hash
-        var rem = ord(seq[i]) & 0b111
-        hash = (hash << 3) + Int(rem)
-    return hash
-
-
-def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
-    Python.add_to_path(py_lib.as_string_slice())
-    np = Python.import_module("numpy")
-    ar = np.zeros(tensor.num_elements())
-    for i in range(tensor.num_elements()):
-        ar.itemset(i, tensor[i])
-    return ar
-
-
-def matrix_to_numpy[T: DType](tensor: Tensor[T]) -> PythonObject:
-    np = Python.import_module("numpy")
-    ar = np.zeros([tensor.shape()[0], tensor.shape()[1]])
-    for i in range(tensor.shape()[0]):
-        for j in range(tensor.shape()[1]):
-            ar.itemset((i, j), tensor[i, j])
-    return ar
-
-
-fn grow_tensor[
-    T: DType,
-](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
-    var new_tensor = Tensor[T](num_ele)
-    cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
-    return new_tensor
-
-
-fn grow_matrix[
-    T: DType
-](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
-    var new_tensor = Tensor[T](new_shape)
-    for i in range(old_tensor.shape()[0]):
-        for j in range(old_tensor.shape()[1]):
-            new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
-    return new_tensor
-
-
-fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
-    acc = 0
-    for i in range(tensor.num_elements()):
-        acc += Int(tensor[i])
-    return acc
-
-
-fn encode_img_b64(fig: PythonObject) raises -> String:
-    Python.add_to_path(py_lib.as_string_slice())
-    py_io = Python.import_module("io")
-    py_base64 = Python.import_module("base64")
-    plt = Python.import_module("matplotlib.pyplot")
-
-    buf = py_io.BytesIO()
-    plt.savefig(buf, format="png")
-    buf.seek(0)
-    plt.close()
-    base64_image = py_base64.b64encode(buf.read()).decode("utf-8")
-    buf.close()
-
-    return str(base64_image)

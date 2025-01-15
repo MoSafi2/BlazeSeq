@@ -7,6 +7,11 @@ from utils import Variant
 alias encoded_imgs = Variant[String, List[String]]
 
 
+trait HTMLMaker(CollectionElement):
+    fn html_output(self) -> String:
+        ...
+
+
 fn create_html_template() -> String:
     return """
     <!DOCTYPE html>

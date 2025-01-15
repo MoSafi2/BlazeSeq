@@ -3,11 +3,15 @@ from algorithm import vectorize
 from blazeseq.CONSTS import *
 from tensor import Tensor
 from collections.vector import *
-from tensor import Tensor
+from tensor import Tensor, TensorShape
 from collections.list import List
 from memory import memcpy
+from python import PythonObject, Python
 
 ######################### Character find functions ###################################
+
+
+alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
 
 
 @always_inline
@@ -251,6 +255,98 @@ fn find_last_read_header(
             return -1
         last_chr = find_last_read_header(in_tensor, start, end_inner)
     return last_chr
+
+
+@always_inline
+fn base2int(byte: Byte) -> UInt8:
+    alias A_b = 65
+    alias a_b = 95
+    alias C_b = 67
+    alias c_b = 97
+    alias G_b = 71
+    alias g_b = 103
+    alias T_b = 84
+    alias t_b = 116
+    if byte == A_b or byte == a_b:
+        return 0
+    if byte == C_b or byte == c_b:
+        return 1
+    if byte == G_b or byte == g_b:
+        return 2
+    if byte == T_b or byte == t_b:
+        return 3
+    return 4
+
+
+# TODO: Make this also parametrized on the number of bits per bp
+fn _seq_to_hash(seq: String) -> UInt64:
+    var hash = 0
+    for i in range(0, len(seq)):
+        # Remove the most signifcant 3 bits
+        hash = hash & 0x1FFFFFFFFFFFFFFF
+        # Mask for the least sig. three bits, add to hash
+        var rem = ord(seq[i]) & 0b111
+        hash = (hash << 3) + Int(rem)
+    return hash
+
+
+def tensor_to_numpy_1d[T: DType](tensor: Tensor[T]) -> PythonObject:
+    Python.add_to_path(py_lib.as_string_slice())
+    np = Python.import_module("numpy")
+    ar = np.zeros(tensor.num_elements())
+    for i in range(tensor.num_elements()):
+        ar.itemset(i, tensor[i])
+    return ar
+
+
+def matrix_to_numpy[T: DType](tensor: Tensor[T]) -> PythonObject:
+    np = Python.import_module("numpy")
+    ar = np.zeros([tensor.shape()[0], tensor.shape()[1]])
+    for i in range(tensor.shape()[0]):
+        for j in range(tensor.shape()[1]):
+            ar.itemset((i, j), tensor[i, j])
+    return ar
+
+
+fn grow_tensor[
+    T: DType,
+](old_tensor: Tensor[T], num_ele: Int) -> Tensor[T]:
+    var new_tensor = Tensor[T](num_ele)
+    cpy_tensor(new_tensor, old_tensor, old_tensor.num_elements(), 0, 0)
+    return new_tensor
+
+
+fn grow_matrix[
+    T: DType
+](old_tensor: Tensor[T], new_shape: TensorShape) -> Tensor[T]:
+    var new_tensor = Tensor[T](new_shape)
+    for i in range(old_tensor.shape()[0]):
+        for j in range(old_tensor.shape()[1]):
+            new_tensor[VariadicList(i, j)] = old_tensor[VariadicList(i, j)]
+    return new_tensor
+
+
+fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
+    acc = 0
+    for i in range(tensor.num_elements()):
+        acc += Int(tensor[i])
+    return acc
+
+
+fn encode_img_b64(fig: PythonObject) raises -> String:
+    Python.add_to_path(py_lib.as_string_slice())
+    py_io = Python.import_module("io")
+    py_base64 = Python.import_module("base64")
+    plt = Python.import_module("matplotlib.pyplot")
+
+    buf = py_io.BytesIO()
+    plt.savefig(buf, format="png")
+    buf.seek(0)
+    plt.close()
+    base64_image = py_base64.b64encode(buf.read()).decode("utf-8")
+    buf.close()
+
+    return str(base64_image)
 
 
 @value
