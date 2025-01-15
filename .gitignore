@@ -8,6 +8,7 @@ blazeseq/*
 !cli.mojo
 !todo.md
 !QC.mojo
+!test_template.html
 # pixi environments
 .pixi
 

@@ -24,24 +24,10 @@ fn create_html_template() -> String:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Image Container</title>
-        <style>
-            .image-container {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-            }
-            .image-container img {
-                max-width: 200px;
-                max-height: 200px;
-                border: 1px solid #ccc;
-                padding: 5px;
-            }
-        </style>
+        <link rel="stylesheet" href="style.css">
     </head>
     <body>
-    \n
         <div class="image-container">
-    \n
         </div>
     </body>
     </html>
@@ -73,6 +59,22 @@ fn insert_image_into_template(
             + base64_image
             + '" alt="Image">'
             + "\n"
+            + "</div>"
             + marker,
         )
     return html
+
+
+# <style>
+#     .image-container {
+#         display: flex;
+#         flex-wrap: wrap;
+#         gap: 10px;
+#     }
+#     .image-container img {
+#         max-width: 200px;
+#         max-height: 200px;
+#         border: 1px solid #ccc;
+#         padding: 5px;
+#     }
+# </style>

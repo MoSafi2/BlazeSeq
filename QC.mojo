@@ -14,7 +14,7 @@ fn main() raises:
     var n = 0
 
     t0 = perf_counter_ns()
-    while n < 100_000:
+    while True:
         try:
             var record = parser.next()
             stats.tally(record)

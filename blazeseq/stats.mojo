@@ -63,8 +63,8 @@ struct FullStats(CollectionElement):
         self.total_bases = 0
         self.len_dist = LengthDistribution()
         self.bp_dist = BasepairDistribution()
-        self.qu_dist = QualityDistribution()
         self.cg_content = CGContent()
+        self.qu_dist = QualityDistribution()
         self.dup_reads = DupReads()
         self.tile_qual = PerTileQuality()
         self.adpt_cont = AdapterContent(hash_list(), 12)
@@ -98,11 +98,13 @@ struct FullStats(CollectionElement):
         img1, img2 = self.bp_dist.plot(self.num_reads)
         plots.append(img1)
         plots.append(img2)
-
         plots.append(self.cg_content.plot())
         plots.append(self.len_dist.plot())
         img, _ = self.dup_reads.plot()
         plots.append(img)
+        img1, img2 = self.qu_dist.plot()
+        plots.append(img1)
+        plots.append(img2)
         plots.append(self.tile_qual.plot())
         plots.append(self.adpt_cont.plot(self.num_reads))
 
@@ -112,7 +114,6 @@ struct FullStats(CollectionElement):
         plots = self.plot()
         var template = create_html_template()
         for plot in plots:
-            print(plot[].plot)
             template = insert_image_into_template(
                 template, encode_img_b64(plot[].plot), plot[]
             )
@@ -178,6 +179,7 @@ struct BasepairDistribution(Analyser):
         ax.plot(arr1)
         ax.set_ylim(0, 100)
         ax.set_label(["%T", "%A", "%G", "%C"])
+        ax.set_xlabel("Position in read (bp)")
         ax.set_title("Base Distribution")
 
         var y = plt.subplots()  # Create a figure
@@ -186,9 +188,10 @@ struct BasepairDistribution(Analyser):
         ax2.plot(arr2)
         ax2.set_ylim(0, 100)
         ax2.set_label(["%N"])
+        ax2.set_xlabel("Position in read (bp)")
         ax2.set_title("N percentage")
 
-        res1 = result_panel("Base Distribution", (1024, 1024), fig)
+        res1 = result_panel("Per base sequence content", (1024, 1024), fig)
         res2 = result_panel("N percentage", (1024, 1024), fig2)
         return res1, res2
 
@@ -265,6 +268,7 @@ struct CGContent(Analyser):
         ax.plot(arr, label="GC count per read")
         ax.plot(theoritical_distribution, label="Theoritical Distribution")
         ax.set_title("Per sequence GC content")
+        ax.set_xlabel("Mean GC content (%)")
 
         res = result_panel("CG distribution", (1024, 1024), fig)
 
@@ -415,7 +419,6 @@ struct DupReads(Analyser):
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = Tensor[DType.float64](total_percentages)
         final_arr = tensor_to_numpy_1d(arr)
-        # np.save("arr_DupReads.npy", arr2)
         f = plt.subplots(figsize=(10, 6))
         fig = f[0]
         ax = f[1]
@@ -442,6 +445,7 @@ struct DupReads(Analyser):
             ]
         )
         ax.set_xlabel("Sequence Duplication Level")
+        ax.set_title("Sequences Duplication levels")
         ax.set_ylim(0, 100)
 
         ################################################################
@@ -455,7 +459,9 @@ struct DupReads(Analyser):
             if seq_precent > 0.1:
                 overrepresented_seqs.append((key[].key, seq_precent))
 
-        duplicate_reads = result_panel("Duplicate Reads", (1024, 1024), fig)
+        duplicate_reads = result_panel(
+            "Sequence Duplication Levels", (1024, 1024), fig
+        )
 
         return duplicate_reads, overrepresented_seqs
 
@@ -508,6 +514,8 @@ struct LengthDistribution(Analyser):
         ax.xaxis.set_major_locator(mtp.ticker.MaxNLocator(integer=True))
         ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
         ax.set_ylim(0)
+        ax.set_title("Distribution of sequence lengths over all sequences")
+        ax.set_xlabel("Sequence Length (bp)")
 
         len_dis = result_panel("Length Distribution", (1024, 1024), fig)
 
@@ -518,6 +526,7 @@ struct LengthDistribution(Analyser):
 
 
 # TODO: FIX this struct to reflect FastQC
+# TODO: FIX this to get bands instead per base pair to avoid problems with long reads
 @value
 struct QualityDistribution(Analyser):
     var qu_dist: Tensor[DType.int64]
@@ -626,6 +635,8 @@ struct QualityDistribution(Analyser):
 
         ax.bxp(l, showfliers=False)
         ax.plot(mean_line)
+        ax.set_title("Quality Scores across all bases")
+        ax.set_xlabel("Position in read (bp)")
 
         qua_boxplot = result_panel(
             "Per base sequence quality", (1024, 1024), fig
@@ -648,6 +659,8 @@ struct QualityDistribution(Analyser):
         fig2 = z[0]
         ax2 = z[1]
         ax2.plot(arr2)
+        ax2.set_xlabel("Mean Sequence Quality (Phred Score)")
+        ax2.set_title("Quality scsore distribution over all sequences")
 
         avg_qu = result_panel("Per sequence quality scores", (1024, 1024), fig2)
 
@@ -765,7 +778,8 @@ struct PerTileQuality(Analyser):
         for i in self.map.keys():
             ks.append(i[])
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks, ax=ax)
-
+        ax.set_title("Quality per tile")
+        ax.set_xlabel("Position in read (bp)")
         tile_quality = result_panel(
             "Per tile sequence quality", (1024, 1024), fig
         )
@@ -950,9 +964,6 @@ struct AdapterContent[bits: Int = 3]():
         shape = TensorShape(len(self.hash_list), 1)
         self.hash_counts = Tensor[DType.int64](shape)
         self.max_length = 0
-
-    fn report(self) -> Tensor[DType.int64]:
-        return self.hash_counts
 
     # TODO: Check if it will be easier to use the bool_tuple and hashes as a list instead
     @always_inline
