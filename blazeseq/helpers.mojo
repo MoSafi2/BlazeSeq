@@ -329,7 +329,7 @@ fn grow_matrix[
 fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
     acc = 0
     for i in range(tensor.num_elements()):
-        acc += Int(tensor[i])
+        acc += int(tensor[i])
     return acc
 
 

@@ -84,7 +84,7 @@ struct FullStats(CollectionElement):
     @always_inline
     fn tally(mut self, record: RecordCoord):
         self.num_reads += 1
-        self.total_bases += Int(record.seq_len())
+        self.total_bases += int(record.seq_len())
         self.bp_dist.tally_read(record)
         self.len_dist.tally_read(record)
         self.cg_content.tally_read(record)
@@ -143,21 +143,21 @@ struct BasepairDistribution(Analyser):
 
         for i in range(record.len_record()):
             # Remineder of first 5 bits seperates N from T
-            var base_val = Int((record.SeqStr[i] & 0b11111) % self.WIDTH)
+            var base_val = int((record.SeqStr[i] & 0b11111) % self.WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
     fn tally_read(mut self, record: RecordCoord):
         if record.seq_len() > self.max_length:
-            self.max_length = Int(record.seq_len())
+            self.max_length = int(record.seq_len())
             var new_tensor = grow_matrix(
                 self.bp_dist, TensorShape(self.max_length, self.WIDTH)
             )
             swap(self.bp_dist, new_tensor)
 
-        for i in range(Int(record.seq_len())):
+        for i in range(int(record.seq_len())):
             # Remineder of first 5 bits seperates N from T
-            var base_val = Int((record.SeqStr[i] & 0b11111) % self.WIDTH)
+            var base_val = int((record.SeqStr[i] & 0b11111) % self.WIDTH)
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
@@ -222,8 +222,8 @@ struct CGContent(Analyser):
             ):
                 cg_num += 1
 
-        var read_cg_content = Int(
-            round(cg_num * 100 / Int(record.len_record()))
+        var read_cg_content = int(
+            round(cg_num * 100 / int(record.len_record()))
         )
         self.cg_content[read_cg_content] += 1
 
@@ -239,7 +239,7 @@ struct CGContent(Analyser):
             ):
                 cg_num += 1
 
-        var read_cg_content = Int(round(cg_num * 100 / Int(record.seq_len())))
+        var read_cg_content = int(round(cg_num * 100 / int(record.seq_len())))
         self.cg_content[read_cg_content] += 1
 
     fn calculate_theoritical_distribution(self) raises -> PythonObject:
@@ -484,17 +484,17 @@ struct LengthDistribution(Analyser):
     fn tally_read(mut self, record: RecordCoord):
         if record.seq_len() > self.length_vector.num_elements():
             var new_tensor = grow_tensor(
-                self.length_vector, Int(record.seq_len())
+                self.length_vector, int(record.seq_len())
             )
             swap(self.length_vector, new_tensor)
-        self.length_vector[Int(record.seq_len() - 1)] += 1
+        self.length_vector[int(record.seq_len() - 1)] += 1
 
     @always_inline
     fn length_average(self, num_reads: Int) -> Float64:
         var cum: Int64 = 0
         for i in range(self.length_vector.num_elements()):
             cum += self.length_vector[i] * (i + 1)
-        return Int(cum) / num_reads
+        return int(cum) / num_reads
 
     fn plot(self) raises -> result_panel:
         Python.add_to_path(py_lib.as_string_slice())
@@ -553,35 +553,35 @@ struct QualityDistribution(Analyser):
 
         for i in range(record.len_quality()):
             base_qu = record.QuStr[i]
-            index = VariadicList[Int](i, Int(base_qu))
+            index = VariadicList[Int](i, int(base_qu))
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
             if base_qu < self.min_qu:
                 self.min_qu = base_qu
 
-        average = Int(sum_tensor(record.QuStr) / record.len_quality())
+        average = int(sum_tensor(record.QuStr) / record.len_quality())
         self.qu_dist_seq[average] += 1
 
     fn tally_read(mut self, record: RecordCoord):
         if record.qu_len() > self.max_length:
-            self.max_length = Int(record.seq_len())
+            self.max_length = int(record.seq_len())
             new_shape = TensorShape(self.max_length, 128)
             new_qu_dist = grow_matrix(self.qu_dist, new_shape)
             swap(self.qu_dist, new_qu_dist)
 
-        for i in range(Int(record.qu_len())):
+        for i in range(int(record.qu_len())):
             base_qu = record.QuStr[i]
-            index = VariadicList[Int](i, Int(base_qu))
+            index = VariadicList[Int](i, int(base_qu))
             self.qu_dist[index] += 1
             if base_qu > self.max_qu:
                 self.max_qu = base_qu
             if base_qu < self.min_qu:
                 self.min_qu = base_qu
         var sum: Int = 0
-        for i in range(Int(record.qu_len())):
-            sum += Int(record.QuStr[i])
-        average = Int(sum / record.qu_len())
+        for i in range(int(record.qu_len())):
+            sum += int(record.QuStr[i])
+        average = int(sum / record.qu_len())
         self.qu_dist_seq[average] += 1
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
@@ -603,7 +603,7 @@ struct QualityDistribution(Analyser):
         arr = matrix_to_numpy(self.qu_dist)
         min_index = schema.OFFSET
         max_index = max(40, self.max_qu)
-        arr = self.slice_array(arr, Int(min_index), Int(max_index))
+        arr = self.slice_array(arr, int(min_index), int(max_index))
 
         ################ Quality Boxplot ##################
 
@@ -654,7 +654,7 @@ struct QualityDistribution(Analyser):
                 break
 
         arr2 = tensor_to_numpy_1d(self.qu_dist_seq)
-        arr2 = arr2[Int(schema.OFFSET) : index + 2]
+        arr2 = arr2[int(schema.OFFSET) : index + 2]
         z = plt.subplots()
         fig2 = z[0]
         ax2 = z[1]
@@ -745,7 +745,7 @@ struct PerTileQuality(Analyser):
                 deref_value.quality = new_tensor
 
             for i in range(record.len_record()):
-                deref_value.quality[i] += Int(record.QuStr[i])
+                deref_value.quality[i] += int(record.QuStr[i])
 
             self.map._entries[pos] = DictEntry[Int, TileQualityEntry](
                 entry.unsafe_take().key, deref_value
@@ -880,7 +880,7 @@ struct KmerContent[KMERSIZE: Int]:
         var index: UInt = 0
         var multiplier = 1
         for i in range(len(kmer), -1, -1):
-            index += Int(base2int(kmer[i]))
+            index += int(base2int(kmer[i]))
             multiplier *= 4
         return index
 
@@ -990,7 +990,7 @@ struct AdapterContent[bits: Int = 3]():
 
             # Mask for the least sig. three bits, add to hash
             var rem = record.SeqStr[i] & bit_shift
-            hash = (hash << bits) + Int(rem)
+            hash = (hash << bits) + int(rem)
             if len(self.hash_list) > 0:
                 self._check_hashes(hash, i + 1)
 

@@ -43,7 +43,7 @@ fn insert_image_into_template(
     Args:
         html: The HTML template string.
         base64_image: The base64-encoded image string.
-        plot_info: Info about the plot
+        plot_info: Info about the plot.
 
     Returns:
         String: The updated HTML template with the image inserted.
