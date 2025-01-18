@@ -2,10 +2,16 @@ from blazeseq.parser import RecordParser
 from blazeseq.stats import FullStats
 from time import perf_counter_ns
 from sys import argv
+from os import abort
 
 
 fn main() raises:
     args = argv()
+    print(args[1])
+    if String(args[1]) == "":
+        print("Got an empty file name")
+        abort()
+
     var parser = RecordParser[validate_ascii=False, validate_quality=False](
         String(args[1])
     )

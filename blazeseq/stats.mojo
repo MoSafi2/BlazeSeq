@@ -20,11 +20,7 @@ from blazeseq.helpers import (
     sum_tensor,
     encode_img_b64,
 )
-from blazeseq.html_maker import (
-    create_html_template,
-    insert_image_into_template,
-    result_panel,
-)
+from blazeseq.html_maker import result_panel, insert_result_panel
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -74,12 +70,12 @@ struct FullStats(CollectionElement):
         self.num_reads += 1
         self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
-        self.len_dist.tally_read(record)
-        self.cg_content.tally_read(record)  # Almost Free
-        self.dup_reads.tally_read(record)
-        self.qu_dist.tally_read(record)
-        self.adpt_cont.tally_read(record, self.num_reads)
-        self.tile_qual.tally_read(record)
+        # self.len_dist.tally_read(record)
+        # self.cg_content.tally_read(record)  # Almost Free
+        # self.dup_reads.tally_read(record)
+        # self.qu_dist.tally_read(record)
+        # self.adpt_cont.tally_read(record, self.num_reads)
+        # self.tile_qual.tally_read(record)
 
     @always_inline
     fn tally(mut self, record: RecordCoord):
@@ -92,34 +88,34 @@ struct FullStats(CollectionElement):
         pass
 
     @always_inline
-    fn plot(mut self) raises -> List[result_panel]:
-        plots = List[result_panel]()
+    fn plot(mut self) raises -> List[PythonObject]:
+        plots = List[PythonObject]()
 
         img1, img2 = self.bp_dist.plot(self.num_reads)
         plots.append(img1)
         plots.append(img2)
-        plots.append(self.cg_content.plot())
-        plots.append(self.len_dist.plot())
-        img, _ = self.dup_reads.plot()
-        plots.append(img)
-        img1, img2 = self.qu_dist.plot()
-        plots.append(img1)
-        plots.append(img2)
-        plots.append(self.tile_qual.plot())
-        plots.append(self.adpt_cont.plot(self.num_reads))
+        # plots.append(self.cg_content.plot())
+        # plots.append(self.len_dist.plot())
+        # img, _ = self.dup_reads.plot()
+        # plots.append(img)
+        # img1, img2 = self.qu_dist.plot()
+        # plots.append(img1)
+        # plots.append(img2)
+        # plots.append(self.tile_qual.plot())
+        # plots.append(self.adpt_cont.plot(self.num_reads))
 
         return plots
 
     fn make_html(mut self, file_name: String) raises:
-        plots = self.plot()
-        var template = create_html_template()
-        for plot in plots:
-            template = insert_image_into_template(
-                template, encode_img_b64(plot[].plot), plot[]
-            )
+        res1, res2 = self.bp_dist.make_html(self.num_reads)
+        var html: String
+        with open("assets/report_template.html", "r") as file:
+            html = file.read()
+        html = insert_result_panel(html, res1)
+        html = insert_result_panel(html, res2)
 
-        with open(file_name, "w") as f:
-            f.write(template)
+        with open("assets/{}".format(file_name), "w") as f:
+            f.write(html)
 
 
 @value
@@ -165,7 +161,7 @@ struct BasepairDistribution(Analyser):
     # DONE!
     fn plot(
         self, total_reads: Int64
-    ) raises -> Tuple[result_panel, result_panel]:
+    ) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
 
@@ -191,9 +187,33 @@ struct BasepairDistribution(Analyser):
         ax2.set_xlabel("Position in read (bp)")
         ax2.set_title("N percentage")
 
-        res1 = result_panel("Per base sequence content", (1024, 1024), fig)
-        res2 = result_panel("N percentage", (1024, 1024), fig2)
-        return res1, res2
+        # res1 = result_panel("Per base sequence content", (1024, 1024), fig)
+        # res2 = result_panel("N percentage", (1024, 1024), fig2)
+        return fig, fig2
+
+    fn make_grade(self):
+        pass
+
+    fn make_html(
+        self, total_reads: Int64
+    ) raises -> Tuple[result_panel, result_panel]:
+        fig1, fig2 = self.plot(total_reads)
+        var encoded_fig1 = encode_img_b64(fig1)
+        var encoded_fig2 = encode_img_b64(fig2)
+        var result_1 = result_panel(
+            "base_pair_distribution",
+            "pass",
+            "Base Pair Distribtion",
+            encoded_fig1,
+        )
+        var result_2 = result_panel(
+            "base_pair_distribution2",
+            "pass",
+            "Base Pair Distribtion",
+            encoded_fig2,
+        )
+
+        return result_1, result_2
 
     fn __str__(self) -> String:
         return String("\nBase_pair_dist_matrix: ")
@@ -258,7 +278,7 @@ struct CGContent(Analyser):
         var theoritical_distribution = nd.pdf(x_categories) * total_counts
         return theoritical_distribution
 
-    fn plot(self) raises -> result_panel:
+    fn plot(self) raises -> PythonObject:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = tensor_to_numpy_1d(self.cg_content)
@@ -271,9 +291,9 @@ struct CGContent(Analyser):
         ax.set_title("Per sequence GC content")
         ax.set_xlabel("Mean GC content (%)")
 
-        res = result_panel("CG distribution", (1024, 1024), fig)
+        # res = result_panel("CG distribution", (1024, 1024), fig)
 
-        return res
+        return fig
 
     fn __str__(self) -> String:
         return String("\nThe CpG content tensor is: ") + str(self.cg_content)
@@ -382,7 +402,7 @@ struct DupReads(Analyser):
 
     fn plot(
         mut self,
-    ) raises -> Tuple[result_panel, List[Tuple[String, Float64]]]:
+    ) raises -> Tuple[PythonObject, List[Tuple[String, Float64]]]:
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
@@ -460,11 +480,11 @@ struct DupReads(Analyser):
             if seq_precent > 0.1:
                 overrepresented_seqs.append((key[].key, seq_precent))
 
-        duplicate_reads = result_panel(
-            "Sequence Duplication Levels", (1024, 1024), fig
-        )
+        # duplicate_reads = result_panel(
+        #     "Sequence Duplication Levels", (1024, 1024), fig
+        # )
 
-        return duplicate_reads, overrepresented_seqs
+        return fig, overrepresented_seqs
 
 
 @value
@@ -497,7 +517,7 @@ struct LengthDistribution(Analyser):
             cum += self.length_vector[i] * (i + 1)
         return int(cum) / num_reads
 
-    fn plot(self) raises -> result_panel:
+    fn plot(self) raises -> PythonObject:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
@@ -518,9 +538,9 @@ struct LengthDistribution(Analyser):
         ax.set_title("Distribution of sequence lengths over all sequences")
         ax.set_xlabel("Sequence Length (bp)")
 
-        len_dis = result_panel("Length Distribution", (1024, 1024), fig)
+        # len_dis = result_panel("Length Distribution", (1024, 1024), fig)
 
-        return len_dis
+        return fig
 
     fn __str__(self) -> String:
         return String("\nLength Distribution: ") + str(self.length_vector)
@@ -594,7 +614,7 @@ struct QualityDistribution(Analyser):
         indices = np.arange(min_index, max_index)
         return np.take(arr, indices, axis=1)
 
-    fn plot(self) raises -> Tuple[result_panel, result_panel]:
+    fn plot(self) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
@@ -608,7 +628,7 @@ struct QualityDistribution(Analyser):
 
         ################ Quality Boxplot ##################
 
-        #TODO: Convert as much as possible away from numpy
+        # TODO: Convert as much as possible away from numpy
         mean_line = np.sum(
             arr * np.arange(1, arr.shape[1] + 1), axis=1
         ) / np.sum(arr, axis=1)
@@ -640,9 +660,9 @@ struct QualityDistribution(Analyser):
         ax.set_title("Quality Scores across all bases")
         ax.set_xlabel("Position in read (bp)")
 
-        qua_boxplot = result_panel(
-            "Per base sequence quality", (1024, 1024), fig
-        )
+        # qua_boxplot = result_panel(
+        #     "Per base sequence quality", (1024, 1024), fig
+        # )
 
         ###############################################################
         ####                Average quality /seq                   ####
@@ -664,9 +684,9 @@ struct QualityDistribution(Analyser):
         ax2.set_xlabel("Mean Sequence Quality (Phred Score)")
         ax2.set_title("Quality scsore distribution over all sequences")
 
-        avg_qu = result_panel("Per sequence quality scores", (1024, 1024), fig2)
+        # avg_qu = result_panel("Per sequence quality scores", (1024, 1024), fig2)
 
-        return Tuple(qua_boxplot, avg_qu)
+        return Tuple(fig, fig2)
 
     fn __str__(self) -> String:
         return String("\nQuality_dist_matrix: ")
@@ -760,7 +780,7 @@ struct PerTileQuality(Analyser):
             self.max_length = record.len_record()
 
     # TODO: Construct a n_keys*max_length array to hold all information.
-    fn plot(self) raises -> result_panel:
+    fn plot(self) raises -> PythonObject:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         sns = Python.import_module("seaborn")
@@ -782,11 +802,11 @@ struct PerTileQuality(Analyser):
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks, ax=ax)
         ax.set_title("Quality per tile")
         ax.set_xlabel("Position in read (bp)")
-        tile_quality = result_panel(
-            "Per tile sequence quality", (1024, 1024), fig
-        )
+        # tile_quality = result_panel(
+        #     "Per tile sequence quality", (1024, 1024), fig
+        # )
 
-        return tile_quality
+        return fig
 
     fn __str__(self) -> String:
         return ""
@@ -997,7 +1017,7 @@ struct AdapterContent[bits: Int = 3]():
                 self._check_hashes(hash, i + 1)
 
     @always_inline
-    fn plot(self, total_reads: Int64) raises -> result_panel:
+    fn plot(self, total_reads: Int64) raises -> PythonObject:
         Python.add_to_path(py_lib.as_string_slice())
         plt = Python.import_module("matplotlib.pyplot")
         arr = matrix_to_numpy(self.hash_counts)
@@ -1023,11 +1043,11 @@ struct AdapterContent[bits: Int = 3]():
         plt.ylabel("Percentage of Reads")
         plt.title("Adapter Content")
 
-        adapter_cont = result_panel(
-            "Per tile sequence quality", (1024, 1024), fig
-        )
+        # adapter_cont = result_panel(
+        #     "Per tile sequence quality", (1024, 1024), fig
+        # )
 
-        return adapter_cont
+        return fig
 
     @always_inline
     fn _check_hashes(mut self, hash: UInt64, pos: Int):
