@@ -129,7 +129,7 @@ struct FullStats(CollectionElement):
         for entry in results:
             html = insert_result_panel(html, entry[])
 
-        with open("assets/{}".format(file_name), "w") as f:
+        with open("{}_blazeseq.html".format(file_name), "w") as f:
             f.write(html)
 
 

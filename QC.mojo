@@ -7,10 +7,6 @@ from os import abort
 
 fn main() raises:
     args = argv()
-    print(args[1])
-    if String(args[1]) == "":
-        print("Got an empty file name")
-        abort()
 
     var parser = RecordParser[validate_ascii=False, validate_quality=False](
         String(args[1])
@@ -27,7 +23,7 @@ fn main() raises:
             n += 1
         except:
             t1 = perf_counter_ns()
-            stats.make_html("test.html")
+            stats.make_html(args[1])
             t2 = perf_counter_ns()
             print(n)
             print("Total tally time: ", (t1 - t0) / 1e9, "s")
