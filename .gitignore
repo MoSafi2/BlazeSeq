@@ -9,6 +9,7 @@ blazeseq/*
 !todo.md
 !QC.mojo
 !test_template.html
+!assets/*
 # pixi environments
 .pixi
 

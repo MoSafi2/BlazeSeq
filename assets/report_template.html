@@ -1,0 +1,238 @@
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{{filename}} - report</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"
+        integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <div class="header">
+    <div id="header_title">Report</div>
+    <div id="header_filename">
+      {{date}}<br />
+      {{filename}}
+    </div>
+  </div>
+  <div class="summary">
+    <h2>Summary</h2>
+    <ul>
+      {{basicstatisticscs}}
+      <li>
+        <a class="{{passbasicstatistics}}" href="#basicstatistics">
+          {{basicstatisticsname}}
+        </a>
+      </li>
+      {{basicstatisticsce}}
+
+      {{perbasesequencequalitycs}}
+      <li>
+        <a class="{{passperbasesequencequality}}" href="#perbasesequencequality">
+          {{perbasesequencequalityname}}
+        </a>
+      </li>
+      {{perbasesequencequalityce}}
+
+      {{pertilesequencequalitycs}}
+      <li>
+        <a class="{{passpertilesequencequality}}" href="#pertilesequencequality">
+          {{pertilesequencequalityname}}
+        </a>
+      </li>
+      {{pertilesequencequalityce}}
+
+      {{persequencequalityscorescs}}
+      <li>
+        <a class="{{passpersequencequalityscores}}" href="#persequencequalityscores">
+          {{persequencequalityscoresname}}
+        </a>
+      </li>
+      {{persequencequalityscoresce}}
+
+      {{perbasesequencecontentcs}}
+      <li>
+        <a class="{{passperbasesequencecontent}}" href="#perbasesequencecontent">
+          {{perbasesequencecontentname}}
+        </a>
+      </li>
+      {{perbasesequencecontentce}}
+
+      {{persequencegccontentcs}}
+      <li>
+        <a class="{{passpersequencegccontent}}" href="#persequencegccontent">
+          {{persequencegccontentname}}
+        </a>
+      </li>
+      {{persequencegccontentce}}
+
+      {{perbasencontentcs}}
+      <li>
+        <a class="{{passperbasencontent}}" href="#perbasencontent">
+          {{perbasencontentname}}
+        </a>
+      </li>
+      {{perbasencontentce}}
+
+      {{sequencelengthdistributioncs}}
+      <li>
+        <a class="{{passsequencelengthdistribution}}" href="#sequencelengthdistribution">
+          {{sequencelengthdistributionname}}
+        </a>
+      </li>
+      {{sequencelengthdistributionce}}
+
+      {{sequenceduplicationlevelscs}}
+      <li>
+        <a class="{{passsequenceduplicationlevels}}" href="#sequenceduplicationlevels">
+          {{sequenceduplicationlevelsname}}
+        </a>
+      </li>
+      {{sequenceduplicationlevelsce}}
+
+      {{overrepresentedsequencescs}}
+      <li>
+        <a class="{{passoverrepresentedsequences}}" href="#overrepresentedsequences">
+          {{overrepresentedsequencesname}}
+        </a>
+      </li>
+      {{overrepresentedsequencesce}}
+
+      {{adaptercontentcs}}
+      <li>
+        <a class="{{passadaptercontent}}" href="#adaptercontent">
+          {{adaptercontentname}}
+        </a>
+      </li>
+      {{adaptercontentce}}
+
+      {{kmercontentcs}}
+      <li>
+        <a class="{{passkmercontent}}" href="#kmercontent">
+          {{kmercontentname}}
+        </a>
+      </li>
+      {{kmercontentce}}
+    </ul>
+  </div>
+  <div class="main">
+    <div class="module">
+      <h2 class="{{passbasicstatistics}}" id="basicstatistics">
+        {{basicstatisticsname}}: {{passbasicstatistics}}
+      </h2>
+      {{basicstatisticsdata}}
+    </div>
+
+    {{perbasesequencequalitycs}}
+    <div class="module">
+      <h2 class="{{passperbasesequencequality}}" id="perbasesequencequality">
+        {{perbasesequencequalityname}}: {{passperbasesequencequality}}
+      </h2>
+      <div id="seqbasequalityboxplot"></div>
+    </div>
+    {{perbasesequencequalityce}}
+
+    {{pertilesequencequalitycs}}
+    <div class="module">
+      <h2 class="{{passpertilesequencequality}}" id="pertilesequencequality">
+        {{pertilesequencequalityname}}: {{passpertilesequencequality}}
+      </h2>
+      <div id="tilequalityheatmap"></div>
+    </div>
+    {{pertilesequencequalityce}}
+
+    {{persequencequalityscorescs}}
+    <div class="module">
+      <h2 class="{{passpersequencequalityscores}}" id="persequencequalityscores">
+        {{persequencequalityscoresname}}: {{passpersequencequalityscores}}
+      </h2>
+      <div id="seqqualitylineplot"></div>
+    </div>
+    {{persequencequalityscoresce}}
+
+    {{perbasesequencecontentcs}}
+    <div class="module">
+      <h2 class="{{passperbasesequencecontent}}" id="perbasesequencecontent">
+        {{perbasesequencecontentname}}: {{passperbasesequencecontent}}
+      </h2>
+      <div id="basesequencecontentlineplot"></div>
+    </div>
+    {{perbasesequencecontentce}}
+
+    {{persequencegccontentcs}}
+    <div class="module">
+      <h2 class="{{passpersequencegccontent}}" id="persequencegccontent">
+        {{persequencegccontentname}}: {{passpersequencegccontent}}
+      </h2>
+      <div id="sequencegccontentlineplot"></div>
+    </div>
+    {{persequencegccontentce}}
+
+    {{perbasencontentcs}}
+    <div class="module">
+      <h2 class="{{passperbasencontent}}" id="perbasencontent">
+        {{perbasencontentname}}: {{passperbasencontent}}
+      </h2>
+      <div id="basencontentlineplot"></div>
+    </div>
+    {{perbasencontentce}}
+
+    {{sequencelengthdistributioncs}}
+    <div class="module">
+      <h2 class="{{passsequencelengthdistribution}}" id="sequencelengthdistribution">
+        {{sequencelengthdistributionname}}: {{passsequencelengthdistribution}}
+      </h2>
+      <div id="sequencelengthdistributionlineplot"></div>
+    </div>
+    {{sequencelengthdistributionce}}
+
+    {{sequenceduplicationlevelscs}}
+    <div class="module">
+      <h2 class="{{passsequenceduplicationlevels}}" id="sequenceduplicationlevels">
+        {{sequenceduplicationlevelsname}}: {{passsequenceduplicationlevels}}
+      </h2>
+      <div id="seqduplevelslineplot"></div>
+    </div>
+    {{sequenceduplicationlevelsce}}
+
+    {{overrepresentedsequencescs}}
+    <div class="module">
+      <h2 class="{{passoverrepresentedsequences}}" id="overrepresentedsequences">
+        {{overrepresentedsequencesname}}: {{passoverrepresentedsequences}}
+      </h2>
+      {{overrepresentedsequencesdata}}
+    </div>
+    {{overrepresentedsequencesce}}
+
+    {{adaptercontentcs}}
+    <div class="module">
+      <h2 class="{{passadaptercontent}}" id="adaptercontent">
+        {{adaptercontentname}}: {{passadaptercontent}}
+      </h2>
+      <div id="adapterlineplot"></div>
+    </div>
+    {{adaptercontentce}}
+
+    {{kmercontentcs}}
+    <div class="module">
+      <h2 class="{{passkmercontent}}" id="kmercontent">
+        {{kmercontentname}}: {{passkmercontent}}
+      </h2>
+      <div id="kmerlineplot"></div>
+    </div>
+    {{kmercontentce}}
+  </div>
+  <div class="footer">Falco {{FalcoConfig::FalcoVersion}}</div>
+</body>
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+<script>
+  // Plotly script code as in the original template...
+</script>
+</html>

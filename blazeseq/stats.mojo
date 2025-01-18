@@ -242,6 +242,7 @@ struct CGContent(Analyser):
         var read_cg_content = int(round(cg_num * 100 / int(record.seq_len())))
         self.cg_content[read_cg_content] += 1
 
+    # TODO: Convert as much as possible away from numpy
     fn calculate_theoritical_distribution(self) raises -> PythonObject:
         np = Python.import_module("numpy")
         sc = Python.import_module("scipy")
@@ -607,6 +608,7 @@ struct QualityDistribution(Analyser):
 
         ################ Quality Boxplot ##################
 
+        #TODO: Convert as much as possible away from numpy
         mean_line = np.sum(
             arr * np.arange(1, arr.shape[1] + 1), axis=1
         ) / np.sum(arr, axis=1)
