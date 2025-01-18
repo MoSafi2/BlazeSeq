@@ -18,7 +18,7 @@
 ## Output formats
 
 - [x] Figures
-- [ ] HTML
+- [x] HTML
 - [ ] JSON
 - [ ] Text
 - [ ] CLI tool

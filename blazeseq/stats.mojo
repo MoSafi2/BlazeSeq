@@ -20,7 +20,7 @@ from blazeseq.helpers import (
     sum_tensor,
     encode_img_b64,
 )
-from blazeseq.html_maker import result_panel, insert_result_panel
+from blazeseq.html_maker import result_panel, insert_result_panel, html_template
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -122,9 +122,12 @@ struct FullStats(CollectionElement):
         results.append(self.tile_qual.make_html())
         results.append(self.adpt_cont.make_html(self.num_reads))
 
-        var html: String
-        with open("assets/report_template.html", "r") as file:
-            html = file.read()
+        var html: String = html_template
+        # with open("assets/report_template.html", "r") as file:
+        #     html = file.read()
+
+        while html.find("<<filename>>") > -1:
+            html = html.replace("<<filename>>", file_name)
 
         for entry in results:
             html = insert_result_panel(html, entry[])
