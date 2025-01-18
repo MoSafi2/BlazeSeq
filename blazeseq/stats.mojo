@@ -37,7 +37,7 @@ alias plt_figure = PythonObject
 ################
 
 
-trait Analyser(CollectionElement, Stringable):
+trait Analyser(CollectionElement):
     fn tally_read(mut self, record: FastqRecord):
         ...
 
@@ -70,12 +70,12 @@ struct FullStats(CollectionElement):
         self.num_reads += 1
         self.total_bases += record.len_record()
         self.bp_dist.tally_read(record)
-        # self.len_dist.tally_read(record)
-        # self.cg_content.tally_read(record)  # Almost Free
-        # self.dup_reads.tally_read(record)
-        # self.qu_dist.tally_read(record)
-        # self.adpt_cont.tally_read(record, self.num_reads)
-        # self.tile_qual.tally_read(record)
+        self.len_dist.tally_read(record)
+        self.cg_content.tally_read(record)  # Almost Free
+        self.dup_reads.tally_read(record)
+        self.qu_dist.tally_read(record)
+        self.adpt_cont.tally_read(record, self.num_reads)
+        self.tile_qual.tally_read(record)
 
     @always_inline
     fn tally(mut self, record: RecordCoord):
@@ -94,25 +94,40 @@ struct FullStats(CollectionElement):
         img1, img2 = self.bp_dist.plot(self.num_reads)
         plots.append(img1)
         plots.append(img2)
-        # plots.append(self.cg_content.plot())
-        # plots.append(self.len_dist.plot())
-        # img, _ = self.dup_reads.plot()
-        # plots.append(img)
-        # img1, img2 = self.qu_dist.plot()
-        # plots.append(img1)
-        # plots.append(img2)
-        # plots.append(self.tile_qual.plot())
-        # plots.append(self.adpt_cont.plot(self.num_reads))
+        plots.append(self.cg_content.plot())
+        plots.append(self.len_dist.plot())
+        img, _ = self.dup_reads.plot()
+        plots.append(img)
+        img1, img2 = self.qu_dist.plot()
+        plots.append(img1)
+        plots.append(img2)
+        plots.append(self.tile_qual.plot())
+        plots.append(self.adpt_cont.plot(self.num_reads))
 
         return plots
 
     fn make_html(mut self, file_name: String) raises:
+        var results = List[result_panel]()
         res1, res2 = self.bp_dist.make_html(self.num_reads)
+
+        results.append(res1)
+        results.append(res2)
+        results.append(self.cg_content.make_html())
+        results.append(self.len_dist.make_html())
+        results.append(self.dup_reads.make_html())
+
+        res1, res2 = self.qu_dist.make_html()
+        results.append(res1)
+        results.append(res2)
+        results.append(self.tile_qual.make_html())
+        results.append(self.adpt_cont.make_html(self.num_reads))
+
         var html: String
         with open("assets/report_template.html", "r") as file:
             html = file.read()
-        html = insert_result_panel(html, res1)
-        html = insert_result_panel(html, res2)
+
+        for entry in results:
+            html = insert_result_panel(html, entry[])
 
         with open("assets/{}".format(file_name), "w") as f:
             f.write(html)
@@ -187,8 +202,6 @@ struct BasepairDistribution(Analyser):
         ax2.set_xlabel("Position in read (bp)")
         ax2.set_title("N percentage")
 
-        # res1 = result_panel("Per base sequence content", (1024, 1024), fig)
-        # res2 = result_panel("N percentage", (1024, 1024), fig2)
         return fig, fig2
 
     fn make_grade(self):
@@ -207,16 +220,13 @@ struct BasepairDistribution(Analyser):
             encoded_fig1,
         )
         var result_2 = result_panel(
-            "base_pair_distribution2",
+            "n_percentage",
             "pass",
-            "Base Pair Distribtion",
+            "N Percentage (%)",
             encoded_fig2,
         )
 
         return result_1, result_2
-
-    fn __str__(self) -> String:
-        return String("\nBase_pair_dist_matrix: ")
 
 
 # Done!
@@ -291,12 +301,21 @@ struct CGContent(Analyser):
         ax.set_title("Per sequence GC content")
         ax.set_xlabel("Mean GC content (%)")
 
-        # res = result_panel("CG distribution", (1024, 1024), fig)
-
         return fig
 
-    fn __str__(self) -> String:
-        return String("\nThe CpG content tensor is: ") + str(self.cg_content)
+    fn make_html(
+        self,
+    ) raises -> result_panel:
+        fig = self.plot()
+        var encoded_fig1 = encode_img_b64(fig)
+        var result_1 = result_panel(
+            "cg_content",
+            "pass",
+            "Per sequence GC content",
+            encoded_fig1,
+        )
+
+        return result_1
 
 
 # TODO: You should extraplolate from the number of reads in the unique reads to how it would look like for everything.
@@ -397,9 +416,6 @@ struct DupReads(Analyser):
 
         return trueCount
 
-    fn __str__(self) -> String:
-        return String("\nNumber of duplicated reads is")
-
     fn plot(
         mut self,
     ) raises -> Tuple[PythonObject, List[Tuple[String, Float64]]]:
@@ -486,6 +502,19 @@ struct DupReads(Analyser):
 
         return fig, overrepresented_seqs
 
+    # TODO: Add Table for Over-represted Seqs
+    fn make_html(mut self) raises -> result_panel:
+        fig, _ = self.plot()
+        var encoded_fig1 = encode_img_b64(fig)
+        var result_1 = result_panel(
+            "dup_reads",
+            "pass",
+            "Sequence Duplication Levels",
+            encoded_fig1,
+        )
+
+        return result_1
+
 
 @value
 struct LengthDistribution(Analyser):
@@ -542,8 +571,17 @@ struct LengthDistribution(Analyser):
 
         return fig
 
-    fn __str__(self) -> String:
-        return String("\nLength Distribution: ") + str(self.length_vector)
+    fn make_html(self) raises -> result_panel:
+        fig = self.plot()
+        var encoded_fig1 = encode_img_b64(fig)
+        var result_1 = result_panel(
+            "seq_len_dis",
+            "pass",
+            "Sequence Duplication Levels",
+            encoded_fig1,
+        )
+
+        return result_1
 
 
 # TODO: FIX this struct to reflect FastQC
@@ -684,12 +722,27 @@ struct QualityDistribution(Analyser):
         ax2.set_xlabel("Mean Sequence Quality (Phred Score)")
         ax2.set_title("Quality scsore distribution over all sequences")
 
-        # avg_qu = result_panel("Per sequence quality scores", (1024, 1024), fig2)
-
         return Tuple(fig, fig2)
 
-    fn __str__(self) -> String:
-        return String("\nQuality_dist_matrix: ")
+    fn make_html(self) raises -> Tuple[result_panel, result_panel]:
+        fig1, fig2 = self.plot()
+        var encoded_fig1 = encode_img_b64(fig1)
+        var encoded_fig2 = encode_img_b64(fig2)
+        var result_1 = result_panel(
+            "qu_score_dis",
+            "pass",
+            "Quality Scores Distribtion",
+            encoded_fig1,
+        )
+
+        var result_2 = result_panel(
+            "qu_score_dis",
+            "pass",
+            "Mean Quality distribution",
+            encoded_fig2,
+        )
+
+        return result_1, result_2
 
     fn _guess_schema(self) -> QualitySchema:
         alias SANGER_ENCODING_OFFSET = 33
@@ -802,14 +855,19 @@ struct PerTileQuality(Analyser):
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks, ax=ax)
         ax.set_title("Quality per tile")
         ax.set_xlabel("Position in read (bp)")
-        # tile_quality = result_panel(
-        #     "Per tile sequence quality", (1024, 1024), fig
-        # )
 
         return fig
 
-    fn __str__(self) -> String:
-        return ""
+    fn make_html(self) raises -> result_panel:
+        fig1 = self.plot()
+        var encoded_fig1 = encode_img_b64(fig1)
+        var result_1 = result_panel(
+            "tile_quality",
+            "pass",
+            "Quality per tile",
+            encoded_fig1,
+        )
+        return result_1
 
     # TODO: This function should return tile information
     @always_inline
@@ -1043,11 +1101,18 @@ struct AdapterContent[bits: Int = 3]():
         plt.ylabel("Percentage of Reads")
         plt.title("Adapter Content")
 
-        # adapter_cont = result_panel(
-        #     "Per tile sequence quality", (1024, 1024), fig
-        # )
-
         return fig
+
+    fn make_html(self, total_reads: Int64) raises -> result_panel:
+        fig1 = self.plot(total_reads)
+        var encoded_fig1 = encode_img_b64(fig1)
+        var result_1 = result_panel(
+            "adapter_content",
+            "pass",
+            "Adapter Content",
+            encoded_fig1,
+        )
+        return result_1
 
     @always_inline
     fn _check_hashes(mut self, hash: UInt64, pos: Int):
