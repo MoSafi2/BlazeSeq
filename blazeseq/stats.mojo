@@ -30,11 +30,8 @@ from blazeseq.CONSTS import (
 from blazeseq.config import hash_list, hash_names
 
 # TODO: Make this dynamic
-alias py_lib: String = "./.pixi/envs/default/lib/python3.12/site-packages/"
+alias py_lib: String = "/home/mohamed/Documents/Projects/BlazeSeq/.pixi/envs/default/lib/python3.12/site-packages/"
 alias plt_figure = PythonObject
-
-
-################
 
 
 trait Analyser(CollectionElement):
@@ -123,9 +120,6 @@ struct FullStats(CollectionElement):
         results.append(self.adpt_cont.make_html(self.num_reads))
 
         var html: String = html_template
-        # with open("assets/report_template.html", "r") as file:
-        #     html = file.read()
-
         while html.find("<<filename>>") > -1:
             html = html.replace("<<filename>>", file_name)
 
@@ -207,7 +201,8 @@ struct BasepairDistribution(Analyser):
 
         return fig, fig2
 
-    fn make_grade(self):
+    @always_inline
+    fn make_grade(self, grades: Dict[String, Int]):
         pass
 
     fn make_html(
@@ -499,10 +494,6 @@ struct DupReads(Analyser):
             if seq_precent > 0.1:
                 overrepresented_seqs.append((key[].key, seq_precent))
 
-        # duplicate_reads = result_panel(
-        #     "Sequence Duplication Levels", (1024, 1024), fig
-        # )
-
         return fig, overrepresented_seqs
 
     # TODO: Add Table for Over-represted Seqs
@@ -655,18 +646,55 @@ struct QualityDistribution(Analyser):
         indices = np.arange(min_index, max_index)
         return np.take(arr, indices, axis=1)
 
+    fn get_bins(self, max_len: Int) -> List[Int]:
+        var pos: Int = 1
+        var interval: Int = 1
+        bins = List[Int]()
+        while pos <= max_len:
+            if pos > max_len:
+                pos = max_len
+            bins.append(pos)
+            pos += interval
+            if pos == 10 and max_len > 75:
+                interval = 5
+            if pos == 50 and max_len > 200:
+                interval = 10
+            if pos == 100 and max_len > 300:
+                interval = 50
+            if pos == 500 and max_len > 1000:
+                interval = 100
+            if pos == 1000 and max_len > 2000:
+                interval = 500
+
+        if bins[-1] < max_len:
+            bins.append(max_len)
+
+        return bins
+
     fn plot(self) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
-        py_builtin = Python.import_module("builtins")
 
         schema = self._guess_schema()
         arr = matrix_to_numpy(self.qu_dist)
         min_index = schema.OFFSET
         max_index = max(40, self.max_qu)
         arr = self.slice_array(arr, int(min_index), int(max_index))
-
+        # Convert the raw array to binned array to account for very long seqs.
+        var bins = self.get_bins(arr.shape[0])
+        py_bins = Python.list()
+        for i in bins:
+            py_bins.append(i[])
+        x = np.linspace(0, arr.shape[0], arr.shape[0])
+        binned_array = np.digitize(x, py_bins)
+        py_binned_slices = Python.list()
+        for i in range(len(bins)):
+            mask = np.equal(binned_array, i)
+            t1 = np.compress(mask, arr, axis=0)
+            t2 = np.sum(t1, axis=0)
+            py_binned_slices.append(t2)
+        arr = np.vstack(py_binned_slices)
         ################ Quality Boxplot ##################
 
         # TODO: Convert as much as possible away from numpy
@@ -686,9 +714,9 @@ struct QualityDistribution(Analyser):
         x = plt.subplots()
         fig = x[0]
         ax = x[1]
-        l = py_builtin.list()
+        l = Python.list()
         for i in range(len(IQR)):
-            var stat: PythonObject = py_builtin.dict()
+            var stat: PythonObject = Python.dict()
             stat["med"] = median[i]
             stat["q1"] = Q25[i]
             stat["q3"] = Q75[i]
@@ -700,10 +728,8 @@ struct QualityDistribution(Analyser):
         ax.plot(mean_line)
         ax.set_title("Quality Scores across all bases")
         ax.set_xlabel("Position in read (bp)")
-
-        # qua_boxplot = result_panel(
-        #     "Per base sequence quality", (1024, 1024), fig
-        # )
+        ax.set_xticklabels(py_bins)
+        plt.xticks(rotation=45)
 
         ###############################################################
         ####                Average quality /seq                   ####
@@ -723,7 +749,7 @@ struct QualityDistribution(Analyser):
         ax2 = z[1]
         ax2.plot(arr2)
         ax2.set_xlabel("Mean Sequence Quality (Phred Score)")
-        ax2.set_title("Quality scsore distribution over all sequences")
+        ax2.set_title("Quality score distribution over all sequences")
 
         return Tuple(fig, fig2)
 
@@ -840,7 +866,6 @@ struct PerTileQuality(Analyser):
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         sns = Python.import_module("seaborn")
-        py_builtin = Python.import_module("builtins")
         plt = Python.import_module("matplotlib.pyplot")
 
         z = plt.subplots()
@@ -852,7 +877,7 @@ struct PerTileQuality(Analyser):
             temp_arr = tensor_to_numpy_1d(self.map[i[]].quality)
             arr = np.vstack((arr, temp_arr))
 
-        var ks = py_builtin.list()
+        var ks = Python.list()
         for i in self.map.keys():
             ks.append(i[])
         sns.heatmap(arr[1:,], cmap="Blues_r", yticklabels=ks, ax=ax)
