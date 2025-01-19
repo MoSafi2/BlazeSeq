@@ -20,6 +20,7 @@ from blazeseq.helpers import (
     sum_tensor,
     encode_img_b64,
     get_bins,
+    bin_array,
 )
 from blazeseq.html_maker import result_panel, insert_result_panel, html_template
 from blazeseq.CONSTS import (
@@ -170,19 +171,21 @@ struct BasepairDistribution(Analyser):
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
-    # Should Plot BP distrubution  line plot & Per base N content
-    # DONE!
+    # TODO: Also bind this array
+    # TODO: Fix erros in this plot after binning
     fn plot(
         self, total_reads: Int64
     ) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
-
         var arr = matrix_to_numpy(self.bp_dist)
+        # bins = get_bins(self.max_length)
+        # arr, py_bins = bin_array(arr, bins, func="mean")
+
         arr = (arr / total_reads) * 100
-        var arr1 = arr[:, 0:4]
-        var arr2 = arr[:, 4:5]
-        var x = plt.subplots()  # Create a figure
+        var arr1 = arr[:, 0:4]  # C,G,T,A pairs
+        var arr2 = arr[:, 4:5]  # N content
+        var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
         ax.plot(arr1)
@@ -190,8 +193,9 @@ struct BasepairDistribution(Analyser):
         ax.set_label(["%T", "%A", "%G", "%C"])
         ax.set_xlabel("Position in read (bp)")
         ax.set_title("Base Distribution")
+        # ax.set_xticklabels(py_bins, rotation=45)
 
-        var y = plt.subplots()  # Create a figure
+        var y = plt.subplots()
         var fig2 = y[0]
         var ax2 = y[1]
         ax2.plot(arr2)
@@ -199,7 +203,7 @@ struct BasepairDistribution(Analyser):
         ax2.set_label(["%N"])
         ax2.set_xlabel("Position in read (bp)")
         ax2.set_title("N percentage")
-
+        # ax2.set_xticklabels(py_bins, rotation=45)
         return fig, fig2
 
     @always_inline
@@ -659,18 +663,8 @@ struct QualityDistribution(Analyser):
         arr = self.slice_array(arr, int(min_index), int(max_index))
         # Convert the raw array to binned array to account for very long seqs.
         var bins = get_bins(arr.shape[0])
-        py_bins = Python.list()
-        for i in bins:
-            py_bins.append(i[])
-        x = np.linspace(0, arr.shape[0], arr.shape[0])
-        binned_array = np.digitize(x, py_bins)
-        py_binned_slices = Python.list()
-        for i in range(len(bins)):
-            mask = np.equal(binned_array, i)
-            t1 = np.compress(mask, arr, axis=0)
-            t2 = np.sum(t1, axis=0)
-            py_binned_slices.append(t2)
-        arr = np.vstack(py_binned_slices)
+        arr, py_bins = bin_array(arr, bins)
+
         ################ Quality Boxplot ##################
 
         # TODO: Convert as much as possible away from numpy
@@ -704,8 +698,7 @@ struct QualityDistribution(Analyser):
         ax.plot(mean_line)
         ax.set_title("Quality Scores across all bases")
         ax.set_xlabel("Position in read (bp)")
-        ax.set_xticklabels(py_bins)
-        plt.xticks(rotation=45)
+        ax.set_xticklabels(py_bins, rotation=45)
 
         ###############################################################
         ####                Average quality /seq                   ####

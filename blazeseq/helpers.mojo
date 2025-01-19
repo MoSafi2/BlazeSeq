@@ -348,9 +348,8 @@ fn encode_img_b64(fig: PythonObject) raises -> String:
 
     return str(base64_image)
 
-
-
-
+# Same logic as exponential BaseGroups in FASTQC
+# TODO: Add source
 fn get_bins(max_len: Int) -> List[Int]:
     var pos: Int = 1
     var interval: Int = 1
@@ -376,6 +375,30 @@ fn get_bins(max_len: Int) -> List[Int]:
 
     return bins
 
+
+@always_inline
+fn bin_array(
+    arr: PythonObject, bins: List[Int], func: StringLiteral = "sum"
+) raises -> Tuple[PythonObject, PythonObject]:
+    Python.add_to_path(py_lib.as_string_slice())
+    np = Python.import_module("numpy")
+
+    py_bins = Python.list()
+    for i in bins:
+        py_bins.append(i[])
+    x = np.linspace(0, arr.shape[0], arr.shape[0])
+    binned_array = np.digitize(x, py_bins)
+    py_binned_slices = Python.list()
+    for i in range(len(bins)):
+        mask = np.equal(binned_array, i)
+        t1 = np.compress(mask, arr, axis=0)
+        if func == "mean":
+            t2 = np.mean(t1, axis=0)
+        else:
+            t2 = np.sum(t1, axis=0)
+        py_binned_slices.append(t2)
+    new_arr = np.vstack(py_binned_slices)
+    return new_arr, py_bins
 
 
 @value
