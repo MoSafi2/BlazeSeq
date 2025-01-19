@@ -19,6 +19,7 @@ from blazeseq.helpers import (
     grow_matrix,
     sum_tensor,
     encode_img_b64,
+    get_bins,
 )
 from blazeseq.html_maker import result_panel, insert_result_panel, html_template
 from blazeseq.CONSTS import (
@@ -646,31 +647,6 @@ struct QualityDistribution(Analyser):
         indices = np.arange(min_index, max_index)
         return np.take(arr, indices, axis=1)
 
-    fn get_bins(self, max_len: Int) -> List[Int]:
-        var pos: Int = 1
-        var interval: Int = 1
-        bins = List[Int]()
-        while pos <= max_len:
-            if pos > max_len:
-                pos = max_len
-            bins.append(pos)
-            pos += interval
-            if pos == 10 and max_len > 75:
-                interval = 5
-            if pos == 50 and max_len > 200:
-                interval = 10
-            if pos == 100 and max_len > 300:
-                interval = 50
-            if pos == 500 and max_len > 1000:
-                interval = 100
-            if pos == 1000 and max_len > 2000:
-                interval = 500
-
-        if bins[-1] < max_len:
-            bins.append(max_len)
-
-        return bins
-
     fn plot(self) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
@@ -682,7 +658,7 @@ struct QualityDistribution(Analyser):
         max_index = max(40, self.max_qu)
         arr = self.slice_array(arr, int(min_index), int(max_index))
         # Convert the raw array to binned array to account for very long seqs.
-        var bins = self.get_bins(arr.shape[0])
+        var bins = get_bins(arr.shape[0])
         py_bins = Python.list()
         for i in bins:
             py_bins.append(i[])
