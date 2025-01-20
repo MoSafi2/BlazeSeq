@@ -17,55 +17,6 @@ struct result_panel:
     var html_output: String
 
 
-fn create_html_template() -> String:
-    return """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Image Container</title>
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body>
-        <div class="image-container">
-        </div>
-    </body>
-    </html>
-    """
-
-
-fn insert_image_into_template(
-    owned html: String, base64_image: String, plot_info: result_panel
-) raises -> String:
-    """
-    Inserts a base64-encoded image into the HTML template.
-
-    Args:
-        html: The HTML template string.
-        base64_image: The base64-encoded image string.
-        plot_info: Info about the plot.
-
-    Returns:
-        String: The updated HTML template with the image inserted.
-    """
-    # var py_str: PythonObject = '<img src="data:image/jpeg;base64,{}" alt="Image">'
-    # var image_html: PythonObject = py_str.format(base64_image)
-
-    var marker: String = '<div class="image-container">'
-    if marker in html:
-        html = html.replace(
-            marker,
-            '<img src="data:image/jpeg;base64,'
-            + base64_image
-            + '" alt="Image">'
-            + "\n"
-            + "</div>"
-            + marker,
-        )
-    return html
-
-
 @always_inline
 fn _make_summary_insert(panel: result_panel) raises -> String:
     return '<li><a class="{}" href="#{}">{}</a></li>'.format(
@@ -133,6 +84,40 @@ alias html_template: String = """
         <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"
             integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
         <style>
+        """ + style + """
+        </style>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    </head>
+
+    <body>
+        <div class="header">
+            <div id="header_title">Report</div>
+            <div id="header_filename">
+                <<date>><br />
+                <<filename>>
+            </div>
+        </div>
+        <div class="summary">
+            <h2>Summary</h2>
+            <ul>
+                <!-- Insert Point for Summary links -->
+            </ul>
+        </div>
+
+        <div class="main">
+            <!-- Insertion point for Images & Results -->
+        </div>
+
+        <div class="footer">BlazeQC<<BlazeQC_Version>></div>
+    </body>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+    </html>
+            """
+
+alias style: String = """
             @media screen {
                 div.summary {
                     width: 18em;
@@ -319,34 +304,4 @@ alias html_template: String = """
             .fail {
                 color: #990000;
             }
-        </style>
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    </head>
-
-    <body>
-        <div class="header">
-            <div id="header_title">Report</div>
-            <div id="header_filename">
-                {{date}}<br />
-                <<filename>>
-            </div>
-        </div>
-        <div class="summary">
-            <h2>Summary</h2>
-            <ul>
-                <!-- Insert Point for Summary links -->
-            </ul>
-        </div>
-
-        <div class="main">
-            <!-- Insertion point for Images & Results -->
-        </div>
-
-        <div class="footer">Falco {{FalcoConfig::FalcoVersion}}</div>
-    </body>
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
-        crossorigin="anonymous"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
-    </html>
-"""
+                """

@@ -32,7 +32,7 @@ from blazeseq.CONSTS import (
 from blazeseq.config import hash_list, hash_names
 
 # TODO: Make this dynamic
-alias py_lib: String = "/home/mohamed/Documents/Projects/BlazeSeq/.pixi/envs/default/lib/python3.12/site-packages/"
+alias py_lib: String = ".pixi/envs/default/lib/python3.12/site-packages/"
 alias plt_figure = PythonObject
 
 
