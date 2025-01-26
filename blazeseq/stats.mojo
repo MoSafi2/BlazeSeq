@@ -95,7 +95,7 @@ struct FullStats(CollectionElement):
         plots.append(img2)
         plots.append(self.cg_content.plot())
         plots.append(self.len_dist.plot())
-        img, _ = self.dup_reads.plot()
+        img, _ = self.dup_reads.plot(int(self.num_reads))
         plots.append(img)
         img1, img2 = self.qu_dist.plot()
         plots.append(img1)
@@ -113,7 +113,7 @@ struct FullStats(CollectionElement):
         results.append(res2)
         results.append(self.cg_content.make_html())
         results.append(self.len_dist.make_html())
-        results.append(self.dup_reads.make_html())
+        results.append(self.dup_reads.make_html(int(self.num_reads)))
 
         res1, res2 = self.qu_dist.make_html()
         results.append(res1)
@@ -427,7 +427,7 @@ struct DupReads(Analyser):
         return trueCount
 
     fn plot(
-        mut self,
+        mut self, total_reads: Int
     ) raises -> Tuple[PythonObject, List[Tuple[String, Float64]]]:
         ###################################################################
         ###                     Duplicate Reads                         ###
@@ -465,6 +465,7 @@ struct DupReads(Analyser):
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var arr = Tensor[DType.float64](total_percentages)
+        arr = (arr / float(total_reads)) * float(100)
         final_arr = tensor_to_numpy_1d(arr)
         f = plt.subplots(figsize=(10, 6))
         fig = f[0]
@@ -509,8 +510,8 @@ struct DupReads(Analyser):
         return fig, overrepresented_seqs
 
     # TODO: Add Table for Over-represted Seqs
-    fn make_html(mut self) raises -> result_panel:
-        fig, _ = self.plot()
+    fn make_html(mut self, total_reads: Int) raises -> result_panel:
+        fig, _ = self.plot(total_reads)
         var encoded_fig1 = encode_img_b64(fig)
         var result_1 = result_panel(
             "dup_reads",
