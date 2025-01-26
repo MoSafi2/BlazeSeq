@@ -129,6 +129,7 @@ struct FullStats(CollectionElement):
             html = insert_result_panel(html, entry[])
 
         with open("{}_blazeseq.html".format(file_name), "w") as f:
+            print("{}_blazeseq.html".format(file_name))
             f.write(html)
 
 
@@ -178,32 +179,38 @@ struct BasepairDistribution(Analyser):
     ) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
+        var np = Python.import_module("numpy")
         var arr = matrix_to_numpy(self.bp_dist)
-        # bins = get_bins(self.max_length)
-        # arr, py_bins = bin_array(arr, bins, func="mean")
+        bins = get_bins(self.max_length)
+        arr, py_bins = bin_array(arr, bins, func="sum")
+        var div_arr = Python.list()
+        div_arr.append(total_reads)
+        for i in range(len(py_bins) - 1):
+            div_arr.append((bins[i + 1] - bins[i]) * total_reads)
+        arr = (np.divide(arr.T, div_arr).T) * 100
 
-        arr = (arr / total_reads) * 100
         var arr1 = arr[:, 0:4]  # C,G,T,A pairs
         var arr2 = arr[:, 4:5]  # N content
         var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
         ax.plot(arr1)
+        ax.set_xticklabels(py_bins, rotation=45)
         ax.set_ylim(0, 100)
         ax.set_label(["%T", "%A", "%G", "%C"])
         ax.set_xlabel("Position in read (bp)")
         ax.set_title("Base Distribution")
-        # ax.set_xticklabels(py_bins, rotation=45)
 
         var y = plt.subplots()
         var fig2 = y[0]
         var ax2 = y[1]
         ax2.plot(arr2)
+        ax2.set_xticklabels(py_bins, rotation=45)
         ax2.set_ylim(0, 100)
         ax2.set_label(["%N"])
         ax2.set_xlabel("Position in read (bp)")
         ax2.set_title("N percentage")
-        # ax2.set_xticklabels(py_bins, rotation=45)
+
         return fig, fig2
 
     @always_inline
@@ -663,7 +670,7 @@ struct QualityDistribution(Analyser):
         arr = self.slice_array(arr, int(min_index), int(max_index))
         # Convert the raw array to binned array to account for very long seqs.
         var bins = get_bins(arr.shape[0])
-        arr, py_bins = bin_array(arr, bins)
+        arr, py_bins = bin_array(arr, bins, func="mean")
 
         ################ Quality Boxplot ##################
 

@@ -394,8 +394,10 @@ fn bin_array(
         t1 = np.compress(mask, arr, axis=0)
         if func == "mean":
             t2 = np.mean(t1, axis=0)
-        else:
+        elif func == "sum":
             t2 = np.sum(t1, axis=0)
+        else:
+            t2 = t1
         py_binned_slices.append(t2)
     new_arr = np.vstack(py_binned_slices)
     return new_arr, py_bins
