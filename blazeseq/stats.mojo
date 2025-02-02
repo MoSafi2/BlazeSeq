@@ -186,6 +186,7 @@ struct BasepairDistribution(Analyser):
     ) raises -> Tuple[PythonObject, PythonObject]:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
+        var mtp = Python.import_module("matplotlib")
         var np = Python.import_module("numpy")
         var arr = matrix_to_numpy(self.bp_dist)
         bins = make_linear_base_groups(self.max_length)
@@ -206,6 +207,9 @@ struct BasepairDistribution(Analyser):
         ax.set_xticklabels(py_bins, rotation=45)
         ax.plot(arr1)
         ax.set_ylim(0, 100)
+        ax.xaxis.set_major_locator(
+            mtp.ticker.MaxNLocator(integer=True, nbins=15)
+        )
         ax.set_label(["%T", "%A", "%G", "%C"])
         ax.set_xlabel("Position in read (bp)")
         ax.set_title("Base Distribution")
@@ -219,8 +223,11 @@ struct BasepairDistribution(Analyser):
         for i in range(len(bins)):
             bins_range.append(i)
 
-        ax.set_xticks(bins_range)
+        ax2.set_xticks(bins_range)
         ax2.set_xticklabels(py_bins, rotation=45)
+        ax2.xaxis.set_major_locator(
+            mtp.ticker.MaxNLocator(integer=True, nbins=15)
+        )
         ax2.set_ylim(0, 100)
         ax2.set_label(["%N"])
         ax2.set_xlabel("Position in read (bp)")
@@ -590,8 +597,6 @@ struct LengthDistribution(Analyser):
         ax.set_title("Distribution of sequence lengths over all sequences")
         ax.set_xlabel("Sequence Length (bp)")
 
-        # len_dis = result_panel("Length Distribution", (1024, 1024), fig)
-
         return fig
 
     fn make_html(self) raises -> result_panel:
@@ -607,8 +612,6 @@ struct LengthDistribution(Analyser):
         return result_1
 
 
-# TODO: FIX this struct to reflect FastQC
-# TODO: FIX this to get bands instead per base pair to avoid problems with long reads
 @value
 struct QualityDistribution(Analyser):
     var qu_dist: Tensor[DType.int64]
@@ -667,7 +670,6 @@ struct QualityDistribution(Analyser):
         self.qu_dist_seq[average] += 1
 
     # Use this answer for plotting: https://stackoverflow.com/questions/58053594/how-to-create-a-boxplot-from-data-with-weights
-    # TODO: Make an abbreviator of the plot to get always between 50-60 bars per plot
     fn slice_array(
         self, arr: PythonObject, min_index: Int, max_index: Int
     ) raises -> PythonObject:
@@ -679,6 +681,7 @@ struct QualityDistribution(Analyser):
         Python.add_to_path(py_lib.as_string_slice())
         np = Python.import_module("numpy")
         plt = Python.import_module("matplotlib.pyplot")
+        mtp = Python.import_module("matplotlib")
 
         schema = self._guess_schema()
         arr = matrix_to_numpy(self.qu_dist)
@@ -730,6 +733,9 @@ struct QualityDistribution(Analyser):
 
         ax.set_xticks(bins_range)
         ax.set_xticklabels(py_bins, rotation=45)
+        ax.xaxis.set_major_locator(
+            mtp.ticker.MaxNLocator(integer=True, nbins=15)
+        )
 
         ###############################################################
         ####                Average quality /seq                   ####
