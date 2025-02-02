@@ -350,8 +350,6 @@ struct CGContent(Analyser):
         return result_1
 
 
-# TODO: You should extraplolate from the number of reads in the unique reads to how it would look like for everything.
-# TODO: Add the number of non-dups reads
 @value
 struct DupReads(Analyser):
     var unique_dict: Dict[String, Int]
@@ -545,7 +543,6 @@ struct DupReads(Analyser):
         return result_1
 
 
-# TODO: Add binning to all plots
 @value
 struct LengthDistribution(Analyser):
     var length_vector: Tensor[DType.int64]
@@ -590,7 +587,6 @@ struct LengthDistribution(Analyser):
 
         var arr2 = np.insert(arr, 0, 0)
         var arr3 = np.append(arr2, 0)
-        np.save("len_dist.npy", arr3)
         bins = make_linear_base_groups(self.length_vector.num_elements())
         arr3, py_bins = bin_array(arr3, bins, func="mean")
 
