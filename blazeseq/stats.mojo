@@ -351,6 +351,7 @@ struct CGContent(Analyser):
 
 
 # TODO: You should extraplolate from the number of reads in the unique reads to how it would look like for everything.
+# TODO: Add the number of non-dups reads
 @value
 struct DupReads(Analyser):
     var unique_dict: Dict[String, Int]
@@ -387,7 +388,7 @@ struct DupReads(Analyser):
             self.unique_dict[s] = 1
             self.unique_reads += 1
 
-            if self.unique_reads == self.MAX_READS:
+            if self.unique_reads <= self.MAX_READS:
                 self.count_at_max = self.n
         else:
             return
@@ -445,7 +446,6 @@ struct DupReads(Analyser):
 
         var pSeeingAtLimit: Float64 = 1 - pNotSeeingAtLimit
         var trueCount = count_at_level / pSeeingAtLimit
-
         return trueCount
 
     fn plot(
@@ -454,7 +454,7 @@ struct DupReads(Analyser):
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
-
+        # Correct if we didn't hit the number of unique reads, thus count_at_max stays at 0:
         self.predict_reads()
         total_percentages = List[Float64](capacity=16)
         for _ in range(16):
@@ -516,7 +516,7 @@ struct DupReads(Analyser):
         )
         ax.set_xlabel("Sequence Duplication Level")
         ax.set_title("Sequences Duplication levels")
-        ax.set_ylim(0, 100)
+        # ax.set_ylim(0, 100)
 
         ################################################################
         ####               Over-Represented Sequences                ###
@@ -590,9 +590,22 @@ struct LengthDistribution(Analyser):
 
         var arr2 = np.insert(arr, 0, 0)
         var arr3 = np.append(arr2, 0)
+        np.save("len_dist.npy", arr3)
+        bins = make_linear_base_groups(self.length_vector.num_elements())
+        arr3, py_bins = bin_array(arr3, bins, func="mean")
+
+        ticks = Python.list()
+        for i in range(len(bins)):
+            ticks.append(i)
+
         ax.plot(arr3)
-        ax.xaxis.set_major_locator(mtp.ticker.MaxNLocator(integer=True))
-        ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
+
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(py_bins)
+        ax.xaxis.set_major_locator(
+            mtp.ticker.MaxNLocator(integer=True, nbins=15)
+        )
+        # ax.set_xlim(np.argmax(arr3 > 0) - 1, len(arr3) - 1)
         ax.set_ylim(0)
         ax.set_title("Distribution of sequence lengths over all sequences")
         ax.set_xlabel("Sequence Length (bp)")
