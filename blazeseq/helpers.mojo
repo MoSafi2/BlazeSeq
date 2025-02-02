@@ -348,9 +348,10 @@ fn encode_img_b64(fig: PythonObject) raises -> String:
 
     return str(base64_image)
 
+
 # Same logic as exponential BaseGroups in FASTQC
-# TODO: Add source
-fn get_bins(max_len: Int) -> List[Int]:
+# Ported from FASTQC: https://github.com/s-andrews/FastQC/blob/1faeea0412093224d7f6a07f777fad60a5650795/uk/ac/babraham/FastQC/Graphs/BaseGroup.java
+fn get_exp_interval(max_len: Int) -> List[Int]:
     var pos: Int = 1
     var interval: Int = 1
     bins = List[Int]()
@@ -374,6 +375,65 @@ fn get_bins(max_len: Int) -> List[Int]:
         bins.append(max_len)
 
     return bins
+
+
+# Ported from FastQC: https://github.com/s-andrews/FastQC/blob/1faeea0412093224d7f6a07f777fad60a5650795/uk/ac/babraham/FastQC/Graphs/BaseGroup.java
+fn get_linear_interval(length: Int) -> Int:
+    base_values = List[Int](2, 5, 10)
+    multiplier = 1
+
+    while True:
+        for base in base_values:
+            interval = base[] * multiplier
+            group_count = 9 + ((length - 9) // interval)
+            if (length - 9) % interval != 0:
+                group_count += 1
+
+            if group_count < 75:
+                return interval
+
+        multiplier *= 10
+
+        # if multiplier == 10_000_000:
+        #     raise Error("Couldn't find a sensible interval grouping for length")
+
+
+fn make_ungrouped_groups(max_length: Int) -> List[Int]:
+    var ungrouped_list = List[Int]()
+    for i in range(1, max_length + 1):
+        ungrouped_list.append(i)
+    return ungrouped_list
+
+
+fn make_linear_base_groups(max_length: Int) -> List[Int]:
+    if max_length <= 75:
+        return make_ungrouped_groups(max_length)
+
+    interval = get_linear_interval(max_length)
+    starting_base = 1
+    groups = List[Int]()
+
+    while starting_base <= max_length:
+        end_base = starting_base + (interval - 1)
+
+        if starting_base < 10:
+            end_base = starting_base
+        elif starting_base == 10 and interval > 10:
+            end_base = interval - 1
+
+        if end_base > max_length:
+            end_base = max_length
+
+        groups.append(starting_base)
+
+        if starting_base < 10:
+            starting_base += 1
+        elif starting_base == 10 and interval > 10:
+            starting_base = interval
+        else:
+            starting_base += interval
+
+    return groups
 
 
 @always_inline

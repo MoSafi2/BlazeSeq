@@ -19,7 +19,7 @@ from blazeseq.helpers import (
     grow_matrix,
     sum_tensor,
     encode_img_b64,
-    get_bins,
+    make_linear_base_groups,
     bin_array,
 )
 from blazeseq.html_maker import result_panel, insert_result_panel, html_template
@@ -106,24 +106,33 @@ struct FullStats(CollectionElement):
         return plots
 
     fn make_html(mut self, file_name: String) raises:
-        var results = List[result_panel]()
-        res1, res2 = self.bp_dist.make_html(self.num_reads)
+        Python.add_to_path(py_lib.as_string_slice())
 
-        results.append(res1)
-        results.append(res2)
-        results.append(self.cg_content.make_html())
-        results.append(self.len_dist.make_html())
-        results.append(self.dup_reads.make_html(int(self.num_reads)))
+        py_dt = Python.import_module("datetime")
+        dt_now = py_dt.datetime.now().strftime("%a %d %b %Y")
+
+        var results = List[result_panel]()
 
         res1, res2 = self.qu_dist.make_html()
-        results.append(res1)
         results.append(res2)
+        results.append(res1)
+
+        n_dist, bp_dist = self.bp_dist.make_html(self.num_reads)
+
+        results.append(bp_dist)
+        results.append(self.cg_content.make_html())
+        results.append(n_dist)
+        results.append(self.len_dist.make_html())
+        results.append(self.dup_reads.make_html(int(self.num_reads)))
         results.append(self.tile_qual.make_html())
         results.append(self.adpt_cont.make_html(self.num_reads))
 
         var html: String = html_template
         while html.find("<<filename>>") > -1:
             html = html.replace("<<filename>>", file_name)
+
+        while html.find("<<date>>") > -1:
+            html = html.replace("<<date>>", str(dt_now))
 
         for entry in results:
             html = insert_result_panel(html, entry[])
@@ -172,8 +181,6 @@ struct BasepairDistribution(Analyser):
             var index = VariadicList[Int](i, base_val)
             self.bp_dist[index] += 1
 
-    # TODO: Also bind this array
-    # TODO: Fix erros in this plot after binning
     fn plot(
         self, total_reads: Int64
     ) raises -> Tuple[PythonObject, PythonObject]:
@@ -181,21 +188,23 @@ struct BasepairDistribution(Analyser):
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
         var arr = matrix_to_numpy(self.bp_dist)
-        bins = get_bins(self.max_length)
+        bins = make_linear_base_groups(self.max_length)
         arr, py_bins = bin_array(arr, bins, func="sum")
-        var div_arr = Python.list()
-        div_arr.append(total_reads)
-        for i in range(len(py_bins) - 1):
-            div_arr.append((bins[i + 1] - bins[i]) * total_reads)
-        arr = (np.divide(arr.T, div_arr).T) * 100
+        arr = (np.divide(arr.T, arr.sum(axis=1)).T) * 100
 
         var arr1 = arr[:, 0:4]  # C,G,T,A pairs
         var arr2 = arr[:, 4:5]  # N content
         var x = plt.subplots()
         var fig = x[0]
         var ax = x[1]
-        ax.plot(arr1)
+
+        bins_range = Python.list()
+        for i in range(len(bins)):
+            bins_range.append(i)
+
+        ax.set_xticks(bins_range)
         ax.set_xticklabels(py_bins, rotation=45)
+        ax.plot(arr1)
         ax.set_ylim(0, 100)
         ax.set_label(["%T", "%A", "%G", "%C"])
         ax.set_xlabel("Position in read (bp)")
@@ -205,6 +214,12 @@ struct BasepairDistribution(Analyser):
         var fig2 = y[0]
         var ax2 = y[1]
         ax2.plot(arr2)
+
+        bins_range = Python.list()
+        for i in range(len(bins)):
+            bins_range.append(i)
+
+        ax.set_xticks(bins_range)
         ax2.set_xticklabels(py_bins, rotation=45)
         ax2.set_ylim(0, 100)
         ax2.set_label(["%N"])
@@ -523,6 +538,7 @@ struct DupReads(Analyser):
         return result_1
 
 
+# TODO: Add binning to all plots
 @value
 struct LengthDistribution(Analyser):
     var length_vector: Tensor[DType.int64]
@@ -670,7 +686,7 @@ struct QualityDistribution(Analyser):
         max_index = max(40, self.max_qu)
         arr = self.slice_array(arr, int(min_index), int(max_index))
         # Convert the raw array to binned array to account for very long seqs.
-        var bins = get_bins(arr.shape[0])
+        var bins = make_linear_base_groups(arr.shape[0])
         arr, py_bins = bin_array(arr, bins, func="mean")
 
         ################ Quality Boxplot ##################
@@ -704,8 +720,15 @@ struct QualityDistribution(Analyser):
 
         ax.bxp(l, showfliers=False)
         ax.plot(mean_line)
+        ax.set_ylim(0, 60)
         ax.set_title("Quality Scores across all bases")
         ax.set_xlabel("Position in read (bp)")
+
+        bins_range = Python.list()
+        for i in range(len(bins)):
+            bins_range.append(i)
+
+        ax.set_xticks(bins_range)
         ax.set_xticklabels(py_bins, rotation=45)
 
         ###############################################################
@@ -735,14 +758,14 @@ struct QualityDistribution(Analyser):
         var encoded_fig1 = encode_img_b64(fig1)
         var encoded_fig2 = encode_img_b64(fig2)
         var result_1 = result_panel(
-            "qu_score_dis",
+            "qu_score_dis_base",
             "pass",
             "Quality Scores Distribtion",
             encoded_fig1,
         )
 
         var result_2 = result_panel(
-            "qu_score_dis",
+            "qu_score_dis_seq",
             "pass",
             "Mean Quality distribution",
             encoded_fig2,
@@ -1036,6 +1059,7 @@ struct KmerContent[KMERSIZE: Int]:
 
 # TODO: Check how to add the analyzer Trait again
 # TODO: Also plot the Over-represented sequences.
+# TODO: Add binning
 @value
 struct AdapterContent[bits: Int = 3]():
     var kmer_len: Int
