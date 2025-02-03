@@ -33,7 +33,6 @@ from blazeseq.config import hash_list, hash_names
 
 # TODO: Make this dynamic
 alias py_lib: String = ".pixi/envs/default/lib/python3.12/site-packages/"
-alias plt_figure = PythonObject
 
 
 trait Analyser(CollectionElement):
@@ -550,6 +549,7 @@ struct LengthDistribution(Analyser):
     fn __init__(out self):
         self.length_vector = Tensor[DType.int64](0)
 
+    @always_inline
     fn tally_read(mut self, record: FastqRecord):
         if record.len_record() > self.length_vector.num_elements():
             var new_tensor = grow_tensor(
@@ -558,6 +558,7 @@ struct LengthDistribution(Analyser):
             swap(self.length_vector, new_tensor)
         self.length_vector[record.len_record() - 1] += 1
 
+    @always_inline
     fn tally_read(mut self, record: RecordCoord):
         if record.seq_len() > self.length_vector.num_elements():
             var new_tensor = grow_tensor(
@@ -573,11 +574,56 @@ struct LengthDistribution(Analyser):
             cum += self.length_vector[i] * (i + 1)
         return int(cum) / num_reads
 
+    fn get_size_distribution(
+        self, min_val: Int, max_val: Int
+    ) -> Tuple[Int, Int]:
+        # We won't group if they've asked us not to
+
+        base = 1
+
+        while base > (max_val - min_val):
+            base //= 10
+
+        divisions = List[Int](1, 2, 5)
+
+        while True:
+            for d in divisions:
+                tester = base * d[]
+                if (max_val - min_val) / tester <= 50:
+                    interval = tester
+                    break
+            else:
+                base *= 10
+                continue
+            break
+
+        # Now we work out the first value to be plotted
+        basic_division = min_val // interval
+        test_start = basic_division * interval
+        starting = test_start
+
+        return starting, interval
+
     fn plot(self) raises -> PythonObject:
         Python.add_to_path(py_lib.as_string_slice())
         var plt = Python.import_module("matplotlib.pyplot")
         var np = Python.import_module("numpy")
         var mtp = Python.import_module("matplotlib")
+
+        var min_val: Int = 0
+        var max_val: Int = self.length_vector.num_elements()
+
+        for i in range(self.length_vector.num_elements()):
+            if self.length_vector[i] > 0:
+                min_val = i
+                break
+
+        _, interval = self.get_size_distribution(min_val, max_val)
+        bins = List[Int]()
+        start = 0
+        while start <= max_val:
+            bins.append(start)
+            start += interval
 
         var arr = tensor_to_numpy_1d(self.length_vector)
 
@@ -587,7 +633,7 @@ struct LengthDistribution(Analyser):
 
         var arr2 = np.insert(arr, 0, 0)
         var arr3 = np.append(arr2, 0)
-        bins = make_linear_base_groups(self.length_vector.num_elements())
+        # bins = make_linear_base_groups(self.length_vector.num_elements())
         arr3, py_bins = bin_array(arr3, bins, func="mean")
 
         ticks = Python.list()
@@ -597,7 +643,7 @@ struct LengthDistribution(Analyser):
         ax.plot(arr3)
 
         ax.set_xticks(ticks)
-        ax.set_xticklabels(py_bins)
+        ax.set_xticklabels(py_bins, rotation=45)
         ax.xaxis.set_major_locator(
             mtp.ticker.MaxNLocator(integer=True, nbins=15)
         )
