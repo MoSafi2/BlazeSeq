@@ -539,9 +539,21 @@ struct DupReads(Analyser):
                     (key[].key, key[].value, seq_precent, String("No Hit"))
                 )
 
+        fn cmp_over_repr(
+            a: Tuple[String, Int, Float64, String],
+            b: Tuple[String, Int, Float64, String],
+        ) capturing -> Bool:
+            if a[2] > b[2]:
+                return True
+            elif a[2] < b[2]:
+                return False
+            else:
+                return False
+
+        sort[cmp_fn=cmp_over_repr](overrepresented_seqs)
+
         return fig, overrepresented_seqs
 
-    # TODO: Add Table for Over-represted Seqs
     fn make_html(
         mut self, total_reads: Int
     ) raises -> Tuple[result_panel, result_panel]:
