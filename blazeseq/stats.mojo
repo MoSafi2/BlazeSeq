@@ -22,7 +22,14 @@ from blazeseq.helpers import (
     make_linear_base_groups,
     bin_array,
 )
-from blazeseq.html_maker import result_panel, insert_result_panel, html_template
+from blazeseq.html_maker import (
+    result_panel,
+    insert_result_panel,
+    html_template,
+    _make_row,
+    _make_table,
+)
+
 from blazeseq.CONSTS import (
     illumina_1_5_schema,
     illumina_1_3_schema,
@@ -122,7 +129,11 @@ struct FullStats(CollectionElement):
         results.append(self.cg_content.make_html())
         results.append(n_dist)
         results.append(self.len_dist.make_html())
-        results.append(self.dup_reads.make_html(int(self.num_reads)))
+        dup_reads, over_represented = self.dup_reads.make_html(
+            int(self.num_reads)
+        )
+        results.append(dup_reads)
+        results.append(over_represented)
         results.append(self.tile_qual.make_html())
         results.append(self.adpt_cont.make_html(self.num_reads))
 
@@ -447,7 +458,7 @@ struct DupReads(Analyser):
 
     fn plot(
         mut self, total_reads: Int
-    ) raises -> Tuple[PythonObject, List[Tuple[String, Float64]]]:
+    ) raises -> Tuple[PythonObject, List[Tuple[String, Int, Float64, String]]]:
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
@@ -520,17 +531,21 @@ struct DupReads(Analyser):
         ################################################################
 
         # TODO: Check also those over-representing stuff against the contaimination list.
-        overrepresented_seqs = List[Tuple[String, Float64]]()
+        overrepresented_seqs = List[Tuple[String, Int, Float64, String]]()
         for key in self.unique_dict.items():
-            seq_precent = key[].value / self.n
+            seq_precent = (key[].value / self.n) * 100
             if seq_precent > 0.1:
-                overrepresented_seqs.append((key[].key, seq_precent))
+                overrepresented_seqs.append(
+                    (key[].key, key[].value, seq_precent, String("No Hit"))
+                )
 
         return fig, overrepresented_seqs
 
     # TODO: Add Table for Over-represted Seqs
-    fn make_html(mut self, total_reads: Int) raises -> result_panel:
-        fig, _ = self.plot(total_reads)
+    fn make_html(
+        mut self, total_reads: Int
+    ) raises -> Tuple[result_panel, result_panel]:
+        fig, over_repr = self.plot(total_reads)
         var encoded_fig1 = encode_img_b64(fig)
         var result_1 = result_panel(
             "dup_reads",
@@ -539,7 +554,21 @@ struct DupReads(Analyser):
             encoded_fig1,
         )
 
-        return result_1
+        var rows: String = ""
+        for entry in over_repr:
+            var row = _make_row(entry[][0], entry[][1], entry[][2], entry[][3])
+            rows += row
+        var over_repr_table = _make_table(rows)
+
+        var result_2 = result_panel(
+            "over_represented_seqs",
+            "pass",
+            "Over-represented Sequences",
+            over_repr_table,
+            panel_type="table",
+        )
+
+        return result_1, result_2
 
 
 @value

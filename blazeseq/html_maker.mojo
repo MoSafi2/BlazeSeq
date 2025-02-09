@@ -15,6 +15,21 @@ struct result_panel:
     var grade: String
     var legand: String
     var html_output: String
+    var panel_type: String
+
+    fn __init__(
+        out self,
+        name: String,
+        grade: String,
+        legand: String,
+        html_output: String,
+        panel_type: String = "image",
+    ):
+        self.name = name
+        self.grade = grade
+        self.legand = legand
+        self.html_output = html_output
+        self.panel_type = panel_type
 
 
 @always_inline
@@ -26,19 +41,38 @@ fn _make_summary_insert(panel: result_panel) raises -> String:
 
 @always_inline
 fn _make_module_insert(panel: result_panel) raises -> String:
-    return """
-            <div class="module">
-                <h2 class="{0}" id="{1}">
-                    {2}
-                </h2>
-                <div id="{2}plot">
-                <img src="data:image/jpeg;base64,{3}" alt="Image">
+    if panel.panel_type == "image":
+        return """
+                <div class="module">
+                    <h2 class="{0}" id="{1}">
+                        {2}
+                    </h2>
+                    <div id="{2}plot">
+                    <img src="data:image/jpeg;base64,{3}" alt="Image">
+                    </div>
                 </div>
-            </div>
 
-                  """.format(
-        panel.grade, panel.name, panel.legand, panel.html_output
-    )
+                    """.format(
+            panel.grade, panel.name, panel.legand, panel.html_output
+        )
+    elif panel.panel_type == "table":
+        return """
+                <div class="module">
+                    <h2 class="{0}" id="{1}">
+                        {2}
+                    </h2>
+                    <div id="{2}plot">
+                    {3}
+                    </div>
+                </div>
+                 
+                    """.format(
+            panel.grade, panel.name, panel.legand, panel.html_output
+        )
+
+    else:
+        return """
+            """
 
 
 @always_inline
@@ -72,6 +106,41 @@ fn insert_result_panel(mut html: String, result: result_panel) raises -> String:
 
     return html
 
+
+fn _make_row(
+    seq: String, count: Int, perc: Float64, source: String
+) raises -> String:
+    return row_template.format(seq, count, perc, source)
+
+
+fn _make_table(rows: String) raises -> String:
+    return table_template.replace(String("<<rows>>"), rows)
+
+
+alias row_template: String = """
+    <tr>
+        <td>{}</td>
+        <td>{}</td>
+        <td>{}%</td>
+        <td>{}</td>
+    </tr>
+    """
+
+alias table_template: String = """
+    <table>
+    <thead>
+        <tr>
+            <th>Sequence</th>
+            <th>Count</th>
+            <th>Percentage</th>
+            <th>Possible Source</th>
+        </tr>
+    </thead>
+    <tbody>
+        <<rows>>
+    </tbody>
+    </table>
+    """
 
 alias html_template: String = """
     <html>

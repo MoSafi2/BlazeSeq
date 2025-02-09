@@ -1,4 +1,5 @@
 from blazeseq.helpers import _seq_to_hash
+from collections import Dict
 
 
 # TODO: Move those to a config file
@@ -36,3 +37,14 @@ def hash_names() -> (
     ]
 
     return names
+
+
+def get_hashes() -> Dict[String, String]:
+    var hashes = Dict[String, String]()
+    hashes["Illumina Universal Adapter"] = "AGATCGGAAGAG"
+    hashes["Illumina Small RNA 3' Adapter"] = "TGGAATTCTCGG"
+    hashes["Illumina Small RNA 5' Adapter"] = "GATCGTCGGACT"
+    hashes["Nextera Transposase Sequence"] = "CTGTCTCTTATA"
+    hashes["PolyA"] = "AAAAAAAAAAAA"
+    hashes["PolyG"] = "GGGGGGGGGGGG"
+    return hashes
