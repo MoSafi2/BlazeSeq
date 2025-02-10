@@ -93,6 +93,15 @@ struct FullStats(CollectionElement):
         pass
 
     @always_inline
+    fn make_base_stats(self):
+        var sum: Int64 = 0
+        for i in range(self.cg_content.cg_content.num_elements()):
+            sum += self.cg_content.cg_content[i] * i
+        var avg_cg = (sum / self.num_reads)
+        var schema = self.qu_dist._guess_schema()
+        
+
+    @always_inline
     fn plot(mut self) raises -> List[PythonObject]:
         plots = List[PythonObject]()
 
@@ -108,6 +117,7 @@ struct FullStats(CollectionElement):
         plots.append(img2)
         plots.append(self.tile_qual.plot())
         plots.append(self.adpt_cont.plot(self.num_reads))
+        self.make_base_stats()
 
         return plots
 
@@ -136,6 +146,8 @@ struct FullStats(CollectionElement):
         results.append(over_represented)
         results.append(self.tile_qual.make_html())
         results.append(self.adpt_cont.make_html(self.num_reads))
+
+        self.make_base_stats()
 
         var html: String = html_template
         while html.find("<<filename>>") > -1:
@@ -361,6 +373,14 @@ struct CGContent(Analyser):
 
 
 @value
+struct OverRepresentedSequence:
+    var seq: String
+    var count: Int
+    var percentage: Float64
+    var hit: String
+
+
+@value
 struct DupReads(Analyser):
     var unique_dict: Dict[String, Int]
     var unique_reads: Int
@@ -458,7 +478,7 @@ struct DupReads(Analyser):
 
     fn plot(
         mut self, total_reads: Int
-    ) raises -> Tuple[PythonObject, List[Tuple[String, Int, Float64, String]]]:
+    ) raises -> Tuple[PythonObject, List[OverRepresentedSequence]]:
         ###################################################################
         ###                     Duplicate Reads                         ###
         ###################################################################
@@ -531,24 +551,15 @@ struct DupReads(Analyser):
         ################################################################
 
         # TODO: Check also those over-representing stuff against the contaimination list.
-        overrepresented_seqs = List[Tuple[String, Int, Float64, String]]()
+        overrepresented_seqs = List[OverRepresentedSequence]()
         for key in self.unique_dict.items():
             seq_precent = (key[].value / self.n) * 100
             if seq_precent > 0.1:
                 overrepresented_seqs.append(
-                    (key[].key, key[].value, seq_precent, String("No Hit"))
+                    OverRepresentedSequence(
+                        key[].key, key[].value, seq_precent, String("No Hit")
+                    )
                 )
-
-        fn cmp_over_repr(
-            a: Tuple[String, Int, Float64, String],
-            b: Tuple[String, Int, Float64, String],
-        ) capturing -> Bool:
-            if a[2] > b[2]:
-                return True
-            elif a[2] < b[2]:
-                return False
-            else:
-                return False
 
         sort[cmp_fn=cmp_over_repr](overrepresented_seqs)
 
@@ -568,7 +579,9 @@ struct DupReads(Analyser):
 
         var rows: String = ""
         for entry in over_repr:
-            var row = _make_row(entry[][0], entry[][1], entry[][2], entry[][3])
+            var row = _make_row(
+                entry[].seq, entry[].count, entry[].percentage, entry[].hit
+            )
             rows += row
         var over_repr_table = _make_table(rows)
 
@@ -581,6 +594,18 @@ struct DupReads(Analyser):
         )
 
         return result_1, result_2
+
+
+fn cmp_over_repr(
+    a: OverRepresentedSequence,
+    b: OverRepresentedSequence,
+) capturing -> Bool:
+    if a.percentage > b.percentage:
+        return True
+    elif a.percentage < b.percentage:
+        return False
+    else:
+        return False
 
 
 @value

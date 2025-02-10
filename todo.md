@@ -13,7 +13,7 @@
 - [x] Adapter Content
 - [x] Kmer Content
 - [x] Sequence Duplication Levels
-- [x] Overrepresented sequences [#partial support]
+- [x] Overrepresented sequences
 
 ## Output formats
 
