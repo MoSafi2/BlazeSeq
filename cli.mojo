@@ -41,7 +41,9 @@ fn main() raises:
                     schema = String(vars[i + 1])
 
     if fast_mode:
-        var parser = CoordParser(String(path))
+        var parser = CoordParser[validate_ascii=False, validate_quality=False](
+            String(path)
+        )
         run_coord_parser(parser)
     else:
         run_record_parser(
