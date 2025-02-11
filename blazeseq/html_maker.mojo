@@ -142,6 +142,42 @@ alias table_template: String = """
     </table>
     """
 
+
+fn format_length(original_length: Float64) -> String:
+    length = original_length
+    unit = " bp"
+
+    if length >= 1000000000:
+        length /= 1000000000
+        unit = " Gbp"
+    elif length >= 1000000:
+        length /= 1000000
+        unit = " Mbp"
+    elif length >= 1000:
+        length /= 1000
+        unit = " kbp"
+
+    chars = str(length)
+
+    last_index = 0
+
+    # Go through until we find a dot (if there is one)
+    for i in range(len(chars)):
+        last_index = i
+        if chars[i] == ".":
+            break
+
+    # We keep the next char as well if they are non-zero numbers
+    if last_index + 1 < len(chars) and chars[last_index + 1] != "0":
+        last_index += 1
+    elif last_index > 0 and chars[last_index] == ".":
+        last_index -= 1  # Lose the dot if it's the last character
+
+    final_chars = chars[: last_index + 1]  # Slice the list
+
+    return final_chars + unit  # Join the characters back into a string
+
+
 alias html_template: String = """
     <html>
     <head>

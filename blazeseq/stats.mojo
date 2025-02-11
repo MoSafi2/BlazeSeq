@@ -28,6 +28,7 @@ from blazeseq.html_maker import (
     html_template,
     _make_row,
     _make_table,
+    format_length,
 )
 
 from blazeseq.CONSTS import (
@@ -100,6 +101,8 @@ struct FullStats(CollectionElement):
         var avg_cg = (sum / self.num_reads)
         var schema = self.qu_dist._guess_schema()
 
+        total_bases = format_length(float(self.total_bases))
+
         var table_template = """
                         <table>
                         <thead>
@@ -128,7 +131,7 @@ struct FullStats(CollectionElement):
                         </tbody>
                         </table>
                         """.format(
-            schema.__str__(), self.num_reads, self.total_bases, avg_cg
+            schema.SCHEMA, self.num_reads, total_bases, avg_cg
         )
         var res = result_panel(
             "base_stats",
