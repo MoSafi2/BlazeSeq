@@ -2,7 +2,6 @@ from time import perf_counter_ns as now
 from sys import argv
 from blazeseq.parser import CoordParser, RecordParser
 from blazeseq.iostream import FileReader
-from blazeseq.stats import FullStats
 
 
 fn main() raises:
