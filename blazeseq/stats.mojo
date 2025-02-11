@@ -93,13 +93,51 @@ struct FullStats(CollectionElement):
         pass
 
     @always_inline
-    fn make_base_stats(self):
+    fn make_base_stats(self) raises -> result_panel:
         var sum: Int64 = 0
         for i in range(self.cg_content.cg_content.num_elements()):
             sum += self.cg_content.cg_content[i] * i
         var avg_cg = (sum / self.num_reads)
         var schema = self.qu_dist._guess_schema()
-        
+
+        var table_template = """
+                        <table>
+                        <thead>
+                            <tr>
+                                <th>Measure</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td>Encoding</td>
+                            <td>{}</td>
+                        </tr>
+                        <tr>
+                            <td>Total Sequences</td>
+                            <td>{}</td>
+                        </tr>
+                        <tr>
+                            <td>Total Bases	</td>
+                            <td>{}</td>
+                        </tr>
+                        <tr>
+                            <td>%GC	</td>
+                            <td>{}</td>
+                        </tr>
+                        </tbody>
+                        </table>
+                        """.format(
+            schema.__str__(), self.num_reads, self.total_bases, avg_cg
+        )
+        var res = result_panel(
+            "base_stats",
+            "pass",
+            "Base Statistics",
+            table_template,
+            panel_type="table",
+        )
+        return res
 
     @always_inline
     fn plot(mut self) raises -> List[PythonObject]:
@@ -117,7 +155,6 @@ struct FullStats(CollectionElement):
         plots.append(img2)
         plots.append(self.tile_qual.plot())
         plots.append(self.adpt_cont.plot(self.num_reads))
-        self.make_base_stats()
 
         return plots
 
@@ -128,7 +165,7 @@ struct FullStats(CollectionElement):
         dt_now = py_dt.datetime.now().strftime("%a %d %b %Y")
 
         var results = List[result_panel]()
-
+        results.append(self.make_base_stats())
         res1, res2 = self.qu_dist.make_html()
         results.append(res2)
         results.append(res1)
@@ -146,8 +183,6 @@ struct FullStats(CollectionElement):
         results.append(over_represented)
         results.append(self.tile_qual.make_html())
         results.append(self.adpt_cont.make_html(self.num_reads))
-
-        self.make_base_stats()
 
         var html: String = html_template
         while html.find("<<filename>>") > -1:

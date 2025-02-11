@@ -464,7 +464,7 @@ fn bin_array(
 
 
 @value
-struct QualitySchema(Stringable, CollectionElement):
+struct QualitySchema(Stringable, CollectionElement, Writable):
     var SCHEMA: StringLiteral
     var LOWER: UInt8
     var UPPER: UInt8
@@ -477,6 +477,9 @@ struct QualitySchema(Stringable, CollectionElement):
         self.UPPER = upper
         self.LOWER = lower
         self.OFFSET = offset
+
+    fn write_to[w: Writer](self, mut writer: w) -> None:
+        writer.write(self.__str__())
 
     fn __str__(self) -> String:
         return (
