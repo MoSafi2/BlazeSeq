@@ -1,6 +1,5 @@
 from time import perf_counter_ns as now
 from sys import argv
-from utils import StringRef
 from blazeseq.parser import CoordParser, RecordParser
 from blazeseq.iostream import FileReader
 from blazeseq.stats import FullStats
@@ -33,60 +32,62 @@ fn main() raises:
         if opt == "-q":
             validate_quality = True
 
-    var schema: StringRef = "generic"
+    var schema: String = "generic"
 
     if validate_quality:
         for i in range(len(vars)):
             if vars[i] == "-q" or vars[i] == "--validate-quality":
                 if vars[i + 1] != "-" or vars[i + 1] != "--":
-                    schema = vars[i + 1]
+                    schema = String(vars[i + 1])
 
     if fast_mode:
-        var parser = CoordParser(path)
+        var parser = CoordParser(String(path))
         run_coord_parser(parser)
     else:
-        run_record_parser(path, validate_ascii, validate_quality, schema)
+        run_record_parser(
+            String(path), validate_ascii, validate_quality, schema
+        )
 
 
 fn run_record_parser(
     path: String,
     validate_ascii: Bool,
     validate_quality: Bool,
-    schema: StringRef,
+    schema: String,
 ) raises:
     if validate_ascii and validate_quality:
         var parser = RecordParser[validate_ascii=True, validate_quality=True](
-            path, schema
+            String(path), schema
         )
         run_record_parser_session(parser)
     elif validate_ascii and not validate_quality:
         var parser = RecordParser[validate_ascii=True, validate_quality=False](
-            path, schema
+            String(path), schema
         )
         run_record_parser_session(parser)
     elif not validate_ascii and validate_quality:
         var parser = RecordParser[validate_ascii=False, validate_quality=True](
-            path, schema
+            String(path), schema
         )
         run_record_parser_session(parser)
     elif not validate_ascii and not validate_quality:
         var parser = RecordParser[validate_ascii=False, validate_quality=False](
-            path, schema
+            String(path), schema
         )
         run_record_parser_session(parser)
 
 
-fn run_record_parser_session(inout parser: RecordParser) raises:
+fn run_record_parser_session(mut parser: RecordParser) raises:
     var reads = 0
     var strt = now()
     while True:
         try:
-            var record = parser.next()
+            _ = parser.next()
             reads += 1
             if reads % 1_000_000 == 0:
                 var current = now()
                 var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-                var rounded = int(round(reads_p_min))
+                var rounded = Int(round(reads_p_min))
                 print("\33[H")
                 print("\033[J")
                 print("Number of reads processed is:", reads)
@@ -96,7 +97,7 @@ fn run_record_parser_session(inout parser: RecordParser) raises:
             var current = now()
             var elapsed = (current - strt) / 1e9
             var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-            var rounded = int(round(reads_p_min))
+            var rounded = Int(round(reads_p_min))
             print(
                 "total of",
                 reads,
@@ -110,17 +111,17 @@ fn run_record_parser_session(inout parser: RecordParser) raises:
             break
 
 
-fn run_coord_parser(inout parser: CoordParser) raises:
+fn run_coord_parser(mut parser: CoordParser) raises:
     var reads = 0
     var strt = now()
     while True:
         try:
-            var record = parser.next()
+            _ = parser.next()
             reads += 1
             if reads % 1_000_000 == 0:
                 var current = now()
                 var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-                var rounded = int(round(reads_p_min))
+                var rounded = Int(round(reads_p_min))
                 print("\33[H")
                 print("\033[J")
                 print("Number of reads processed is:", reads)
@@ -130,7 +131,7 @@ fn run_coord_parser(inout parser: CoordParser) raises:
             var current = now()
             var elapsed = (current - strt) / 1e9
             var reads_p_min: Float64 = reads / ((current - strt) / 1e9) * 60
-            var rounded = int(round(reads_p_min))
+            var rounded = Int(round(reads_p_min))
             print("\33[H")
             print("\033[J")
             print(
