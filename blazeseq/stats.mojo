@@ -103,6 +103,14 @@ struct FullStats(CollectionElement):
 
         total_bases = format_length(float(self.total_bases))
 
+        var lengths: String
+        if self.bp_dist.max_length == self.bp_dist.min_length:
+            lengths = str(self.bp_dist.max_length)
+        else:
+            lengths = "{}-{}".format(
+                self.bp_dist.min_length, self.bp_dist.max_length
+            )
+
         var table_template = """
                         <table>
                         <thead>
@@ -128,13 +136,21 @@ struct FullStats(CollectionElement):
                             <td>{}</td>
                         </tr>
                         <tr>
+                            <td>Sequence length</td>
+                            <td>{}
+                        </td>
+                        <tr>
                             <td>%GC	</td>
                             <td>{}</td>
                         </tr>
                         </tbody>
                         </table>
                         """.format(
-            schema.SCHEMA, self.num_reads, total_bases, avg_cg
+            schema.SCHEMA,
+            self.num_reads,
+            total_bases,
+            lengths.split("/")[-1],
+            avg_cg,
         )
         var res = result_panel(
             "base_stats",
@@ -191,14 +207,14 @@ struct FullStats(CollectionElement):
         results.append(self.adpt_cont.make_html(self.num_reads))
 
         var html: String = html_template
+        for entry in results:
+            html = insert_result_panel(html, entry[])
+
         while html.find("<<filename>>") > -1:
             html = html.replace("<<filename>>", file_name)
 
         while html.find("<<date>>") > -1:
             html = html.replace("<<date>>", str(dt_now))
-
-        for entry in results:
-            html = insert_result_panel(html, entry[])
 
         with open("{}_blazeseq.html".format(file_name), "w") as f:
             print("{}_blazeseq.html".format(file_name))
@@ -209,12 +225,14 @@ struct FullStats(CollectionElement):
 struct BasepairDistribution(Analyser):
     var bp_dist: Tensor[DType.int64]
     var max_length: Int
+    var min_length: Int
     alias WIDTH = 5
 
     fn __init__(out self):
         var shape = TensorShape(VariadicList[Int](1, self.WIDTH))
         self.bp_dist = Tensor[DType.int64](shape)
         self.max_length = 0
+        self.min_length = Int.MAX
 
     fn tally_read(mut self, record: FastqRecord):
         if record.len_record() > self.max_length:
@@ -223,6 +241,9 @@ struct BasepairDistribution(Analyser):
                 self.bp_dist, TensorShape(self.max_length, self.WIDTH)
             )
             swap(self.bp_dist, new_tensor)
+
+        if record.len_record() < self.min_length:
+            self.min_length = record.len_record()
 
         for i in range(record.len_record()):
             # Remineder of first 5 bits seperates N from T
