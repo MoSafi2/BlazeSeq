@@ -143,6 +143,7 @@ alias table_template: String = """
     """
 
 
+# Ported from FastQC: https://github.com/s-andrews/FastQC/blob/1faeea0412093224d7f6a07f777fad60a5650795/uk/ac/babraham/FastQC/Modules/BasicStats.java#L157
 fn format_length(original_length: Float64) -> String:
     length = original_length
     unit = " bp"

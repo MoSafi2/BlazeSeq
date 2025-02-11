@@ -113,6 +113,9 @@ struct FullStats(CollectionElement):
                         </thead>
                         <tbody>
                         <tr>
+                            <td>Filename</td>
+                            <td><<filename>></td>
+                        <tr>
                             <td>Encoding</td>
                             <td>{}</td>
                         </tr>
