@@ -1,5 +1,5 @@
 from memory import memcpy, UnsafePointer, Span
-from utils import StringRef, StringSlice
+from utils import StringSlice
 from blazeseq.helpers import get_next_line_index, slice_tensor, cpy_tensor
 from blazeseq.CONSTS import (
     simd_width,
@@ -457,7 +457,9 @@ struct BufferedWriter:
     fn flush_buffer(mut self) raises:
         var out = Tensor[U8](self.cursor)
         cpy_tensor[U8](out, self.buf, self.cursor, 0, 0)
-        var out_string = StringRef(out._steal_ptr(), self.cursor)
+        var out_string = StringSlice[origin=StaticConstantOrigin](
+            ptr=out._steal_ptr(), length=self.cursor
+        )
         self.sink.write(out_string)
         self.written += self.cursor
         self.cursor = 0

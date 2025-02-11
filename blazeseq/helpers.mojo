@@ -329,7 +329,7 @@ fn grow_matrix[
 fn sum_tensor[T: DType](tensor: Tensor[T]) -> Int:
     acc = 0
     for i in range(tensor.num_elements()):
-        acc += int(tensor[i])
+        acc += Int(tensor[i])
     return acc
 
 
@@ -346,7 +346,7 @@ fn encode_img_b64(fig: PythonObject) raises -> String:
     base64_image = py_base64.b64encode(buf.read()).decode("utf-8")
     buf.close()
 
-    return str(base64_image)
+    return String(base64_image)
 
 
 # Same logic as exponential BaseGroups in FASTQC
@@ -486,9 +486,9 @@ struct QualitySchema(Stringable, CollectionElement, Writable):
             String("Quality schema: ")
             + self.SCHEMA
             + "\nLower: "
-            + str(self.LOWER)
+            + String(self.LOWER)
             + "\nUpper: "
-            + str(self.UPPER)
+            + String(self.UPPER)
             + "\nOffset: "
-            + str(self.OFFSET)
+            + String(self.OFFSET)
         )

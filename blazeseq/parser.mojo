@@ -6,7 +6,6 @@ from blazeseq.helpers import (
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator, FileReader
 import time
-from utils import StringRef
 
 
 struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:

@@ -158,7 +158,7 @@ fn format_length(original_length: Float64) -> String:
         length /= 1000
         unit = " kbp"
 
-    chars = str(length)
+    chars = String(length)
 
     last_index = 0
 
