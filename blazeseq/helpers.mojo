@@ -11,8 +11,6 @@ from python import PythonObject, Python
 ######################### Character find functions ###################################
 
 
-
-
 @always_inline
 fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
     for i in range(simd_width):
@@ -22,7 +20,7 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
 
 
 @always_inline
-fn find_chr_next_occurance_simd[
+fn find_chr_next_occurance[
     T: DType
 ](in_tensor: Tensor[T], chr: Int, start: Int = 0) -> Int:
     """
@@ -45,20 +43,6 @@ fn find_chr_next_occurance_simd[
     return -1
 
 
-@always_inline
-fn find_chr_next_occurance_iter[
-    T: DType
-](in_tensor: Tensor[T], chr: Int, start: Int = 0) -> Int:
-    """
-    Generic Function to find the next occurance of character Iterativly.
-    No overhead for tensors < 1,000 items while being easier to debug.
-    """
-    for i in range(start, in_tensor.num_elements()):
-        if in_tensor[i] == chr:
-            return i
-    return -1
-
-
 fn find_chr_last_occurance[
     T: DType
 ](in_tensor: Tensor[T], start: Int, end: Int, chr: Int) -> Int:
@@ -68,21 +52,9 @@ fn find_chr_last_occurance[
     return -1
 
 
-# @always_inline
-# fn find_chr_all_occurances[T: DType](in_tensor: Tensor[T], chr: Int) -> List[Int]:
-#     var holder = List[Int]()
-
-#     @parameter
-#     fn inner[simd_width: Int](size: Int):
-#         var simd_vec = in_tensor.load[simd_width](size)
-#         var bool_vec = simd_vec == chr
-#         if bool_vec.reduce_or():
-#             for i in range(len(bool_vec)):
-#                 if bool_vec[i]:
-#                     holder.append(size + i)
-
-#     vectorize[inner, simd_width](in_tensor.num_elements())
-#     return holder
+@always_inline
+fn _align_down(value: Int, alignment: Int) -> Int:
+    return value._positive_div(alignment) * alignment
 
 
 ################################ Tensor slicing ################################################
@@ -159,14 +131,6 @@ fn cpy_tensor[
     var src_ptr: UnsafePointer[Scalar[T]] = src._ptr + src_strt
     memcpy(dest_ptr, src_ptr, num_elements)
 
-    ## Alternative method
-    # @parameter
-    # fn inner[simd_width: Int](size: Int):
-    #     var transfer = src.load[width=simd_width](src_strt + size)
-    #     dest.store[width=simd_width](dest_strt + size, transfer)
-
-    # vectorize[inner, simd_width](num_elements)
-
 
 ################################ Next line Ops ##############################
 
@@ -174,9 +138,7 @@ fn cpy_tensor[
 
 
 @always_inline
-fn get_next_line[
-    T: DType, USE_SIMD: Bool = True
-](in_tensor: Tensor[T], start: Int) -> Tensor[T]:
+fn get_next_line[T: DType](in_tensor: Tensor[T], start: Int) -> Tensor[T]:
     """Function to get the next line using either SIMD instruction (default) or iterativly.
     """
 
@@ -187,48 +149,22 @@ fn get_next_line[
         if in_start >= in_tensor.num_elements():
             return Tensor[T](0)
 
-    @parameter
-    if USE_SIMD:
-        var next_line_pos = find_chr_next_occurance_simd(
-            in_tensor, new_line, in_start
-        )
-        if next_line_pos == -1:
-            next_line_pos = (
-                in_tensor.num_elements()
-            )  # If no line separator found, return the reminder of the string, behaviour subject to change
-        return slice_tensor_simd(in_tensor, in_start, next_line_pos)
-    else:
-        var next_line_pos = find_chr_next_occurance_iter(
-            in_tensor, new_line, in_start
-        )
-        if next_line_pos == -1:
-            next_line_pos = (
-                in_tensor.num_elements()
-            )  # If no line separator found, return the reminder of the string, behaviour subject to change
-        return slice_tensor_iter(in_tensor, in_start, next_line_pos)
+    var next_line_pos = find_chr_next_occurance(in_tensor, new_line, in_start)
+    if next_line_pos == -1:
+        next_line_pos = (
+            in_tensor.num_elements()
+        )  # If no line separator found, return the reminder of the string, behaviour subject to change
+    return slice_tensor_simd(in_tensor, in_start, next_line_pos)
 
 
 @always_inline
-fn get_next_line_index[
-    T: DType, USE_SIMD: Bool = True
-](in_tensor: Tensor[T], start: Int) -> Int:
+fn get_next_line_index[T: DType](in_tensor: Tensor[T], start: Int) -> Int:
     var in_start = start
 
-    @parameter
-    if USE_SIMD:
-        var next_line_pos = find_chr_next_occurance_simd(
-            in_tensor, new_line, in_start
-        )
-        if next_line_pos == -1:
-            return -1
-        return next_line_pos
-    else:
-        var next_line_pos = find_chr_next_occurance_iter(
-            in_tensor, new_line, in_start
-        )
-        if next_line_pos == -1:
-            return -1
-        return next_line_pos
+    var next_line_pos = find_chr_next_occurance(in_tensor, new_line, in_start)
+    if next_line_pos == -1:
+        return -1
+    return next_line_pos
 
 
 ############################# Fastq recod-related Ops ################################
@@ -254,8 +190,6 @@ fn find_last_read_header(
             return -1
         last_chr = find_last_read_header(in_tensor, start, end_inner)
     return last_chr
-
-
 
 
 @value
