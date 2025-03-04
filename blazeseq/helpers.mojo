@@ -193,7 +193,7 @@ fn find_last_read_header(
 
 
 @value
-struct QualitySchema(Stringable, CollectionElement, Writable):
+struct QualitySchema(CollectionElement, Writable):
     var SCHEMA: StringLiteral
     var LOWER: UInt8
     var UPPER: UInt8

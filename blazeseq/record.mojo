@@ -2,7 +2,7 @@ from blazeseq.helpers import slice_tensor, write_to_buff
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant
-from tensor import Tensor
+from max.tensor import Tensor
 from memory import Span
 from math import align_down, remainder
 from memory import UnsafePointer
@@ -73,15 +73,24 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
     @always_inline
     fn get_qulity_scores(self, quality_format: String) -> Tensor[U8]:
         var schema = self._parse_schema((quality_format))
-        return self.QuStr - schema.OFFSET
+        output = Tensor[U8](self.len_quality())
+        for i in range(self.len_quality()):
+            output[i] = self.QuStr[i] - schema.OFFSET
+        return output
 
     @always_inline
     fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[U8]:
-        return self.QuStr - schema.OFFSET
+        output = Tensor[U8](self.len_quality())
+        for i in range(self.len_quality()):
+            output[i] = self.QuStr[i] - schema.OFFSET
+        return output
 
     @always_inline
     fn get_qulity_scores(self, offset: UInt8) -> Tensor[U8]:
-        return self.QuStr - offset
+        output = Tensor[U8](self.len_quality())
+        for i in range(self.len_quality()):
+            output[i] = self.QuStr[i] - offset
+        return output
 
     @always_inline
     fn get_header_string(self) -> StringSlice[__origin_of(self)]:
@@ -131,27 +140,27 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         )
 
     fn write_to[w: Writer](self, mut writer: w):
-        var l1 = Span[origin = __origin_of(self.SeqHeader)](
+        var l1 = String(
             ptr=self.SeqHeader.unsafe_ptr(),
             length=self.SeqHeader.num_elements(),
         )
-        var l2 = Span[origin = __origin_of(self.SeqStr)](
+        var l2 = String(
             ptr=self.SeqStr.unsafe_ptr(), length=self.SeqStr.num_elements()
         )
-        var l3 = Span[origin = __origin_of(self.QuHeader)](
+        var l3 = String(
             ptr=self.QuHeader.unsafe_ptr(), length=self.QuHeader.num_elements()
         )
-        var l4 = Span[origin = __origin_of(self.QuStr)](
+        var l4 = String(
             ptr=self.QuStr.unsafe_ptr(), length=self.QuStr.num_elements()
         )
-        writer.write_bytes(l1)
-        writer.write("\n")
-        writer.write_bytes(l2)
-        writer.write("\n")
-        writer.write_bytes(l3)
-        writer.write("\n")
-        writer.write_bytes(l4)
-        writer.write("\n")
+        # writer.write_bytes(l1)
+        # writer.write("\n")
+        # writer.write_bytes(l2)
+        # writer.write("\n")
+        # writer.write_bytes(l3)
+        # writer.write("\n")
+        # writer.write_bytes(l4)
+        # writer.write("\n")
 
     @staticmethod
     @always_inline
