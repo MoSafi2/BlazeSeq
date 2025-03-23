@@ -2,10 +2,9 @@ import math
 from algorithm import vectorize
 from blazeseq.CONSTS import *
 from tensor import Tensor
-from collections.vector import *
 from tensor import Tensor, TensorShape
-from collections.list import List
-from memory import memcpy
+from collections import List
+from memory import memcpy, UnsafePointer
 from python import PythonObject, Python
 
 ######################### Character find functions ###################################
