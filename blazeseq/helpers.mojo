@@ -19,25 +19,23 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
 
 
 @always_inline
-fn find_chr_next_occurance[
-    T: DType
-](in_tensor: Tensor[T], chr: Int, start: Int = 0) -> Int:
+fn find_chr_next_occurance(in_buf: List[UInt8], chr: Int, start: Int = 0) -> Int:
     """
     Function to find the next occurance of character using SIMD instruction.
     Checks are in-bound. no-risk of overflowing the tensor.
     """
-    var len = in_tensor.num_elements() - start
+    var len = len(in_buf) - start
     var aligned = start + math.align_down(len, simd_width)
 
     for s in range(start, aligned, simd_width):
-        var v = in_tensor.load[width=simd_width](s)
+        var v = in_buf.unsafe_ptr().load[width=simd_width](s)
         x = v.cast[DType.uint8]()
         var mask = x == chr
         if mask.reduce_or():
             return s + arg_true(mask)
-
-    for i in range(aligned, in_tensor.num_elements()):
-        if in_tensor[i] == chr:
+    var y = in_buf.__len__()
+    for i in range(aligned, y):
+        if in_buf[i] == chr:
             return i
     return -1
 
@@ -136,31 +134,30 @@ fn cpy_tensor[
 # The next line OPs is dependent on find_chr_next_occurance and slice_tensor
 
 
+# @always_inline
+# fn get_next_line[T: DType](in_buf: Tensor[T], start: Int) -> Tensor[T]:
+#     """Function to get the next line using either SIMD instruction (default) or iterativly.
+#     """
+
+#     var in_start = start
+#     while in_tensor[in_start] == new_line:  # Skip leadin \n
+#         print("skipping \n")
+#         in_start += 1
+#         if in_start >= in_tensor.num_elements():
+#             return Tensor[T](0)
+
+#     var next_line_pos = find_chr_next_occurance(in_tensor, new_line, in_start)
+#     if next_line_pos == -1:
+#         next_line_pos = (
+#             in_tensor.num_elements()
+#         )  # If no line separator found, return the reminder of the string, behaviour subject to change
+#     return slice_tensor_simd(in_tensor, in_start, next_line_pos)
+
+
 @always_inline
-fn get_next_line[T: DType](in_tensor: Tensor[T], start: Int) -> Tensor[T]:
-    """Function to get the next line using either SIMD instruction (default) or iterativly.
-    """
-
+fn get_next_line_index(in_buf: List[UInt8], start: Int) -> Int:
     var in_start = start
-    while in_tensor[in_start] == new_line:  # Skip leadin \n
-        print("skipping \n")
-        in_start += 1
-        if in_start >= in_tensor.num_elements():
-            return Tensor[T](0)
-
-    var next_line_pos = find_chr_next_occurance(in_tensor, new_line, in_start)
-    if next_line_pos == -1:
-        next_line_pos = (
-            in_tensor.num_elements()
-        )  # If no line separator found, return the reminder of the string, behaviour subject to change
-    return slice_tensor_simd(in_tensor, in_start, next_line_pos)
-
-
-@always_inline
-fn get_next_line_index[T: DType](in_tensor: Tensor[T], start: Int) -> Int:
-    var in_start = start
-
-    var next_line_pos = find_chr_next_occurance(in_tensor, new_line, in_start)
+    var next_line_pos = find_chr_next_occurance(in_buf, new_line, in_start)
     if next_line_pos == -1:
         return -1
     return next_line_pos
