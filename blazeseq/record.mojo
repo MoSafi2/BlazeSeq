@@ -183,14 +183,14 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         var l4 = String(
             ptr=self.QuStr.unsafe_ptr(), length=self.QuStr.num_elements()
         )
-        # writer.write_bytes(l1)
-        # writer.write("\n")
-        # writer.write_bytes(l2)
-        # writer.write("\n")
-        # writer.write_bytes(l3)
-        # writer.write("\n")
-        # writer.write_bytes(l4)
-        # writer.write("\n")
+        writer.write(l1)
+        writer.write("\n")
+        writer.write(l2)
+        writer.write("\n")
+        writer.write(l3)
+        writer.write("\n")
+        writer.write(l4)
+        writer.write("\n")
 
     @staticmethod
     @always_inline

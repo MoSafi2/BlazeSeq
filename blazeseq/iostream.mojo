@@ -155,7 +155,7 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
         var coord: Slice
         var line_start = self.head
-        var line_end = get_next_line_index(self.buf, self.head)
+        var line_end = self._get_next_line_index(self.head)
 
         coord = Slice(line_start, line_end)
 
@@ -185,7 +185,7 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         if self._check_buf_state():
             _ = self._fill_buffer()
         var line_start = self.head
-        var line_end = get_next_line_index(self.buf, self.head)
+        var line_end = self._get_next_line_index(self.head)
         self.head = line_end + 1
 
         if self.buf[line_end] == carriage_return:
@@ -197,7 +197,7 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         self._resize_buf(self.capacity(), MAX_CAPACITY)
         _ = self._fill_buffer()
         var line_start = self.head
-        var line_end = get_next_line_index(self.buf, self.head)
+        var line_end = self._get_next_line_index(self.head)
         self.head = line_end + 1
 
         return slice(line_start, line_end)
@@ -225,6 +225,7 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
+        print("resizng buffer")
         if self.capacity() == max_capacity:
             raise Error("Buffer is at max capacity")
 
@@ -257,6 +258,25 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         if self.buf[in_slice.end.or_else(0)] != carriage_return:
             return in_slice
         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
+
+    
+
+    @always_inline
+    fn _get_next_line_index(self, start: Int) -> Int:
+        var len = self.len() - start
+        var aligned = start + math.align_down(len, simd_width)
+        for s in range(start, aligned, simd_width):
+            var v = self.buf.unsafe_ptr().load[width=simd_width](s)
+            x = v.cast[DType.uint8]()
+            var mask = x == new_line
+            if mask.reduce_or():
+                return s + arg_true(mask)
+        var y = self.len()
+        for i in range(aligned, y):
+            if self.buf[i] == new_line:
+                return i
+        return -1
+
 
     ########################## Helpers functions, have no side effects #######################
 
@@ -363,26 +383,26 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
     return -1
 
 
-@always_inline
-fn find_chr_next_occurance(in_buf: List[UInt8], chr: Int, start: Int = 0) -> Int:
-    """
-    Function to find the next occurance of character using SIMD instruction.
-    Checks are in-bound. no-risk of overflowing the tensor.
-    """
-    var len = len(in_buf) - start
-    var aligned = start + math.align_down(len, simd_width)
+# @always_inline
+# fn find_chr_next_occurance(in_buf: List[UInt8], chr: Int, start: Int = 0) -> Int:
+#     """
+#     Function to find the next occurance of character using SIMD instruction.
+#     Checks are in-bound. no-risk of overflowing the tensor.
+#     """
+#     var len = len(in_buf) - start
+#     var aligned = start + math.align_down(len, simd_width)
 
-    for s in range(start, aligned, simd_width):
-        var v = in_buf.unsafe_ptr().load[width=simd_width](s)
-        x = v.cast[DType.uint8]()
-        var mask = x == chr
-        if mask.reduce_or():
-            return s + arg_true(mask)
-    var y = in_buf.__len__()
-    for i in range(aligned, y):
-        if in_buf[i] == chr:
-            return i
-    return -1
+#     for s in range(start, aligned, simd_width):
+#         var v = in_buf.unsafe_ptr().load[width=simd_width](s)
+#         x = v.cast[DType.uint8]()
+#         var mask = x == chr
+#         if mask.reduce_or():
+#             return s + arg_true(mask)
+#     var y = in_buf.__len__()
+#     for i in range(aligned, y):
+#         if in_buf[i] == chr:
+#             return i
+#     return -1
 
 
 
@@ -392,26 +412,21 @@ fn _align_down(value: Int, alignment: Int) -> Int:
 
 
 
-@always_inline
-fn get_next_line_index(in_buf: List[UInt8], start: Int) -> Int:
-    var in_start = start
-    var next_line_pos = find_chr_next_occurance(in_buf, new_line, in_start)
-    if next_line_pos == -1:
-        return -1
-    return next_line_pos
 
 
 
 
 fn main() raises:
-    var path = Path("data/SRR4381933_1.fastq")
+    var path = Path("/home/mohamed/Documents/Projects/BlazeSeq/data/fastq_test.fastq")
     var reader = BufferedLineIterator[FileReader](path)
 
     var n = 0
     t1 = time.perf_counter_ns()
     while True:
         try:
-            var line = reader.read_next_coord()
+            var line = reader.read_next_line()
+            line.append(0)
+            print(String(buffer = line))
             n += 1
         except:
             break
