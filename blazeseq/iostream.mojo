@@ -485,19 +485,18 @@ struct BufferedWriter:
         self.sink.close()
 
 
-# fn main() raises:
-#     var path = Path("data/M_abscessus_HiSeq.fq")
-#     var reader = BufferedLineIterator[FileReader](path)
+fn main() raises:
+    var path = Path("data/SRR16012060.fastq")
+    var reader = BufferedLineIterator[FileReader](path)
 
-#     var n = 0
-#     t1 = time.now()
-#     while True:
-#         try:
-#             var line = reader.read_next_coord()
-#             n += 1
-#         except Error:
-#             print("EOF")
-#             print(n)
-#             break
-#     t2 = time.now()
-#     print("Time taken:", (t2 - t1) / 1e6)
+    var n = 0
+    t1 = time.perf_counter_ns()
+    while True:
+        try:
+            var line = reader.read_next_coord()
+            n += 1
+        except:
+            break
+    print(n)
+    t2 = time.perf_counter_ns()
+    print("Time taken:", (t2 - t1) / 1e9)
