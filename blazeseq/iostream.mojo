@@ -20,9 +20,6 @@ alias new_line = 10
 # https://github.com/dignifiedquire/buffer-redux
 # Minimial Implementation that support only line iterations
 
-# BUG in resizing buffer: One extra line & bad consumed and file coordinates.
-
-
 trait Reader:
     fn read_bytes(mut self, amt: Int) raises -> List[UInt8]:
         ...
@@ -136,11 +133,7 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
     @always_inline
-    fn read_n_coords[lines: Int](mut self) raises -> List[Slice]:
-        return self._read_n_line[lines]()
-
-    @always_inline
-    fn _fill_buffer[check_ascii: Bool = False](mut self) raises -> Int:
+    fn _fill_buffer[check_ascii: Bool = False](mut self) raises -> Int64:
         """Returns the number of bytes read into the buffer."""
         self._left_shift()
         var nels = self.uninatialized_space()
@@ -153,8 +146,7 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         if amt == 0:
             raise Error("EOF")
         self.end += Int(amt)
-
-        return Int(amt)
+        return amt
 
     @always_inline
     fn _line_coord(mut self) raises -> Slice:
@@ -188,65 +180,6 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
         return slice(line_start, line_end)
 
-    # # TODO: Handle small Buffers, handle windows seperator, simplify
-    @always_inline
-    fn _read_n_line[lines: Int](mut self) raises -> List[Slice]:
-        var coords = List[Slice](Slice(-1, -1))
-        var internal_head = self.head
-
-        # TODO: Provide unrolling later using the @parameter for op
-        for i in range(lines):
-            if internal_head >= self.end:
-                internal_head -= self.head
-                # Resetting coordinates for read lines to the new buffer coordinates
-                for j in range(i):
-                    coords[j] = Slice(
-                        coords[j].start.or_else(0) - self.head,
-                        coords[j].end.or_else(0) - self.head,
-                    )
-                _ = self._fill_buffer()  # self.head is reset to 0
-
-            var coord: Slice
-            var line_start = internal_head
-            var line_end = get_next_line_index(self.buf, internal_head)
-
-            coord = Slice(line_start, line_end)
-
-            # Handle small buffers
-            if coord.end == -1 and self.head == 0:
-                for i in range(MAX_SHIFT):
-                    if coord.end != -1:
-                        coords[i] = self._handle_windows_sep(coord)
-                        continue
-                    else:
-                        coord = self._line_coord_missing_line(internal_head)
-
-            # Handle incomplete lines across two chunks
-            if coord.end == -1:
-                # Restting corrdinates to new buffer
-                internal_head -= self.head
-                line_start = internal_head
-                for j in range(i):
-                    coords[j] = Slice(
-                        coords[j].start.or_else(0) - self.head,
-                        coords[j].end.or_else(0) - self.head,
-                    )
-                _ = self._fill_buffer()  # self.head is 0
-
-                # Try again to read the complete line
-                var completet_line = self._line_coord_incomplete_line(
-                    internal_head
-                )
-                coords[i] = completet_line
-                line_end = completet_line.end.or_else(0)
-
-            internal_head = line_end + 1
-
-            coords[i] = self._handle_windows_sep(slice(line_start, line_end))
-
-        self.head = internal_head
-        return coords
-
     @always_inline
     fn _line_coord_incomplete_line(mut self) raises -> Slice:
         if self._check_buf_state():
@@ -259,15 +192,6 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
             line_end -= 1
         return slice(line_start, line_end)
 
-    # Overload to allow reading missing line from a specific point
-    @always_inline
-    fn _line_coord_incomplete_line(mut self, pos: Int) raises -> Slice:
-        if self._check_buf_state():
-            _ = self._fill_buffer()
-        var line_start = pos
-        var line_end = get_next_line_index(self.buf, pos)
-        return slice(line_start, line_end)
-
     @always_inline
     fn _line_coord_missing_line(mut self) raises -> Slice:
         self._resize_buf(self.capacity(), MAX_CAPACITY)
@@ -278,13 +202,6 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
         return slice(line_start, line_end)
 
-    @always_inline
-    fn _line_coord_missing_line(mut self, pos: Int) raises -> Slice:
-        self._resize_buf(self.capacity(), MAX_CAPACITY)
-        _ = self._fill_buffer()
-        var line_start = pos
-        var line_end = get_next_line_index(self.buf, pos)
-        return slice(line_start, line_end)
 
     @always_inline
     fn _left_shift(mut self):
@@ -323,7 +240,6 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         var aligned = math.align_down(
             self.end - self.head, simd_width
         ) + self.head
-        # alias bit_mask = 0xA0  # Between 32 and 127, makes a problems with 10
         alias bit_mask = 0x80  # Non negative
         for i in range(self.head, aligned, simd_width):
             var vec = self.buf.unsafe_ptr().load[width=simd_width](i)
