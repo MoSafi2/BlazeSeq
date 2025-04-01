@@ -1,4 +1,4 @@
-from blazeseq.helpers import QualitySchema
+from blazeseq.record import QualitySchema
 from sys.info import simdwidthof
 
 alias KB = 1024

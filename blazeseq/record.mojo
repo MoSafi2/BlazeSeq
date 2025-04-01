@@ -1,4 +1,3 @@
-from blazeseq.helpers import slice_tensor, write_to_buff
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant
@@ -11,6 +10,37 @@ from utils import Writable, StringSlice
 alias TU8 = Tensor[U8]
 alias schema = Variant[String, QualitySchema]
 
+
+
+@value
+struct QualitySchema(CollectionElement, Writable):
+    var SCHEMA: StringLiteral
+    var LOWER: UInt8
+    var UPPER: UInt8
+    var OFFSET: UInt8
+
+    fn __init__(
+        mut self, schema: StringLiteral, lower: Int, upper: Int, offset: Int
+    ):
+        self.SCHEMA = schema
+        self.UPPER = upper
+        self.LOWER = lower
+        self.OFFSET = offset
+
+    fn write_to[w: Writer](self, mut writer: w) -> None:
+        writer.write(self.__str__())
+
+    fn __str__(self) -> String:
+        return (
+            String("Quality schema: ")
+            + self.SCHEMA
+            + "\nLower: "
+            + String(self.LOWER)
+            + "\nUpper: "
+            + String(self.UPPER)
+            + "\nOffset: "
+            + String(self.OFFSET)
+        )
 
 @value
 struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):

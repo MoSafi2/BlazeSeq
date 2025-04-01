@@ -1,6 +1,5 @@
 from memory import memcpy, UnsafePointer, Span
 from utils import StringSlice
-from blazeseq.helpers import get_next_line_index, slice_tensor, cpy_tensor
 from blazeseq.CONSTS import (
     simd_width,
     U8,
@@ -14,6 +13,8 @@ import time
 from tensor import Tensor
 import math
 
+
+alias new_line = 10
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
 # https://github.com/dignifiedquire/buffer-redux
@@ -134,9 +135,9 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
-    # @always_inline
-    # fn read_n_coords[lines: Int](mut self) raises -> List[Slice]:
-    #     return self._read_n_line[lines]()
+    @always_inline
+    fn read_n_coords[lines: Int](mut self) raises -> List[Slice]:
+        return self._read_n_line[lines]()
 
     @always_inline
     fn _fill_buffer[check_ascii: Bool = False](mut self) raises -> Int:
@@ -386,58 +387,108 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
 
 # TODO: Add a resize if the buffer is too small
-struct BufferedWriter:
-    var sink: FileHandle
-    var buf: Tensor[U8]
-    var cursor: Int
-    var written: Int
+# struct BufferedWriter:
+#     var sink: FileHandle
+#     var buf: Tensor[U8]
+#     var cursor: Int
+#     var written: Int
 
-    fn __init__(out self, out_path: String, buf_size: Int) raises:
-        self.sink = open(out_path, "w")
-        self.buf = Tensor[U8](buf_size)
-        self.cursor = 0
-        self.written = 0
+#     fn __init__(out self, out_path: String, buf_size: Int) raises:
+#         self.sink = open(out_path, "w")
+#         self.buf = Tensor[U8](buf_size)
+#         self.cursor = 0
+#         self.written = 0
 
-    fn ingest(mut self, source: Tensor[U8]) raises -> Bool:
-        if source.num_elements() > self.uninatialized_space():
-            self.flush_buffer()
-        cpy_tensor[U8](self.buf, source, source.num_elements(), self.cursor, 0)
-        self.cursor += source.num_elements()
-        return True
+#     fn ingest(mut self, source: Tensor[U8]) raises -> Bool:
+#         if source.num_elements() > self.uninatialized_space():
+#             self.flush_buffer()
+#         cpy_tensor[U8](self.buf, source, source.num_elements(), self.cursor, 0)
+#         self.cursor += source.num_elements()
+#         return True
 
-    fn flush_buffer(mut self) raises:
-        var out = Tensor[U8](self.cursor)
-        cpy_tensor[U8](out, self.buf, self.cursor, 0, 0)
-        var out_string = StringSlice[origin=StaticConstantOrigin](
-            ptr=out._steal_ptr(), length=self.cursor
-        )
-        self.sink.write(out_string)
-        self.written += self.cursor
-        self.cursor = 0
+#     fn flush_buffer(mut self) raises:
+#         var out = Tensor[U8](self.cursor)
+#         cpy_tensor[U8](out, self.buf, self.cursor, 0, 0)
+#         var out_string = StringSlice[origin=StaticConstantOrigin](
+#             ptr=out._steal_ptr(), length=self.cursor
+#         )
+#         self.sink.write(out_string)
+#         self.written += self.cursor
+#         self.cursor = 0
 
-    fn _resize_buf(mut self, amt: Int, max_capacity: Int = MAX_CAPACITY):
-        var new_capacity = 0
-        if self.buf.num_elements() + amt > max_capacity:
-            new_capacity = max_capacity
-        else:
-            new_capacity = self.buf.num_elements() + amt
-        var new_tensor = Tensor[U8](new_capacity)
-        cpy_tensor[U8](new_tensor, self.buf, self.cursor, 0, 0)
-        swap(self.buf, new_tensor)
+#     fn _resize_buf(mut self, amt: Int, max_capacity: Int = MAX_CAPACITY):
+#         var new_capacity = 0
+#         if self.buf.num_elements() + amt > max_capacity:
+#             new_capacity = max_capacity
+#         else:
+#             new_capacity = self.buf.num_elements() + amt
+#         var new_tensor = Tensor[U8](new_capacity)
+#         cpy_tensor[U8](new_tensor, self.buf, self.cursor, 0, 0)
+#         swap(self.buf, new_tensor)
 
-    fn uninatialized_space(self) -> Int:
-        return self.capacity() - self.cursor
+#     fn uninatialized_space(self) -> Int:
+#         return self.capacity() - self.cursor
 
-    fn capacity(self) -> Int:
-        return self.buf.num_elements()
+#     fn capacity(self) -> Int:
+#         return self.buf.num_elements()
 
-    fn close(mut self) raises:
-        self.flush_buffer()
-        self.sink.close()
+#     fn close(mut self) raises:
+#         self.flush_buffer()
+#         self.sink.close()
+
+
+
+
+@always_inline
+fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
+    for i in range(simd_width):
+        if v[i]:
+            return i
+    return -1
+
+
+@always_inline
+fn find_chr_next_occurance(in_buf: List[UInt8], chr: Int, start: Int = 0) -> Int:
+    """
+    Function to find the next occurance of character using SIMD instruction.
+    Checks are in-bound. no-risk of overflowing the tensor.
+    """
+    var len = len(in_buf) - start
+    var aligned = start + math.align_down(len, simd_width)
+
+    for s in range(start, aligned, simd_width):
+        var v = in_buf.unsafe_ptr().load[width=simd_width](s)
+        x = v.cast[DType.uint8]()
+        var mask = x == chr
+        if mask.reduce_or():
+            return s + arg_true(mask)
+    var y = in_buf.__len__()
+    for i in range(aligned, y):
+        if in_buf[i] == chr:
+            return i
+    return -1
+
+
+
+@always_inline
+fn _align_down(value: Int, alignment: Int) -> Int:
+    return value._positive_div(alignment) * alignment
+
+
+
+@always_inline
+fn get_next_line_index(in_buf: List[UInt8], start: Int) -> Int:
+    var in_start = start
+    var next_line_pos = find_chr_next_occurance(in_buf, new_line, in_start)
+    if next_line_pos == -1:
+        return -1
+    return next_line_pos
+
+
 
 
 fn main() raises:
-    var path = Path("data/SRR16012060.fastq")
+    var path = Path("data/SRR4381933_1.fastq")
     var reader = BufferedLineIterator[FileReader](path)
 
     var n = 0

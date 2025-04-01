@@ -1,8 +1,4 @@
 from blazeseq.record import FastqRecord, RecordCoord
-from blazeseq.helpers import (
-    find_last_read_header,
-    get_next_line,
-)
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator, FileReader
 import time
