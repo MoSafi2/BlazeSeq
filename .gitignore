@@ -12,11 +12,13 @@ blazeseq/*
 !assets/*
 # pixi environments
 .pixi
+!/blazeseq/*.mojo
 
 # pixi environments
 .pixi
 *.egg-info
-
+*
+!*.mojo
 # magic environments
 .magic
 QC
