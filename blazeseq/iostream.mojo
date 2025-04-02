@@ -14,7 +14,7 @@ from tensor import Tensor
 import math
 
 
-alias new_line = 10
+alias NEW_LINE = 10
 
 # Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
 # https://github.com/dignifiedquire/buffer-redux
@@ -52,9 +52,13 @@ struct FileReader(Reader):
             raise Error(
                 "The buffer capacity is smaller than the requestd amounts"
             )
-        read = self.handle.read(ptr=buf.unsafe_ptr() + buf_pos, size=amt)
-        buf._len = Int(read)
-        return read
+        new = self.handle.read_bytes(amt)
+        for i in range(len(new)):
+            buf.append(new[i])
+        #buf.extend(new)
+        #read = self.handle.read(ptr=buf.unsafe_ptr() + buf_pos, size=amt)
+        #buf._len = Int(read)
+        return len(new)
 
     fn __moveinit__(mut self, owned other: Self):
         self.handle = other.handle^
@@ -123,21 +127,21 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         var line_coord = self._line_coord()
         return self.buf[line_coord]
 
-    @always_inline
-    fn read_next_coord(
-        mut self,
-    ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
-        var line_coord = self._line_coord()
-        var ptr = self.buf.unsafe_ptr() + line_coord.start.or_else(0)
-        var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
-        return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
+    # @always_inline
+    # fn read_next_coord(
+    #     mut self,
+    # ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
+    #     var line_coord = self._line_coord()
+    #     var ptr = self.buf.unsafe_ptr() + line_coord.start.or_else(0)
+    #     var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
+    #     return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
     @always_inline
     fn _fill_buffer[check_ascii: Bool = False](mut self) raises -> Int64:
         """Returns the number of bytes read into the buffer."""
         self._left_shift()
         var nels = self.uninatialized_space()
-        var amt = self.source.read_to_buffer(self.buf, self.head, nels)
+        var amt = self.source.read_to_buffer(self.buf, self.end, nels)
 
         @parameter
         if check_ascii:
@@ -199,7 +203,6 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         var line_start = self.head
         var line_end = self._get_next_line_index(self.head)
         self.head = line_end + 1
-
         return slice(line_start, line_end)
 
 
@@ -208,11 +211,14 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
         if self.head == 0:
             return
         var no_items = self.len()
-        var dest_ptr: UnsafePointer[UInt8] = self.buf.unsafe_ptr() + 0
-        var src_ptr: UnsafePointer[UInt8] = self.buf.unsafe_ptr() + self.head
-        memcpy(dest_ptr, src_ptr, no_items)
+        for i in range(no_items):
+            self.buf[i] = self.buf[i + self.head]
+        # var dest_ptr: UnsafePointer[UInt8] = self.buf.unsafe_ptr()
+        # var src_ptr: UnsafePointer[UInt8] = self.buf.unsafe_ptr() + self.head
+        # memcpy(dest_ptr, src_ptr, no_items)
         self.head = 0
         self.end = no_items
+
 
     @always_inline
     fn _check_buf_state(mut self) -> Bool:
@@ -225,7 +231,6 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
-        print("resizng buffer")
         if self.capacity() == max_capacity:
             raise Error("Buffer is at max capacity")
 
@@ -263,18 +268,21 @@ struct BufferedLineIterator[reader: Reader, check_ascii: Bool = False](Sized, St
 
     @always_inline
     fn _get_next_line_index(self, start: Int) -> Int:
-        var len = self.len() - start
-        var aligned = start + math.align_down(len, simd_width)
-        for s in range(start, aligned, simd_width):
-            var v = self.buf.unsafe_ptr().load[width=simd_width](s)
-            x = v.cast[DType.uint8]()
-            var mask = x == new_line
-            if mask.reduce_or():
-                return s + arg_true(mask)
-        var y = self.len()
-        for i in range(aligned, y):
-            if self.buf[i] == new_line:
+        for i in range(self.head, self.end):
+            if self.buf[i] == NEW_LINE:
                 return i
+        # var len = self.len() - start
+        # var aligned = start + math.align_down(len, simd_width)
+        # for s in range(start, aligned, simd_width):
+        #     var v = self.buf.unsafe_ptr().load[width=simd_width](s)
+        #     x = v.cast[DType.uint8]()
+        #     var mask = x == NEW_LINE
+        #     if mask.reduce_or():
+        #         return s + arg_true(mask)
+        # var y = self.len()
+        # for i in range(aligned, y):
+        #     if self.buf[i] == NEW_LINE:
+        #         return i
         return -1
 
 
@@ -406,14 +414,6 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
 
 
 
-@always_inline
-fn _align_down(value: Int, alignment: Int) -> Int:
-    return value._positive_div(alignment) * alignment
-
-
-
-
-
 
 
 fn main() raises:
@@ -425,7 +425,6 @@ fn main() raises:
     while True:
         try:
             var line = reader.read_next_line()
-            line.append(0)
             print(String(buffer = line))
             n += 1
         except:
