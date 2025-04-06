@@ -160,9 +160,6 @@ struct BufferedLineIterator(Sized, Stringable):
         # @parameter
         # if check_ascii:
         #     self._check_ascii()
-
-        if amt == 0:
-            raise Error("EOF")
         self.end += Int(amt)
         print("Buffer after fill")
         print(self.head, self.end)
@@ -175,26 +172,25 @@ struct BufferedLineIterator(Sized, Stringable):
 
         var coord: Slice
         var line_start = self.head
-        var line_end = self._get_next_line_index(self.head)
+        var line_end = self._get_next_line_index()
         coord = Slice(line_start, line_end)
-        # Handle small buffers
-        if coord.end == -1 and self.head == 0:
-            for _ in range(MAX_SHIFT):
-                if coord.end != -1:
-                    return self._handle_windows_sep(coord)
-                else:
-                    coord = self._line_coord_missing_line()
 
-        # Handle incomplete lines across two chunks
+        # if coord.end == -1 and self.head == 0:
+        #     for _ in range(MAX_SHIFT):
+        #         if coord.end != -1:
+        #             return self._handle_windows_sep(coord)
+        #         else:
+        #             coord = self._line_coord_missing_line()
+
         if coord.end == -1:
             _ = self._fill_buffer()
-            return self._handle_windows_sep(self._line_coord_incomplete_line())
+            return self._line_coord_incomplete_line()
 
         self.head = line_end + 1
 
-        # Handling Windows-syle line seperator
-        if self.buf[line_end] == carriage_return:
-            line_end -= 1
+        # # Handling Windows-syle line seperator
+        # if self.buf[line_end] == carriage_return:
+        #     line_end -= 1
 
         return slice(line_start, line_end)
 
@@ -204,7 +200,7 @@ struct BufferedLineIterator(Sized, Stringable):
         if self._check_buf_state():
             _ = self._fill_buffer()
         var line_start = self.head
-        var line_end = self._get_next_line_index(self.head)
+        var line_end = self._get_next_line_index()
         self.head = line_end + 1
 
         if self.buf[line_end] == carriage_return:
@@ -218,7 +214,7 @@ struct BufferedLineIterator(Sized, Stringable):
         self._resize_buf(self.capacity(), MAX_CAPACITY)
         _ = self._fill_buffer()
         var line_start = self.head
-        var line_end = self._get_next_line_index(self.head)
+        var line_end = self._get_next_line_index()
         self.head = line_end + 1
         return slice(line_start, line_end)
 
@@ -247,6 +243,7 @@ struct BufferedLineIterator(Sized, Stringable):
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
+        print("Resizing buffer")
         if self.capacity() == max_capacity:
             raise Error("Buffer is at max capacity")
         var nels: Int
@@ -280,18 +277,23 @@ struct BufferedLineIterator(Sized, Stringable):
         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
 
     @always_inline
-    fn _get_next_line_index(self, start: Int) raises -> Int:
-        var len = self.len() - start
-        var aligned = start + math.align_down(len, simd_width)
-        for s in range(start, aligned, simd_width):
-            var v = self.buf.ptr.load[width=simd_width](s)
-            x = v.cast[DType.uint8]()
-            var mask = x == NEW_LINE
-            if mask.reduce_or():
-                return s + arg_true(mask)
-        var y = self.len()
-        for i in range(aligned, y):
+    fn _get_next_line_index(self) raises -> Int:
+        # var aligned = math.align_down(self.len(), simd_width)
+        # for s in range(self.head, aligned, simd_width):
+        #     var v = self.buf.ptr.load[width=simd_width](s)
+        #     x = v.cast[DType.uint8]()
+        #     var mask = x == NEW_LINE
+        #     if mask.reduce_or():
+        #         return s + arg_true(mask)
+        # var y = self.len()
+        # for i in range(aligned, y):
+        #     if self.buf[i] == NEW_LINE:
+        #         return i
+        print("Getting next line index")
+        print("head", self.head, "end", self.end)
+        for i in range(self.head, self.end):
             if self.buf[i] == NEW_LINE:
+                print(self.buf[i], i)
                 return i
         return -1
 
@@ -344,56 +346,6 @@ struct BufferedLineIterator(Sized, Stringable):
             raise Error("Out of bounds")
 
 
-# TODO: Add a resize if the buffer is too small
-# struct BufferedWriter:
-#     var sink: FileHandle
-#     var buf: Tensor[U8]
-#     var cursor: Int
-#     var written: Int
-
-#     fn __init__(out self, out_path: String, buf_size: Int) raises:
-#         self.sink = open(out_path, "w")
-#         self.buf = Tensor[U8](buf_size)
-#         self.cursor = 0
-#         self.written = 0
-
-#     fn ingest(mut self, source: Tensor[U8]) raises -> Bool:
-#         if source.num_elements() > self.uninatialized_space():
-#             self.flush_buffer()
-#         cpy_tensor[U8](self.buf, source, source.num_elements(), self.cursor, 0)
-#         self.cursor += source.num_elements()
-#         return True
-
-#     fn flush_buffer(mut self) raises:
-#         var out = Tensor[U8](self.cursor)
-#         cpy_tensor[U8](out, self.buf, self.cursor, 0, 0)
-#         var out_string = StringSlice[origin=StaticConstantOrigin](
-#             ptr=out._steal_ptr(), length=self.cursor
-#         )
-#         self.sink.write(out_string)
-#         self.written += self.cursor
-#         self.cursor = 0
-
-#     fn _resize_buf(mut self, amt: Int, max_capacity: Int = MAX_CAPACITY):
-#         var new_capacity = 0
-#         if self.buf.num_elements() + amt > max_capacity:
-#             new_capacity = max_capacity
-#         else:
-#             new_capacity = self.buf.num_elements() + amt
-#         var new_tensor = Tensor[U8](new_capacity)
-#         cpy_tensor[U8](new_tensor, self.buf, self.cursor, 0, 0)
-#         swap(self.buf, new_tensor)
-
-#     fn uninatialized_space(self) -> Int:
-#         return self.capacity() - self.cursor
-
-#     fn capacity(self) -> Int:
-#         return self.buf.num_elements()
-
-#     fn close(mut self) raises:
-#         self.flush_buffer()
-#         self.sink.close()
-
 
 @always_inline
 fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
@@ -402,27 +354,6 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
             return i
     return -1
 
-
-# @always_inline
-# fn find_chr_next_occurance(in_buf: List[UInt8], chr: Int, start: Int = 0) -> Int:
-#     """
-#     Function to find the next occurance of character using SIMD instruction.
-#     Checks are in-bound. no-risk of overflowing the tensor.
-#     """
-#     var len = len(in_buf) - start
-#     var aligned = start + math.align_down(len, simd_width)
-
-#     for s in range(start, aligned, simd_width):
-#         var v = in_buf.unsafe_ptr().load[width=simd_width](s)
-#         x = v.cast[DType.uint8]()
-#         var mask = x == chr
-#         if mask.reduce_or():
-#             return s + arg_true(mask)
-#     var y = in_buf.__len__()
-#     for i in range(aligned, y):
-#         if in_buf[i] == chr:
-#             return i
-#     return -1
 
 
 fn main() raises:
@@ -440,9 +371,10 @@ fn main() raises:
                 ptr=line.unsafe_ptr(), length=len(line)
             ))
             n += 1
-            if n == 100:
+            if n == 50:
                 break
-        except:
+        except Error:
+            print(Error)
             break
     print(n)
     t2 = time.perf_counter_ns()
