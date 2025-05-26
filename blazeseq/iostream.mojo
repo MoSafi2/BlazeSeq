@@ -45,10 +45,12 @@ struct FileReader:
 
     @always_inline
     fn read_to_buffer(mut self, mut buf: InnerBuffer, amt: Int) raises -> Int64:
-        read = self.handle.read(buf.ptr, amt)
+        fd = FileDescriptor(self.handle._get_raw_fd())
+        s = Span[T=UInt8, origin=__origin_of(buf)](ptr=buf.ptr, length=amt)
+        read = fd.read_bytes(s)
         return read
 
-    fn __moveinit__(mut self, owned other: Self):
+    fn __moveinit__(out self, owned other: Self):
         self.handle = other.handle^
 
 
@@ -72,10 +74,10 @@ struct InnerBuffer:
 
     fn __getitem__(
         self, slice: Slice
-    ) raises -> Span[origin=StaticConstantOrigin, T=UInt8]:
+    ) raises -> Span[origin=__origin_of(self), T=UInt8]:
         if slice.start.or_else(0) < 0 or slice.end.or_else(0) > self._len:
             raise Error("Out of bounds")
-        return Span[origin=StaticConstantOrigin, T=UInt8](
+        return Span[origin=__origin_of(self), T=UInt8](
             ptr=self.ptr + slice.start.or_else(0),
             length=slice.end.or_else(0) - slice.start.or_else(0),
         )
