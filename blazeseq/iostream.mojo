@@ -1,5 +1,4 @@
 from memory import memcpy, UnsafePointer, Span
-from utils import StringSlice
 from blazeseq.CONSTS import (
     simd_width,
     U8,
@@ -10,7 +9,6 @@ from blazeseq.CONSTS import (
 )
 from pathlib import Path
 import time
-from tensor import Tensor
 import math
 
 
