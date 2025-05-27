@@ -107,7 +107,9 @@ struct InnerBuffer:
     fn as_span[
         mut: Bool
     ](mut self) -> Span[mut=mut, T=UInt8, origin = __origin_of(self)]:
-        return Span[mut=mut, T=UInt8, origin = __origin_of(self)]()
+        return Span[mut=mut, T=UInt8, origin = __origin_of(self)](
+            ptr=self.ptr, length=self._len
+        )
 
     fn __del__(owned self):
         if self.ptr:
@@ -141,17 +143,14 @@ struct BufferedLineIterator:
 
     @always_inline
     fn _left_shift(mut self) raises:
-        print("Left shifting")
         if self.head == 0:
             return
         var no_items = self.len()
         var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
         var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
         memcpy(dest_ptr, src_ptr, no_items)
-        print("after left shift")
         self.head = 0
         self.end = no_items
-        print(self.head, self.end)
 
     @always_inline
     fn _check_buf_state(mut self) -> Bool:
@@ -168,13 +167,10 @@ struct BufferedLineIterator:
         self._left_shift()
         var nels = self.uninatialized_space()
         var amt = self.source.read_to_buffer(self.buf, nels)
-
         # @parameter
         # if check_ascii:
         #     self._check_ascii()
         self.end += Int(amt)
-        print("Buffer after fill")
-        print(self.head, self.end)
         return amt
 
     @always_inline
@@ -187,183 +183,168 @@ struct BufferedLineIterator:
 
     @always_inline
     fn uninatialized_space(self) -> Int:
-        print("Uninatialized space")
-        print("capacity", self.capacity(), "end", self.end)
         return self.capacity() - self.end
 
     @always_inline
     fn usable_space(self) -> Int:
         return self.uninatialized_space() + self.head
 
+    #     @always_inline
+    #     fn read_next_line(mut self) raises -> List[UInt8]:
+    #         var line_coord = self._line_coord()
+    #         line_span = self.buf[line_coord]
+    #         return List[UInt8](
+    #             ptr=line_span.unsafe_ptr(),
+    #             length=len(line_span),
+    #             capacity=len(line_span),
+    #         )
 
-#     @always_inline
-#     fn read_next_line(mut self) raises -> List[UInt8]:
-#         var line_coord = self._line_coord()
-#         line_span = self.buf[line_coord]
-#         print(line_span._len)
-#         return List[UInt8](
-#             ptr=line_span.unsafe_ptr(),
-#             length=len(line_span),
-#             capacity=len(line_span),
-#         )
+    #     @always_inline
+    #     fn read_next_coord(
+    #         mut self,
+    #     ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
+    #         var line_coord = self._line_coord()
+    #         var ptr = self.buf.ptr + line_coord.start.or_else(0)
+    #         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
+    #         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
-#     @always_inline
-#     fn read_next_coord(
-#         mut self,
-#     ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
-#         var line_coord = self._line_coord()
-#         var ptr = self.buf.ptr + line_coord.start.or_else(0)
-#         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
-#         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
+    #     @always_inline
+    #     fn _line_coord(mut self) raises -> Slice:
+    #         if self._check_buf_state():
+    #             _ = self._fill_buffer()
 
+    #         var coord: Slice
+    #         var line_start = self.head
+    #         var line_end = self._get_next_line_index()
+    #         coord = Slice(line_start, line_end)
 
-#     @always_inline
-#     fn _line_coord(mut self) raises -> Slice:
-#         if self._check_buf_state():
-#             _ = self._fill_buffer()
+    #         # if coord.end == -1 and self.head == 0:
+    #         #     for _ in range(MAX_SHIFT):
+    #         #         if coord.end != -1:
+    #         #             return self._handle_windows_sep(coord)
+    #         #         else:
+    #         #             coord = self._line_coord_missing_line()
 
-#         var coord: Slice
-#         var line_start = self.head
-#         var line_end = self._get_next_line_index()
-#         coord = Slice(line_start, line_end)
+    #         if coord.end == -1:
+    #             _ = self._fill_buffer()
+    #             return self._line_coord_incomplete_line()
 
-#         # if coord.end == -1 and self.head == 0:
-#         #     for _ in range(MAX_SHIFT):
-#         #         if coord.end != -1:
-#         #             return self._handle_windows_sep(coord)
-#         #         else:
-#         #             coord = self._line_coord_missing_line()
+    #         self.head = line_end + 1
 
-#         if coord.end == -1:
-#             _ = self._fill_buffer()
-#             return self._line_coord_incomplete_line()
+    #         # # Handling Windows-syle line seperator
+    #         # if self.buf[line_end] == carriage_return:
+    #         #     line_end -= 1
 
-#         self.head = line_end + 1
+    #         return slice(line_start, line_end)
 
-#         # # Handling Windows-syle line seperator
-#         # if self.buf[line_end] == carriage_return:
-#         #     line_end -= 1
+    #     @always_inline
+    #     fn _line_coord_incomplete_line(mut self) raises -> Slice:
+    #         if self._check_buf_state():
+    #             _ = self._fill_buffer()
+    #         var line_start = self.head
+    #         var line_end = self._get_next_line_index()
+    #         self.head = line_end + 1
 
-#         return slice(line_start, line_end)
+    #         if self.buf[line_end] == carriage_return:
+    #             line_end -= 1
+    #         return slice(line_start, line_end)
 
-#     @always_inline
-#     fn _line_coord_incomplete_line(mut self) raises -> Slice:
-#         print("Incomplete line")
-#         if self._check_buf_state():
-#             _ = self._fill_buffer()
-#         var line_start = self.head
-#         var line_end = self._get_next_line_index()
-#         self.head = line_end + 1
+    #     @always_inline
+    #     fn _line_coord_missing_line(mut self) raises -> Slice:
 
-#         if self.buf[line_end] == carriage_return:
-#             line_end -= 1
-#         return slice(line_start, line_end)
+    #         self._resize_buf(self.capacity(), MAX_CAPACITY)
+    #         _ = self._fill_buffer()
+    #         var line_start = self.head
+    #         var line_end = self._get_next_line_index()
+    #         self.head = line_end + 1
+    #         return slice(line_start, line_end)
 
-#     @always_inline
-#     fn _line_coord_missing_line(mut self) raises -> Slice:
-#         print("Missing line")
+    #     @always_inline
+    #     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
+    #         if self.capacity() == max_capacity:
+    #             raise Error("Buffer is at max capacity")
+    #         var nels: Int
+    #         if self.capacity() + amt > max_capacity:
+    #             nels = max_capacity
+    #         else:
+    #             nels = self.capacity() + amt
+    #         self.buf.ptr = UnsafePointer[UInt8].alloc(nels)
 
-#         self._resize_buf(self.capacity(), MAX_CAPACITY)
-#         _ = self._fill_buffer()
-#         var line_start = self.head
-#         var line_end = self._get_next_line_index()
-#         self.head = line_end + 1
-#         return slice(line_start, line_end)
+    #     @always_inline
+    #     fn _check_ascii(self) raises:
+    #         var aligned = math.align_down(
+    #             self.end - self.head, simd_width
+    #         ) + self.head
+    #         alias bit_mask = 0x80  # Non negative
+    #         for i in range(self.head, aligned, simd_width):
+    #             var vec = self.buf.ptr.load[width=simd_width](i)
+    #             var mask = vec & bit_mask
+    #             for i in range(len(mask)):
+    #                 if mask[i] != 0:
+    #                     raise Error("Non ASCII letters found")
 
+    #         for i in range(aligned, self.end):
+    #             if self.buf[i] & bit_mask != 0:
+    #                 raise Error("Non ASCII letters found")
 
-#     @always_inline
-#     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
-#         print("Resizing buffer")
-#         if self.capacity() == max_capacity:
-#             raise Error("Buffer is at max capacity")
-#         var nels: Int
-#         if self.capacity() + amt > max_capacity:
-#             nels = max_capacity
-#         else:
-#             nels = self.capacity() + amt
-#         self.buf.ptr = UnsafePointer[UInt8].alloc(nels)
+    #     @always_inline
+    #     fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
+    #         if self.buf[in_slice.end.or_else(0)] != carriage_return:
+    #             return in_slice
+    #         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
 
-#     @always_inline
-#     fn _check_ascii(self) raises:
-#         var aligned = math.align_down(
-#             self.end - self.head, simd_width
-#         ) + self.head
-#         alias bit_mask = 0x80  # Non negative
-#         for i in range(self.head, aligned, simd_width):
-#             var vec = self.buf.ptr.load[width=simd_width](i)
-#             var mask = vec & bit_mask
-#             for i in range(len(mask)):
-#                 if mask[i] != 0:
-#                     raise Error("Non ASCII letters found")
+    @always_inline
+    fn _get_next_line_index(self) raises -> Int:
+        var aligned = math.align_down(self.len(), simd_width)
+        for s in range(self.head, aligned, simd_width):
+            var v = self.buf.ptr.load[width=simd_width](s)
+            var mask = v == NEW_LINE
+            if mask.reduce_or():
+                return s + arg_true(mask)
+        var y = self.len()
+        for i in range(aligned, y):
+            if self.buf[i] == NEW_LINE:
+                return i
+        for i in range(self.head, self.end):
+            if self.buf[i] == NEW_LINE:
+                return i
+        return -1
 
-#         for i in range(aligned, self.end):
-#             if self.buf[i] & bit_mask != 0:
-#                 raise Error("Non ASCII letters found")
+    #    ########################## Helpers functions, have no side effects #######################
 
-#     @always_inline
-#     fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
-#         if self.buf[in_slice.end.or_else(0)] != carriage_return:
-#             return in_slice
-#         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
+    @always_inline
+    fn __len__(self) -> Int:
+        return self.end - self.head
 
-#     @always_inline
-#     fn _get_next_line_index(self) raises -> Int:
-#         # var aligned = math.align_down(self.len(), simd_width)
-#         # for s in range(self.head, aligned, simd_width):
-#         #     var v = self.buf.ptr.load[width=simd_width](s)
-#         #     x = v.cast[DType.uint8]()
-#         #     var mask = x == NEW_LINE
-#         #     if mask.reduce_or():
-#         #         return s + arg_true(mask)
-#         # var y = self.len()
-#         # for i in range(aligned, y):
-#         #     if self.buf[i] == NEW_LINE:
-#         #         return i
-#         print("Getting next line index")
-#         print("head", self.head, "end", self.end)
-#         for i in range(self.head, self.end):
-#             if self.buf[i] == NEW_LINE:
-#                 print(self.buf[i], i)
-#                 return i
-#         return -1
+    @always_inline
+    fn __str__(mut self) -> String:
+        var s = self.buf.as_span[mut=False]()
+        sl = slice(self.head, self.end)
+        return String(bytes=s.__getitem__(sl))
 
-#     ########################## Helpers functions, have no side effects #######################
+    fn __getitem__(self, index: Int) raises -> UInt8:
+        if self.head > index or index >= self.end:
+            raise Error("Out of bounds")
+        return self.buf[index]
 
-#     @always_inline
-#     fn __len__(self) -> Int:
-#         return self.end - self.head
+    fn __getitem__(mut self, sl: Slice) raises -> List[UInt8]:
+        start = sl.start.or_else(self.head)
+        end = sl.end.or_else(self.end)
+        step = sl.step.or_else(1)
 
-#     @always_inline
-#     fn __str__(self) -> String:
-#         return String(ptr=self.buf.ptr + self.head, length=self.end - self.head)
-
-#     fn __getitem__(self, index: Int) raises -> Scalar[U8]:
-#         if self.head <= index <= self.end:
-#             return self.buf[index]
-#         else:
-#             raise Error("Out of bounds")
-
-#     fn __getitem__(self, slice: Slice) raises -> List[UInt8]:
-#         if (
-#             slice.start.or_else(0) >= self.head
-#             and slice.end.or_else(0) <= self.end
-#         ):
-#             _slice = self.buf[slice]
-#             return List[UInt8](
-#                 ptr=_slice.unsafe_ptr(),
-#                 length=len(_slice),
-#                 capacity=len(_slice),
-#             )
-#         else:
-#             raise Error("Out of bounds")
+        if start >= self.head and end <= self.end:
+            var _slice = self.buf.__getitem__(slice(start, end, step))
+            return List(_slice)
+        else:
+            raise Error("Out of bounds")
 
 
-# @always_inline
-# fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
-#     for i in range(simd_width):
-#         if v[i]:
-#             return i
-#     return -1
+@always_inline
+fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
+    for i in range(simd_width):
+        if v[i]:
+            return i
+    return -1
 
 
 # fn main() raises:

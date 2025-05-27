@@ -265,14 +265,13 @@ def test_buffered_line_iterator_fill_buffer():
     """Test BufferedLineIterator buffer filling."""
     print("Testing BufferedLineIterator fill_buffer...")
 
-    var test_content = "Hello, World!\nThis is a test.\n"
+    var test_content = "Hello, World!\nThis is a test.\nHello, World!\nThis is a test.\nHello, World!\nThis is a test.\nHello, World!\nThis is a test.\nHello, World!\nThis is a test.\nHello, World!\nThis is a test.\n"
     var file_path = create_test_file(test_content)
     var iterator = BufferedLineIterator(file_path)
 
     try:
         # Fill buffer
         var bytes_read = iterator._fill_buffer()
-
         # Should have read some bytes
         assert_true(bytes_read > 0)
         assert_true(iterator.len() > 0)
@@ -376,17 +375,17 @@ def run_all_tests():
         test_inner_buffer_indexing()
         test_inner_buffer_slicing()
         test_inner_buffer_resize()
-        # test_file_reader_creation()
-        # test_file_reader_read_bytes()
-        # test_buffered_line_iterator_creation()
-        # test_buffered_line_iterator_state_methods()
-        # test_buffered_line_iterator_fill_buffer()
-        # test_buffered_line_iterator_left_shift()
-        # test_edge_cases()
+        test_file_reader_creation()
+        test_file_reader_read_bytes()
+        test_buffered_line_iterator_creation()
+        test_buffered_line_iterator_state_methods()
+        test_buffered_line_iterator_fill_buffer()
+        test_buffered_line_iterator_left_shift()
+        test_edge_cases()
 
-        # print("=" * 50)
-        # print("✅ ALL TESTS PASSED!")
-        # print("=" * 50)
+        print("=" * 50)
+        print("✅ ALL TESTS PASSED!")
+        print("=" * 50)
 
     except Error:
         print("=" * 50)

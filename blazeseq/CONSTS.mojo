@@ -15,7 +15,7 @@ alias carriage_return = 13
 alias U8 = DType.uint8
 alias simd_width: Int = simdwidthof[U8]()
 
-alias DEFAULT_CAPACITY = 50
+alias DEFAULT_CAPACITY = 24 * 1024
 alias MAX_SHIFT = 30
 alias MAX_CAPACITY = 2**MAX_SHIFT
 
