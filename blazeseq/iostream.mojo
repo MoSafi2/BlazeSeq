@@ -33,6 +33,7 @@ alias NEW_LINE = 10
 #         ...
 
 
+@fieldwise_init
 struct FileReader:
     var handle: FileHandle
 
@@ -44,9 +45,11 @@ struct FileReader:
         return self.handle.read_bytes(amt)
 
     @always_inline
-    fn read_to_buffer(mut self, mut buf: InnerBuffer, amt: Int) raises -> Int64:
+    fn read_to_buffer(
+        mut self, mut buf: InnerBuffer, amt: Int
+    ) raises -> UInt64:
         fd = FileDescriptor(self.handle._get_raw_fd())
-        s = Span[T=UInt8, origin=__origin_of(buf)](ptr=buf.ptr, length=amt)
+        s = Span[T=UInt8, origin = __origin_of(buf)](ptr=buf.ptr, length=amt)
         read = fd.read_bytes(s)
         return read
 
@@ -54,6 +57,7 @@ struct FileReader:
         self.handle = other.handle^
 
 
+@value
 struct InnerBuffer:
     var ptr: UnsafePointer[UInt8]
     var _len: Int
@@ -74,12 +78,15 @@ struct InnerBuffer:
 
     fn __getitem__(
         self, slice: Slice
-    ) raises -> Span[origin=__origin_of(self), T=UInt8]:
-        if slice.start.or_else(0) < 0 or slice.end.or_else(0) > self._len:
+    ) raises -> Span[origin = __origin_of(self), T=UInt8]:
+        var start = slice.start.or_else(0)
+        var end = slice.end.or_else(self._len)
+
+        if start < 0 or end >= self._len:
             raise Error("Out of bounds")
-        return Span[origin=__origin_of(self), T=UInt8](
-            ptr=self.ptr + slice.start.or_else(0),
-            length=slice.end.or_else(0) - slice.start.or_else(0),
+
+        return Span[origin = __origin_of(self), T=UInt8](
+            ptr=self.ptr + start, length=end - start
         )
 
     fn __setitem__(mut self, index: Int, value: UInt8) raises:
@@ -88,19 +95,18 @@ struct InnerBuffer:
         else:
             raise Error("Out of bounds")
 
-    fn _realloc(mut self, new_len: Int) raises -> Bool:
-        print("Reallocating buffer")
-        if new_len > self._len:
-            var new_ptr = UnsafePointer[UInt8].alloc(new_len)
-            memcpy(new_ptr, self.ptr, self._len)
-            self.ptr = new_ptr
-            self._len = new_len
-            return True
-        else:
+    fn resize(mut self, new_len: Int) raises -> Bool:
+        if new_len < self._len:
             raise Error("New length must be greater than current length")
 
+        var new_ptr = UnsafePointer[UInt8].alloc(new_len)
+        memcpy(dest=new_ptr, src=self.ptr, count=self._len)
+        self.ptr = new_ptr
+        self._len = new_len
+        return True
+            
+
     fn __del__(owned self):
-        print("Deleting buffer")
         if self.ptr:
             self.ptr.free()
 
@@ -109,273 +115,270 @@ struct InnerBuffer:
         self._len = other._len
 
 
+# struct BufferedLineIterator(Sized, Stringable):
+#     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
+#     """
 
-struct BufferedLineIterator(Sized, Stringable):
-    """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
-    """
+#     var source: FileReader
+#     var buf: InnerBuffer
+#     var head: Int
+#     var end: Int
 
-    var source: FileReader
-    var buf: InnerBuffer
-    var head: Int
-    var end: Int
+#     fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
+#         if path.exists():
+#             self.source = FileReader(path)
+#         else:
+#             raise Error("Provided file not found for read")
 
-    fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
-        if path.exists():
-            self.source = FileReader(path)
-        else:
-            raise Error("Provided file not found for read")
+#         self.buf = InnerBuffer(capacity)
+#         self.head = 0
+#         self.end = 0
+#         _ = self._fill_buffer()
 
-        self.buf = InnerBuffer(capacity)
-        self.head = 0
-        self.end = 0
-        _ = self._fill_buffer()
+#     @always_inline
+#     fn read_next_line(mut self) raises -> List[UInt8]:
+#         var line_coord = self._line_coord()
+#         line_span = self.buf[line_coord]
+#         print(line_span._len)
+#         return List[UInt8](
+#             ptr=line_span.unsafe_ptr(),
+#             length=len(line_span),
+#             capacity=len(line_span),
+#         )
 
-    @always_inline
-    fn read_next_line(mut self) raises -> List[UInt8]:
-        var line_coord = self._line_coord()
-        line_span = self.buf[line_coord]
-        print(line_span._len)
-        return List[UInt8](
-            ptr=line_span.unsafe_ptr(),
-            length=len(line_span),
-            capacity=len(line_span),
-        )
+#     @always_inline
+#     fn read_next_coord(
+#         mut self,
+#     ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
+#         var line_coord = self._line_coord()
+#         var ptr = self.buf.ptr + line_coord.start.or_else(0)
+#         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
+#         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
-    @always_inline
-    fn read_next_coord(
-        mut self,
-    ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
-        var line_coord = self._line_coord()
-        var ptr = self.buf.ptr + line_coord.start.or_else(0)
-        var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
-        return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
+#     @always_inline
+#     fn _fill_buffer(mut self) raises -> Int64:
+#         """Returns the number of bytes read into the buffer."""
+#         self._left_shift()
+#         var nels = self.uninatialized_space()
+#         var amt = self.source.read_to_buffer(self.buf, nels)
 
-    @always_inline
-    fn _fill_buffer(mut self) raises -> Int64:
-        """Returns the number of bytes read into the buffer."""
-        self._left_shift()
-        var nels = self.uninatialized_space()
-        var amt = self.source.read_to_buffer(self.buf, nels)
+#         # @parameter
+#         # if check_ascii:
+#         #     self._check_ascii()
+#         self.end += Int(amt)
+#         print("Buffer after fill")
+#         print(self.head, self.end)
+#         return amt
 
-        # @parameter
-        # if check_ascii:
-        #     self._check_ascii()
-        self.end += Int(amt)
-        print("Buffer after fill")
-        print(self.head, self.end)
-        return amt
+#     @always_inline
+#     fn _line_coord(mut self) raises -> Slice:
+#         if self._check_buf_state():
+#             _ = self._fill_buffer()
 
-    @always_inline
-    fn _line_coord(mut self) raises -> Slice:
-        if self._check_buf_state():
-            _ = self._fill_buffer()
+#         var coord: Slice
+#         var line_start = self.head
+#         var line_end = self._get_next_line_index()
+#         coord = Slice(line_start, line_end)
 
-        var coord: Slice
-        var line_start = self.head
-        var line_end = self._get_next_line_index()
-        coord = Slice(line_start, line_end)
+#         # if coord.end == -1 and self.head == 0:
+#         #     for _ in range(MAX_SHIFT):
+#         #         if coord.end != -1:
+#         #             return self._handle_windows_sep(coord)
+#         #         else:
+#         #             coord = self._line_coord_missing_line()
 
-        # if coord.end == -1 and self.head == 0:
-        #     for _ in range(MAX_SHIFT):
-        #         if coord.end != -1:
-        #             return self._handle_windows_sep(coord)
-        #         else:
-        #             coord = self._line_coord_missing_line()
+#         if coord.end == -1:
+#             _ = self._fill_buffer()
+#             return self._line_coord_incomplete_line()
 
-        if coord.end == -1:
-            _ = self._fill_buffer()
-            return self._line_coord_incomplete_line()
+#         self.head = line_end + 1
 
-        self.head = line_end + 1
+#         # # Handling Windows-syle line seperator
+#         # if self.buf[line_end] == carriage_return:
+#         #     line_end -= 1
 
-        # # Handling Windows-syle line seperator
-        # if self.buf[line_end] == carriage_return:
-        #     line_end -= 1
+#         return slice(line_start, line_end)
 
-        return slice(line_start, line_end)
+#     @always_inline
+#     fn _line_coord_incomplete_line(mut self) raises -> Slice:
+#         print("Incomplete line")
+#         if self._check_buf_state():
+#             _ = self._fill_buffer()
+#         var line_start = self.head
+#         var line_end = self._get_next_line_index()
+#         self.head = line_end + 1
 
-    @always_inline
-    fn _line_coord_incomplete_line(mut self) raises -> Slice:
-        print("Incomplete line")
-        if self._check_buf_state():
-            _ = self._fill_buffer()
-        var line_start = self.head
-        var line_end = self._get_next_line_index()
-        self.head = line_end + 1
+#         if self.buf[line_end] == carriage_return:
+#             line_end -= 1
+#         return slice(line_start, line_end)
 
-        if self.buf[line_end] == carriage_return:
-            line_end -= 1
-        return slice(line_start, line_end)
+#     @always_inline
+#     fn _line_coord_missing_line(mut self) raises -> Slice:
+#         print("Missing line")
 
-    @always_inline
-    fn _line_coord_missing_line(mut self) raises -> Slice:
-        print("Missing line")
+#         self._resize_buf(self.capacity(), MAX_CAPACITY)
+#         _ = self._fill_buffer()
+#         var line_start = self.head
+#         var line_end = self._get_next_line_index()
+#         self.head = line_end + 1
+#         return slice(line_start, line_end)
 
-        self._resize_buf(self.capacity(), MAX_CAPACITY)
-        _ = self._fill_buffer()
-        var line_start = self.head
-        var line_end = self._get_next_line_index()
-        self.head = line_end + 1
-        return slice(line_start, line_end)
+#     @always_inline
+#     fn _left_shift(mut self) raises:
+#         print("Left shifting")
+#         if self.head == 0:
+#             return
+#         var no_items = self.len()
+#         var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
+#         var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
+#         memcpy(dest_ptr, src_ptr, no_items)
+#         print("after left shift")
+#         self.head = 0
+#         self.end = no_items
+#         print(self.head, self.end)
 
-    @always_inline
-    fn _left_shift(mut self) raises:
-        print("Left shifting")
-        if self.head == 0:
-            return
-        var no_items = self.len()
-        var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
-        var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
-        memcpy(dest_ptr, src_ptr, no_items)
-        print("after left shift")
-        self.head = 0
-        self.end = no_items
-        print(self.head, self.end)
+#     @always_inline
+#     fn _check_buf_state(mut self) -> Bool:
+#         if self.head >= self.end:
+#             self.head = 0
+#             self.end = 0
+#             return True
+#         else:
+#             return False
 
-    @always_inline
-    fn _check_buf_state(mut self) -> Bool:
-        if self.head >= self.end:
-            self.head = 0
-            self.end = 0
-            return True
-        else:
-            return False
+#     @always_inline
+#     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
+#         print("Resizing buffer")
+#         if self.capacity() == max_capacity:
+#             raise Error("Buffer is at max capacity")
+#         var nels: Int
+#         if self.capacity() + amt > max_capacity:
+#             nels = max_capacity
+#         else:
+#             nels = self.capacity() + amt
+#         self.buf.ptr = UnsafePointer[UInt8].alloc(nels)
 
-    @always_inline
-    fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
-        print("Resizing buffer")
-        if self.capacity() == max_capacity:
-            raise Error("Buffer is at max capacity")
-        var nels: Int
-        if self.capacity() + amt > max_capacity:
-            nels = max_capacity
-        else:
-            nels = self.capacity() + amt
-        self.buf.ptr = UnsafePointer[UInt8].alloc(nels)
+#     @always_inline
+#     fn _check_ascii(self) raises:
+#         var aligned = math.align_down(
+#             self.end - self.head, simd_width
+#         ) + self.head
+#         alias bit_mask = 0x80  # Non negative
+#         for i in range(self.head, aligned, simd_width):
+#             var vec = self.buf.ptr.load[width=simd_width](i)
+#             var mask = vec & bit_mask
+#             for i in range(len(mask)):
+#                 if mask[i] != 0:
+#                     raise Error("Non ASCII letters found")
 
-    @always_inline
-    fn _check_ascii(self) raises:
-        var aligned = math.align_down(
-            self.end - self.head, simd_width
-        ) + self.head
-        alias bit_mask = 0x80  # Non negative
-        for i in range(self.head, aligned, simd_width):
-            var vec = self.buf.ptr.load[width=simd_width](i)
-            var mask = vec & bit_mask
-            for i in range(len(mask)):
-                if mask[i] != 0:
-                    raise Error("Non ASCII letters found")
+#         for i in range(aligned, self.end):
+#             if self.buf[i] & bit_mask != 0:
+#                 raise Error("Non ASCII letters found")
 
-        for i in range(aligned, self.end):
-            if self.buf[i] & bit_mask != 0:
-                raise Error("Non ASCII letters found")
+#     @always_inline
+#     fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
+#         if self.buf[in_slice.end.or_else(0)] != carriage_return:
+#             return in_slice
+#         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
 
-    @always_inline
-    fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
-        if self.buf[in_slice.end.or_else(0)] != carriage_return:
-            return in_slice
-        return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
+#     @always_inline
+#     fn _get_next_line_index(self) raises -> Int:
+#         # var aligned = math.align_down(self.len(), simd_width)
+#         # for s in range(self.head, aligned, simd_width):
+#         #     var v = self.buf.ptr.load[width=simd_width](s)
+#         #     x = v.cast[DType.uint8]()
+#         #     var mask = x == NEW_LINE
+#         #     if mask.reduce_or():
+#         #         return s + arg_true(mask)
+#         # var y = self.len()
+#         # for i in range(aligned, y):
+#         #     if self.buf[i] == NEW_LINE:
+#         #         return i
+#         print("Getting next line index")
+#         print("head", self.head, "end", self.end)
+#         for i in range(self.head, self.end):
+#             if self.buf[i] == NEW_LINE:
+#                 print(self.buf[i], i)
+#                 return i
+#         return -1
 
-    @always_inline
-    fn _get_next_line_index(self) raises -> Int:
-        # var aligned = math.align_down(self.len(), simd_width)
-        # for s in range(self.head, aligned, simd_width):
-        #     var v = self.buf.ptr.load[width=simd_width](s)
-        #     x = v.cast[DType.uint8]()
-        #     var mask = x == NEW_LINE
-        #     if mask.reduce_or():
-        #         return s + arg_true(mask)
-        # var y = self.len()
-        # for i in range(aligned, y):
-        #     if self.buf[i] == NEW_LINE:
-        #         return i
-        print("Getting next line index")
-        print("head", self.head, "end", self.end)
-        for i in range(self.head, self.end):
-            if self.buf[i] == NEW_LINE:
-                print(self.buf[i], i)
-                return i
-        return -1
+#     ########################## Helpers functions, have no side effects #######################
 
-    ########################## Helpers functions, have no side effects #######################
+#     @always_inline
+#     fn len(self) -> Int:
+#         return self.end - self.head
 
-    @always_inline
-    fn len(self) -> Int:
-        return self.end - self.head
+#     @always_inline
+#     fn capacity(self) -> Int:
+#         return self.buf._len
 
-    @always_inline
-    fn capacity(self) -> Int:
-        return self.buf._len
+#     @always_inline
+#     fn uninatialized_space(self) -> Int:
+#         print("Uninatialized space")
+#         print("capacity", self.capacity(), "end", self.end)
+#         return self.capacity() - self.end
 
-    @always_inline
-    fn uninatialized_space(self) -> Int:
-        print("Uninatialized space")
-        print("capacity", self.capacity(), "end", self.end)
-        return self.capacity() - self.end
+#     @always_inline
+#     fn usable_space(self) -> Int:
+#         return self.uninatialized_space() + self.head
 
-    @always_inline
-    fn usable_space(self) -> Int:
-        return self.uninatialized_space() + self.head
+#     @always_inline
+#     fn __len__(self) -> Int:
+#         return self.end - self.head
 
-    @always_inline
-    fn __len__(self) -> Int:
-        return self.end - self.head
+#     @always_inline
+#     fn __str__(self) -> String:
+#         return String(ptr=self.buf.ptr + self.head, length=self.end - self.head)
 
-    @always_inline
-    fn __str__(self) -> String:
-        return String(ptr=self.buf.ptr + self.head, length=self.end - self.head)
+#     fn __getitem__(self, index: Int) raises -> Scalar[U8]:
+#         if self.head <= index <= self.end:
+#             return self.buf[index]
+#         else:
+#             raise Error("Out of bounds")
 
-    fn __getitem__(self, index: Int) raises -> Scalar[U8]:
-        if self.head <= index <= self.end:
-            return self.buf[index]
-        else:
-            raise Error("Out of bounds")
-
-    fn __getitem__(self, slice: Slice) raises -> List[UInt8]:
-        if (
-            slice.start.or_else(0) >= self.head
-            and slice.end.or_else(0) <= self.end
-        ):
-            _slice = self.buf[slice]
-            return List[UInt8](
-                ptr=_slice.unsafe_ptr(),
-                length=len(_slice),
-                capacity=len(_slice),
-            )
-        else:
-            raise Error("Out of bounds")
-
+#     fn __getitem__(self, slice: Slice) raises -> List[UInt8]:
+#         if (
+#             slice.start.or_else(0) >= self.head
+#             and slice.end.or_else(0) <= self.end
+#         ):
+#             _slice = self.buf[slice]
+#             return List[UInt8](
+#                 ptr=_slice.unsafe_ptr(),
+#                 length=len(_slice),
+#                 capacity=len(_slice),
+#             )
+#         else:
+#             raise Error("Out of bounds")
 
 
-@always_inline
-fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
-    for i in range(simd_width):
-        if v[i]:
-            return i
-    return -1
+# @always_inline
+# fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
+#     for i in range(simd_width):
+#         if v[i]:
+#             return i
+#     return -1
 
 
+# fn main() raises:
+#     var path = Path(
+#         "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR4381933_1.fastq"
+#     )
+#     var reader = BufferedLineIterator(path, capacity=256)
 
-fn main() raises:
-    var path = Path(
-        "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR4381933_1.fastq"
-    )
-    var reader = BufferedLineIterator(path, capacity=256)
-
-    var n = 0
-    t1 = time.perf_counter_ns()
-    while True:
-        try:
-            var line = reader.read_next_coord()
-            print(StringSlice[origin=StaticConstantOrigin](
-                ptr=line.unsafe_ptr(), length=len(line)
-            ))
-            n += 1
-            if n == 50:
-                break
-        except Error:
-            print(Error)
-            break
-    print(n)
-    t2 = time.perf_counter_ns()
-    print("Time taken:", (t2 - t1) / 1e9)
+#     var n = 0
+#     t1 = time.perf_counter_ns()
+#     while True:
+#         try:
+#             var line = reader.read_next_coord()
+#             print(StringSlice[origin=StaticConstantOrigin](
+#                 ptr=line.unsafe_ptr(), length=len(line)
+#             ))
+#             n += 1
+#             if n == 50:
+#                 break
+#         except Error:
+#             print(Error)
+#             break
+#     print(n)
+#     t2 = time.perf_counter_ns()
+#     print("Time taken:", (t2 - t1) / 1e9)
