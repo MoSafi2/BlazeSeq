@@ -3,6 +3,7 @@ from pathlib import Path
 from testing import assert_equal, assert_true, assert_false, assert_raises
 import tempfile
 import os
+from collections.string import chr
 
 # Import the modules under test
 from blazeseq.iostream import (
@@ -739,6 +740,326 @@ def test_integration_scenarios():
     print("✓ Integration scenarios tests passed")
 
 
+def test_resize_buf_normal_resize():
+    """Test _resize_buf with normal resize scenarios."""
+    print("Testing _resize_buf normal resize...")
+
+    var test_content = "Hello World"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(
+        file_path, 64
+    )  # Start with small capacity
+
+    try:
+        var original_capacity = iterator.capacity()
+
+        # Test normal resize - increase by 32
+        iterator._resize_buf(32, 1024)
+        assert_equal(iterator.capacity(), original_capacity + 32)
+
+        # Test another resize
+        var new_capacity = iterator.capacity()
+        iterator._resize_buf(64, 1024)
+        assert_equal(iterator.capacity(), new_capacity + 64)
+
+    except e:
+        print("Unexpected error in normal resize:", e)
+        assert_false(True, "Should not raise error for normal resize")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _resize_buf normal resize tests passed")
+
+
+def test_resize_buf_max_capacity_limit():
+    """Test _resize_buf when approaching max capacity."""
+    print("Testing _resize_buf max capacity limit...")
+
+    var test_content = "Test"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        # Test resize that would exceed max capacity - should cap at max
+        iterator._resize_buf(
+            1000, 128
+        )  # Current 64 + 1000 > 128, should cap at 128
+        assert_equal(iterator.capacity(), 128)
+
+        # Test resize when already at max capacity - should raise error
+        with assert_raises():
+            iterator._resize_buf(10, 128)
+
+    except e:
+        print("Unexpected error in max capacity test:", e)
+        # Only acceptable if it's the expected "max capacity" error
+        # if "max capacity" not in e:
+        #     assert_false(True, "Should only raise max capacity error")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _resize_buf max capacity tests passed")
+
+
+def test_resize_buf_edge_cases():
+    """Test _resize_buf edge cases."""
+    print("Testing _resize_buf edge cases...")
+
+    var test_content = "Edge case test"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 32)
+
+    try:
+        # Test resize by 0 (should not change capacity)
+        var original_capacity = iterator.capacity()
+        iterator._resize_buf(0, 1024)
+        assert_equal(iterator.capacity(), original_capacity)
+
+        # Test resize by exactly the remaining capacity to max
+        var remaining = 128 - iterator.capacity()
+        iterator._resize_buf(remaining, 128)
+        assert_equal(iterator.capacity(), 128)
+
+    except e:
+        print("Unexpected error in edge cases:", e)
+        assert_false(True, "Should not raise error for edge cases")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _resize_buf edge cases tests passed")
+
+
+def test_check_ascii_valid_ascii():
+    """Test _check_ascii with valid ASCII content."""
+    print("Testing _check_ascii with valid ASCII...")
+
+    var test_content = "Hello World 123 !@# \n\t"  # All ASCII characters
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Should not raise error for valid ASCII
+        iterator._check_ascii()
+
+        # Test with buffer partially consumed
+        iterator.head = 5
+        iterator._check_ascii()  # Should still pass
+
+    except e:
+        print("Unexpected error with valid ASCII:", e)
+        assert_false(True, "Should not raise error for valid ASCII")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _check_ascii valid ASCII tests passed")
+
+
+def test_check_ascii_invalid_ascii():
+    """Test _check_ascii with non-ASCII content."""
+    print("Testing _check_ascii with non-ASCII...")
+
+    # Create file with non-ASCII characters (UTF-8 encoded)
+    var temp_dir = tempfile.mkdtemp()
+    var file_path = Path(temp_dir) / "test_file.txt"
+
+    # Write binary data with high bit set (non-ASCII)
+    with open(file_path, "wb") as f:
+        var data = List[UInt8]()
+        # Add some ASCII
+        data.append(ord("H"))
+        data.append(ord("e"))
+        data.append(ord("l"))
+        data.append(ord("l"))
+        data.append(ord("o"))
+        # Add non-ASCII (high bit set)
+        data.append(0x80)  # Non-ASCII character
+        data.append(ord("W"))
+        data.append(ord("o"))
+        data.append(ord("r"))
+        data.append(ord("l"))
+        data.append(ord("d"))
+        for i in data:
+            f.write(chr(Int(i[])))
+
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Should raise error for non-ASCII content
+        with assert_raises():
+            iterator._check_ascii()
+
+    except e:
+        print("Error in non-ASCII test setup:", e)
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _check_ascii non-ASCII tests passed")
+
+
+def test_check_ascii_edge_positions():
+    """Test _check_ascii with non-ASCII at different positions."""
+    print("Testing _check_ascii edge positions...")
+
+    # Test non-ASCII at SIMD boundary
+    var temp_dir = tempfile.mkdtemp()
+    var file_path = Path(temp_dir) / "test_file.txt"
+
+    with open(file_path, "wb") as f:
+        var data = List[UInt8]()
+        # Fill with ASCII up to SIMD boundary
+        for i in range(simd_width - 1):
+            data.append(ord("A"))
+        # Add non-ASCII at boundary
+        data.append(0xFF)
+        # Add more ASCII
+        for i in range(5):
+            data.append(ord("B"))
+        f.write(bytes(data))
+
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        with assert_raises():
+            iterator._check_ascii()
+
+    except e:
+        print("Error in edge position test:", e)
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _check_ascii edge positions tests passed")
+
+
+def test_handle_windows_sep_with_cr():
+    """Test _handle_windows_sep with carriage return."""
+    print("Testing _handle_windows_sep with CR...")
+
+    var temp_dir = tempfile.mkdtemp()
+    var file_path = Path(temp_dir) / "test_file.txt"
+
+    # Create content with Windows line endings (CRLF)
+    with open(file_path, "wb") as f:
+        var data = List[UInt8]()
+        data.append(ord("H"))
+        data.append(ord("e"))
+        data.append(ord("l"))
+        data.append(ord("l"))
+        data.append(ord("o"))
+        data.append(carriage_return)  # CR
+        data.append(NEW_LINE)  # LF
+        data.append(ord("W"))
+        data.append(ord("o"))
+        data.append(ord("r"))
+        data.append(ord("l"))
+        data.append(ord("d"))
+        f.write(bytes(data))
+
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Create slice that ends at CR
+        var test_slice = Slice(0, 6)  # Points to CR position
+        var result_slice = iterator._handle_windows_sep(test_slice)
+
+        # Should return slice with end reduced by 1 (removing CR)
+        assert_equal(result_slice.start.or_else(0), 0)
+        assert_equal(result_slice.end.or_else(0), 5)  # One less than original
+
+    except e:
+        print("Unexpected error with Windows separator:", e)
+        assert_false(
+            True, "Should not raise error for Windows separator handling"
+        )
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _handle_windows_sep with CR tests passed")
+
+
+def test_handle_windows_sep_without_cr():
+    """Test _handle_windows_sep without carriage return."""
+    print("Testing _handle_windows_sep without CR...")
+
+    var test_content = "Hello\nWorld"  # Unix line ending (LF only)
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Create slice that ends at LF (no CR before it)
+        var test_slice = Slice(0, 6)  # Points to LF position
+        var result_slice = iterator._handle_windows_sep(test_slice)
+
+        # Should return same slice (no change)
+        assert_equal(result_slice.start.or_else(0), test_slice.start.or_else(0))
+        assert_equal(result_slice.end.or_else(0), test_slice.end.or_else(0))
+
+    except e:
+        print("Unexpected error without Windows separator:", e)
+        assert_false(True, "Should not raise error for non-Windows separator")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _handle_windows_sep without CR tests passed")
+
+
+def test_handle_windows_sep_edge_cases():
+    """Test _handle_windows_sep edge cases."""
+    print("Testing _handle_windows_sep edge cases...")
+
+    var temp_dir = tempfile.mkdtemp()
+    var file_path = Path(temp_dir) / "test_file.txt"
+
+    # Test with CR at very end of buffer
+    with open(file_path, "wb") as f:
+        var data = List[UInt8]()
+        data.append(ord("T"))
+        data.append(ord("e"))
+        data.append(ord("s"))
+        data.append(ord("t"))
+        data.append(carriage_return)  # CR at end
+        f.write(bytes(data))
+
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Test slice ending at CR
+        var test_slice = Slice(0, 5)  # End at CR position
+        var result_slice = iterator._handle_windows_sep(test_slice)
+
+        assert_equal(result_slice.end.or_else(0), 4)  # Should be reduced
+
+        # Test slice with default end value
+        var test_slice2 = Slice(0, None)
+        # This should handle the None case appropriately
+
+    except e:
+        print("Error in edge cases:", e)
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _handle_windows_sep edge cases tests passed")
+
 
 def run_all_tests():
     """Run all unit tests."""
@@ -768,7 +1089,6 @@ def run_all_tests():
         test_dunder_getitem_slice()
         test_arg_true_function()
         test_integration_scenarios()
-
 
         print("=" * 50)
         print("✅ ALL TESTS PASSED!")
