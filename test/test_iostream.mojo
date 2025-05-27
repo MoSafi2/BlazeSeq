@@ -640,11 +640,8 @@ def test_dunder_getitem_slice():
         assert_equal(slice2[5], ord("H"))
 
         # Test slice with step
-        var slice3 = iterator[0:6:2]
-        assert_equal(len(slice3), 3)
-        assert_equal(slice3[0], ord("A"))
-        assert_equal(slice3[1], ord("C"))
-        assert_equal(slice3[2], ord("E"))
+        with assert_raises():
+            var slice3 = iterator[0:6:2]
 
         # Test with default values (using head and end)
         iterator.head = 2
@@ -713,7 +710,7 @@ def test_integration_scenarios():
         # Test getting first line using multiple methods
         var first_newline = iterator._get_next_line_index()
         var first_line_slice = iterator[0:first_newline]
-        var first_line_str = String(first_line_slice.__str__())
+        var first_line_str = String(bytes=first_line_slice)
         assert_equal(first_line_str, "First line")
 
         # Move to second line
@@ -727,9 +724,9 @@ def test_integration_scenarios():
 
         # Find next newline from current position
         var second_newline = iterator._get_next_line_index()
-        var relative_pos = second_newline - iterator.head
+        _ = second_newline - iterator.head
         var second_line_slice = iterator[iterator.head : second_newline]
-        var second_line_str = String(second_line_slice.__str__())
+        var second_line_str = String(bytes=second_line_slice)
         assert_equal(second_line_str, "Second line")
 
     except e:
@@ -768,9 +765,9 @@ def run_all_tests():
         test_dunder_str()
         test_dunder_str_with_newlines()
         test_dunder_getitem_index()
-        # test_dunder_getitem_slice()
+        test_dunder_getitem_slice()
         test_arg_true_function()
-        # test_integration_scenarios()
+        test_integration_scenarios()
 
 
         print("=" * 50)

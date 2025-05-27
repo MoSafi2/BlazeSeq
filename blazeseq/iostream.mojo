@@ -80,6 +80,10 @@ struct InnerBuffer:
     ) raises -> Span[origin = __origin_of(self), T=UInt8]:
         var start = slice.start.or_else(0)
         var end = slice.end.or_else(self._len)
+        var step = slice.step.or_else(1)
+
+        if step > 1:
+            raise Error("Step loading is not supported")
 
         if start < 0 or end > self._len:
             raise Error("Out of bounds")
@@ -301,7 +305,7 @@ struct BufferedLineIterator(Sized):
             var mask = v == NEW_LINE
             if mask.reduce_or():
                 return s + arg_true(mask)
-        
+
         for i in range(aligned_range, self.end):
             if self.buf[i] == NEW_LINE:
                 return i
@@ -327,14 +331,16 @@ struct BufferedLineIterator(Sized):
             raise Error("Out of bounds")
         return self.buf[index]
 
-    fn __getitem__(mut self, sl: Slice) raises -> List[UInt8]:
+    fn __getitem__(
+        mut self, sl: Slice
+    ) raises -> Span[T=UInt8, origin = __origin_of(self.buf)]:
         start = sl.start.or_else(self.head)
         end = sl.end.or_else(self.end)
         step = sl.step.or_else(1)
 
         if start >= self.head and end <= self.end:
             var _slice = self.buf.__getitem__(slice(start, end, step))
-            return List(_slice)
+            return _slice
         else:
             raise Error("Out of bounds")
 
