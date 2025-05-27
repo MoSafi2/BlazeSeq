@@ -118,25 +118,87 @@ struct InnerBuffer:
         self._len = other._len
 
 
-# struct BufferedLineIterator(Sized, Stringable):
-#     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
-#     """
+struct BufferedLineIterator:
+    """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
+    """
 
-#     var source: FileReader
-#     var buf: InnerBuffer
-#     var head: Int
-#     var end: Int
+    var source: FileReader
+    var buf: InnerBuffer
+    var head: Int
+    var end: Int
 
-#     fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
-#         if path.exists():
-#             self.source = FileReader(path)
-#         else:
-#             raise Error("Provided file not found for read")
+    fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
+        if path.exists():
+            self.source = FileReader(path)
+        else:
+            raise Error("Provided file not found for read")
 
-#         self.buf = InnerBuffer(capacity)
-#         self.head = 0
-#         self.end = 0
+        self.buf = InnerBuffer(capacity)
+        self.head = 0
+        self.end = 0
 #         _ = self._fill_buffer()
+
+
+
+    @always_inline
+    fn _left_shift(mut self) raises:
+        print("Left shifting")
+        if self.head == 0:
+            return
+        var no_items = self.len()
+        var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
+        var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
+        memcpy(dest_ptr, src_ptr, no_items)
+        print("after left shift")
+        self.head = 0
+        self.end = no_items
+        print(self.head, self.end)
+
+
+    @always_inline
+    fn _check_buf_state(mut self) -> Bool:
+        if self.head >= self.end:
+            self.head = 0
+            self.end = 0
+            return True
+        else:
+            return False
+
+    @always_inline
+    fn _fill_buffer(mut self) raises -> UInt64:
+        """Returns the number of bytes read into the buffer."""
+        self._left_shift()
+        var nels = self.uninatialized_space()
+        var amt = self.source.read_to_buffer(self.buf, nels)
+
+        # @parameter
+        # if check_ascii:
+        #     self._check_ascii()
+        self.end += Int(amt)
+        print("Buffer after fill")
+        print(self.head, self.end)
+        return amt
+
+    @always_inline
+    fn len(self) -> Int:
+        return self.end - self.head
+
+    @always_inline
+    fn capacity(self) -> Int:
+        return self.buf._len
+
+    @always_inline
+    fn uninatialized_space(self) -> Int:
+        print("Uninatialized space")
+        print("capacity", self.capacity(), "end", self.end)
+        return self.capacity() - self.end
+
+    @always_inline
+    fn usable_space(self) -> Int:
+        return self.uninatialized_space() + self.head
+
+
+
 
 #     @always_inline
 #     fn read_next_line(mut self) raises -> List[UInt8]:
@@ -158,20 +220,6 @@ struct InnerBuffer:
 #         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
 #         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
 
-#     @always_inline
-#     fn _fill_buffer(mut self) raises -> Int64:
-#         """Returns the number of bytes read into the buffer."""
-#         self._left_shift()
-#         var nels = self.uninatialized_space()
-#         var amt = self.source.read_to_buffer(self.buf, nels)
-
-#         # @parameter
-#         # if check_ascii:
-#         #     self._check_ascii()
-#         self.end += Int(amt)
-#         print("Buffer after fill")
-#         print(self.head, self.end)
-#         return amt
 
 #     @always_inline
 #     fn _line_coord(mut self) raises -> Slice:
@@ -226,28 +274,6 @@ struct InnerBuffer:
 #         self.head = line_end + 1
 #         return slice(line_start, line_end)
 
-#     @always_inline
-#     fn _left_shift(mut self) raises:
-#         print("Left shifting")
-#         if self.head == 0:
-#             return
-#         var no_items = self.len()
-#         var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
-#         var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
-#         memcpy(dest_ptr, src_ptr, no_items)
-#         print("after left shift")
-#         self.head = 0
-#         self.end = no_items
-#         print(self.head, self.end)
-
-#     @always_inline
-#     fn _check_buf_state(mut self) -> Bool:
-#         if self.head >= self.end:
-#             self.head = 0
-#             self.end = 0
-#             return True
-#         else:
-#             return False
 
 #     @always_inline
 #     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
@@ -306,24 +332,6 @@ struct InnerBuffer:
 #         return -1
 
 #     ########################## Helpers functions, have no side effects #######################
-
-#     @always_inline
-#     fn len(self) -> Int:
-#         return self.end - self.head
-
-#     @always_inline
-#     fn capacity(self) -> Int:
-#         return self.buf._len
-
-#     @always_inline
-#     fn uninatialized_space(self) -> Int:
-#         print("Uninatialized space")
-#         print("capacity", self.capacity(), "end", self.end)
-#         return self.capacity() - self.end
-
-#     @always_inline
-#     fn usable_space(self) -> Int:
-#         return self.uninatialized_space() + self.head
 
 #     @always_inline
 #     fn __len__(self) -> Int:
