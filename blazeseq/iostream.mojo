@@ -263,58 +263,50 @@ struct BufferedLineIterator(Sized):
     #         self.head = line_end + 1
     #         return slice(line_start, line_end)
 
-    #     @always_inline
-    #     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
-    #         if self.capacity() == max_capacity:
-    #             raise Error("Buffer is at max capacity")
-    #         var nels: Int
-    #         if self.capacity() + amt > max_capacity:
-    #             nels = max_capacity
-    #         else:
-    #             nels = self.capacity() + amt
-    #         self.buf.ptr = UnsafePointer[UInt8].alloc(nels)
+    @always_inline
+    fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
+        if self.capacity() == max_capacity:
+            raise Error("Buffer is at max capacity")
+        var nels: Int
+        if self.capacity() + amt > max_capacity:
+            nels = max_capacity
+        else:
+            nels = self.capacity() + amt
+        _ = self.buf.resize(nels)
 
-    #     @always_inline
-    #     fn _check_ascii(self) raises:
-    #         var aligned = math.align_down(
-    #             self.end - self.head, simd_width
-    #         ) + self.head
-    #         alias bit_mask = 0x80  # Non negative
-    #         for i in range(self.head, aligned, simd_width):
-    #             var vec = self.buf.ptr.load[width=simd_width](i)
-    #             var mask = vec & bit_mask
-    #             for i in range(len(mask)):
-    #                 if mask[i] != 0:
-    #                     raise Error("Non ASCII letters found")
+    @always_inline
+    fn _check_ascii(self) raises:
+        var aligned_end = math.align_down(self.len(), simd_width) + self.head
+        alias bit_mask = 0x80  # Non negative
+        for i in range(self.head, aligned_end, simd_width):
+            var vec = self.buf.ptr.load[width=simd_width](i)
+            if (vec & bit_mask).reduce_or():
+                raise Error("Non ASCII letters found")
 
-    #         for i in range(aligned, self.end):
-    #             if self.buf[i] & bit_mask != 0:
-    #                 raise Error("Non ASCII letters found")
+        for i in range(aligned_end, self.end):
+            if self.buf[i] & bit_mask != 0:
+                raise Error("Non ASCII letters found")
 
-    #     @always_inline
-    #     fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
-    #         if self.buf[in_slice.end.or_else(0)] != carriage_return:
-    #             return in_slice
-    #         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
+    @always_inline
+    fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
+        if self.buf[in_slice.end.or_else(0)] != carriage_return:
+            return in_slice
+        return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
 
     @always_inline
     fn _get_next_line_index(self) raises -> Int:
-        var aligned_range = math.align_down(self.len(), simd_width) + self.head
-        for s in range(self.head, aligned_range, simd_width):
-            var v = self.buf.ptr.load[width=simd_width](s)
+        var aligned_end = math.align_down(self.len(), simd_width) + self.head
+        for i in range(self.head, aligned_end, simd_width):
+            var v = self.buf.ptr.load[width=simd_width](i)
             var mask = v == NEW_LINE
             if mask.reduce_or():
-                return s + arg_true(mask)
+                return i + arg_true(mask)
 
-        for i in range(aligned_range, self.end):
-            if self.buf[i] == NEW_LINE:
-                return i
-        for i in range(self.head, self.end):
+        for i in range(aligned_end, self.end):
             if self.buf[i] == NEW_LINE:
                 return i
         return -1
 
-    #    ########################## Helpers functions, have no side effects #######################
 
     @always_inline
     fn __len__(self) -> Int:
