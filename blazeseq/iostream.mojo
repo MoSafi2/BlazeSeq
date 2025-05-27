@@ -120,7 +120,7 @@ struct InnerBuffer:
         self._len = other._len
 
 
-struct BufferedLineIterator:
+struct BufferedLineIterator(Sized):
     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
 
@@ -295,14 +295,14 @@ struct BufferedLineIterator:
 
     @always_inline
     fn _get_next_line_index(self) raises -> Int:
-        var aligned = math.align_down(self.len(), simd_width)
-        for s in range(self.head, aligned, simd_width):
+        var aligned_range = math.align_down(self.len(), simd_width) + self.head
+        for s in range(self.head, aligned_range, simd_width):
             var v = self.buf.ptr.load[width=simd_width](s)
             var mask = v == NEW_LINE
             if mask.reduce_or():
                 return s + arg_true(mask)
-        var y = self.len()
-        for i in range(aligned, y):
+        
+        for i in range(aligned_range, self.end):
             if self.buf[i] == NEW_LINE:
                 return i
         for i in range(self.head, self.end):
