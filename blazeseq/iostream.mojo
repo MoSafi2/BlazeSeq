@@ -48,9 +48,8 @@ struct FileReader:
     fn read_to_buffer(
         mut self, mut buf: InnerBuffer, amt: Int
     ) raises -> UInt64:
-        fd = FileDescriptor(self.handle._get_raw_fd())
-        s = Span[T=UInt8, origin = __origin_of(buf)](ptr=buf.ptr, length=amt)
-        read = fd.read_bytes(s)
+        s = buf.as_span[mut=True]()
+        read = self.handle.read(buffer=s)
         return read
 
     fn __moveinit__(out self, owned other: Self):
@@ -104,7 +103,11 @@ struct InnerBuffer:
         self.ptr = new_ptr
         self._len = new_len
         return True
-            
+
+    fn as_span[
+        mut: Bool
+    ](mut self) -> Span[mut=mut, T=UInt8, origin = __origin_of(self)]:
+        return Span[mut=mut, T=UInt8, origin = __origin_of(self)]()
 
     fn __del__(owned self):
         if self.ptr:
