@@ -11,6 +11,7 @@ from blazeseq.iostream import (
     BufferedLineIterator,
     NEW_LINE,
     DEFAULT_CAPACITY,
+    arg_true,
 )
 
 
@@ -364,6 +365,382 @@ def test_edge_cases():
     print("✓ Edge cases tests passed")
 
 
+def test_get_next_line_index():
+    """Test BufferedLineIterator _get_next_line_index method."""
+    print("Testing _get_next_line_index...")
+
+    # Test with newline in buffer
+    var test_content = "Hello\nWorld\nTest\n"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        # Fill buffer
+        _ = iterator._fill_buffer()
+
+        # Find first newline (should be at position 5)
+        var first_newline = iterator._get_next_line_index()
+        assert_equal(first_newline, 5)  # "Hello\n" - newline at index 5
+
+        # Move head past first newline and find next
+        iterator.head = 6  # Start after first newline
+        var second_newline = iterator._get_next_line_index()
+        assert_equal(second_newline, 12)  # "World\n" - newline at index 12
+
+        # Move head past second newline
+        iterator.head = 13  # Start after second newline
+        var third_newline = iterator._get_next_line_index()
+        assert_equal(third_newline, 18)  # "Test\n" - newline at index 18
+
+    except e:
+        print("Unexpected error in _get_next_line_index:", e)
+        assert_false(True, "Should not raise error for valid newline search")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _get_next_line_index basic tests passed")
+
+
+def test_get_next_line_index_no_newline():
+    """Test _get_next_line_index when no newline is found."""
+    print("Testing _get_next_line_index with no newline...")
+
+    var test_content = "No newline here"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        # Fill buffer
+        _ = iterator._fill_buffer()
+
+        # Should return -1 when no newline found
+        var result = iterator._get_next_line_index()
+        assert_equal(result, -1)
+
+    except e:
+        print("Unexpected error when no newline found:", e)
+        assert_false(True, "Should not raise error when no newline found")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ _get_next_line_index no newline tests passed")
+
+
+def test_get_next_line_index_edge_cases():
+    """Test _get_next_line_index edge cases."""
+    print("Testing _get_next_line_index edge cases...")
+
+    # Test with newline at beginning
+    var test_content1 = "\nHello World"
+    var file_path1 = create_test_file(test_content1)
+    var iterator1 = BufferedLineIterator(file_path1, 64)
+
+    try:
+        _ = iterator1._fill_buffer()
+        var result1 = iterator1._get_next_line_index()
+        assert_equal(result1, 0)  # Newline at start
+    except e:
+        print("Unexpected error with newline at start:", e)
+
+    os.remove(file_path1)
+
+    # Test with newline at end
+    var test_content2 = "Hello World\n"
+    var file_path2 = create_test_file(test_content2)
+    var iterator2 = BufferedLineIterator(file_path2, 64)
+
+    try:
+        _ = iterator2._fill_buffer()
+        var result2 = iterator2._get_next_line_index()
+        assert_equal(result2, 11)  # Newline at end
+    except e:
+        print("Unexpected error with newline at end:", e)
+
+    os.remove(file_path2)
+
+    # Test with multiple consecutive newlines
+    var test_content3 = "Line1\n\n\nLine2"
+    var file_path3 = create_test_file(test_content3)
+    var iterator3 = BufferedLineIterator(file_path3, 64)
+
+    try:
+        _ = iterator3._fill_buffer()
+        var result3 = iterator3._get_next_line_index()
+        assert_equal(result3, 5)  # First newline
+
+        iterator3.head = 6
+        var result4 = iterator3._get_next_line_index()
+        assert_equal(result4, 6)  # Second newline (consecutive)
+    except e:
+        print("Unexpected error with consecutive newlines:", e)
+
+    os.remove(file_path3)
+
+    print("✓ _get_next_line_index edge cases tests passed")
+
+
+def test_dunder_len():
+    """Test BufferedLineIterator __len__ method."""
+    print("Testing __len__...")
+
+    var test_content = "Hello, World!"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    # Initially empty
+    assert_equal(len(iterator), 0)
+
+    try:
+        # Fill buffer
+        _ = iterator._fill_buffer()
+
+        # Should now have length equal to content
+        var expected_len = len(test_content)
+        assert_equal(len(iterator), expected_len)
+
+        # Test after consuming some data
+        iterator.head = 5
+        assert_equal(len(iterator), expected_len - 5)
+
+        # Test when head == end
+        iterator.head = iterator.end
+        assert_equal(len(iterator), 0)
+
+    except e:
+        print("Unexpected error in __len__:", e)
+        assert_false(True, "Should not raise error for __len__")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ __len__ tests passed")
+
+
+def test_dunder_str():
+    """Test BufferedLineIterator __str__ method."""
+    print("Testing __str__...")
+
+    var test_content = "Hello, World!"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        # Fill buffer
+        _ = iterator._fill_buffer()
+
+        # Should return the content as string
+        var result = String(iterator.__str__())
+        assert_equal(result, test_content)
+
+        # Test after consuming some data
+        iterator.head = 7  # Skip "Hello, "
+        var partial_result = String(iterator.__str__())
+        assert_equal(partial_result, "World!")
+
+        # Test with empty buffer
+        iterator.head = iterator.end
+        var empty_result = String(iterator.__str__())
+        assert_equal(empty_result, "")
+
+    except e:
+        print("Unexpected error in __str__:", e)
+        assert_false(True, "Should not raise error for __str__")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ __str__ tests passed")
+
+
+def test_dunder_str_with_newlines():
+    """Test __str__ method with newlines and special characters."""
+    print("Testing __str__ with newlines...")
+
+    var test_content = "Line1\nLine2\r\nLine3\n"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+        var result = String(iterator.__str__())
+        assert_equal(result, test_content)
+
+    except e:
+        print("Unexpected error in __str__ with newlines:", e)
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ __str__ with newlines tests passed")
+
+
+def test_dunder_getitem_index():
+    """Test BufferedLineIterator __getitem__ with index."""
+    print("Testing __getitem__ with index...")
+
+    var test_content = "ABCDEF"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Test valid indices
+        assert_equal(iterator[0], ord("A"))
+        assert_equal(iterator[1], ord("B"))
+        assert_equal(iterator[5], ord("F"))
+
+        # Test after moving head
+        iterator.head = 2
+        assert_equal(iterator[2], ord("C"))  # Still valid
+        assert_equal(iterator[3], ord("D"))
+
+    except e:
+        print("Unexpected error in __getitem__ index:", e)
+        assert_false(True, "Should not raise error for valid indices")
+
+    # Test out of bounds - before head
+    with assert_raises():
+        _ = iterator[1]  # head is at 2, so 1 should be out of bounds
+
+    # Test out of bounds - after end
+    with assert_raises():
+        _ = iterator[100]
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ __getitem__ index tests passed")
+
+
+def test_dunder_getitem_slice():
+    """Test BufferedLineIterator __getitem__ with slice."""
+    print("Testing __getitem__ with slice...")
+
+    var test_content = "ABCDEFGHIJ"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Test valid slices
+        var slice1 = iterator[0:5]
+        assert_equal(len(slice1), 5)
+        assert_equal(slice1[0], ord("A"))
+        assert_equal(slice1[4], ord("E"))
+
+        var slice2 = iterator[2:8]
+        assert_equal(len(slice2), 6)
+        assert_equal(slice2[0], ord("C"))
+        assert_equal(slice2[5], ord("H"))
+
+        # Test slice with step
+        var slice3 = iterator[0:6:2]
+        assert_equal(len(slice3), 3)
+        assert_equal(slice3[0], ord("A"))
+        assert_equal(slice3[1], ord("C"))
+        assert_equal(slice3[2], ord("E"))
+
+        # Test with default values (using head and end)
+        iterator.head = 2
+        iterator.end = 8
+        var slice4 = iterator[:]  # Should use head:end
+        assert_equal(len(slice4), 6)
+        assert_equal(slice4[0], ord("C"))
+
+    except e:
+        print("Unexpected error in __getitem__ slice:", e)
+        assert_false(True, "Should not raise error for valid slices")
+
+    # Test out of bounds slices
+    with assert_raises():
+        _ = iterator[0:15]  # End beyond buffer
+
+    with assert_raises():
+        _ = iterator[-1:5]  # Start before head
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ __getitem__ slice tests passed")
+
+
+def test_arg_true_function():
+    """Test the arg_true helper function."""
+    print("Testing arg_true function...")
+
+    # Create test SIMD vectors
+    var vec1 = SIMD[DType.bool, 4](False, True, False, False)
+    var result1 = arg_true(vec1)
+    assert_equal(result1, 1)
+
+    var vec2 = SIMD[DType.bool, 4](True, False, False, False)
+    var result2 = arg_true(vec2)
+    assert_equal(result2, 0)
+
+    var vec3 = SIMD[DType.bool, 4](False, False, False, True)
+    var result3 = arg_true(vec3)
+    assert_equal(result3, 3)
+
+    var vec4 = SIMD[DType.bool, 4](False, False, False, False)
+    var result4 = arg_true(vec4)
+    assert_equal(result4, -1)  # No true values
+
+    # Test with multiple true values (should return first)
+    var vec5 = SIMD[DType.bool, 4](False, True, True, False)
+    var result5 = arg_true(vec5)
+    assert_equal(result5, 1)
+
+    print("✓ arg_true function tests passed")
+
+
+def test_integration_scenarios():
+    """Test integration scenarios combining multiple methods."""
+    print("Testing integration scenarios...")
+
+    var test_content = "First line\nSecond line\nThird line\n"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+
+    try:
+        _ = iterator._fill_buffer()
+
+        # Test getting first line using multiple methods
+        var first_newline = iterator._get_next_line_index()
+        var first_line_slice = iterator[0:first_newline]
+        var first_line_str = String(first_line_slice.__str__())
+        assert_equal(first_line_str, "First line")
+
+        # Move to second line
+        iterator.head = first_newline + 1
+        var current_length = len(iterator)
+        assert_true(current_length > 0)
+
+        # Get remaining content as string
+        var remaining = String(iterator.__str__())
+        assert_equal(remaining, "Second line\nThird line\n")
+
+        # Find next newline from current position
+        var second_newline = iterator._get_next_line_index()
+        var relative_pos = second_newline - iterator.head
+        var second_line_slice = iterator[iterator.head : second_newline]
+        var second_line_str = String(second_line_slice.__str__())
+        assert_equal(second_line_str, "Second line")
+
+    except e:
+        print("Unexpected error in integration test:", e)
+        assert_false(True, "Integration test should not raise errors")
+
+    # Clean up
+    os.remove(file_path)
+
+    print("✓ Integration scenarios tests passed")
+
+
+
 def run_all_tests():
     """Run all unit tests."""
     print("=" * 50)
@@ -382,6 +759,17 @@ def run_all_tests():
         test_buffered_line_iterator_fill_buffer()
         test_buffered_line_iterator_left_shift()
         test_edge_cases()
+        test_get_next_line_index()
+        test_get_next_line_index_no_newline()
+        test_get_next_line_index_edge_cases()
+        test_dunder_len()
+        test_dunder_str()
+        test_dunder_str_with_newlines()
+        test_dunder_getitem_index()
+        test_dunder_getitem_slice()
+        test_arg_true_function()
+        test_integration_scenarios()
+
 
         print("=" * 50)
         print("✅ ALL TESTS PASSED!")
