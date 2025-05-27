@@ -48,7 +48,7 @@ struct FileReader:
     fn read_to_buffer(
         mut self, mut buf: InnerBuffer, amt: Int
     ) raises -> UInt64:
-        s = buf.as_span[mut=True]()
+        s = buf.as_span_mut()
         read = self.handle.read(buffer=s)
         return read
 
@@ -77,7 +77,7 @@ struct InnerBuffer:
 
     fn __getitem__(
         mut self, slice: Slice
-    ) raises -> Span[origin = __origin_of(self), T=UInt8]:
+    ) raises -> Span[Byte, __origin_of(self)]:
         var start = slice.start.or_else(0)
         var end = slice.end.or_else(self._len)
         var step = slice.step.or_else(1)
@@ -87,10 +87,9 @@ struct InnerBuffer:
 
         if start < 0 or end > self._len:
             raise Error("Out of bounds")
-
-        return Span[origin = __origin_of(self), T=UInt8](
-            ptr=self.ptr + start, length=end - start
-        )
+        len = end - start
+        ptr = self.ptr + start
+        return Span[Byte, __origin_of(self)](ptr=ptr, length=len)
 
     fn __setitem__(mut self, index: Int, value: UInt8) raises:
         if index < self._len:
@@ -108,12 +107,11 @@ struct InnerBuffer:
         self._len = new_len
         return True
 
-    fn as_span[
-        mut: Bool
-    ](mut self) -> Span[mut=mut, T=UInt8, origin = __origin_of(self)]:
-        return Span[mut=mut, T=UInt8, origin = __origin_of(self)](
-            ptr=self.ptr, length=self._len
-        )
+    fn as_span(self) -> Span[Byte, __origin_of(self)]:
+        return Span[Byte, __origin_of(self)](ptr=self.ptr, length=self._len)
+
+    fn as_span_mut(mut self) -> Span[Byte, __origin_of(self)]:
+        return Span[Byte, __origin_of(self)](ptr=self.ptr, length=self._len)
 
     fn __del__(owned self):
         if self.ptr:
@@ -124,7 +122,7 @@ struct InnerBuffer:
         self._len = other._len
 
 
-struct BufferedLineIterator(Sized):
+struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
 
@@ -142,8 +140,7 @@ struct BufferedLineIterator(Sized):
         self.buf = InnerBuffer(capacity)
         self.head = 0
         self.end = 0
-
-    #         _ = self._fill_buffer()
+        # _ = self._fill_buffer()
 
     @always_inline
     fn _left_shift(mut self) raises:
@@ -171,9 +168,10 @@ struct BufferedLineIterator(Sized):
         self._left_shift()
         var nels = self.uninatialized_space()
         var amt = self.source.read_to_buffer(self.buf, nels)
-        # @parameter
-        # if check_ascii:
-        #     self._check_ascii()
+
+        @parameter
+        if check_ascii:
+            self._check_ascii()
         self.end += Int(amt)
         return amt
 
@@ -193,75 +191,42 @@ struct BufferedLineIterator(Sized):
     fn usable_space(self) -> Int:
         return self.uninatialized_space() + self.head
 
-    #     @always_inline
-    #     fn read_next_line(mut self) raises -> List[UInt8]:
-    #         var line_coord = self._line_coord()
-    #         line_span = self.buf[line_coord]
-    #         return List[UInt8](
-    #             ptr=line_span.unsafe_ptr(),
-    #             length=len(line_span),
-    #             capacity=len(line_span),
-    #         )
+    @always_inline
+    fn get_next_line(mut self) raises -> String:
+        var line_coord = self._line_coord()
+        line_span = self[line_coord]
+        return String(bytes=line_span)
 
-    #     @always_inline
-    #     fn read_next_coord(
-    #         mut self,
-    #     ) raises -> Span[T=Byte, origin=StaticConstantOrigin]:
-    #         var line_coord = self._line_coord()
-    #         var ptr = self.buf.ptr + line_coord.start.or_else(0)
-    #         var length = line_coord.end.or_else(0) - line_coord.start.or_else(0)
-    #         return Span[T=Byte, origin=StaticConstantOrigin](ptr=ptr, length=length)
+    @always_inline
+    fn get_next_line_span(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
+        var line_coord = self._line_coord()
+        return self[line_coord]
 
-    #     @always_inline
-    #     fn _line_coord(mut self) raises -> Slice:
-    #         if self._check_buf_state():
-    #             _ = self._fill_buffer()
+    # TODO: Check how safe this function is and if it can return null buffer
+    @always_inline
+    fn _line_coord(mut self) raises -> Slice:
+        if self._check_buf_state():
+            _ = self._fill_buffer()
+        var line_start = self.head
+        var line_end = self._get_next_line_index()
+        if line_end == -1:
+            _ = self._fill_buffer()
+            line_end = self._get_next_line_index()
+        # Handling Windows-syle line seperator
+        if self.buf[line_end] == carriage_return:
+            line_end -= 1
+        self.head = line_end + 1
 
-    #         var coord: Slice
-    #         var line_start = self.head
-    #         var line_end = self._get_next_line_index()
-    #         coord = Slice(line_start, line_end)
+        return slice(line_start, line_end)
 
-    #         # if coord.end == -1 and self.head == 0:
-    #         #     for _ in range(MAX_SHIFT):
-    #         #         if coord.end != -1:
-    #         #             return self._handle_windows_sep(coord)
-    #         #         else:
-    #         #             coord = self._line_coord_missing_line()
-
-    #         if coord.end == -1:
-    #             _ = self._fill_buffer()
-    #             return self._line_coord_incomplete_line()
-
-    #         self.head = line_end + 1
-
-    #         # # Handling Windows-syle line seperator
-    #         # if self.buf[line_end] == carriage_return:
-    #         #     line_end -= 1
-
-    #         return slice(line_start, line_end)
-
-    #     @always_inline
-    #     fn _line_coord_incomplete_line(mut self) raises -> Slice:
-    #         if self._check_buf_state():
-    #             _ = self._fill_buffer()
-    #         var line_start = self.head
-    #         var line_end = self._get_next_line_index()
-    #         self.head = line_end + 1
-
-    #         if self.buf[line_end] == carriage_return:
-    #             line_end -= 1
-    #         return slice(line_start, line_end)
-
-    #     @always_inline
-    #     fn _line_coord_missing_line(mut self) raises -> Slice:
-
-    #         self._resize_buf(self.capacity(), MAX_CAPACITY)
-    #         _ = self._fill_buffer()
-    #         var line_start = self.head
-    #         var line_end = self._get_next_line_index()
-    #         self.head = line_end + 1
-    #         return slice(line_start, line_end)
+    # @always_inline
+    # fn _line_coord_missing_line(mut self) raises -> Slice:
+    #     self._resize_buf(self.capacity(), MAX_CAPACITY)
+    #     _ = self._fill_buffer()
+    #     var line_start = self.head
+    #     var line_end = self._get_next_line_index()
+    #     self.head = line_end + 1
+    #     return slice(line_start, line_end)
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
@@ -307,14 +272,13 @@ struct BufferedLineIterator(Sized):
                 return i
         return -1
 
-
     @always_inline
     fn __len__(self) -> Int:
         return self.end - self.head
 
     @always_inline
-    fn __str__(mut self) -> String:
-        var s = self.buf.as_span[mut=False]()
+    fn __str__(self) -> String:
+        var s = self.buf.as_span()
         sl = slice(self.head, self.end)
         return String(bytes=s.__getitem__(sl))
 
@@ -325,7 +289,7 @@ struct BufferedLineIterator(Sized):
 
     fn __getitem__(
         mut self, sl: Slice
-    ) raises -> Span[T=UInt8, origin = __origin_of(self.buf)]:
+    ) raises -> Span[Byte, __origin_of(self.buf)]:
         start = sl.start.or_else(self.head)
         end = sl.end.or_else(self.end)
         step = sl.step.or_else(1)
