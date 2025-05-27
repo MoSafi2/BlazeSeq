@@ -76,12 +76,12 @@ struct InnerBuffer:
             raise Error("Out of bounds")
 
     fn __getitem__(
-        self, slice: Slice
+        mut self, slice: Slice
     ) raises -> Span[origin = __origin_of(self), T=UInt8]:
         var start = slice.start.or_else(0)
         var end = slice.end.or_else(self._len)
 
-        if start < 0 or end >= self._len:
+        if start < 0 or end > self._len:
             raise Error("Out of bounds")
 
         return Span[origin = __origin_of(self), T=UInt8](
@@ -136,9 +136,8 @@ struct BufferedLineIterator:
         self.buf = InnerBuffer(capacity)
         self.head = 0
         self.end = 0
-#         _ = self._fill_buffer()
 
-
+    #         _ = self._fill_buffer()
 
     @always_inline
     fn _left_shift(mut self) raises:
@@ -153,7 +152,6 @@ struct BufferedLineIterator:
         self.head = 0
         self.end = no_items
         print(self.head, self.end)
-
 
     @always_inline
     fn _check_buf_state(mut self) -> Bool:
@@ -196,8 +194,6 @@ struct BufferedLineIterator:
     @always_inline
     fn usable_space(self) -> Int:
         return self.uninatialized_space() + self.head
-
-
 
 
 #     @always_inline
