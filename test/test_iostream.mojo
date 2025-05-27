@@ -1050,6 +1050,130 @@ def test_handle_windows_sep_edge_cases():
     print("✓ _handle_windows_sep edge cases tests passed")
 
 
+def test_get_next_line_index_updated():
+    """Test updated _get_next_line_index implementation."""
+    print("Testing updated _get_next_line_index...")
+    
+    var test_content = "Line1\nLine2\nLine3\n"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+    
+    try:
+        _ = iterator._fill_buffer()
+        
+        # Test finding first newline
+        var first_nl = iterator._get_next_line_index()
+        assert_equal(first_nl, 5)  # After "Line1"
+        
+        # Move head and find next
+        iterator.head = 6
+        var second_nl = iterator._get_next_line_index()
+        assert_equal(second_nl, 12)  # After "Line2"
+        
+        # Test with head at different SIMD alignments
+        iterator.head = 1  # Misaligned start
+        var nl_from_misaligned = iterator._get_next_line_index()
+        assert_equal(nl_from_misaligned, 5)  # Should still find first newline
+        
+    except e:
+        print("Unexpected error in updated _get_next_line_index:", str(e))
+        assert_false(True, "Should not raise error for line index search")
+    
+    # Clean up
+    os.remove(str(file_path))
+    
+    print("✓ Updated _get_next_line_index tests passed")
+
+
+def test_get_next_line_index_no_newline_updated():
+    """Test updated _get_next_line_index when no newline found."""
+    print("Testing updated _get_next_line_index no newline...")
+    
+    var test_content = "No newlines in this content at all"
+    var file_path = create_test_file(test_content)
+    var iterator = BufferedLineIterator(file_path, 64)
+    
+    try:
+        _ = iterator._fill_buffer()
+        
+        var result = iterator._get_next_line_index()
+        assert_equal(result, -1)  # Should return -1 when no newline found
+        
+        # Test with head moved
+        iterator.head = 10
+        var result2 = iterator._get_next_line_index()
+        assert_equal(result2, -1)  # Still should return -1
+        
+    except e:
+        print("Unexpected error when no newline found:", str(e))
+        assert_false(True, "Should not raise error when no newline found")
+    
+    # Clean up
+    os.remove(str(file_path))
+    
+    print("✓ Updated _get_next_line_index no newline tests passed")
+
+
+def test_integration_with_all_methods():
+    """Test integration scenario using all methods together."""
+    print("Testing integration with all methods...")
+    
+    var temp_dir = tempfile.mkdtemp()
+    var file_path = Path(temp_dir) / "test_file.txt"
+    
+    # Create file with Windows line endings and ASCII content
+    with open(file_path, "wb") as f:
+        var data = List[UInt8]()
+        # "Hello" + CRLF
+        for c in "Hello":
+            data.append(ord(c))
+        data.append(carriage_return)
+        data.append(NEW_LINE)
+        # "World" + CRLF
+        for c in "World":
+            data.append(ord(c))
+        data.append(carriage_return)
+        data.append(NEW_LINE)
+        f.write(bytes(data))
+    
+    var iterator = BufferedLineIterator(file_path, 32)  # Small buffer
+    
+    try:
+        # Fill buffer
+        _ = iterator._fill_buffer()
+        
+        # Check ASCII validity
+        iterator._check_ascii()
+        
+        # Resize buffer if needed
+        iterator._resize_buf(32, 128)
+        assert_equal(iterator.capacity(), 64)
+        
+        # Find first line
+        var first_nl = iterator._get_next_line_index()
+        assert_true(first_nl > 0)
+        
+        # Handle Windows line ending
+        var line_slice = Slice(0, first_nl)
+        var clean_slice = iterator._handle_windows_sep(line_slice)
+        assert_equal(clean_slice.end.or_else(0), first_nl - 1)  # Should remove CR
+        
+        # Extract line content
+        var line_data = iterator[clean_slice]
+        var line_str = String(line_data)
+        assert_equal(line_str, "Hello")
+        
+    except e:
+        print("Unexpected error in integration test:", str(e))
+        assert_false(True, "Integration test should not raise errors")
+    
+    # Clean up
+    os.remove(str(file_path))
+    
+    print("✓ Integration with all methods tests passed")
+
+
+
 def run_all_tests():
     """Run all unit tests."""
     print("=" * 50)
