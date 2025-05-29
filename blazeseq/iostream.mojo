@@ -46,9 +46,16 @@ struct FileReader:
 
     @always_inline
     fn read_to_buffer(
-        mut self, mut buf: InnerBuffer, amt: Int
+        mut self, mut buf: InnerBuffer, amt: Int, pos: Int = 0
     ) raises -> UInt64:
-        s = buf.as_span_mut()
+        s = buf.as_span_mut(pos=pos)
+        if amt > len(s):
+            raise Error(
+                "Number of elements to read is bigger than the available space"
+                " in the buffer"
+            )
+        if amt < 0:
+            raise Error("The amount to be read should be positive")
         read = self.handle.read(buffer=s)
         return read
 
@@ -107,11 +114,21 @@ struct InnerBuffer:
         self._len = new_len
         return True
 
-    fn as_span(self) -> Span[Byte, __origin_of(self)]:
-        return Span[Byte, __origin_of(self)](ptr=self.ptr, length=self._len)
+    fn as_span(self, pos: Int = 0) raises -> Span[Byte, __origin_of(self)]:
+        if pos > self._len:
+            raise Error("Position is outside the buffer")
+        return Span[Byte, __origin_of(self)](
+            ptr=self.ptr + pos, length=self._len - pos
+        )
 
-    fn as_span_mut(mut self) -> Span[Byte, __origin_of(self)]:
-        return Span[Byte, __origin_of(self)](ptr=self.ptr, length=self._len)
+    fn as_span_mut(
+        mut self, pos: Int = 0
+    ) raises -> Span[Byte, __origin_of(self)]:
+        if pos > self._len:
+            raise Error("Position is outside the buffer")
+        return Span[Byte, __origin_of(self)](
+            ptr=self.ptr + pos, length=self._len - pos
+        )
 
     fn __del__(owned self):
         if self.ptr:
@@ -167,7 +184,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         """Returns the number of bytes read into the buffer."""
         self._left_shift()
         var nels = self.uninatialized_space()
-        var amt = self.source.read_to_buffer(self.buf, nels)
+        var amt = self.source.read_to_buffer(self.buf, nels, self.end)
 
         @parameter
         if check_ascii:
@@ -252,9 +269,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 raise Error("Non ASCII letters found")
 
     @always_inline
-    fn _handle_windows_sep(
-        self, mut in_slice: Slice
-    ) raises -> Slice:
+    fn _handle_windows_sep(self, mut in_slice: Slice) raises -> Slice:
         if self.buf[in_slice.end.or_else(0)] != carriage_return:
             return in_slice
         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
