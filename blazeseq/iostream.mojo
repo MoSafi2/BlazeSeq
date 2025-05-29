@@ -209,14 +209,13 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             _ = self._fill_buffer()
         var line_start = self.head
         var line_end = self._get_next_line_index()
+
+        # Handle Broken line
         if line_end == -1:
             _ = self._fill_buffer()
             line_end = self._get_next_line_index()
-        # Handling Windows-syle line seperator
-        if self.buf[line_end] == carriage_return:
-            line_end -= 1
-        self.head = line_end + 1
 
+        self.head = line_end + 1
         return slice(line_start, line_end)
 
     # @always_inline
@@ -253,7 +252,9 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 raise Error("Non ASCII letters found")
 
     @always_inline
-    fn _handle_windows_sep(self, in_slice: Slice) raises -> Slice:
+    fn _handle_windows_sep(
+        self, mut in_slice: Slice
+    ) raises -> Slice:
         if self.buf[in_slice.end.or_else(0)] != carriage_return:
             return in_slice
         return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
@@ -294,7 +295,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         end = sl.end.or_else(self.end)
         step = sl.step.or_else(1)
 
-        if start >= self.head and end <= self.end:
+        if end <= self.end:
             var _slice = self.buf.__getitem__(slice(start, end, step))
             return _slice
         else:
