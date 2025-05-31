@@ -247,8 +247,10 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 " increasing buffer size"
             )
 
+        sl = Slice(line_start, line_end)
+        sl_stripped = self._strip_spaces(sl)
         self.head = line_end + 1
-        return slice(line_start, line_end)
+        return sl_stripped
 
     # @always_inline
     # fn _line_coord_missing_line(mut self) raises -> Slice:
@@ -284,12 +286,6 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 raise Error("Non ASCII letters found")
 
     @always_inline
-    fn _handle_windows_sep(self, mut in_slice: Slice) raises -> Slice:
-        if self.buf[in_slice.end.or_else(0)] != carriage_return:
-            return in_slice
-        return Slice(in_slice.start.or_else(0), in_slice.end.or_else(0) - 1)
-
-    @always_inline
     fn _get_next_line_index(self) raises -> Int:
         var aligned_end = math.align_down(self.len(), simd_width) + self.head
         for i in range(self.head, aligned_end, simd_width):
@@ -302,6 +298,21 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             if self.buf[i] == NEW_LINE:
                 return i
         return -1
+
+    @always_inline
+    fn _strip_spaces(self, in_slice: Slice) raises -> Slice:
+        var start = in_slice.start.or_else(0)
+        var end = in_slice.end.or_else(0)
+        len = end - start
+        for i in range(len):
+            if not is_posix_space(self.buf[i]):
+                start = i
+                break
+        for i in range(len, 0):
+            if not is_posix_space(self.buf[i]):
+                end = i
+                break
+        return Slice(start, end)
 
     @always_inline
     fn __len__(self) -> Int:
@@ -338,6 +349,33 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
         if v[i]:
             return i
     return -1
+
+
+# Ported from the is_posix_space in Mojo Stdlib
+@always_inline
+fn is_posix_space(c: UInt8) -> Bool:
+    alias ` ` = UInt8(ord(" "))
+    alias `\t` = UInt8(ord("\t"))
+    alias `\n` = UInt8(ord("\n"))
+    alias `\r` = UInt8(ord("\r"))
+    alias `\f` = UInt8(ord("\f"))
+    alias `\v` = UInt8(ord("\v"))
+    alias `\x1c` = UInt8(ord("\x1c"))
+    alias `\x1d` = UInt8(ord("\x1d"))
+    alias `\x1e` = UInt8(ord("\x1e"))
+
+    # This compiles to something very clever that's even faster than a LUT.
+    return (
+        c == ` `
+        or c == `\t`
+        or c == `\n`
+        or c == `\r`
+        or c == `\f`
+        or c == `\v`
+        or c == `\x1c`
+        or c == `\x1d`
+        or c == `\x1e`
+    )
 
 
 # fn main() raises:

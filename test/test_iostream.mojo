@@ -947,7 +947,7 @@ def test_handle_windows_sep_with_cr():
 
         # Create slice that ends at CR
         var test_slice = Slice(0, 6)  # Points to CR position
-        var result_slice = iterator._handle_windows_sep(test_slice)
+        var result_slice = iterator._strip_spaces(test_slice)
         # Should return slice with end reduced by 1 (removing CR)
         assert_equal(result_slice.start.or_else(0), 0)
         assert_equal(result_slice.end.or_else(0), 6)  # One less than original
@@ -977,7 +977,7 @@ def test_handle_windows_sep_without_cr():
 
         # Create slice that ends at LF (no CR before it)
         var test_slice = Slice(0, 6)  # Points to LF position
-        var result_slice = iterator._handle_windows_sep(test_slice)
+        var result_slice = iterator._strip_spaces(test_slice)
 
         # Should return same slice (no change)
         assert_equal(result_slice.start.or_else(0), test_slice.start.or_else(0))
@@ -1010,7 +1010,7 @@ def test_handle_windows_sep_edge_cases():
 
         # Test slice ending at CR
         var test_slice = Slice(0, 5)  # End at CR position
-        var result_slice = iterator._handle_windows_sep(test_slice)
+        var result_slice = iterator._strip_spaces(test_slice)
         assert_equal(result_slice.end.or_else(0), 5)  # Should be reduced
 
     except e:
@@ -1116,7 +1116,7 @@ def test_integration_with_all_methods():
 
         # Handle Windows line ending
         var line_slice = Slice(0, first_nl)
-        var clean_slice = iterator._handle_windows_sep(line_slice)
+        var clean_slice = iterator._strip_spaces(line_slice)
         assert_equal(
             clean_slice.end.or_else(0), first_nl - 1
         )  # Should remove CR
