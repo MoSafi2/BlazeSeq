@@ -6,3 +6,4 @@
 *.egg-info
 # magic environments
 .magic
+test_file.mojo

@@ -147,6 +147,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     var buf: InnerBuffer
     var head: Int
     var end: Int
+    var _EOF: Bool
 
     fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
         if path.exists():
@@ -157,7 +158,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         self.buf = InnerBuffer(capacity)
         self.head = 0
         self.end = 0
-        # _ = self._fill_buffer()
+        self._EOF = False
 
     @always_inline
     fn _left_shift(mut self) raises:
@@ -186,10 +187,14 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         var nels = self.uninatialized_space()
         var amt = self.source.read_to_buffer(self.buf, nels, self.end)
 
+        self.end += Int(amt)
+        if amt < nels:
+            self._EOF = True
+
         @parameter
         if check_ascii:
             self._check_ascii()
-        self.end += Int(amt)
+
         return amt
 
     @always_inline
@@ -227,10 +232,20 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         var line_start = self.head
         var line_end = self._get_next_line_index()
 
+        # Handle EOF with no newline
+        if line_end == -1 and self._EOF and self.head != self.end:
+            return slice(line_start, self.end)
+
         # Handle Broken line
         if line_end == -1:
             _ = self._fill_buffer()
             line_end = self._get_next_line_index()
+
+        if line_end == -1:
+            raise Error(
+                "can't find the line end, buffer maybe too small. consider"
+                " increasing buffer size"
+            )
 
         self.head = line_end + 1
         return slice(line_start, line_end)
@@ -258,7 +273,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     @always_inline
     fn _check_ascii(self) raises:
         var aligned_end = math.align_down(self.len(), simd_width) + self.head
-        alias bit_mask = 0x80  # Non negative
+        alias bit_mask: UInt8 = 0x80  # Non negative
         for i in range(self.head, aligned_end, simd_width):
             var vec = self.buf.ptr.load[width=simd_width](i)
             if (vec & bit_mask).reduce_or():
@@ -293,7 +308,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         return self.end - self.head
 
     @always_inline
-    fn __str__(self) -> String:
+    fn __str__(self) raises -> String:
         var s = self.buf.as_span()
         sl = slice(self.head, self.end)
         return String(bytes=s.__getitem__(sl))

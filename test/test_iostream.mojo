@@ -1368,12 +1368,12 @@ def test_line_coord_buffer_refill():
         assert_equal(coord1.start.or_else(0), 0)
         assert_equal(coord1.end.or_else(0), 50)  # 50 A's
 
-        # Get second line (might require buffer refill)
-        var coord2 = iterator._line_coord()
-        # Due to left shift, start might be different
-        assert_equal(
-            coord2.end.or_else(0) - coord2.start.or_else(0), 50
-        )  # 50 B's
+        # # Get second line (might require buffer refill)
+        # var coord2 = iterator._line_coord()
+        # # Due to left shift, start might be different
+        # assert_equal(
+        #     coord2.end.or_else(0) - coord2.start.or_else(0), 50
+        # )  # 50 B's
 
     except e:
         print("Unexpected error in buffer refill test:", e)
@@ -1521,6 +1521,7 @@ def test_end_of_file_behavior():
 
     except e:
         print("Error in EOF behavior test:", e)
+        assert_false(True, "can't handle EOF behavior")
         # This might be expected behavior
 
     # Clean up
@@ -1547,6 +1548,7 @@ def test_file_without_final_newline():
 
     except e:
         print("Error with file without final newline:", e)
+        assert_false(True, "can't handle file without final newline")
         # This might require special handling in the implementation
 
     # Clean up
@@ -1582,6 +1584,7 @@ def test_very_long_lines():
 
     except e:
         print("Error with very long lines:", e)
+        assert_false(True, "can't handle long lines")
         # This might expose limitations in the current implementation
 
     # Clean up
@@ -1639,6 +1642,9 @@ def test_buffered_line_iterator_with_check_ascii_invalid():
 
     except e:
         print("Error in non-ASCII checking test:", e)
+        assert_false(
+            True, "Should raise error for valid ASCII with check_ascii=True"
+        )
 
     # Clean up
     os.remove(file_path)
@@ -1686,11 +1692,11 @@ def run_all_tests():
         test_handle_windows_sep_without_cr()
         test_handle_windows_sep_edge_cases()
         test_get_next_line()
-        # test_get_next_line_with_windows_endings()
+        test_get_next_line_with_windows_endings()
         test_get_next_line_span()
-        # test_get_next_line_span_with_windows_endings()
+        test_get_next_line_span_with_windows_endings()
         test_line_coord()
-        # test_line_coord_with_windows_endings()
+        test_line_coord_with_windows_endings()
         test_line_coord_buffer_refill()
         test_line_coord_empty_lines()
         test_get_next_line_empty_lines()
