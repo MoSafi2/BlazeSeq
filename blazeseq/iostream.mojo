@@ -246,8 +246,6 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 " increasing buffer size"
             )
 
-        # sl = Slice(line_start, line_end)
-        # sl_stripped = self._strip_spaces(sl)
         self.head = line_end + 1
         return self[line_start:line_end]
 
