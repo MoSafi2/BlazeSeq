@@ -105,7 +105,6 @@ struct InnerBuffer(Movable, Copyable):
     fn resize(mut self, new_len: Int) raises -> Bool:
         if new_len < self._len:
             raise Error("New length must be greater than current length")
-
         var new_ptr = UnsafePointer[Byte].alloc(new_len)
         memcpy(dest=new_ptr, src=self.ptr, count=self._len)
         self.ptr = new_ptr
@@ -191,7 +190,8 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
 
         @parameter
         if check_ascii:
-            self._check_ascii()
+            var s = self.buf.as_span_mut()[self.head : self.end]
+            _check_ascii(s)
 
         return amt
 
@@ -236,8 +236,9 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             return self[line_start : self.end]
 
         # Handle Broken line
-        if line_end == -1:
+        elif line_end == -1:
             _ = self._fill_buffer()
+            line_start = self.head
             line_end = self._get_next_line_index()
 
         if line_end == -1:
@@ -246,17 +247,11 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 " increasing buffer size"
             )
 
+        if line_end < line_start:
+            raise Error("Line start is larger than line end, raising error")
+
         self.head = line_end + 1
         return self[line_start:line_end]
-
-    # @always_inline
-    # fn _line_coord_missing_line(mut self) raises -> Slice:
-    #     self._resize_buf(self.capacity(), MAX_CAPACITY)
-    #     _ = self._fill_buffer()
-    #     var line_start = self.head
-    #     var line_end = self._get_next_line_index()
-    #     self.head = line_end + 1
-    #     return slice(line_start, line_end)
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
@@ -268,19 +263,6 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         else:
             nels = self.capacity() + amt
         _ = self.buf.resize(nels)
-
-    @always_inline
-    fn _check_ascii(self) raises:
-        var aligned_end = math.align_down(self.len(), simd_width) + self.head
-        alias bit_mask: UInt8 = 0x80  # Non negative
-        for i in range(self.head, aligned_end, simd_width):
-            var vec = self.buf.ptr.load[width=simd_width](i)
-            if (vec & bit_mask).reduce_or():
-                raise Error("Non ASCII letters found")
-
-        for i in range(aligned_end, self.end):
-            if self.buf[i] & bit_mask != 0:
-                raise Error("Non ASCII letters found")
 
     # TODO: Should be free-standing function to find a haystack in a buffer and return an Index, sliceing should be done some where else.
     # TODO: Benchmark this implementation agaist ExtraMojo implementation
@@ -297,23 +279,6 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             if self.buf[i] == NEW_LINE:
                 return i
         return -1
-
-    # TODO: Should be free-standing function to find a haystack in a buffer and return an Index, sliceing should be done some where else.
-    # TODO: Should get a Span instead of a slice
-    @always_inline
-    fn _strip_spaces(self, in_slice: Slice) raises -> Slice:
-        var start = in_slice.start.or_else(0)
-        var end = in_slice.end.or_else(0)
-        len = end - start
-        for i in range(len):
-            if not is_posix_space(self.buf[i]):
-                start = i
-                break
-        for i in range(len, 0):
-            if not is_posix_space(self.buf[i]):
-                end = i
-                break
-        return Slice(start, end)
 
     @always_inline
     fn __len__(self) -> Int:
@@ -362,7 +327,7 @@ fn _strip_spaces[
         if not is_posix_space(in_slice[i]):
             start = i
             break
-    for i in range(len(in_slice) -1, -1, -1):
+    for i in range(len(in_slice) - 1, -1, -1):
         if not is_posix_space(in_slice[i]):
             end = i + 1
             break
@@ -371,6 +336,38 @@ fn _strip_spaces[
         ptr=in_slice.unsafe_ptr() + start, length=end - start
     )
     return out_span
+
+
+@always_inline
+fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
+    var aligned_end = math.align_down(len(buffer), simd_width)
+    alias bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
+
+    for i in range(0, aligned_end, simd_width):
+        var vec = buffer.unsafe_ptr().load[width=simd_width](i)
+        if (vec & bit_mask).reduce_or():
+            raise Error("Non ASCII letters found")
+
+    for i in range(aligned_end, len(buffer)):
+        if buffer.unsafe_ptr()[i] & bit_mask != 0:
+            raise Error("Non ASCII letters found")
+
+
+@always_inline
+fn _get_next_line_index[
+    mut: Bool, //, o: Origin[mut]
+](buffer: Span[Byte, o]) raises -> Int:
+    var aligned_end = math.align_down(len(buffer), simd_width)
+    for i in range(0, aligned_end, simd_width):
+        var v = buffer.unsafe_ptr().load[width=simd_width](i)
+        var mask = v == NEW_LINE
+        if mask.reduce_or():
+            return i + arg_true(mask)
+
+    for i in range(aligned_end, len(buffer)):
+        if buffer.unsafe_ptr()[i] == NEW_LINE:
+            return i
+    return -1
 
 
 # Ported from the is_posix_space() in Mojo Stdlib
@@ -398,28 +395,3 @@ fn is_posix_space(c: Byte) -> Bool:
         or c == GROUP_SEP
         or c == RECORD_SEP
     )
-
-
-# fn main() raises:
-#     var path = Path(
-#         "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR4381933_1.fastq"
-#     )
-#     var reader = BufferedLineIterator(path, capacity=256)
-
-#     var n = 0
-#     t1 = time.perf_counter_ns()
-#     while True:
-#         try:
-#             var line = reader.read_next_coord()
-#             print(StringSlice[origin=StaticConstantOrigin](
-#                 ptr=line.unsafe_ptr(), length=len(line)
-#             ))
-#             n += 1
-#             if n == 50:
-#                 break
-#         except Error:
-#             print(Error)
-#             break
-#     print(n)
-#     t2 = time.perf_counter_ns()
-#     print("Time taken:", (t2 - t1) / 1e9)

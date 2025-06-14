@@ -1,10 +1,9 @@
-from benchmark import keep
-from os.fstat import stat
-from memory import UnsafePointer, OwnedPointer
-from collections import InlineArray
-
+from blazeseq.iostream import BufferedLineIterator
 fn main() raises:
-    var x = OwnedPointer(InlineArray[UInt8, size=500*1024*1024](uninitialized=True))
-    var y = Span[origin=__origin_of(x)](ptr=x.unsafe_ptr(), length=6400)
-    var z = rebind[dest_type=Span[origin=__origin_of(x), T=UInt8]](y[1:5000])
-    print((String(bytes=z)))
+    var iterator = BufferedLineIterator("/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq", capacity=300)
+    n = 0
+    while True:
+        print(iterator.get_next_line())
+        n +=1
+        if n == 10:
+            break

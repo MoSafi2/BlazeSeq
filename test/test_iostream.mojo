@@ -1359,44 +1359,25 @@ def test_line_coord_buffer_refill():
 
     # Create content larger than buffer to test refilling
     var large_content = "A" * 50 + "\n" + "B" * 50 + "\n" + "C" * 50 + "\n"
-    print(large_content)
     var file_path = create_test_file(large_content)
     var iterator = BufferedLineIterator(file_path, 80)  # Small buffer
 
-    # try:
-    #     # Get first line (should fit in buffer)
-    #     var coord1 = iterator.get_next_line_span()
-    #     assert_equal(coord1[0], ord("A"))
-    #     assert_equal(coord1[-1], ord("A"))  # 50 A's
+    try:
+        # Get first line (should fit in buffer)
+        var coord1 = iterator.get_next_line_span()
+        assert_equal(coord1[0], ord("A"))
+        assert_equal(coord1[-1], ord("A"))  # 50 A's
 
-    #     # Get second line (might require buffer refill)
-    #     var coord2 = iterator.get_next_line_span()
-    #     print(String(bytes=coord2))
-    #     # Due to left shift, start might be different
-    #     # assert_equal(len(coord2), 50)  # 50 B's
-    #     raise Error("stop Here")
-    # except e:
-        # print("Unexpected error in buffer refill test:", e)
-        # assert_false(
-        #     True,
-        #     "Should handle buffer refilling during line coordinate calculation",
-        # )
-
-    var coord1 = iterator.get_next_line_span()
-    assert_equal(coord1[0], ord("A"))
-    print(String(bytes=coord1))
-    assert_equal(coord1[-1], ord("A"))  # 50 A's
-
-    # Get second line (might require buffer refill)
-    var coord2 = iterator.get_next_line_span()
-    print(String(bytes=coord2))
-    print(len(coord2))
-    var coord3 = iterator.get_next_line_span()
-    print(String(bytes=coord3))
-    # Due to left shift, start might be different
-    # assert_equal(len(coord2), 50)  # 50 B's
-    raise Error("stop Here")
-
+        # Get second line (might require buffer refill)
+        var coord2 = iterator.get_next_line_span()
+        # Due to left shift, start might be different
+        assert_equal(len(coord2), 50)  # 50 B's
+    except e:
+        print("Unexpected error in buffer refill test:", e)
+        assert_false(
+            True,
+            "Should handle buffer refilling during line coordinate calculation",
+        )
 
     # Clean up
     os.remove(file_path)
