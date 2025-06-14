@@ -228,17 +228,19 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         if self._check_buf_state():
             _ = self._fill_buffer()
         var line_start = self.head
-        var line_end = _get_next_line_index(self.as_span_mut())
+        var line_end = _get_next_line_index(self.as_span_mut(), self.head)
 
         # EOF with no newline
         if line_end == -1 and self.IS_EOF and self.head != self.end:
             return self[line_start : self.end]
 
         # Handle Broken line
-        elif line_end == -1:
+        if line_end == -1:
             _ = self._fill_buffer()
             line_start = self.head
-            line_end = _get_next_line_index(self.as_span_mut())
+            line_end = line_start + _get_next_line_index(
+                self.as_span_mut(), self.head
+            )
 
         if line_end == -1:
             raise Error(
@@ -262,7 +264,6 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         else:
             nels = self.capacity() + amt
         _ = self.buf.resize(nels)
-
 
     @always_inline
     fn as_span(self) raises -> Span[Byte, __origin_of(self.buf)]:
@@ -348,17 +349,17 @@ fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
 @always_inline
 fn _get_next_line_index[
     mut: Bool, //, o: Origin[mut]
-](buffer: Span[Byte, o]) raises -> Int:
+](buffer: Span[Byte, o], offset: Int = 0) raises -> Int:
     var aligned_end = math.align_down(len(buffer), simd_width)
     for i in range(0, aligned_end, simd_width):
         var v = buffer.unsafe_ptr().load[width=simd_width](i)
         var mask = v == NEW_LINE
         if mask.reduce_or():
-            return i + arg_true(mask)
+            return offset + i + arg_true(mask)
 
     for i in range(aligned_end, len(buffer)):
         if buffer.unsafe_ptr()[i] == NEW_LINE:
-            return i
+            return offset + i
     return -1
 
 
