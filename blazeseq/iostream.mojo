@@ -19,31 +19,32 @@ alias NEW_LINE = 10
 # Minimial Implementation that support only line iterations
 
 
-# trait Reader:
-#     pass
-#     fn read_bytes(mut self, amt: Int) raises -> List[UInt8]:
-#         ...
+trait Reader:
+    pass
 
-#     fn read_to_buffer(
-#         mut self, mut buf: BufferedLineIterator, buf_pos: Int, amt: Int
-#     ) raises -> Int64:
-#         ...
+    fn read_bytes(mut self, amt: Int) raises -> List[Byte]:
+        ...
 
-#     fn __moveinit__(mut self, owned other: Self):
-#         ...
+    fn read_to_buffer(
+        mut self, mut buf: BufferedLineIterator, buf_pos: Int, amt: Int
+    ) raises -> Int64:
+        ...
+
+    fn __moveinit__(out self, owned other: Self):
+        ...
 
 
-@fieldwise_init
-struct FileReader:
+struct FileReader(Movable):
     var handle: FileHandle
 
     fn __init__(out self, path: Path) raises:
         self.handle = open(path, "r")
 
     @always_inline
-    fn read_bytes(mut self, amt: Int = -1) raises -> List[UInt8]:
+    fn read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
         return self.handle.read_bytes(amt)
 
+    # TODO: Change this to take a mut Span or or UnsafePointer
     @always_inline
     fn read_to_buffer(
         mut self, mut buf: InnerBuffer, amt: Int, pos: Int = 0
@@ -59,24 +60,21 @@ struct FileReader:
         read = self.handle.read(buffer=s)
         return read
 
-    fn __moveinit__(out self, owned other: Self):
-        self.handle = other.handle^
 
-
-@value
-struct InnerBuffer:
-    var ptr: UnsafePointer[UInt8]
+struct InnerBuffer(Movable, Copyable):
+    var ptr: UnsafePointer[Byte]
     var _len: Int
 
     fn __init__(out self, length: Int):
-        self.ptr = UnsafePointer[UInt8].alloc(length)
+        self.ptr = UnsafePointer[Byte].alloc(length)
         self._len = length
 
-    fn __init__(out self, ptr: UnsafePointer[UInt8], length: Int):
+    # TODO: Check if this constructor is necessary
+    fn __init__(out self, ptr: UnsafePointer[Byte], length: Int):
         self.ptr = ptr
         self._len = length
 
-    fn __getitem__(self, index: Int) raises -> UInt8:
+    fn __getitem__(self, index: Int) raises -> Byte:
         if index < self._len:
             return self.ptr[index]
         else:
@@ -98,7 +96,7 @@ struct InnerBuffer:
         ptr = self.ptr + start
         return Span[Byte, __origin_of(self)](ptr=ptr, length=len)
 
-    fn __setitem__(mut self, index: Int, value: UInt8) raises:
+    fn __setitem__(mut self, index: Int, value: Byte) raises:
         if index < self._len:
             self.ptr[index] = value
         else:
@@ -108,7 +106,7 @@ struct InnerBuffer:
         if new_len < self._len:
             raise Error("New length must be greater than current length")
 
-        var new_ptr = UnsafePointer[UInt8].alloc(new_len)
+        var new_ptr = UnsafePointer[Byte].alloc(new_len)
         memcpy(dest=new_ptr, src=self.ptr, count=self._len)
         self.ptr = new_ptr
         self._len = new_len
@@ -134,11 +132,8 @@ struct InnerBuffer:
         if self.ptr:
             self.ptr.free()
 
-    fn __moveinit__(out self, owned other: Self):
-        self.ptr = other.ptr
-        self._len = other._len
 
-
+# TODO: Should be generic over reader
 struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
@@ -147,7 +142,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     var buf: InnerBuffer
     var head: Int
     var end: Int
-    var _EOF: Bool
+    var IS_EOF: Bool
 
     fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
         if path.exists():
@@ -158,7 +153,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         self.buf = InnerBuffer(capacity)
         self.head = 0
         self.end = 0
-        self._EOF = False
+        self.IS_EOF = False
 
     @always_inline
     fn _left_shift(mut self) raises:
@@ -183,13 +178,16 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     @always_inline
     fn _fill_buffer(mut self) raises -> UInt64:
         """Returns the number of bytes read into the buffer."""
+        if self.IS_EOF:
+            return 0
+
         self._left_shift()
         var nels = self.uninatialized_space()
         var amt = self.source.read_to_buffer(self.buf, nels, self.end)
 
         self.end += Int(amt)
         if amt < nels:
-            self._EOF = True
+            self.IS_EOF = True
 
         @parameter
         if check_ascii:
@@ -216,25 +214,26 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
     @always_inline
     fn get_next_line(mut self) raises -> String:
         var line_coord = self._line_coord()
-        line_span = self[line_coord]
-        return String(bytes=line_span)
+        st_line = st_line = _strip_spaces(line_coord)
+        return String(bytes=st_line)
 
     @always_inline
     fn get_next_line_span(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
-        var line_coord = self._line_coord()
-        return self[line_coord]
+        line = self._line_coord()
+        st_line = _strip_spaces(line)
+        return st_line
 
     # TODO: Check how safe this function is and if it can return null buffer
     @always_inline
-    fn _line_coord(mut self) raises -> Slice:
+    fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
         if self._check_buf_state():
             _ = self._fill_buffer()
         var line_start = self.head
         var line_end = self._get_next_line_index()
 
-        # Handle EOF with no newline
-        if line_end == -1 and self._EOF and self.head != self.end:
-            return slice(line_start, self.end)
+        # EOF with no newline
+        if line_end == -1 and self.IS_EOF and self.head != self.end:
+            return self[line_start : self.end]
 
         # Handle Broken line
         if line_end == -1:
@@ -247,10 +246,10 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 " increasing buffer size"
             )
 
-        sl = Slice(line_start, line_end)
-        sl_stripped = self._strip_spaces(sl)
+        # sl = Slice(line_start, line_end)
+        # sl_stripped = self._strip_spaces(sl)
         self.head = line_end + 1
-        return sl_stripped
+        return self[line_start:line_end]
 
     # @always_inline
     # fn _line_coord_missing_line(mut self) raises -> Slice:
@@ -285,6 +284,8 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             if self.buf[i] & bit_mask != 0:
                 raise Error("Non ASCII letters found")
 
+    # TODO: Should be free-standing function to find a haystack in a buffer and return an Index, sliceing should be done some where else.
+    # TODO: Benchmark this implementation agaist ExtraMojo implementation
     @always_inline
     fn _get_next_line_index(self) raises -> Int:
         var aligned_end = math.align_down(self.len(), simd_width) + self.head
@@ -299,6 +300,8 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 return i
         return -1
 
+    # TODO: Should be free-standing function to find a haystack in a buffer and return an Index, sliceing should be done some where else.
+    # TODO: Should get a Span instead of a slice
     @always_inline
     fn _strip_spaces(self, in_slice: Slice) raises -> Slice:
         var start = in_slice.start.or_else(0)
@@ -324,7 +327,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         sl = slice(self.head, self.end)
         return String(bytes=s.__getitem__(sl))
 
-    fn __getitem__(self, index: Int) raises -> UInt8:
+    fn __getitem__(self, index: Int) raises -> Byte:
         if self.head > index or index >= self.end:
             raise Error("Out of bounds")
         return self.buf[index]
@@ -351,30 +354,53 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
     return -1
 
 
-# Ported from the is_posix_space in Mojo Stdlib
 @always_inline
-fn is_posix_space(c: UInt8) -> Bool:
-    alias ` ` = UInt8(ord(" "))
-    alias `\t` = UInt8(ord("\t"))
-    alias `\n` = UInt8(ord("\n"))
-    alias `\r` = UInt8(ord("\r"))
-    alias `\f` = UInt8(ord("\f"))
-    alias `\v` = UInt8(ord("\v"))
-    alias `\x1c` = UInt8(ord("\x1c"))
-    alias `\x1d` = UInt8(ord("\x1d"))
-    alias `\x1e` = UInt8(ord("\x1e"))
+fn _strip_spaces[
+    mut: Bool, //, o: Origin[mut]
+](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
+
+    var start = 0
+    var end = len(in_slice)
+    for i in range(len(in_slice)):
+        if not is_posix_space(in_slice[i]):
+            start = i
+            break
+    for i in range(len(in_slice), -1, -1):
+        if not is_posix_space(in_slice[i]):
+            end = i
+            break
+    out_span = Span[Byte, o](
+        ptr=in_slice.unsafe_ptr() + start, length=end - start
+    )
+
+    print(String(bytes=out_span))
+    return out_span
+
+
+# Ported from the is_posix_space() in Mojo Stdlib
+@always_inline
+fn is_posix_space(c: Byte) -> Bool:
+    alias SPACE = Byte(ord(" "))
+    alias HORIZONTAL_TAB = Byte(ord("\t"))
+    alias NEW_LINE = Byte(ord("\n"))
+    alias CARRIAGE_RETURN = Byte(ord("\r"))
+    alias FORM_FEED = Byte(ord("\f"))
+    alias VERTICAL_TAB = Byte(ord("\v"))
+    alias FILE_SEP = Byte(ord("\x1c"))
+    alias GROUP_SEP = Byte(ord("\x1d"))
+    alias RECORD_SEP = Byte(ord("\x1e"))
 
     # This compiles to something very clever that's even faster than a LUT.
     return (
-        c == ` `
-        or c == `\t`
-        or c == `\n`
-        or c == `\r`
-        or c == `\f`
-        or c == `\v`
-        or c == `\x1c`
-        or c == `\x1d`
-        or c == `\x1e`
+        c == SPACE
+        or c == HORIZONTAL_TAB
+        or c == NEW_LINE
+        or c == CARRIAGE_RETURN
+        or c == FORM_FEED
+        or c == VERTICAL_TAB
+        or c == FILE_SEP
+        or c == GROUP_SEP
+        or c == RECORD_SEP
     )
 
 
