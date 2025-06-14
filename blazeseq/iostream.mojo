@@ -49,7 +49,7 @@ struct FileReader(Movable):
     fn read_to_buffer(
         mut self, mut buf: InnerBuffer, amt: Int, pos: Int = 0
     ) raises -> UInt64:
-        s = buf.as_span_mut(pos=pos)
+        s = buf.as_span(pos=pos)
         if amt > len(s):
             raise Error(
                 "Number of elements to read is bigger than the available space"
@@ -118,14 +118,6 @@ struct InnerBuffer(Movable, Copyable):
             raise Error("Position is outside the buffer")
         return Span[Byte, o](ptr=self.ptr + pos, length=self._len - pos)
 
-    fn as_span_mut(
-        mut self, pos: Int = 0
-    ) raises -> Span[Byte, __origin_of(self)]:
-        if pos > self._len:
-            raise Error("Position is outside the buffer")
-        return Span[Byte, __origin_of(self)](
-            ptr=self.ptr + pos, length=self._len - pos
-        )
 
     fn __del__(owned self):
         if self.ptr:
@@ -190,7 +182,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
 
         @parameter
         if check_ascii:
-            var s = self.buf.as_span_mut()[self.head : self.end]
+            var s = self.buf.as_span()[self.head : self.end]
             _check_ascii(s)
 
         return amt
@@ -247,10 +239,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 "can't find the line end, buffer maybe too small. consider"
                 " increasing buffer size"
             )
-
-        if line_end < line_start:
-            raise Error("Line start is larger than line end, raising error")
-
+        
         self.head = line_end + 1
         return self[line_start:line_end]
 
@@ -282,11 +271,13 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         sl = slice(self.head, self.end)
         return String(bytes=s.__getitem__(sl))
 
+    @always_inline
     fn __getitem__(self, index: Int) raises -> Byte:
         if self.head > index or index >= self.end:
             raise Error("Out of bounds")
         return self.buf[index]
 
+    @always_inline
     fn __getitem__(
         mut self, sl: Slice
     ) raises -> Span[Byte, __origin_of(self.buf)]:
