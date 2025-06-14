@@ -311,9 +311,9 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
 
 
 @value
-struct RecordCoord[mut: Bool, //, o: Origin[mut], validate_quality: Bool = False](
-    Sized, Writable, Movable, Copyable
-):
+struct RecordCoord[
+    mut: Bool, //, o: Origin[mut], validate_quality: Bool = False
+](Sized, Writable, Movable, Copyable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 

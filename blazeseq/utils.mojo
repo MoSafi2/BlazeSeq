@@ -1,0 +1,98 @@
+from memory import pack_bits
+from blazeseq.CONSTS import simd_width
+from bit import count_trailing_zeros
+import math
+
+
+alias NEW_LINE = 10
+
+
+@always_inline
+fn _strip_spaces[
+    mut: Bool, //, o: Origin[mut]
+](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
+    var start = 0
+    var end = len(in_slice)
+    for i in range(0, len(in_slice)):
+        if not is_posix_space(in_slice[i]):
+            start = i
+            break
+    for i in range(len(in_slice) - 1, -1, -1):
+        if not is_posix_space(in_slice[i]):
+            end = i + 1
+            break
+
+    out_span = Span[Byte, o](
+        ptr=in_slice.unsafe_ptr() + start, length=end - start
+    )
+    return out_span
+
+
+@always_inline
+fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
+    var aligned_end = math.align_down(len(buffer), simd_width)
+    alias bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
+
+    for i in range(0, aligned_end, simd_width):
+        var vec = buffer.unsafe_ptr().load[width=simd_width](i)
+        if (vec & bit_mask).reduce_or():
+            raise Error("Non ASCII letters found")
+
+    for i in range(aligned_end, len(buffer)):
+        if buffer.unsafe_ptr()[i] & bit_mask != 0:
+            raise Error("Non ASCII letters found")
+
+
+# TODO: Benchmark this implementation agaist ExtraMojo implementation
+# Ported partially from ExtraMojo: https://github.com/ExtraMojo/ExtraMojo
+@always_inline
+fn _get_next_line_index[
+    mut: Bool, //, o: Origin[mut]
+](buffer: Span[Byte, o], offset: Int = 0) raises -> Int:
+    if len(buffer) < simd_width:
+        for i in range(0, len(buffer)):
+            if buffer.unsafe_ptr()[i] == NEW_LINE:
+                return offset + i
+            return -1
+
+    var aligned_end = math.align_down(len(buffer), simd_width)
+    for i in range(0, aligned_end, simd_width):
+        var v = buffer.unsafe_ptr().load[width=simd_width](i)
+        var mask = v == NEW_LINE
+
+        var packed = pack_bits(mask)
+        if packed:
+            var index = Int(count_trailing_zeros(packed))
+            return offset + i + index
+
+    for i in range(aligned_end, len(buffer)):
+        if buffer.unsafe_ptr()[i] == NEW_LINE:
+            return offset + i
+    return -1
+
+
+# Ported from the is_posix_space() in Mojo Stdlib
+@always_inline
+fn is_posix_space(c: Byte) -> Bool:
+    alias SPACE = Byte(ord(" "))
+    alias HORIZONTAL_TAB = Byte(ord("\t"))
+    alias NEW_LINE = Byte(ord("\n"))
+    alias CARRIAGE_RETURN = Byte(ord("\r"))
+    alias FORM_FEED = Byte(ord("\f"))
+    alias VERTICAL_TAB = Byte(ord("\v"))
+    alias FILE_SEP = Byte(ord("\x1c"))
+    alias GROUP_SEP = Byte(ord("\x1d"))
+    alias RECORD_SEP = Byte(ord("\x1e"))
+
+    # This compiles to something very clever that's even faster than a LUT.
+    return (
+        c == SPACE
+        or c == HORIZONTAL_TAB
+        or c == NEW_LINE
+        or c == CARRIAGE_RETURN
+        or c == FORM_FEED
+        or c == VERTICAL_TAB
+        or c == FILE_SEP
+        or c == GROUP_SEP
+        or c == RECORD_SEP
+    )

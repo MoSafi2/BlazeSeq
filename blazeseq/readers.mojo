@@ -11,6 +11,7 @@ BufferedReader.
 from memory import memset_zero, UnsafePointer
 from sys import ffi
 from sys.info import os_is_macos
+from blazeseq.iostream import Reader, InnerBuffer
 
 
 # Constants for zlib return codes
@@ -81,7 +82,7 @@ struct ZLib:
         return func(file, buffer, length)
 
 
-struct GZFile:
+struct GZFile(Movable, Reader):
     """Helper class for gzip file operations."""
 
     var handle: c_void_ptr
@@ -109,6 +110,25 @@ struct GZFile:
         self.lib = other.lib^
         self.filename = other.filename^
         self.mode = other.mode^
+
+    fn read_to_buffer(
+        mut self, mut buf: InnerBuffer, amt: Int, pos: Int
+    ) raises -> UInt64:
+        s = buf.as_span(pos=pos)
+        if amt > len(s):
+            raise Error(
+                "Number of elements to read is bigger than the available space"
+                " in the buffer"
+            )
+        if amt < 0:
+            if amt < 0:
+                raise Error("The amount to be read should be positive")
+
+        var bytes_read = self.lib.gzread(
+            self.handle, s.unsafe_ptr(), c_uint(len(s))
+        )
+
+        return UInt64(bytes_read)
 
     fn unbuffered_read[
         o: MutableOrigin

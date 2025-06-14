@@ -1,16 +1,7 @@
-from memory import memcpy, UnsafePointer, Span, pack_bits
-from blazeseq.CONSTS import (
-    simd_width,
-    U8,
-    DEFAULT_CAPACITY,
-    MAX_CAPACITY,
-    MAX_SHIFT,
-    carriage_return,
-)
+from memory import memcpy, UnsafePointer, Span
+from blazeseq.CONSTS import DEFAULT_CAPACITY
+from blazeseq.utils import _check_ascii, _get_next_line_index, _strip_spaces
 from pathlib import Path
-from bit import count_trailing_zeros
-import time
-import math
 
 
 alias NEW_LINE = 10
@@ -21,21 +12,16 @@ alias NEW_LINE = 10
 
 
 trait Reader:
-    pass
-
-    fn read_bytes(mut self, amt: Int) raises -> List[Byte]:
-        ...
-
     fn read_to_buffer(
-        mut self, mut buf: BufferedLineIterator, buf_pos: Int, amt: Int
-    ) raises -> Int64:
+        mut self, mut buf: InnerBuffer, amt: Int, pos: Int
+    ) raises -> UInt64:
         ...
 
     fn __moveinit__(out self, owned other: Self):
         ...
 
 
-struct FileReader(Movable):
+struct FileReader(Movable, Reader):
     var handle: FileHandle
 
     fn __init__(out self, path: Path) raises:
@@ -45,7 +31,7 @@ struct FileReader(Movable):
     fn read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
         return self.handle.read_bytes(amt)
 
-    # TODO: Change this to take a mut Span or or UnsafePointer
+    # TODO: Change this to take a mut Span or or UnsafePointer when possible
     @always_inline
     fn read_to_buffer(
         mut self, mut buf: InnerBuffer, amt: Int, pos: Int = 0
@@ -62,85 +48,21 @@ struct FileReader(Movable):
         return read
 
 
-struct InnerBuffer(Movable, Copyable):
-    var ptr: UnsafePointer[Byte]
-    var _len: Int
-
-    fn __init__(out self, length: Int):
-        self.ptr = UnsafePointer[Byte].alloc(length)
-        self._len = length
-
-    # TODO: Check if this constructor is necessary
-    fn __init__(out self, ptr: UnsafePointer[Byte], length: Int):
-        self.ptr = ptr
-        self._len = length
-
-    fn __getitem__(self, index: Int) raises -> Byte:
-        if index < self._len:
-            return self.ptr[index]
-        else:
-            raise Error("Out of bounds")
-
-    fn __getitem__(
-        mut self, slice: Slice
-    ) raises -> Span[Byte, __origin_of(self)]:
-        var start = slice.start.or_else(0)
-        var end = slice.end.or_else(self._len)
-        var step = slice.step.or_else(1)
-
-        if step > 1:
-            raise Error("Step loading is not supported")
-
-        if start < 0 or end > self._len:
-            raise Error("Out of bounds")
-        len = end - start
-        ptr = self.ptr + start
-        return Span[Byte, __origin_of(self)](ptr=ptr, length=len)
-
-    fn __setitem__(mut self, index: Int, value: Byte) raises:
-        if index < self._len:
-            self.ptr[index] = value
-        else:
-            raise Error("Out of bounds")
-
-    fn resize(mut self, new_len: Int) raises -> Bool:
-        if new_len < self._len:
-            raise Error("New length must be greater than current length")
-        var new_ptr = UnsafePointer[Byte].alloc(new_len)
-        memcpy(dest=new_ptr, src=self.ptr, count=self._len)
-        self.ptr = new_ptr
-        self._len = new_len
-        return True
-
-    fn as_span[
-        mut: Bool, //, o: Origin[mut]
-    ](ref [o]self, pos: Int = 0) raises -> Span[Byte, o]:
-        if pos > self._len:
-            raise Error("Position is outside the buffer")
-        return Span[Byte, o](ptr=self.ptr + pos, length=self._len - pos)
-
-    fn __del__(owned self):
-        if self.ptr:
-            self.ptr.free()
-
-
 # TODO: Should be generic over reader
-struct BufferedLineIterator[check_ascii: Bool = False](Sized):
+struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
     """A poor man's BufferedReader and LineIterator that takes as input a FileHandle or an in-memory Tensor and provides a buffered reader on-top with default capactiy.
     """
 
-    var source: FileReader
+    var source: R
     var buf: InnerBuffer
     var head: Int
     var end: Int
     var IS_EOF: Bool
 
-    fn __init__(out self, path: Path, capacity: Int = DEFAULT_CAPACITY) raises:
-        if path.exists():
-            self.source = FileReader(path)
-        else:
-            raise Error("Provided file not found for read")
-
+    fn __init__(
+        out self, owned reader: R, capacity: Int = DEFAULT_CAPACITY
+    ) raises:
+        self.source = reader^
         self.buf = InnerBuffer(capacity)
         self.head = 0
         self.end = 0
@@ -222,8 +144,12 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         var line_start = self.head
         var line_end = _get_next_line_index(self.as_span_mut(), self.head)
 
+        if line_end == -1 and self.IS_EOF and self.head == self.end:
+            raise Error("EOF")
+
         # EOF with no newline
         if line_end == -1 and self.IS_EOF and self.head != self.end:
+            self.head = self.end
             return self[line_start : self.end]
 
         # Handle Broken line
@@ -292,102 +218,63 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             raise Error("Out of bounds")
 
 
-@always_inline
-fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
-    for i in range(simd_width):
-        if v[i]:
-            return i
-    return -1
+struct InnerBuffer(Movable, Copyable):
+    var ptr: UnsafePointer[Byte]
+    var _len: Int
 
+    fn __init__(out self, length: Int):
+        self.ptr = UnsafePointer[Byte].alloc(length)
+        self._len = length
 
-@always_inline
-fn _strip_spaces[
-    mut: Bool, //, o: Origin[mut]
-](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
-    var start = 0
-    var end = len(in_slice)
-    for i in range(0, len(in_slice)):
-        if not is_posix_space(in_slice[i]):
-            start = i
-            break
-    for i in range(len(in_slice) - 1, -1, -1):
-        if not is_posix_space(in_slice[i]):
-            end = i + 1
-            break
+    # TODO: Check if this constructor is necessary
+    fn __init__(out self, ptr: UnsafePointer[Byte], length: Int):
+        self.ptr = ptr
+        self._len = length
 
-    out_span = Span[Byte, o](
-        ptr=in_slice.unsafe_ptr() + start, length=end - start
-    )
-    return out_span
+    fn __getitem__(self, index: Int) raises -> Byte:
+        if index < self._len:
+            return self.ptr[index]
+        else:
+            raise Error("Out of bounds")
 
+    fn __getitem__(
+        mut self, slice: Slice
+    ) raises -> Span[Byte, __origin_of(self)]:
+        var start = slice.start.or_else(0)
+        var end = slice.end.or_else(self._len)
+        var step = slice.step.or_else(1)
 
-@always_inline
-fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
-    var aligned_end = math.align_down(len(buffer), simd_width)
-    alias bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
+        if step > 1:
+            raise Error("Step loading is not supported")
 
-    for i in range(0, aligned_end, simd_width):
-        var vec = buffer.unsafe_ptr().load[width=simd_width](i)
-        if (vec & bit_mask).reduce_or():
-            raise Error("Non ASCII letters found")
+        if start < 0 or end > self._len:
+            raise Error("Out of bounds")
+        len = end - start
+        ptr = self.ptr + start
+        return Span[Byte, __origin_of(self)](ptr=ptr, length=len)
 
-    for i in range(aligned_end, len(buffer)):
-        if buffer.unsafe_ptr()[i] & bit_mask != 0:
-            raise Error("Non ASCII letters found")
+    fn __setitem__(mut self, index: Int, value: Byte) raises:
+        if index < self._len:
+            self.ptr[index] = value
+        else:
+            raise Error("Out of bounds")
 
+    fn resize(mut self, new_len: Int) raises -> Bool:
+        if new_len < self._len:
+            raise Error("New length must be greater than current length")
+        var new_ptr = UnsafePointer[Byte].alloc(new_len)
+        memcpy(dest=new_ptr, src=self.ptr, count=self._len)
+        self.ptr = new_ptr
+        self._len = new_len
+        return True
 
-# TODO: Benchmark this implementation agaist ExtraMojo implementation
-# Ported partially from ExtraMojo: https://github.com/ExtraMojo/ExtraMojo
-@always_inline
-fn _get_next_line_index[
-    mut: Bool, //, o: Origin[mut]
-](buffer: Span[Byte, o], offset: Int = 0) raises -> Int:
+    fn as_span[
+        mut: Bool, //, o: Origin[mut]
+    ](ref [o]self, pos: Int = 0) raises -> Span[Byte, o]:
+        if pos > self._len:
+            raise Error("Position is outside the buffer")
+        return Span[Byte, o](ptr=self.ptr + pos, length=self._len - pos)
 
-    if len(buffer) < simd_width:
-        for i in range(0, len(buffer)):
-            if buffer.unsafe_ptr()[i] == NEW_LINE:
-                return offset + i
-            return -1
-
-    var aligned_end = math.align_down(len(buffer), simd_width)
-    for i in range(0, aligned_end, simd_width):
-        var v = buffer.unsafe_ptr().load[width=simd_width](i)
-        var mask = v == NEW_LINE
-
-        var packed = pack_bits(mask)
-        if packed:
-            var index = Int(count_trailing_zeros(packed))
-            return offset + i + index
-
-    for i in range(aligned_end, len(buffer)):
-        if buffer.unsafe_ptr()[i] == NEW_LINE:
-            return offset + i
-    return -1
-
-
-# Ported from the is_posix_space() in Mojo Stdlib
-@always_inline
-fn is_posix_space(c: Byte) -> Bool:
-    alias SPACE = Byte(ord(" "))
-    alias HORIZONTAL_TAB = Byte(ord("\t"))
-    alias NEW_LINE = Byte(ord("\n"))
-    alias CARRIAGE_RETURN = Byte(ord("\r"))
-    alias FORM_FEED = Byte(ord("\f"))
-    alias VERTICAL_TAB = Byte(ord("\v"))
-    alias FILE_SEP = Byte(ord("\x1c"))
-    alias GROUP_SEP = Byte(ord("\x1d"))
-    alias RECORD_SEP = Byte(ord("\x1e"))
-
-    # This compiles to something very clever that's even faster than a LUT.
-    return (
-        c == SPACE
-        or c == HORIZONTAL_TAB
-        or c == NEW_LINE
-        or c == CARRIAGE_RETURN
-        or c == FORM_FEED
-        or c == VERTICAL_TAB
-        or c == FILE_SEP
-        or c == GROUP_SEP
-        or c == RECORD_SEP
-    )
-
+    fn __del__(owned self):
+        if self.ptr:
+            self.ptr.free()
