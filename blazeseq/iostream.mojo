@@ -131,6 +131,11 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
         st_line = st_line = _strip_spaces(line_coord)
         return String(bytes=st_line)
 
+    fn get_next_line_bytes(mut self) raises -> List[Byte]:
+        var line_coord = self._line_coord()
+        st_line = st_line = _strip_spaces(line_coord)
+        return List[Byte](st_line)
+
     @always_inline
     fn get_next_line_span(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
         line = self._line_coord()

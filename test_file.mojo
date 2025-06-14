@@ -4,17 +4,21 @@ from blazeseq.parser import CoordParser, RecordParser
 
 
 fn main() raises:
-    var iterator = CoordParser[check_ascii=False, check_quality=False](
+    var iterator = RecordParser[check_ascii=False, check_quality=False](
         FileReader(
-            "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq"
+            "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq",
         )
     )
-    var n = 0
+    var count = 0
+    var slen = 0
+    var qlen = 0
     while True:
         try:
-            _ = iterator.next()
-            n += 1
+            var r = iterator.next()
+            count += 1
+            slen += r.len_record()
+            qlen += r.len_quality()
         except:
             break
 
-    print(n)
+    print(count, slen, qlen, sep="\t")
