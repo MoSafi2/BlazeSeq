@@ -1,13 +1,5 @@
-from blazeseq.iostream import BufferedLineIterator
+from blazeseq.parser import CoordParser
 fn main() raises:
-    var iterator = BufferedLineIterator("/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq", capacity=4096)
-    n = 0
-
-    while True:
-        try:
-            var x = iterator.get_next_line_span()
-            n+= 1 
-        except:
-            break
+    var iterator = CoordParser[validate_ascii=False, validate_quality=False]("/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq")
+    var x = iterator.parse_all()
     
-    print(n/4)
