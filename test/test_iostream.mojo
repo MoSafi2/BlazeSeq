@@ -1286,24 +1286,24 @@ def test_line_coord():
     try:
         # Get first line coordinates
         var coord1 = iterator._line_coord()
-        assert_equal(coord1[0], 0)
-        assert_equal(coord1[len(coord1)], 3)  # "One"
+        assert_equal(coord1[0], ord("O"))
+        assert_equal(coord1[len(coord1) - 1], ord("e"))  # "One"
 
         # Head should have moved past first line
         assert_equal(iterator.head, 4)  # After "One\n"
 
         # Get second line coordinates
         var coord2 = iterator._line_coord()
-        assert_equal(coord2[0], 4)
-        assert_equal(coord2[len(coord2)], 7)  # "Two"
+        assert_equal(coord2[0], ord("T"))
+        assert_equal(coord2[len(coord2) -1], ord("o"))  # "Two"
 
         # Head should have moved past second line
         assert_equal(iterator.head, 8)  # After "Two\n"
 
         # Get third line coordinates
         var coord3 = iterator._line_coord()
-        assert_equal(coord3[0], 8)
-        assert_equal(coord3[len(coord3)], 13)  # "Three"
+        assert_equal(coord3[0], ord("T"))
+        assert_equal(coord3[len(coord3)-1], ord("e"))  # "Three"
 
     except e:
         print("Unexpected error in _line_coord:", e)

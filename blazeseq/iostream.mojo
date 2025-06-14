@@ -358,22 +358,20 @@ fn arg_true[simd_width: Int](v: SIMD[DType.bool, simd_width]) -> Int:
 fn _strip_spaces[
     mut: Bool, //, o: Origin[mut]
 ](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
-
     var start = 0
     var end = len(in_slice)
-    for i in range(len(in_slice)):
+    for i in range(0, len(in_slice)):
         if not is_posix_space(in_slice[i]):
             start = i
             break
-    for i in range(len(in_slice), -1, -1):
+    for i in range(len(in_slice) -1, -1, -1):
         if not is_posix_space(in_slice[i]):
-            end = i
+            end = i + 1
             break
+
     out_span = Span[Byte, o](
         ptr=in_slice.unsafe_ptr() + start, length=end - start
     )
-
-    print(String(bytes=out_span))
     return out_span
 
 
