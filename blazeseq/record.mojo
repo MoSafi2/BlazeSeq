@@ -95,39 +95,43 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         return StringSlice(self.QuStr)
 
     @always_inline
-    fn get_qulity_scores(self, quality_format: String) -> StringSlice[__origin_of(self.QuStr)]:
+    fn get_qulity_scores(
+        self, quality_format: String
+    ) -> List[Byte, hint_trivial_type=True]:
         var schema = self._parse_schema((quality_format))
-        output = Tensor[U8](self.len_quality())
+        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
         for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - schema.OFFSET
+            output[i] = ord(self.QuStr[i]) - schema.OFFSET
         return output
 
     @always_inline
-    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[U8]:
-        output = Tensor[U8](self.len_quality())
+    fn get_qulity_scores(
+        self, schema: QualitySchema
+    ) -> List[Byte, hint_trivial_type=True]:
+        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
         for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - schema.OFFSET
+            output[i] = ord(self.QuStr[i]) - schema.OFFSET
         return output
 
     @always_inline
-    fn get_qulity_scores(self, offset: UInt8) -> Tensor[U8]:
-        output = Tensor[U8](self.len_quality())
+    fn get_qulity_scores(
+        self, offset: UInt8
+    ) -> List[Byte, hint_trivial_type=True]:
+        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
         for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - offset
+            output[i] = ord(self.QuStr[i]) - offset
         return output
 
     @always_inline
-    fn get_header_string(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[__origin_of(self)](
-            ptr=self.SeqHeader._ptr, length=self.SeqHeader.num_elements()
-        )
+    fn get_header_string(self) -> StringSlice[__origin_of(self.SeqHeader)]:
+        return StringSlice(self.SeqHeader)
 
     @always_inline
     fn validate_record(self) raises:
-        if self.SeqHeader[0] != read_header:
+        if ord(self.SeqHeader[0]) != read_header:
             raise Error("Sequence Header is corrupt")
 
-        if self.QuHeader[0] != quality_header:
+        if ord(self.QuHeader[0]) != quality_header:
             raise Error("Quality Header is corrupt")
 
         if self.len_record() != self.len_quality():
@@ -145,10 +149,9 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
     @always_inline
     fn validate_quality_schema(self) raises:
         for i in range(self.len_quality()):
-            if (
-                self.QuStr[i] > self.quality_schema.UPPER
-                or self.QuStr[i] < self.quality_schema.LOWER
-            ):
+            if ord(self.QuStr[i]) > Int(self.quality_schema.UPPER) or ord(
+                self.QuStr[i]
+            ) < Int(self.quality_schema.LOWER):
                 raise Error(
                     "Corrput quality score according to proivded schema"
                 )
@@ -164,26 +167,13 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         )
 
     fn write_to[w: Writer](self, mut writer: w):
-        var l1 = String(
-            ptr=self.SeqHeader.unsafe_ptr(),
-            length=self.SeqHeader.num_elements(),
-        )
-        var l2 = String(
-            ptr=self.SeqStr.unsafe_ptr(), length=self.SeqStr.num_elements()
-        )
-        var l3 = String(
-            ptr=self.QuHeader.unsafe_ptr(), length=self.QuHeader.num_elements()
-        )
-        var l4 = String(
-            ptr=self.QuStr.unsafe_ptr(), length=self.QuStr.num_elements()
-        )
-        writer.write(l1)
+        writer.write(self.SeqHeader)
         writer.write("\n")
-        writer.write(l2)
+        writer.write(self.SeqStr)
         writer.write("\n")
-        writer.write(l3)
+        writer.write(self.QuHeader)
         writer.write("\n")
-        writer.write(l4)
+        writer.write(self.QuStr)
         writer.write("\n")
 
     @staticmethod
@@ -222,19 +212,19 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
 
     @always_inline
     fn len_record(self) -> Int:
-        return self.SeqStr.num_elements()
+        return len(self.SeqStr)
 
     @always_inline
     fn len_quality(self) -> Int:
-        return self.QuStr.num_elements()
+        return len(self.QuStr)
 
     @always_inline
     fn len_qu_header(self) -> Int:
-        return self.QuHeader.num_elements()
+        return len(self.QuHeader)
 
     @always_inline
     fn len_seq_header(self) -> Int:
-        return self.SeqHeader.num_elements()
+        return len(self.SeqHeader)
 
     @always_inline
     fn hash[bits: Int = 3, length: Int = 64 // bits](self) -> UInt64:
@@ -321,23 +311,23 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
 
 
 @value
-struct RecordCoord[validate_quality: Bool = False](
+struct RecordCoord[mut: Bool, //, o: Origin[mut], validate_quality: Bool = False](
     Sized, Writable, Movable, Copyable
 ):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Span[Byte, StaticConstantOrigin]
-    var SeqStr: Span[Byte, StaticConstantOrigin]
-    var QuHeader: Span[Byte, StaticConstantOrigin]
-    var QuStr: Span[Byte, StaticConstantOrigin]
+    var SeqHeader: Span[Byte, o]
+    var SeqStr: Span[Byte, o]
+    var QuHeader: Span[Byte, o]
+    var QuStr: Span[Byte, o]
 
     fn __init__(
         out self,
-        SH: Span[Byte, StaticConstantOrigin],
-        SS: Span[Byte, StaticConstantOrigin],
-        QH: Span[Byte, StaticConstantOrigin],
-        QS: Span[Byte, StaticConstantOrigin],
+        SH: Span[Byte, o],
+        SS: Span[Byte, o],
+        QH: Span[Byte, o],
+        QS: Span[Byte, o],
     ):
         self.SeqHeader = SH
         self.SeqStr = SS

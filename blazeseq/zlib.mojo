@@ -129,13 +129,3 @@ struct GZFile:
         if bytes_read < 0:
             raise Error("Error reading from gzip file: " + String(bytes_read))
         return Int(bytes_read)
-
-
-def main():
-
-    var file = GZFile("/home/mmabrouk/Documents/Projects/BlazeSeq/data/SRR4381933_1.fastq.gz", "rb")
-    # Read and print data
-    var buffer = List[UInt8](0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    var data = file.unbuffered_read(buffer)
-    print("Bytes read:", data)
-    print("Read data:", String(StringSlice(unsafe_from_utf8=buffer)))

@@ -5,13 +5,13 @@ import time
 
 
 struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
-    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
+    var stream: BufferedLineIterator[check_ascii=validate_ascii]
     var quality_schema: QualitySchema
 
     fn __init__(out self, path: String, schema: String = "generic") raises:
-        self.stream = BufferedLineIterator[
-            FileReader, check_ascii=validate_ascii
-        ](path, DEFAULT_CAPACITY)
+        self.stream = BufferedLineIterator[check_ascii=validate_ascii](
+            path, DEFAULT_CAPACITY
+        )
         self.quality_schema = self._parse_schema(schema)
 
     fn parse_all(mut self) raises:
@@ -41,10 +41,10 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord:
-        var line1 = self.stream.read_next_line()
-        var line2 = self.stream.read_next_line()
-        var line3 = self.stream.read_next_line()
-        var line4 = self.stream.read_next_line()
+        var line1 = self.stream.get_next_line()
+        var line2 = self.stream.get_next_line()
+        var line3 = self.stream.get_next_line()
+        var line4 = self.stream.get_next_line()
         return FastqRecord(line1, line2, line3, line4, self.quality_schema)
 
     @staticmethod
@@ -75,17 +75,16 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
 
 
 struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
-    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
+    var stream: BufferedLineIterator[check_ascii=validate_ascii]
 
     fn __init__(out self, path: String) raises:
-        self.stream = BufferedLineIterator[
-            FileReader, check_ascii=validate_ascii
-        ](path, DEFAULT_CAPACITY)
+        self.stream = BufferedLineIterator[check_ascii=validate_ascii](
+            path, DEFAULT_CAPACITY
+        )
 
     @always_inline
     fn parse_all(mut self) raises:
         while True:
-            var record: RecordCoord
             record = self._parse_record()
             record.validate()
 
@@ -94,7 +93,9 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
                 record.validate_quality_schema()
 
     @always_inline
-    fn next(mut self) raises -> RecordCoord:
+    fn next(
+        mut self,
+    ) raises -> RecordCoord[mut=False, o = __origin_of(self.stream.buf)]:
         read = self._parse_record()
         read.validate()
 
@@ -106,10 +107,18 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
     @always_inline
     fn _parse_record(
         mut self,
-    ) raises -> RecordCoord:
-        var line1 = self.stream.read_next_coord()
-        var line2 = self.stream.read_next_coord()
-        var line3 = self.stream.read_next_coord()
-        var line4 = self.stream.read_next_coord()
+    ) raises -> RecordCoord[
+        mut=False, o = __origin_of(__origin_of(self.stream.buf))
+    ]:
+        var line1 = self.stream.get_next_line_span()
 
-        return RecordCoord(line1, line2, line3, line4)
+        var line2 = self.stream.get_next_line_span()
+        var line3 = self.stream.get_next_line_span()
+        var line4 = self.stream.get_next_line_span()
+
+        return RecordCoord(
+            line1.get_immutable(),
+            line2.get_immutable(),
+            line3.get_immutable(),
+            line4.get_immutable(),
+        )
