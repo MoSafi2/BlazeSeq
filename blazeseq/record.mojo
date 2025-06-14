@@ -1,26 +1,23 @@
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedLineIterator
 from utils.variant import Variant
-from max.tensor import Tensor
 from memory import Span
 from math import align_down, remainder
 from memory import UnsafePointer
-from utils import Writable, StringSlice
+from utils import Writable
 
-alias TU8 = Tensor[U8]
 alias schema = Variant[String, QualitySchema]
 
 
-
 @value
-struct QualitySchema(CollectionElement, Writable):
-    var SCHEMA: StringLiteral
+struct QualitySchema(Movable, Copyable, Writable):
+    var SCHEMA: StaticString
     var LOWER: UInt8
     var UPPER: UInt8
     var OFFSET: UInt8
 
     fn __init__(
-        mut self, schema: StringLiteral, lower: Int, upper: Int, offset: Int
+        out self, schema: StringLiteral, lower: Int, upper: Int, offset: Int
     ):
         self.SCHEMA = schema
         self.UPPER = upper
@@ -42,22 +39,23 @@ struct QualitySchema(CollectionElement, Writable):
             + String(self.OFFSET)
         )
 
+
 @value
-struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
+struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
     """Struct that represent a single FastaQ record."""
 
-    var SeqHeader: TU8
-    var SeqStr: TU8
-    var QuHeader: TU8
-    var QuStr: TU8
+    var SeqHeader: String
+    var SeqStr: String
+    var QuHeader: String
+    var QuStr: String
     var quality_schema: QualitySchema
 
     fn __init__(
         out self,
-        SH: TU8,
-        SS: TU8,
-        QH: TU8,
-        QS: TU8,
+        SH: String,
+        SS: String,
+        QH: String,
+        QS: String,
         quality_schema: schema = "generic",
     ) raises:
         self.SeqHeader = SH
@@ -78,10 +76,10 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
         QS: String,
         quality_schema: schema = "generic",
     ):
-        self.SeqHeader = SH._buffer
-        self.SeqStr = SS._buffer
-        self.QuHeader = QH._buffer
-        self.QuStr = QS._buffer
+        self.SeqHeader = SH
+        self.SeqStr = SS
+        self.QuHeader = QH
+        self.QuStr = QS
         if quality_schema.isa[String]():
             var q: String = quality_schema[String]
             self.quality_schema = self._parse_schema(q)
@@ -89,19 +87,15 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
             self.quality_schema = quality_schema[QualitySchema]
 
     @always_inline
-    fn get_seq(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[__origin_of(self)](
-            ptr=self.SeqStr._ptr, length=self.SeqStr.num_elements()
-        )
+    fn get_seq(self) -> StringSlice[__origin_of(self.SeqStr)]:
+        return StringSlice(self.SeqStr)
 
     @always_inline
-    fn get_quality_string(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[__origin_of(self)](
-            ptr=self.QuStr._ptr, length=self.QuStr.num_elements()
-        )
+    fn get_quality_string(self) -> StringSlice[__origin_of(self.QuStr)]:
+        return StringSlice(self.QuStr)
 
     @always_inline
-    fn get_qulity_scores(self, quality_format: String) -> Tensor[U8]:
+    fn get_qulity_scores(self, quality_format: String) -> StringSlice[__origin_of(self.QuStr)]:
         var schema = self._parse_schema((quality_format))
         output = Tensor[U8](self.len_quality())
         for i in range(self.len_quality()):
@@ -328,7 +322,7 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
 
 @value
 struct RecordCoord[validate_quality: Bool = False](
-    Sized, Writable, CollectionElement
+    Sized, Writable, Movable, Copyable
 ):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """

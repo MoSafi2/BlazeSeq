@@ -1,4 +1,4 @@
-from memory import memcpy, UnsafePointer, Span
+from memory import memcpy, UnsafePointer, Span, pack_bits
 from blazeseq.CONSTS import (
     simd_width,
     U8,
@@ -8,6 +8,7 @@ from blazeseq.CONSTS import (
     carriage_return,
 )
 from pathlib import Path
+from bit import count_trailing_zeros
 import time
 import math
 
@@ -117,7 +118,6 @@ struct InnerBuffer(Movable, Copyable):
         if pos > self._len:
             raise Error("Position is outside the buffer")
         return Span[Byte, o](ptr=self.ptr + pos, length=self._len - pos)
-
 
     fn __del__(owned self):
         if self.ptr:
@@ -239,7 +239,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
                 "can't find the line end, buffer maybe too small. consider"
                 " increasing buffer size"
             )
-        
+
         self.head = line_end + 1
         return self[line_start:line_end]
 
@@ -337,16 +337,27 @@ fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
 
 
 # TODO: Benchmark this implementation agaist ExtraMojo implementation
+# Ported partially from ExtraMojo: https://github.com/ExtraMojo/ExtraMojo
 @always_inline
 fn _get_next_line_index[
     mut: Bool, //, o: Origin[mut]
 ](buffer: Span[Byte, o], offset: Int = 0) raises -> Int:
+
+    if len(buffer) < simd_width:
+        for i in range(0, len(buffer)):
+            if buffer.unsafe_ptr()[i] == NEW_LINE:
+                return offset + i
+            return -1
+
     var aligned_end = math.align_down(len(buffer), simd_width)
     for i in range(0, aligned_end, simd_width):
         var v = buffer.unsafe_ptr().load[width=simd_width](i)
         var mask = v == NEW_LINE
-        if mask.reduce_or():
-            return offset + i + arg_true(mask)
+
+        var packed = pack_bits(mask)
+        if packed:
+            var index = Int(count_trailing_zeros(packed))
+            return offset + i + index
 
     for i in range(aligned_end, len(buffer)):
         if buffer.unsafe_ptr()[i] == NEW_LINE:
@@ -379,3 +390,4 @@ fn is_posix_space(c: Byte) -> Bool:
         or c == GROUP_SEP
         or c == RECORD_SEP
     )
+
