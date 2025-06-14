@@ -1,7 +1,20 @@
 from blazeseq.iostream import FileReader, BufferedLineIterator
 from blazeseq.readers import GZFile
+from blazeseq.parser import CoordParser, RecordParser
+
+
 fn main() raises:
-    var iterator = BufferedLineIterator(GZFile("/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq.gz", "r"))
-    var x = iterator.get_next_line()
-    print(x)
-    
+    var iterator = CoordParser[check_ascii=False, check_quality=False](
+        FileReader(
+            "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq"
+        )
+    )
+    var n = 0
+    while True:
+        try:
+            _ = iterator.next()
+            n += 1
+        except:
+            break
+
+    print(n)

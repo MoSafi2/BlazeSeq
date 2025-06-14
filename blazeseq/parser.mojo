@@ -1,16 +1,18 @@
 from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.CONSTS import *
-from blazeseq.iostream import BufferedLineIterator, FileReader
+from blazeseq.iostream import BufferedLineIterator, FileReader, Reader
 import time
 
 
-struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
-    var stream: BufferedLineIterator[check_ascii=validate_ascii]
+struct RecordParser[
+    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+]:
+    var stream: BufferedLineIterator[R, check_ascii=check_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(out self, path: String, schema: String = "generic") raises:
-        self.stream = BufferedLineIterator[check_ascii=validate_ascii](
-            path, DEFAULT_CAPACITY
+    fn __init__(out self, owned reader: R, schema: String = "generic") raises:
+        self.stream = BufferedLineIterator[check_ascii=check_ascii](
+            reader^, DEFAULT_CAPACITY
         )
         self.quality_schema = self._parse_schema(schema)
 
@@ -18,12 +20,11 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         while True:
             var record: FastqRecord
             record = self._parse_record()
-            # print(record)
             record.validate_record()
 
             # ASCII validation is carried out in the reader
             @parameter
-            if validate_quality:
+            if check_ascii:
                 record.validate_quality_schema()
 
     @always_inline
@@ -35,7 +36,7 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
 
         # ASCII validation is carried out in the reader
         @parameter
-        if validate_quality:
+        if check_ascii:
             record.validate_quality_schema()
         return record
 
@@ -74,12 +75,14 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         return schema
 
 
-struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
-    var stream: BufferedLineIterator[check_ascii=validate_ascii]
+struct CoordParser[
+    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+]:
+    var stream: BufferedLineIterator[R, check_ascii=check_ascii]
 
-    fn __init__(out self, path: String) raises:
-        self.stream = BufferedLineIterator[check_ascii=validate_ascii](
-            path, DEFAULT_CAPACITY
+    fn __init__(out self, owned reader: R) raises:
+        self.stream = BufferedLineIterator[check_ascii=check_ascii](
+            reader^, DEFAULT_CAPACITY
         )
 
     @always_inline
@@ -89,7 +92,7 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
             record.validate()
 
             @parameter
-            if validate_quality:
+            if check_quality:
                 record.validate_quality_schema()
 
     @always_inline
@@ -100,7 +103,7 @@ struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         read.validate()
 
         @parameter
-        if validate_quality:
+        if check_quality:
             read.validate_quality_schema()
         return read
 

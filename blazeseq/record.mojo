@@ -324,15 +324,15 @@ struct RecordCoord[
 
     fn __init__(
         out self,
-        SH: Span[Byte, o],
-        SS: Span[Byte, o],
-        QH: Span[Byte, o],
-        QS: Span[Byte, o],
+        SeqHeader: Span[Byte, o],
+        SeqStr: Span[Byte, o],
+        QuHeader: Span[Byte, o],
+        QuStr: Span[Byte, o],
     ):
-        self.SeqHeader = SH
-        self.SeqStr = SS
-        self.QuHeader = QH
-        self.QuStr = QS
+        self.SeqHeader = SeqHeader
+        self.SeqStr = SeqStr
+        self.QuHeader = QuHeader
+        self.QuStr = QuStr
 
     @always_inline
     fn validate(self) raises:
@@ -373,9 +373,9 @@ struct RecordCoord[
 
     fn write_to[w: Writer](self, mut writer: w):
         writer.write_bytes(self.SeqHeader)
-        writer.write("/n")
+        writer.write("\n")
         writer.write_bytes(self.SeqStr)
-        writer.write("/n")
+        writer.write("\n")
         writer.write_bytes(self.QuHeader)
-        writer.write("/n")
+        writer.write("\n")
         writer.write_bytes(self.QuStr)
