@@ -111,12 +111,12 @@ struct InnerBuffer(Movable, Copyable):
         self._len = new_len
         return True
 
-    fn as_span(self, pos: Int = 0) raises -> Span[Byte, __origin_of(self)]:
+    fn as_span[
+        mut: Bool, //, o: Origin[mut]
+    ](ref [o]self, pos: Int = 0) raises -> Span[Byte, o]:
         if pos > self._len:
             raise Error("Position is outside the buffer")
-        return Span[Byte, __origin_of(self)](
-            ptr=self.ptr + pos, length=self._len - pos
-        )
+        return Span[Byte, o](ptr=self.ptr + pos, length=self._len - pos)
 
     fn as_span_mut(
         mut self, pos: Int = 0
@@ -223,13 +223,12 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         st_line = _strip_spaces(line)
         return st_line
 
-    # TODO: Check how safe this function is and if it can return null buffer
     @always_inline
     fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
         if self._check_buf_state():
             _ = self._fill_buffer()
         var line_start = self.head
-        var line_end = self._get_next_line_index()
+        var line_end = _get_next_line_index(self.as_span_mut())
 
         # EOF with no newline
         if line_end == -1 and self.IS_EOF and self.head != self.end:
@@ -239,7 +238,7 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
         elif line_end == -1:
             _ = self._fill_buffer()
             line_start = self.head
-            line_end = self._get_next_line_index()
+            line_end = _get_next_line_index(self.as_span_mut())
 
         if line_end == -1:
             raise Error(
@@ -264,21 +263,13 @@ struct BufferedLineIterator[check_ascii: Bool = False](Sized):
             nels = self.capacity() + amt
         _ = self.buf.resize(nels)
 
-    # TODO: Should be free-standing function to find a haystack in a buffer and return an Index, sliceing should be done some where else.
-    # TODO: Benchmark this implementation agaist ExtraMojo implementation
-    @always_inline
-    fn _get_next_line_index(self) raises -> Int:
-        var aligned_end = math.align_down(self.len(), simd_width) + self.head
-        for i in range(self.head, aligned_end, simd_width):
-            var v = self.buf.ptr.load[width=simd_width](i)
-            var mask = v == NEW_LINE
-            if mask.reduce_or():
-                return i + arg_true(mask)
 
-        for i in range(aligned_end, self.end):
-            if self.buf[i] == NEW_LINE:
-                return i
-        return -1
+    @always_inline
+    fn as_span(self) raises -> Span[Byte, __origin_of(self.buf)]:
+        return self.buf.as_span()[self.head : self.end]
+
+    fn as_span_mut(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
+        return self.buf.as_span()[self.head : self.end]
 
     @always_inline
     fn __len__(self) -> Int:
@@ -353,6 +344,7 @@ fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
             raise Error("Non ASCII letters found")
 
 
+# TODO: Benchmark this implementation agaist ExtraMojo implementation
 @always_inline
 fn _get_next_line_index[
     mut: Bool, //, o: Origin[mut]
