@@ -52,37 +52,19 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
 
     fn __init__(
         out self,
-        SH: String,
-        SS: String,
-        QH: String,
-        QS: String,
+        SeqHeader: String,
+        SeqStr: String,
+        QuHeader: String,
+        QuStr: String,
         quality_schema: schema = "generic",
     ) raises:
-        self.SeqHeader = SH
-        self.QuHeader = QH
-        self.SeqStr = SS
-        self.QuStr = QS
+        self.SeqHeader = SeqHeader
+        self.QuHeader = QuHeader
+        self.SeqStr = SeqStr
+        self.QuStr = QuStr
 
         if quality_schema.isa[String]():
             self.quality_schema = self._parse_schema(quality_schema[String])
-        else:
-            self.quality_schema = quality_schema[QualitySchema]
-
-    fn __init__(
-        out self,
-        SH: String,
-        SS: String,
-        QH: String,
-        QS: String,
-        quality_schema: schema = "generic",
-    ):
-        self.SeqHeader = SH
-        self.SeqStr = SS
-        self.QuHeader = QH
-        self.QuStr = QS
-        if quality_schema.isa[String]():
-            var q: String = quality_schema[String]
-            self.quality_schema = self._parse_schema(q)
         else:
             self.quality_schema = quality_schema[QualitySchema]
 
@@ -93,25 +75,26 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
     @always_inline
     fn get_quality_string(self) -> StringSlice[__origin_of(self.QuStr)]:
         return StringSlice(self.QuStr)
+    
+    @always_inline
+    fn get_header_string(self) -> StringSlice[__origin_of(self.SeqHeader)]:
+        return StringSlice(self.SeqHeader)
+
 
     @always_inline
     fn get_qulity_scores(
-        self, quality_format: String
+        self, quality_format: schema
     ) -> List[Byte, hint_trivial_type=True]:
-        var schema = self._parse_schema((quality_format))
+        if quality_format.isa[String]():
+            schema = self._parse_schema((quality_format[String]))
+        else:
+            schema = quality_format[QualitySchema]
+
         output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
         for i in range(self.len_quality()):
             output[i] = ord(self.QuStr[i]) - schema.OFFSET
         return output
 
-    @always_inline
-    fn get_qulity_scores(
-        self, schema: QualitySchema
-    ) -> List[Byte, hint_trivial_type=True]:
-        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
-        for i in range(self.len_quality()):
-            output[i] = ord(self.QuStr[i]) - schema.OFFSET
-        return output
 
     @always_inline
     fn get_qulity_scores(
@@ -122,9 +105,6 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
             output[i] = ord(self.QuStr[i]) - offset
         return output
 
-    @always_inline
-    fn get_header_string(self) -> StringSlice[__origin_of(self.SeqHeader)]:
-        return StringSlice(self.SeqHeader)
 
     @always_inline
     fn validate_record(self) raises:
@@ -163,7 +143,6 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
             + self.len_record()
             + self.len_qu_header()
             + self.len_quality()
-            + 4
         )
 
     fn write_to[w: Writer](self, mut writer: w):
@@ -264,7 +243,7 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
             hash = (hash << bits) | Int(base_val[i])
         return hash
 
-    # Change to a better hashing Algorithm
+    # TODO: Change to a better hashing Algorithm
     @staticmethod
     @always_inline
     fn _hash_additive[
