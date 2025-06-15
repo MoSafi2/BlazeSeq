@@ -272,6 +272,8 @@ struct RecordCoord[
     var SeqStr: Span[Byte, o]
     var QuHeader: Span[Byte, o]
     var QuStr: Span[Byte, o]
+    var quality_schema: QualitySchema
+
 
     fn __init__(
         out self,
@@ -279,11 +281,19 @@ struct RecordCoord[
         SeqStr: Span[Byte, o],
         QuHeader: Span[Byte, o],
         QuStr: Span[Byte, o],
+        quality_schema: schema = "generic",
+
     ):
         self.SeqHeader = SeqHeader
         self.SeqStr = SeqStr
         self.QuHeader = QuHeader
         self.QuStr = QuStr
+
+        if quality_schema.isa[String]():
+            self.quality_schema = _parse_schema(quality_schema[String])
+        else:
+            self.quality_schema = quality_schema[QualitySchema]
+
 
     @always_inline
     fn get_seq(self) -> StringSlice[__origin_of(self)]:
@@ -377,6 +387,16 @@ struct RecordCoord[
                     raise Error("Non matching headers")
 
 
+    @always_inline
+    fn validate_quality_schema(self) raises:
+        for i in range(self.len_quality()):
+            if self.QuStr[i] > Int(self.quality_schema.UPPER) or self.QuStr[i]
+             < Int(self.quality_schema.LOWER):
+                raise Error(
+                    "Corrput quality score according to proivded schema"
+                )
+
+
 
     @always_inline
     fn seq_len(self) -> Int32:
@@ -394,16 +414,6 @@ struct RecordCoord[
     fn seq_header_len(self) -> Int32:
         return len(self.SeqHeader)
 
-    @always_inline
-    fn validate_quality_schema(self) raises:
-        for i in range(Int(self.qu_len())):
-            if self.QuStr[i] > 126 or self.QuStr[i] < 33:
-                raise Error(
-                    "Corrput quality score according to proivded schema"
-                )
-
-    fn __len__(self) -> Int:
-        return Int(self.seq_len())
 
     fn write_to[w: Writer](self, mut writer: w):
         writer.write_bytes(self.SeqHeader)
