@@ -64,7 +64,7 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         self.QuStr = QuStr
 
         if quality_schema.isa[String]():
-            self.quality_schema = self._parse_schema(quality_schema[String])
+            self.quality_schema = _parse_schema(quality_schema[String])
         else:
             self.quality_schema = quality_schema[QualitySchema]
 
@@ -73,20 +73,19 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         return StringSlice(self.SeqStr)
 
     @always_inline
-    fn get_quality_string(self) -> StringSlice[__origin_of(self.QuStr)]:
+    fn get_quality(self) -> StringSlice[__origin_of(self.QuStr)]:
         return StringSlice(self.QuStr)
-    
-    @always_inline
-    fn get_header_string(self) -> StringSlice[__origin_of(self.SeqHeader)]:
-        return StringSlice(self.SeqHeader)
 
+    @always_inline
+    fn get_header(self) -> StringSlice[__origin_of(self.SeqHeader)]:
+        return StringSlice(self.SeqHeader)
 
     @always_inline
     fn get_qulity_scores(
         self, quality_format: schema
     ) -> List[Byte, hint_trivial_type=True]:
         if quality_format.isa[String]():
-            schema = self._parse_schema((quality_format[String]))
+            schema = _parse_schema((quality_format[String]))
         else:
             schema = quality_format[QualitySchema]
 
@@ -94,7 +93,6 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         for i in range(self.len_quality()):
             output[i] = ord(self.QuStr[i]) - schema.OFFSET
         return output
-
 
     @always_inline
     fn get_qulity_scores(
@@ -104,7 +102,6 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         for i in range(self.len_quality()):
             output[i] = ord(self.QuStr[i]) - offset
         return output
-
 
     @always_inline
     fn validate_record(self) raises:
@@ -154,31 +151,6 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         writer.write("\n")
         writer.write(self.QuStr)
         writer.write("\n")
-
-    @staticmethod
-    @always_inline
-    fn _parse_schema(quality_format: String) -> QualitySchema:
-        var schema: QualitySchema
-
-        if quality_format == "sanger":
-            schema = sanger_schema
-        elif quality_format == "solexa":
-            schema = solexa_schema
-        elif quality_format == "illumina_1.3":
-            schema = illumina_1_3_schema
-        elif quality_format == "illumina_1.5":
-            schema = illumina_1_5_schema
-        elif quality_format == "illumina_1.8":
-            schema = illumina_1_8_schema
-        elif quality_format == "generic":
-            schema = generic_schema
-        else:
-            print(
-                "Uknown quality schema please choose one of 'sanger', 'solexa',"
-                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
-            )
-            return generic_schema
-        return schema
 
     # BUG: returns Smaller strings that expected.
     @always_inline
@@ -314,14 +286,97 @@ struct RecordCoord[
         self.QuStr = QuStr
 
     @always_inline
-    fn validate(self) raises:
-        if self.seq_len() != self.qu_len():
+    fn get_seq(self) -> StringSlice[__origin_of(self)]:
+        return StringSlice[origin = __origin_of(self)](
+            ptr=self.SeqStr.unsafe_ptr(), length=len(self.SeqStr)
+        )
+
+    @always_inline
+    fn get_quality(self) -> StringSlice[__origin_of(self)]:
+        return StringSlice[origin = __origin_of(self)](
+            ptr=self.QuStr.unsafe_ptr(), length=len(self.QuStr)
+        )
+
+    @always_inline
+    fn get_header(self) -> StringSlice[__origin_of(self)]:
+        return StringSlice[origin = __origin_of(self)](
+            ptr=self.SeqHeader.unsafe_ptr(), length=len(self.SeqHeader)
+        )
+
+    @always_inline
+    fn __len__(self) -> Int:
+        return self.len_record()
+
+    @always_inline
+    fn len_record(self) -> Int:
+        return len(self.SeqStr)
+
+    @always_inline
+    fn len_quality(self) -> Int:
+        return len(self.QuStr)
+
+    @always_inline
+    fn len_qu_header(self) -> Int:
+        return len(self.QuHeader)
+
+    @always_inline
+    fn len_seq_header(self) -> Int:
+        return len(self.SeqHeader)
+
+    @always_inline
+    fn total_length(self) -> Int:
+        return (
+            self.len_seq_header()
+            + self.len_record()
+            + self.len_qu_header()
+            + self.len_quality()
+        )
+
+    @always_inline
+    fn get_qulity_scores(
+        self, quality_format: schema
+    ) -> List[Byte, hint_trivial_type=True]:
+        if quality_format.isa[String]():
+            schema = _parse_schema((quality_format[String]))
+        else:
+            schema = quality_format[QualitySchema]
+
+        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
+        for i in range(self.len_quality()):
+            output[i] = self.QuStr[i] - schema.OFFSET
+        return output
+
+    @always_inline
+    fn get_qulity_scores(
+        self, offset: UInt8
+    ) -> List[Byte, hint_trivial_type=True]:
+        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
+        for i in range(self.len_quality()):
+            output[i] = self.QuStr[i] - offset
+        return output
+
+
+    @always_inline
+    fn validate_record(self) raises:
+        if self.SeqHeader[0] != read_header:
+            raise Error("Sequence Header is corrupt")
+
+        if self.QuHeader[0] != quality_header:
+            raise Error("Quality Header is corrupt")
+
+        if self.len_record() != self.len_quality():
             raise Error("Corrput Lengths")
-        if (
-            self.qu_header_len() > 1
-            and self.qu_header_len() != self.seq_header_len()
-        ):
-            raise Error("Corrput Lengths")
+
+        if self.len_qu_header() > 1:
+            if self.len_qu_header() != self.len_seq_header():
+                raise Error("Quality Header is corrupt")
+
+        if self.len_qu_header() > 1:
+            for i in range(1, self.len_qu_header()):
+                if self.QuHeader[i] != self.SeqHeader[i]:
+                    raise Error("Non matching headers")
+
+
 
     @always_inline
     fn seq_len(self) -> Int32:
@@ -358,3 +413,28 @@ struct RecordCoord[
         writer.write_bytes(self.QuHeader)
         writer.write("\n")
         writer.write_bytes(self.QuStr)
+
+
+@always_inline
+fn _parse_schema(quality_format: String) -> QualitySchema:
+    var schema: QualitySchema
+
+    if quality_format == "sanger":
+        schema = sanger_schema
+    elif quality_format == "solexa":
+        schema = solexa_schema
+    elif quality_format == "illumina_1.3":
+        schema = illumina_1_3_schema
+    elif quality_format == "illumina_1.5":
+        schema = illumina_1_5_schema
+    elif quality_format == "illumina_1.8":
+        schema = illumina_1_8_schema
+    elif quality_format == "generic":
+        schema = generic_schema
+    else:
+        print(
+            "Uknown quality schema please choose one of 'sanger', 'solexa',"
+            " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
+        )
+        return generic_schema
+    return schema
