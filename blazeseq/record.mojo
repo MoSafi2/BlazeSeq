@@ -261,7 +261,7 @@ struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
         return self.__hash__() != other.__hash__()
 
 
-@value
+@fieldwise_init
 struct RecordCoord[
     mut: Bool, //, o: Origin[mut], validate_quality: Bool = False
 ](Sized, Writable, Movable, Copyable):

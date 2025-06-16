@@ -9,23 +9,21 @@ alias NEW_LINE = 10
 
 @always_inline
 fn _strip_spaces[
-    mut: Bool, //, o: Origin[mut]
+    mut: Bool, o: Origin[mut]
 ](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
     var start = 0
-    var end = len(in_slice)
-    for i in range(0, len(in_slice)):
-        if not is_posix_space(in_slice[i]):
-            start = i
-            break
-    for i in range(len(in_slice) - 1, -1, -1):
-        if not is_posix_space(in_slice[i]):
-            end = i + 1
-            break
+    # Find the first non-space character from the beginning
+    while start < len(in_slice) and is_posix_space(in_slice[start]):
+        start += 1
 
-    out_span = Span[Byte, o](
-        ptr=in_slice.unsafe_ptr() + start, length=end - start
-    )
-    return out_span
+    var end = len(in_slice)
+    # Find the first non-space character from the end
+    while end > start and is_posix_space(in_slice[end - 1]):
+        end -= 1
+
+    # This correctly handles all-space lines (where end will equal start)
+    # and avoids creating a new span if no stripping was needed.
+    return in_slice[start:end]
 
 
 @always_inline
@@ -53,7 +51,7 @@ fn _get_next_line_index[
         for i in range(0, len(buffer)):
             if buffer.unsafe_ptr()[i] == NEW_LINE:
                 return offset + i
-            return -1
+        return -1
 
     var aligned_end = math.align_down(len(buffer), simd_width)
     for i in range(0, aligned_end, simd_width):
