@@ -9,7 +9,7 @@ from utils import Writable
 alias schema = Variant[String, QualitySchema]
 
 
-@value
+@fieldwise_init
 struct QualitySchema(Movable, Copyable, Writable):
     var SCHEMA: StaticString
     var LOWER: UInt8
@@ -40,7 +40,7 @@ struct QualitySchema(Movable, Copyable, Writable):
         )
 
 
-@value
+@fieldwise_init
 struct FastqRecord(Sized, Stringable, Movable, Copyable, KeyElement, Writable):
     """Struct that represent a single FastaQ record."""
 

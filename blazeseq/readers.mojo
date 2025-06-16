@@ -39,8 +39,8 @@ alias gzread_fn_type = fn (
 ) -> c_int
 
 
-@value
-struct ZLib:
+@fieldwise_init
+struct ZLib(Copyable, Movable):
     """Wrapper for zlib library functions."""
 
     var lib_handle: ffi.DLHandle

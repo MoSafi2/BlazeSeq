@@ -8,16 +8,26 @@ fn main() raises:
         FileReader(
             "/home/mohamed/Documents/Projects/BlazeSeq/data/SRR16012060.fastq",
         ),
-        capacity=128 * 1024,
+        capacity=300,
     )
     var count = 0
-    var slen = 0
-    var qlen = 0
-    while True:
-        try:
-            var r = iterator.get_next_line_span()
-            count += 1
-        except:
-            break
+    # var slen = 0
+    # var qlen = 0
+    var r = iterator.get_next_n_line_spans[4]()
+    print(
+        String(bytes=r[0]),
+        String(bytes=r[1]),
+        String(bytes=r[2]),
+        String(bytes=r[3]),
+        sep="\n",
+    )
 
-    print(count, slen, qlen, sep="\t")
+    r = iterator.get_next_n_line_spans[4]()
+    print(
+        String(bytes=r[0]),
+        String(bytes=r[1]),
+        String(bytes=r[2]),
+        String(bytes=r[3]),
+        sep="\n"
+    )
+    count += 1

@@ -157,10 +157,16 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
         var result_spans = StaticTuple[Span[Byte, StaticConstantOrigin], n]()
         var current_offset = self.head
         var lines_found = 0
+        
+
+        if self._check_buf_state():
+            _ = self._fill_buffer()
 
         for i in range(n):
+            print("i", i)
             # Keep all coordinates relative starting with 0
             var line_start = current_offset - self.head
+            print("line_start", line_start)
 
             while True:
                 var scan_span = self.buf.as_span()[current_offset : self.end]
@@ -194,8 +200,8 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
                     )
 
                 if (
-                    line_end == -1                ):  # This means we broke out of the inner loop because of EOF and no more lines
-
+                    line_end == -1
+                ):  # This means we broke out of the inner loop because of EOF and no more lines
                     break
 
             current_offset = line_end + 1
