@@ -143,41 +143,10 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
         st_line = _strip_spaces(line)
         return st_line
 
-    # @always_inline
-    # fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
-    #     if self._check_buf_state():
-    #         _ = self._fill_buffer()
-    #     var line_start = self.head
-    #     var line_end = _get_next_line_index(self.as_span_mut(), self.head)
-
-    #     if line_end == -1 and self.IS_EOF and self.head == self.end:
-    #         raise Error("EOF")
-
-    #     # EOF with no newline
-    #     if line_end == -1 and self.IS_EOF and self.head != self.end:
-    #         self.head = self.end
-    #         return self[line_start : self.end]
-
-    #     # Handle Broken line
-    #     if line_end == -1:
-    #         _ = self._fill_buffer()
-    #         line_start = self.head
-    #         line_end = line_start + _get_next_line_index(
-    #             self.as_span_mut(), self.head
-    #         )
-
-    #     if line_end == -1:
-    #         raise Error(
-    #             "can't find the line end, buffer maybe too small. consider"
-    #             " increasing buffer size"
-    #         )
-
-    #     self.head = line_end + 1
-    #     return self[line_start:line_end]
-
+    @always_inline
     fn get_next_n_line_spans[
         n: Int
-    ](mut self) raises -> StaticTuple[Span[Byte, __origin_of(self.buf)], n]:
+    ](mut self) raises -> StaticTuple[Span[Byte, StaticConstantOrigin], n]:
         """
         Gets n line spans, ensuring all lines are fully in the buffer upon return.
         This function will attempt to read enough data to contain all 'n' lines.
@@ -185,18 +154,23 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
         The returned Spans will point to valid data within the buffer.
         """
         var line_boundaries = StaticTuple[StaticTuple[Int, 2], n]()
-        var current_offset = self.head  # Track the current position within the buffer as we scan
+        var result_spans = StaticTuple[Span[Byte, StaticConstantOrigin], n]()
+        var current_offset = self.head
+        var lines_found = 0
 
         for i in range(n):
-            var line_start = current_offset - self.head  # Keeping the line start relative to the internal n line buffer.
-            var line_end = -1
+            # Keep all coordinates relative starting with 0
+            var line_start = current_offset - self.head
 
             while True:
                 var scan_span = self.buf.as_span()[current_offset : self.end]
                 line_end = _get_next_line_index(scan_span, line_start)
 
                 if line_end != -1:
-                    line_boundaries[i] = StaticTuple[Int, 2](line_start, line_end)
+                    line_boundaries[i] = StaticTuple[Int, 2](
+                        line_start, line_end
+                    )
+                    lines_found += 1
                     break
                 else:
                     if self.IS_EOF:
@@ -206,7 +180,7 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
                             line_end = self.end
                             break
                         else:
-                            break  # No more lines to find, return what we have
+                            raise Error("Couldn't find all requested lines")
 
                     var line_offset_after_refill = current_offset - self.head
                     _ = self._fill_buffer()
@@ -220,39 +194,23 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
                     )
 
                 if (
-                    line_end == -1
-                ):  # This means we broke out of the inner loop because of EOF and no more lines
+                    line_end == -1                ):  # This means we broke out of the inner loop because of EOF and no more lines
+
                     break
 
-            # Store the absolute start and end indices of the line within the buffer
-            # line_boundaries.append((line_start_temp, ))
-            current_offset = (
-                line_end + 1
-            )  # Move to the start of the next potential line
+            current_offset = line_end + 1
 
-        # All line boundaries are found relative to the buffer's state *after* the last fill.
-        # Now, consume the lines by advancing self.head and construct the actual Span objects.
-        result_spans = StaticTuple[Span[Byte, __origin_of(self.buf)], n]()
-        for i in range(len(line_boundaries)):
-            var start_idx = line_boundaries[i][0]
-            var end_idx = line_boundaries[i][1]
-            result_spans[i] = self.buf.as_span()[start_idx:end_idx]
+        for i in range(lines_found):
+            var start_idx = line_boundaries[i][0] + self.head
+            var end_idx = line_boundaries[i][1] + self.head
+            var s = self[start_idx:end_idx]
+            result_spans[i] = Span[Byte, StaticConstantOrigin](
+                ptr=s.unsafe_ptr(), length=len(s)
+            )
 
-        # Advance self.head for the next call to get_next_line or get_next_n_line_spans
-        # if len(line_boundaries) > 0:
-        #     self.head = line_boundaries[len(line_boundaries) - 1][1] + 1
-        # else:
-        #     # If no lines were found (e.g., EOF immediately), ensure head is at end
-        #     if self.IS_EOF:
-        #         self.head = self.end
+        self.head = current_offset
 
-        # # Ensure that if self.head catches up to self.end, we reset them for the next fill
-        # if self.head >= self.end:
-        #     self.head = 0
-        #     self.end = 0
-
-        # return result_spans
-        return line_boundaries
+        return result_spans
 
     @always_inline
     fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
@@ -354,7 +312,7 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
             raise Error("Out of bounds")
 
 
-struct InnerBuffer(Movable, Copyable):
+struct InnerBuffer(Copyable, Movable):
     var ptr: UnsafePointer[Byte]
     var _len: Int
 
