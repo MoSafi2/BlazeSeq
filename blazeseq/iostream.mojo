@@ -2,6 +2,7 @@ from memory import memcpy, UnsafePointer, Span
 from blazeseq.CONSTS import DEFAULT_CAPACITY
 from blazeseq.utils import _check_ascii, _get_next_line_index, _strip_spaces
 from pathlib import Path
+from utils import StaticTuple
 
 
 alias NEW_LINE = 10
@@ -142,37 +143,167 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
         st_line = _strip_spaces(line)
         return st_line
 
+    # @always_inline
+    # fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
+    #     if self._check_buf_state():
+    #         _ = self._fill_buffer()
+    #     var line_start = self.head
+    #     var line_end = _get_next_line_index(self.as_span_mut(), self.head)
+
+    #     if line_end == -1 and self.IS_EOF and self.head == self.end:
+    #         raise Error("EOF")
+
+    #     # EOF with no newline
+    #     if line_end == -1 and self.IS_EOF and self.head != self.end:
+    #         self.head = self.end
+    #         return self[line_start : self.end]
+
+    #     # Handle Broken line
+    #     if line_end == -1:
+    #         _ = self._fill_buffer()
+    #         line_start = self.head
+    #         line_end = line_start + _get_next_line_index(
+    #             self.as_span_mut(), self.head
+    #         )
+
+    #     if line_end == -1:
+    #         raise Error(
+    #             "can't find the line end, buffer maybe too small. consider"
+    #             " increasing buffer size"
+    #         )
+
+    #     self.head = line_end + 1
+    #     return self[line_start:line_end]
+
+    fn get_next_n_line_spans[
+        n: Int
+    ](mut self) raises -> StaticTuple[Span[Byte, __origin_of(self.buf)], n]:
+        """
+        Gets n line spans, ensuring all lines are fully in the buffer upon return.
+        This function will attempt to read enough data to contain all 'n' lines.
+        If a line is broken, it will attempt to fill the buffer to complete it.
+        The returned Spans will point to valid data within the buffer.
+        """
+        var line_boundaries = StaticTuple[StaticTuple[Int, 2], n]()
+        var current_offset = self.head  # Track the current position within the buffer as we scan
+
+        for i in range(n):
+            var line_start = current_offset - self.head  # Keeping the line start relative to the internal n line buffer.
+            var line_end = -1
+
+            while True:
+                var scan_span = self.buf.as_span()[current_offset : self.end]
+                line_end = _get_next_line_index(scan_span, line_start)
+
+                if line_end != -1:
+                    line_boundaries[i] = StaticTuple[Int, 2](line_start, line_end)
+                    break
+                else:
+                    if self.IS_EOF:
+                        if current_offset == self.end and i == 0:
+                            raise Error("EOF")
+                        elif current_offset < self.end:
+                            line_end = self.end
+                            break
+                        else:
+                            break  # No more lines to find, return what we have
+
+                    var line_offset_after_refill = current_offset - self.head
+                    _ = self._fill_buffer()
+
+                    current_offset = self.head + line_offset_after_refill
+                    line_start = current_offset - self.head
+
+                if not self.IS_EOF and self.len() == 0:
+                    raise Error(
+                        "Buffer underflow after fill, cannot find line end."
+                    )
+
+                if (
+                    line_end == -1
+                ):  # This means we broke out of the inner loop because of EOF and no more lines
+                    break
+
+            # Store the absolute start and end indices of the line within the buffer
+            # line_boundaries.append((line_start_temp, ))
+            current_offset = (
+                line_end + 1
+            )  # Move to the start of the next potential line
+
+        # All line boundaries are found relative to the buffer's state *after* the last fill.
+        # Now, consume the lines by advancing self.head and construct the actual Span objects.
+        result_spans = StaticTuple[Span[Byte, __origin_of(self.buf)], n]()
+        for i in range(len(line_boundaries)):
+            var start_idx = line_boundaries[i][0]
+            var end_idx = line_boundaries[i][1]
+            result_spans[i] = self.buf.as_span()[start_idx:end_idx]
+
+        # Advance self.head for the next call to get_next_line or get_next_n_line_spans
+        # if len(line_boundaries) > 0:
+        #     self.head = line_boundaries[len(line_boundaries) - 1][1] + 1
+        # else:
+        #     # If no lines were found (e.g., EOF immediately), ensure head is at end
+        #     if self.IS_EOF:
+        #         self.head = self.end
+
+        # # Ensure that if self.head catches up to self.end, we reset them for the next fill
+        # if self.head >= self.end:
+        #     self.head = 0
+        #     self.end = 0
+
+        # return result_spans
+        return line_boundaries
+
     @always_inline
     fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
+        """
+        Retrieves a single line span. This function now operates by finding a line
+        and returning its span, handling buffer filling and shifting as needed.
+        It advances self.head after finding a line.
+        """
         if self._check_buf_state():
             _ = self._fill_buffer()
+
         var line_start = self.head
-        var line_end = _get_next_line_index(self.as_span_mut(), self.head)
+        var line_end = -1
 
-        if line_end == -1 and self.IS_EOF and self.head == self.end:
-            raise Error("EOF")
+        while line_end == -1:
+            var current_scan_span = self.buf.as_span()[self.head : self.end]
+            line_end = _get_next_line_index(current_scan_span, self.head)
 
-        # EOF with no newline
-        if line_end == -1 and self.IS_EOF and self.head != self.end:
-            self.head = self.end
-            return self[line_start : self.end]
+            if line_end != -1:
+                break
+            else:
+                # Newline not found, need to fill buffer
+                if self.IS_EOF:
+                    if self.head == self.end:
+                        raise Error("EOF")
+                    else:
+                        # This is the last partial line at EOF
+                        line_end = self.end
+                        break
 
-        # Handle Broken line
-        if line_end == -1:
-            _ = self._fill_buffer()
-            line_start = self.head
-            line_end = line_start + _get_next_line_index(
-                self.as_span_mut(), self.head
-            )
+                _ = self._fill_buffer()
+                line_start = self.head
 
-        if line_end == -1:
-            raise Error(
-                "can't find the line end, buffer maybe too small. consider"
-                " increasing buffer size"
-            )
+                if (
+                    self.IS_EOF
+                    and _get_next_line_index(
+                        self.buf.as_span()[self.head : self.end], 0
+                    )
+                    == -1
+                ):
+                    line_end = self.end
+                    break
+                elif not self.IS_EOF and self.len() == 0:
+                    raise Error(
+                        "Buffer underflow after fill, cannot find line end."
+                    )
 
+        var final_line_span = self[line_start:line_end]
         self.head = line_end + 1
-        return self[line_start:line_end]
+
+        return final_line_span
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
