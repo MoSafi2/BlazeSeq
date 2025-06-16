@@ -143,17 +143,91 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
         st_line = _strip_spaces(line)
         return st_line
 
+    @always_inline
+    fn _line_coord_n[
+        n: Int
+    ](mut self) raises -> StaticTuple[Span[Byte, StaticConstantOrigin], n]:
+        """
+        Simplified and robust implementation to get n line spans.
+        """
+        # This outer loop handles retries after refilling the buffer.
+        while True:
+            var scan_pos = self.head
+            var lines_found = 0
+            var line_boundaries = StaticTuple[StaticTuple[Int, 2], n]()
+
+            # --- Search Phase ---
+            # Attempt to find all 'n' lines within the current buffer.
+            for i in range(n):
+                # If our scan position is already at the end, we can't find more lines.
+                if scan_pos >= self.end:
+                    break
+
+                var line_start = scan_pos
+
+                var search_span = self.buf.as_span()[scan_pos : self.end]
+                var end_relative = _get_next_line_index(search_span)
+
+                if end_relative != -1:
+                    # Case 1: Found a newline character.
+                    line_end = scan_pos + end_relative
+                elif self.IS_EOF:
+                    # Case 2: No newline, but at EOF. The rest of the buffer is the last line.
+                    line_end = self.end
+                else:
+                    # Case 3: No newline and not at EOF. We need more data.
+                    break
+
+                # If we determined a line boundary, store it.
+                line_boundaries[i] = StaticTuple[Int, 2](line_start, line_end)
+                lines_found += 1
+                scan_pos = line_end + 1
+
+                # If the last line was determined by EOF, stop searching for more.
+                if end_relative == -1:
+                    break
+
+            # --- Evaluation Phase ---
+            # Check if the search was successful.
+            if lines_found == n:
+                # Success! We found all 'n' lines without needing to refill.
+                var spans = StaticTuple[Span[Byte, StaticConstantOrigin], n]()
+                for i in range(n):
+                    var start_idx = line_boundaries[i][0]
+                    var end_idx = line_boundaries[i][1]
+                    var raw_span = self.buf.as_span()[start_idx:end_idx]
+                    var stripped_span = _strip_spaces(raw_span)
+                    spans[i] = Span[Byte, StaticConstantOrigin](
+                        ptr=stripped_span.unsafe_ptr(),
+                        length=len(stripped_span),
+                    )
+
+                # Atomically update the head and return.
+                self.head = scan_pos
+                return spans
+
+            # --- Refill Phase ---
+            # The search failed, so we must try to get more data.
+            if self.IS_EOF:
+                # We failed to find all lines and can't get more data.
+                raise Error(
+                    "EOF: Could not find all " + String(n) + " requested lines."
+                )
+
+            if self.usable_space() == 0:
+                # Buffer is full, but a line ending was still not found.
+                raise Error("Line is longer than the buffer capacity.")
+
+            # Refill the buffer and let the `while True` loop restart the search.
+            _ = self._fill_buffer()
 
     @always_inline
     fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
         while True:
-            # 1. Search for a newline in the current available data.
             var search_span = self.buf.as_span()[self.head : self.end]
-            # Use default offset=0 for clarity since we're searching a sub-span.
             var line_end_relative = _get_next_line_index(search_span)
 
             if line_end_relative != -1:
-                # Found a newline. Calculate absolute position and return the slice.
                 var line_end_absolute = self.head + line_end_relative
                 var final_line_span = self.buf.as_span()[
                     self.head : line_end_absolute
@@ -161,25 +235,18 @@ struct BufferedLineIterator[R: Reader, check_ascii: Bool = False](Sized):
                 self.head = line_end_absolute + 1
                 return final_line_span
 
-            # 2. If no newline, check if we're at the end of the file.
             if self.IS_EOF:
                 if self.head < self.end:
-                    # The remaining data is the last partial line.
                     var final_line_span = self.buf.as_span()[
                         self.head : self.end
                     ]
                     self.head = self.end
                     return final_line_span
                 else:
-                    # No data left and at EOF, so we are done.
                     raise Error("EOF")
 
-            # 3. If not at EOF, try to fill the buffer.
-            # Before filling, check if the buffer is already full.
-            # If so, the line is longer than our capacity.
             if self.usable_space() == 0:
                 raise Error("Line is longer than the buffer capacity.")
-
             _ = self._fill_buffer()
 
     @always_inline
