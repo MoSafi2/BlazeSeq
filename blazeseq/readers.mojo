@@ -10,7 +10,7 @@ BufferedReader.
 
 from memory import memset_zero, UnsafePointer
 from sys import ffi
-from sys.info import os_is_macos
+from sys.info import CompilationTarget
 from blazeseq.iostream import Reader, InnerBuffer
 
 
@@ -48,7 +48,7 @@ struct ZLib(Copyable, Movable):
     @staticmethod
     fn _get_libname() -> StaticString:
         @parameter
-        if os_is_macos():
+        if CompilationTarget.is_macos():
             return "libz.dylib"
         else:
             return "libz.so"

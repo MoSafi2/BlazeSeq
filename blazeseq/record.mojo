@@ -1,5 +1,5 @@
 from hashlib.hasher import default_hasher, Hasher
-from blazeseq.quality_schama import (
+from blazeseq.quality_schema import (
     QualitySchema,
     sanger_schema,
     illumina_1_3_schema,
@@ -381,27 +381,3 @@ struct RecordCoord[
         writer.write("\n")
         writer.write_bytes(self.QuStr)
 
-
-@always_inline
-fn _parse_schema(quality_format: String) -> QualitySchema:
-    var schema: QualitySchema
-
-    if quality_format == "sanger":
-        schema = sanger_schema
-    elif quality_format == "solexa":
-        schema = solexa_schema
-    elif quality_format == "illumina_1.3":
-        schema = illumina_1_3_schema
-    elif quality_format == "illumina_1.5":
-        schema = illumina_1_5_schema
-    elif quality_format == "illumina_1.8":
-        schema = illumina_1_8_schema
-    elif quality_format == "generic":
-        schema = generic_schema
-    else:
-        print(
-            "Uknown quality schema please choose one of 'sanger', 'solexa',"
-            " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
-        )
-        return generic_schema
-    return schema
