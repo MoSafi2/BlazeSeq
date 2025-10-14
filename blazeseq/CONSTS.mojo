@@ -1,5 +1,5 @@
 from blazeseq.record import QualitySchema
-from sys.info import simdwidthof
+from sys.info import simd_width_of
 
 alias KB = 1024
 alias MB = 1024 * KB
@@ -12,8 +12,7 @@ alias quality_header = 43
 alias new_line = 10
 alias carriage_return = 13
 
-alias U8 = DType.uint8
-alias simd_width: Int = simdwidthof[U8]()
+alias simd_width: Int = simd_width_of[UInt8]()
 
 alias DEFAULT_CAPACITY = 24 * 1024
 alias MAX_SHIFT = 30

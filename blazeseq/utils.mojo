@@ -41,34 +41,6 @@ fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
             raise Error("Non ASCII letters found")
 
 
-# TODO: Benchmark this implementation agaist ExtraMojo implementation
-# Ported partially from ExtraMojo: https://github.com/ExtraMojo/ExtraMojo
-@always_inline
-fn _get_next_line_index[
-    mut: Bool, //, o: Origin[mut]
-](buffer: Span[Byte, o], offset: Int = 0) raises -> Int:
-    if len(buffer) < simd_width:
-        for i in range(0, len(buffer)):
-            if buffer.unsafe_ptr()[i] == NEW_LINE:
-                return offset + i
-        return -1
-
-    var aligned_end = math.align_down(len(buffer), simd_width)
-    for i in range(0, aligned_end, simd_width):
-        var v = buffer.unsafe_ptr().load[width=simd_width](i)
-        var mask = v == NEW_LINE
-
-        var packed = pack_bits(mask)
-        if packed:
-            var index = Int(count_trailing_zeros(packed))
-            return offset + i + index
-
-    for i in range(aligned_end, len(buffer)):
-        if buffer.unsafe_ptr()[i] == NEW_LINE:
-            return offset + i
-    return -1
-
-
 # Ported from the is_posix_space() in Mojo Stdlib
 @always_inline
 fn is_posix_space(c: Byte) -> Bool:
