@@ -100,12 +100,12 @@ struct GZFile(Movable, Reader):
         if self.handle == c_void_ptr():
             raise Error("Failed to open gzip file: " + filename)
 
-    fn __del__(owned self):
+    fn __del__(deinit self):
         """Close the file when the object is destroyed."""
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
-    fn __moveinit__(out self, owned other: Self):
+    fn __moveinit__(out self, deinit other: Self):
         self.handle = other.handle
         self.lib = other.lib^
         self.filename = other.filename^

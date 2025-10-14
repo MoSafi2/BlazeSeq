@@ -30,7 +30,7 @@ alias illumina_1_8_schema = QualitySchema("Illumina v1.8", 33, 126, 33)
 
 
 @fieldwise_init
-struct QualitySchema(Copyable, Movable, Writable):
+struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable):
     var SCHEMA: StringSlice[StaticConstantOrigin]
     var LOWER: UInt8
     var UPPER: UInt8

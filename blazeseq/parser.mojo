@@ -10,7 +10,7 @@ struct RecordParser[
     var stream: BufferedReader[R, check_ascii=check_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(out self, owned reader: R, schema: String = "generic") raises:
+    fn __init__(out self, var reader: R, schema: String = "generic") raises:
         self.stream = BufferedLineIterator[check_ascii=check_ascii](
             reader^, DEFAULT_CAPACITY
         )
@@ -38,7 +38,7 @@ struct RecordParser[
         @parameter
         if check_ascii:
             record.validate_quality_schema()
-        return record
+        return record^
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord:
@@ -47,7 +47,7 @@ struct RecordParser[
             self.stream.get_next_line(),
             self.stream.get_next_line(),
             self.stream.get_next_line(),
-            self.quality_schema,
+            self.quality_schema.copy(),
         )
 
     @staticmethod
@@ -56,25 +56,25 @@ struct RecordParser[
         var schema: QualitySchema
 
         if quality_format == "sanger":
-            schema = sanger_schema
+            schema = materialize[sanger_schema]()
         elif quality_format == "solexa":
-            schema = solexa_schema
+            schema = materialize[solexa_schema]()
         elif quality_format == "illumina_1.3":
-            schema = illumina_1_3_schema
+            schema = materialize[illumina_1_3_schema]()
         elif quality_format == "illumina_1.5":
-            schema = illumina_1_5_schema
+            schema = materialize[illumina_1_5_schema]()
         elif quality_format == "illumina_1.8":
-            schema = illumina_1_8_schema
+            schema = materialize[illumina_1_8_schema]()
         elif quality_format == "generic":
-            schema = generic_schema
+            schema = materialize[generic_schema]()
         else:
             print(
                 """Uknown quality schema please choose one of 'sanger', 'solexa',"
                 " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
                 Parsing with generic schema."""
             )
-            return generic_schema
-        return schema
+            return materialize[generic_schema]()
+        return schema^
 
 
 # struct CoordParser[

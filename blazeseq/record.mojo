@@ -50,7 +50,7 @@ struct FastqRecord[val: Bool = True](
         if quality_schema.isa[String]():
             self.quality_schema = _parse_schema(quality_schema[String])
         else:
-            self.quality_schema = quality_schema[QualitySchema]
+            self.quality_schema = quality_schema[QualitySchema].copy()
 
         @parameter
         if val:
@@ -67,7 +67,7 @@ struct FastqRecord[val: Bool = True](
         self.SeqStr = String(seqs[1].strip())
         self.QuHeader = String(seqs[2].strip())
         self.QuStr = String(seqs[3].strip())
-        self.quality_schema = generic_schema
+        self.quality_schema = materialize[generic_schema]()
 
         @parameter
         if val:
@@ -95,7 +95,7 @@ struct FastqRecord[val: Bool = True](
         bytes = self.QuStr.as_bytes()
         for i in range(len(self.QuStr)):
             output[i] = bytes[i] - in_schema.OFFSET
-        return output
+        return output^
 
     @always_inline
     fn get_qulity_scores(self, offset: UInt8) -> List[UInt8]:
@@ -103,7 +103,7 @@ struct FastqRecord[val: Bool = True](
         bytes = self.QuStr.as_bytes()
         for i in range(len(self.QuStr)):
             output[i] = bytes[i] - offset
-        return output
+        return output^
 
     @always_inline
     fn get_header_string(self) -> StringSlice[__origin_of(self.SeqHeader)]:
@@ -302,25 +302,25 @@ struct RecordCoord[
     @always_inline
     fn get_qulity_scores(
         self, quality_format: schema
-    ) -> List[Byte, hint_trivial_type=True]:
+    ) -> List[Byte]:
         if quality_format.isa[String]():
             schema = _parse_schema((quality_format[String]))
         else:
             schema = quality_format[QualitySchema]
 
-        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
+        output = List[Byte](capacity=self.len_quality())
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - schema.OFFSET
-        return output
+        return output^
 
     @always_inline
     fn get_qulity_scores(
         self, offset: UInt8
-    ) -> List[Byte, hint_trivial_type=True]:
-        output = List[Byte, hint_trivial_type=True](capacity=self.len_quality())
+    ) -> List[Byte]:
+        output = List[Byte](capacity=self.len_quality())
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - offset
-        return output
+        return output^
 
 
     @always_inline
