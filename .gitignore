@@ -1,3 +1,4 @@
 *.*
 .pixi
 *.egg-info
+!*.mojo
