@@ -34,7 +34,6 @@ struct FileReader(Movable, Reader):
     fn read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
         return self.handle.read_bytes(amt)
 
-    # TODO: Change this to take a mut Span or or UnsafePointer when possible
     @always_inline
     fn read_to_buffer(
         mut self, mut buf: InnerBuffer, amt: Int, pos: Int = 0
@@ -66,6 +65,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         self.head = 0
         self.end = 0
         self.IS_EOF = False
+        _ = self._fill_buffer()
 
     @always_inline
     fn _left_shift(mut self) raises:
@@ -98,6 +98,8 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         var amt = self.source.read_to_buffer(self.buf, nels, self.end)
         self.end += Int(amt)
         if amt < nels:
+            print("EOF")
+            print(amt)
             self.IS_EOF = True
 
         @parameter
@@ -138,7 +140,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
     @always_inline
     fn _line_coord(mut self) raises -> Span[Byte, origin_of(self.buf)]:
         while True:
-            var search_span = self.buf.as_span()
+            var search_span = self.buf.as_span(self.head)
             var line_end_relative = memchr(search_span, NEW_LINE)
             if line_end_relative != -1:
                 var line_end_absolute = self.head + line_end_relative
@@ -249,7 +251,7 @@ struct InnerBuffer(Copyable, Movable, Sized):
             raise Error("Out of bounds")
         len = end - start
         ptr = self.ptr + start
-        
+
         return Span[Byte, origin_of(self)](ptr=ptr, length=len)
 
     fn __setitem__(mut self, index: Int, value: Byte) raises:

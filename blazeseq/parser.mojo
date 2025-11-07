@@ -47,10 +47,14 @@ struct RecordParser[
         l3 = self.stream.get_next_line()
         l4 = self.stream.get_next_line()
         schema = self.quality_schema.copy()
-        print("l1: ", l1)
-        print("l2: ", l2)
-        print("l3: ", l3)
-        return FastqRecord(l1, l2, l3, l4, schema)
+        try:
+            return FastqRecord(l1, l2, l3, l4, schema)
+        except Error:
+            print(l1)
+            print(l2)
+            print(l3)
+            print(l4)
+            raise
 
     @staticmethod
     @always_inline

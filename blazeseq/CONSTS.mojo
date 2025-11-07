@@ -14,7 +14,7 @@ alias carriage_return = 13
 
 alias simd_width: Int = simd_width_of[UInt8]()
 
-alias DEFAULT_CAPACITY = 24 * 1024
+alias DEFAULT_CAPACITY = 4 * 1024
 alias MAX_SHIFT = 30
 alias MAX_CAPACITY = 2**MAX_SHIFT
 
