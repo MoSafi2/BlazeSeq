@@ -131,7 +131,7 @@ struct GZFile(Movable, Reader):
         return UInt64(bytes_read)
 
     fn unbuffered_read[
-        o: MutableOrigin
+        o: MutOrigin
     ](mut self, buffer: Span[UInt8, o]) raises -> Int:
         """Read data from the gzip file.
 

@@ -20,7 +20,7 @@ fn generate_fastq_record(
     low = Int64(schema.LOWER)
     high = Int64(schema.UPPER)
 
-    random.seed(Int(perf_counter_ns() % (2**32)))
+    random.seed(Int(perf_counter_ns()) % (2**32))
 
     for _ in range(length):
         index = random.random_si64(min=0, max=len(DNA_BASES) - 1)
@@ -34,4 +34,4 @@ fn generate_fastq_record(
 
 
 fn main() raises:
-    print(generate_fastq_record(2, generic_schema))
+    print(generate_fastq_record(50, generic_schema))

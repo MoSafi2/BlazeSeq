@@ -3,14 +3,10 @@ from blazeseq.CONSTS import DEFAULT_CAPACITY
 from blazeseq.utils import _check_ascii, _strip_spaces
 from pathlib import Path
 from utils import StaticTuple
-from extramojo.bstr.memchr import memchr
+from blazeseq.utils import memchr
 
 
 alias NEW_LINE = 10
-
-# Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
-# https://github.com/dignifiedquire/buffer-redux
-# Minimial Implementation that support only line iterations
 
 
 trait Reader:
@@ -21,6 +17,11 @@ trait Reader:
 
     fn __moveinit__(out self, deinit other: Self):
         ...
+
+
+# Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
+# https://github.com/dignifiedquire/buffer-redux
+# Minimial Implementation that support only line iterations
 
 
 struct FileReader(Movable, Reader):
@@ -73,7 +74,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         var no_items = len(self)
         var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
         var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
-        memcpy(dest_ptr, src_ptr, no_items)
+        memcpy(dest=dest_ptr, src=src_ptr, count=no_items)
         self.head = 0
         self.end = no_items
 
@@ -135,7 +136,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
     #     return st_line
 
     @always_inline
-    fn _line_coord(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
+    fn _line_coord(mut self) raises -> Span[Byte, origin_of(self.buf)]:
         while True:
             var search_span = self.buf.as_span()
             var line_end_relative = memchr(search_span, NEW_LINE)
@@ -173,10 +174,10 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         _ = self.buf.resize(nels)
 
     @always_inline
-    fn as_span(self) raises -> Span[Byte, __origin_of(self.buf)]:
+    fn as_span(self) raises -> Span[Byte, origin_of(self.buf)]:
         return self.buf.as_span()[self.head : self.end]
 
-    fn as_span_mut(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
+    fn as_span_mut(mut self) raises -> Span[Byte, origin_of(self.buf)]:
         return self.buf.as_span()[self.head : self.end]
 
     @always_inline
@@ -198,7 +199,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
     @always_inline
     fn __getitem__(
         mut self, sl: Slice
-    ) raises -> Span[Byte, __origin_of(self.buf)]:
+    ) raises -> Span[Byte, origin_of(self.buf)]:
         start = sl.start.or_else(self.head)
         end = sl.end.or_else(self.end)
         step = sl.step.or_else(1)
@@ -236,7 +237,7 @@ struct InnerBuffer(Copyable, Movable):
 
     fn __getitem__(
         mut self, slice: Slice
-    ) raises -> Span[Byte, __origin_of(self)]:
+    ) raises -> Span[Byte, origin_of(self)]:
         var start = slice.start.or_else(0)
         var end = slice.end.or_else(self._len)
         var step = slice.step.or_else(1)
@@ -248,7 +249,7 @@ struct InnerBuffer(Copyable, Movable):
             raise Error("Out of bounds")
         len = end - start
         ptr = self.ptr + start
-        return Span[Byte, __origin_of(self)](ptr=ptr, length=len)
+        return Span[Byte, origin_of(self)](ptr=ptr, length=len)
 
     fn __setitem__(mut self, index: Int, value: Byte) raises:
         if index < self._len:

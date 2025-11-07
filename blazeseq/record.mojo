@@ -75,11 +75,11 @@ struct FastqRecord[val: Bool = True](
             self.validate_quality_schema()
 
     @always_inline
-    fn get_seq(self) -> StringSlice[__origin_of(self.SeqStr)]:
+    fn get_seq(self) -> StringSlice[origin_of(self.SeqStr)]:
         return self.SeqStr.as_string_slice()
 
     @always_inline
-    fn get_quality_string(self) -> StringSlice[__origin_of(self.QuStr)]:
+    fn get_quality_string(self) -> StringSlice[origin_of(self.QuStr)]:
         return self.QuStr.as_string_slice()
 
     @always_inline
@@ -106,7 +106,7 @@ struct FastqRecord[val: Bool = True](
         return output^
 
     @always_inline
-    fn get_header_string(self) -> StringSlice[__origin_of(self.SeqHeader)]:
+    fn get_header_string(self) -> StringSlice[origin_of(self.SeqHeader)]:
         return self.SeqHeader.as_string_slice()
 
     @always_inline
@@ -253,20 +253,20 @@ struct RecordCoord[
 
 
     @always_inline
-    fn get_seq(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[origin = __origin_of(self)](
+    fn get_seq(self) -> StringSlice[origin_of(self)]:
+        return StringSlice[origin = origin_of(self)](
             ptr=self.SeqStr.unsafe_ptr(), length=len(self.SeqStr)
         )
 
     @always_inline
-    fn get_quality(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[origin = __origin_of(self)](
+    fn get_quality(self) -> StringSlice[origin_of(self)]:
+        return StringSlice[origin = origin_of(self)](
             ptr=self.QuStr.unsafe_ptr(), length=len(self.QuStr)
         )
 
     @always_inline
-    fn get_header(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[origin = __origin_of(self)](
+    fn get_header(self) -> StringSlice[origin_of(self)]:
+        return StringSlice[origin = origin_of(self)](
             ptr=self.SeqHeader.unsafe_ptr(), length=len(self.SeqHeader)
         )
 
