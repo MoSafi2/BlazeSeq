@@ -1,23 +1,11 @@
-from blazeseq.iostream import FileReader, BufferedLineIterator
+from blazeseq.iostream import FileReader, BufferedReader
 from blazeseq.readers import GZFile
-from blazeseq.parser import CoordParser, RecordParser
+from blazeseq.parser import RecordParser
 
 
-fn main() raises:
-    var iterator = BufferedLineIterator[check_ascii=False](
-        FileReader(
-            "/home/mohamed/Documents/Projects/BlazeSeq/data/fastq_test.fastq",
-        ),
-        capacity=300,
-    )
-    var count = 0
-    while True:
-        try:
-            var r = iterator._line_coord_n[4]()
-            count += 1
-            if count == 50:
-                break
-        except:
-            break
-
-    print(count)
+def main():
+    reader = BufferedReader(FileReader("./data/9_Swamp_S2B_rbcLa_2019_minq7.fastq"), capacity = 4096)
+    print(reader.get_next_line())
+    print(reader.get_next_line())
+    print(reader.get_next_line())
+    print(reader.get_next_line())

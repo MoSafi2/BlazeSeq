@@ -11,7 +11,7 @@ struct RecordParser[
     var quality_schema: QualitySchema
 
     fn __init__(out self, var reader: R, schema: String = "generic") raises:
-        self.stream = BufferedLineIterator[check_ascii=check_ascii](
+        self.stream = BufferedReader[check_ascii=check_ascii](
             reader^, DEFAULT_CAPACITY
         )
         self.quality_schema = self._parse_schema(schema)
@@ -42,13 +42,15 @@ struct RecordParser[
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord:
-        return FastqRecord(
-            self.stream.get_next_line(),
-            self.stream.get_next_line(),
-            self.stream.get_next_line(),
-            self.stream.get_next_line(),
-            self.quality_schema.copy(),
-        )
+        l1 = self.stream.get_next_line()
+        l2 = self.stream.get_next_line()
+        l3 = self.stream.get_next_line()
+        l4 = self.stream.get_next_line()
+        schema = self.quality_schema.copy()
+        print("l1: ", l1)
+        print("l2: ", l2)
+        print("l3: ", l3)
+        return FastqRecord(l1, l2, l3, l4, schema)
 
     @staticmethod
     @always_inline

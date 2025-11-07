@@ -129,11 +129,11 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         st_line = st_line = _strip_spaces(line_coord)
         return List[Byte](st_line)
 
-    # @always_inline
-    # fn get_next_line_span(mut self) raises -> Span[Byte, __origin_of(self.buf)]:
-    #     line = self._line_coord()
-    #     st_line = _strip_spaces(line)
-    #     return st_line
+    @always_inline
+    fn get_next_line_span(mut self) raises -> Span[Byte, origin_of(self.buf)]:
+        line = self._line_coord()
+        st_line = _strip_spaces(line)
+        return st_line
 
     @always_inline
     fn _line_coord(mut self) raises -> Span[Byte, origin_of(self.buf)]:
@@ -217,7 +217,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
             writer.write("")
 
 
-struct InnerBuffer(Copyable, Movable):
+struct InnerBuffer(Copyable, Movable, Sized):
     var ptr: UnsafePointer[Byte]
     var _len: Int
 
@@ -249,6 +249,7 @@ struct InnerBuffer(Copyable, Movable):
             raise Error("Out of bounds")
         len = end - start
         ptr = self.ptr + start
+        
         return Span[Byte, origin_of(self)](ptr=ptr, length=len)
 
     fn __setitem__(mut self, index: Int, value: Byte) raises:
@@ -256,6 +257,9 @@ struct InnerBuffer(Copyable, Movable):
             self.ptr[index] = value
         else:
             raise Error("Out of bounds")
+
+    fn __len__(self) -> Int:
+        return self._len
 
     fn resize(mut self, new_len: Int) raises -> Bool:
         if new_len < self._len:
