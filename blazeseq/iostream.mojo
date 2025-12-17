@@ -1,4 +1,4 @@
-from memory import memcpy, UnsafePointer, Span
+from memory import memcpy, UnsafePointer, Span, alloc
 from blazeseq.CONSTS import DEFAULT_CAPACITY
 from blazeseq.utils import _check_ascii, _strip_spaces
 from pathlib import Path
@@ -6,7 +6,7 @@ from utils import StaticTuple
 from blazeseq.utils import memchr
 
 
-alias NEW_LINE = 10
+comptime NEW_LINE = 10
 
 
 trait Reader:
@@ -50,7 +50,9 @@ struct FileReader(Movable, Reader):
         return read
 
 
-struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
+struct BufferedReader[R: Reader, check_ascii: Bool = False](
+    Movable, Sized, Writable
+):
     var source: R
     var buf: InnerBuffer
     var head: Int
@@ -72,20 +74,20 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         if self.head == 0:
             return
         var no_items = len(self)
-        var dest_ptr: UnsafePointer[UInt8] = self.buf.ptr
-        var src_ptr: UnsafePointer[UInt8] = self.buf.ptr + self.head
+        var dest_ptr = self.buf.ptr
+        var src_ptr = self.buf.ptr + self.head
         memcpy(dest=dest_ptr, src=src_ptr, count=no_items)
         self.head = 0
         self.end = no_items
 
-    @always_inline
-    fn _check_buf_state(mut self) -> Bool:
-        if self.head >= self.end:
-            self.head = 0
-            self.end = 0
-            return True
-        else:
-            return False
+    # @always_inline
+    # fn _check_buf_state(mut self) -> Bool:
+    #     if self.head >= self.end:
+    #         self.head = 0
+    #         self.end = 0
+    #         return True
+    #     else:
+    #         return False
 
     @always_inline
     fn _fill_buffer(mut self) raises -> UInt64:
@@ -97,9 +99,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
         var nels = self.uninatialized_space()
         var amt = self.source.read_to_buffer(self.buf, nels, self.end)
         self.end += Int(amt)
-        if amt < nels:
-            print("EOF")
-            print(amt)
+        if amt == 0 or amt < nels:
             self.IS_EOF = True
 
         @parameter
@@ -122,41 +122,38 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
 
     @always_inline
     fn get_next_line(mut self) raises -> String:
-        var line_coord = self._line_coord()
-        st_line = st_line = _strip_spaces(line_coord)
+        line_coord = self._line_coord()
+        st_line = _strip_spaces(line_coord)
         return String(bytes=st_line)
 
     fn get_next_line_bytes(mut self) raises -> List[Byte]:
-        var line_coord = self._line_coord()
-        st_line = st_line = _strip_spaces(line_coord)
+        line_coord = self._line_coord()
+        st_line = _strip_spaces(line_coord)
         return List[Byte](st_line)
 
     @always_inline
-    fn get_next_line_span(mut self) raises -> Span[Byte, origin_of(self.buf)]:
+    fn get_next_line_span(mut self) raises -> Span[Byte, MutOrigin.external]:
         line = self._line_coord()
         st_line = _strip_spaces(line)
         return st_line
 
     @always_inline
-    fn _line_coord(mut self) raises -> Span[Byte, origin_of(self.buf)]:
+    fn _line_coord(mut self) raises -> Span[Byte, MutOrigin.external]:
         while True:
-            var search_span = self.buf.as_span(self.head)
-            var line_end_relative = memchr(search_span, NEW_LINE)
-            if line_end_relative != -1:
-                var line_end_absolute = self.head + line_end_relative
-                var final_line_span = self.buf.as_span()[
-                    self.head : line_end_absolute
-                ]
-                self.head = line_end_absolute + 1
-                return final_line_span
+            var search_span = self.buf.as_span()[: self.end]
+            var line_end = memchr(
+                haystack=search_span, chr=NEW_LINE, start=self.head
+            )
+            if line_end != -1:
+                start = self.head
+                self.head = line_end + 1
+                return self.buf.as_span()[start:line_end]
 
             if self.IS_EOF:
                 if self.head < self.end:
-                    var final_line_span = self.buf.as_span()[
-                        self.head : self.end
-                    ]
+                    start = self.head
                     self.head = self.end
-                    return final_line_span
+                    return self.buf.as_span()[start : self.end]
                 else:
                     raise Error("EOF")
 
@@ -166,21 +163,25 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
 
     @always_inline
     fn _resize_buf(mut self, amt: Int, max_capacity: Int) raises:
+        """Resizes Buffer by adding specific amount to the end of the buffer"""
         if self.capacity() == max_capacity:
             raise Error("Buffer is at max capacity")
-        var nels: Int
+
+        var new_capacity: Int
+
         if self.capacity() + amt > max_capacity:
-            nels = max_capacity
+            new_capacity = max_capacity
         else:
-            nels = self.capacity() + amt
-        _ = self.buf.resize(nels)
+            new_capacity = self.capacity() + amt
+
+        _ = self.buf.resize(new_capacity)
 
     @always_inline
-    fn as_span(self) raises -> Span[Byte, origin_of(self.buf)]:
+    fn as_span(self) raises -> Span[Byte, MutOrigin.external]:
         return self.buf.as_span()[self.head : self.end]
 
-    fn as_span_mut(mut self) raises -> Span[Byte, origin_of(self.buf)]:
-        return self.buf.as_span()[self.head : self.end]
+    # fn as_span_mut(mut self) raises -> Span[Byte, MutOrigin.external]:
+    #     return self.buf.as_span()[self.head : self.end]
 
     @always_inline
     fn __len__(self) -> Int:
@@ -194,14 +195,14 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
 
     @always_inline
     fn __getitem__(self, index: Int) raises -> Byte:
-        if self.head > index or index >= self.end:
+        if self.head > index or self.end <= index:
             raise Error("Out of bounds")
         return self.buf[index]
 
     @always_inline
     fn __getitem__(
         mut self, sl: Slice
-    ) raises -> Span[Byte, origin_of(self.buf)]:
+    ) raises -> Span[Byte, MutOrigin.external]:
         start = sl.start.or_else(self.head)
         end = sl.end.or_else(self.end)
         step = sl.step.or_else(1)
@@ -219,16 +220,14 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](Sized, Writable):
             writer.write("")
 
 
-struct InnerBuffer(Copyable, Movable, Sized):
-    var ptr: UnsafePointer[Byte]
+struct InnerBuffer(Movable, Sized):
+    var ptr: UnsafePointer[type=Byte, origin = MutOrigin.external]
     var _len: Int
 
     fn __init__(out self, length: Int):
-        self.ptr = UnsafePointer[Byte].alloc(length)
-        self._len = length
-
-    fn __init__(out self, ptr: UnsafePointer[Byte], length: Int):
-        self.ptr = ptr
+        self.ptr: UnsafePointer[Byte, origin = MutOrigin.external] = alloc[
+            Byte
+        ](length)
         self._len = length
 
     fn __getitem__(self, index: Int) raises -> Byte:
@@ -239,7 +238,7 @@ struct InnerBuffer(Copyable, Movable, Sized):
 
     fn __getitem__(
         mut self, slice: Slice
-    ) raises -> Span[Byte, origin_of(self)]:
+    ) raises -> Span[Byte, MutOrigin.external]:
         var start = slice.start.or_else(0)
         var end = slice.end.or_else(self._len)
         var step = slice.step.or_else(1)
@@ -252,7 +251,7 @@ struct InnerBuffer(Copyable, Movable, Sized):
         len = end - start
         ptr = self.ptr + start
 
-        return Span[Byte, origin_of(self)](ptr=ptr, length=len)
+        return Span[Byte, MutOrigin.external](ptr=ptr, length=len)
 
     fn __setitem__(mut self, index: Int, value: Byte) raises:
         if index < self._len:
@@ -266,18 +265,19 @@ struct InnerBuffer(Copyable, Movable, Sized):
     fn resize(mut self, new_len: Int) raises -> Bool:
         if new_len < self._len:
             raise Error("New length must be greater than current length")
-        var new_ptr = UnsafePointer[Byte].alloc(new_len)
+        var new_ptr = alloc[Byte](new_len)
         memcpy(dest=new_ptr, src=self.ptr, count=self._len)
+        self.ptr.free()
         self.ptr = new_ptr
         self._len = new_len
         return True
 
-    fn as_span[
-        mut: Bool, //, o: Origin[mut]
-    ](ref [o]self, pos: Int = 0) raises -> Span[Byte, o]:
+    fn as_span(self, pos: Int = 0) raises -> Span[Byte, MutOrigin.external]:
         if pos > self._len:
             raise Error("Position is outside the buffer")
-        return Span[Byte, o](ptr=self.ptr + pos, length=self._len - pos)
+        return Span[Byte, MutOrigin.external](
+            ptr=self.ptr + pos, length=self._len - pos
+        )
 
     fn __del__(deinit self):
         if self.ptr:
