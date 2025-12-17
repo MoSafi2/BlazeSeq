@@ -1,6 +1,6 @@
 from blazeseq import FastqRecord
 from blazeseq.iostream import BufferedReader
-from testing import assert_equal, assert_false, assert_true
+from testing import assert_equal, assert_false, assert_true, TestSuite
 
 
 fn get_fastq_records() raises -> List[String]:
@@ -13,11 +13,10 @@ fn get_fastq_records() raises -> List[String]:
     # Get first 4 lines for a complete FASTQ record
     for i in range(min(4, len(lines))):
         records.append(String(lines[i]))
-
     return records^
 
 
-fn valid_fastq_record() raises:
+fn test_valid_fastq_record() raises:
     var valid_vec = get_fastq_records()
     var read = FastqRecord(
         valid_vec[0], valid_vec[1], valid_vec[2], valid_vec[3]
@@ -36,10 +35,10 @@ fn valid_fastq_record() raises:
 
     # Test string representation
     var str_repr = read.__str__()
-    assert_true(str_repr.count("\n") == 3)  # Should have 3 newlines for 4 lines
+    assert_true(str_repr.count("\n") == 4)  # Should have 3 newlines for 4 lines
 
 
-fn invalid_record() raises:
+fn test_invalid_record() raises:
     # Test invalid header (doesn't start with @)
     try:
         _ = FastqRecord("INVALID", "ATCG", "+", "!!!!")
@@ -67,11 +66,11 @@ fn invalid_record() raises:
 
 
 fn test_fastq_record_methods() raises:
-    var record = FastqRecord("@test_seq", "ATCGATCG", "+", "!!!!!!!!!")
+    var record = FastqRecord("@test_seq", "ATCGATCGG", "+", "!!!!!!!!!")
 
     # Test getter methods
     var seq = record.get_seq()
-    assert_equal(String(seq), "ATCGATCG")
+    assert_equal(String(seq), "ATCGATCGG")
 
     var qual = record.get_quality_string()
     assert_equal(String(qual), "!!!!!!!!!")
@@ -80,9 +79,9 @@ fn test_fastq_record_methods() raises:
     assert_equal(String(header), "@test_seq")
 
     # Test length methods
-    assert_equal(len(record), 8)
+    assert_equal(len(record), 9)
     assert_equal(
-        record.total_length(), 26
+        record.total_length(), 28
     )  # @test_seq(9) + ATCGATCG(8) + +(1) + !!!!!!!!!(8)
 
 
@@ -100,18 +99,6 @@ fn test_fastq_record_equality() raises:
 
 
 fn main() raises:
-    print("Running FASTQ record tests...")
 
-    valid_fastq_record()
-    print("✓ Valid FASTQ record test passed")
+    TestSuite.discover_tests[__functions_in_module()]().run()
 
-    # invalid_record()
-    # print("✓ Invalid record tests passed")
-
-    # test_fastq_record_methods()
-    # print("✓ FASTQ record methods test passed")
-
-    # test_fastq_record_equality()
-    # print("✓ FASTQ record equality test passed")
-
-    # print("All FASTQ record tests completed successfully!")

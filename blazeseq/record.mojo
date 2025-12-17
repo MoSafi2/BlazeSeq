@@ -83,7 +83,7 @@ struct FastqRecord[val: Bool = True](
         return self.QuStr.as_string_slice()
 
     @always_inline
-    fn get_qulity_scores(self, mut quality_format: schema) -> List[UInt8]:
+    fn get_quality_scores(self, mut quality_format: schema) -> List[UInt8]:
         var in_schema: QualitySchema
 
         if quality_format.isa[String]():
@@ -91,15 +91,15 @@ struct FastqRecord[val: Bool = True](
         else:
             in_schema = quality_format.take[QualitySchema]()
 
-        output = List[UInt8](capacity=len(self.QuStr))
+        output = List[UInt8](length=len(self.QuStr), fill=0)
         bytes = self.QuStr.as_bytes()
         for i in range(len(self.QuStr)):
             output[i] = bytes[i] - in_schema.OFFSET
         return output^
 
     @always_inline
-    fn get_qulity_scores(self, offset: UInt8) -> List[UInt8]:
-        output = List[UInt8](capacity=len(self.QuStr))
+    fn get_quality_scores(self, offset: UInt8) -> List[UInt8]:
+        output = List[UInt8](length=len(self.QuStr), fill=0)
         bytes = self.QuStr.as_bytes()
         for i in range(len(self.QuStr)):
             output[i] = bytes[i] - offset
@@ -219,25 +219,24 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
 
 
 @fieldwise_init
-struct RecordCoord[
-    mut: Bool, //, o: Origin[mut], validate_quality: Bool = False
+struct RecordCoord[ validate_quality: Bool = False
 ](Sized, Writable, Movable, Copyable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Span[Byte, o]
-    var SeqStr: Span[Byte, o]
-    var QuHeader: Span[Byte, o]
-    var QuStr: Span[Byte, o]
+    var SeqHeader: Span[Byte, MutOrigin.external]
+    var SeqStr: Span[Byte, MutOrigin.external]
+    var QuHeader: Span[Byte, MutOrigin.external]
+    var QuStr: Span[Byte, MutOrigin.external]
     var quality_schema: QualitySchema
 
 
     fn __init__(
         out self,
-        SeqHeader: Span[Byte, o],
-        SeqStr: Span[Byte, o],
-        QuHeader: Span[Byte, o],
-        QuStr: Span[Byte, o],
+        SeqHeader: Span[Byte, MutOrigin.external],
+        SeqStr: Span[Byte, MutOrigin.external],
+        QuHeader: Span[Byte, MutOrigin.external],
+        QuStr: Span[Byte, MutOrigin.external],
         quality_schema: schema = "generic",
 
     ):
@@ -253,20 +252,21 @@ struct RecordCoord[
 
 
     @always_inline
-    fn get_seq(self) -> StringSlice[origin_of(self)]:
-        return StringSlice[origin = origin_of(self)](
+    fn get_seq(self) -> StringSlice[origin = MutOrigin.external]:
+        
+        return StringSlice[origin = MutOrigin.external](
             ptr=self.SeqStr.unsafe_ptr(), length=len(self.SeqStr)
         )
 
     @always_inline
-    fn get_quality(self) -> StringSlice[origin_of(self)]:
-        return StringSlice[origin = origin_of(self)](
+    fn get_quality(self) -> StringSlice[origin = MutOrigin.external]:
+        return StringSlice[origin = MutOrigin.external](
             ptr=self.QuStr.unsafe_ptr(), length=len(self.QuStr)
         )
 
     @always_inline
-    fn get_header(self) -> StringSlice[origin_of(self)]:
-        return StringSlice[origin = origin_of(self)](
+    fn get_header(self) -> StringSlice[origin = MutOrigin.external]:
+        return StringSlice[origin = MutOrigin.external](
             ptr=self.SeqHeader.unsafe_ptr(), length=len(self.SeqHeader)
         )
 
@@ -300,7 +300,7 @@ struct RecordCoord[
         )
 
     @always_inline
-    fn get_qulity_scores(
+    fn get_quality_scores(
         self, quality_format: schema
     ) -> List[Byte]:
         if quality_format.isa[String]():
@@ -308,16 +308,16 @@ struct RecordCoord[
         else:
             schema = quality_format[QualitySchema]
 
-        output = List[Byte](capacity=self.len_quality())
+        output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - schema.OFFSET
         return output^
 
     @always_inline
-    fn get_qulity_scores(
+    fn get_quality_scores(
         self, offset: UInt8
     ) -> List[Byte]:
-        output = List[Byte](capacity=self.len_quality())
+        output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - offset
         return output^
