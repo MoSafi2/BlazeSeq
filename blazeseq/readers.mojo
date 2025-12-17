@@ -26,7 +26,7 @@ alias Z_BUF_ERROR = -5
 alias Z_VERSION_ERROR = -6
 
 # Type aliases for C types
-alias c_void_ptr = UnsafePointer[UInt8]
+alias c_void_ptr = UnsafePointer[UInt8, MutOrigin.external]
 alias c_char_ptr = UnsafePointer[Int8]
 alias c_uint = UInt32
 alias c_int = Int32
@@ -40,10 +40,10 @@ alias gzread_fn_type = fn (
 
 
 @fieldwise_init
-struct ZLib(Copyable, Movable):
+struct ZLib(Movable):
     """Wrapper for zlib library functions."""
 
-    var lib_handle: ffi.DLHandle
+    var lib_handle: ffi.OwnedDLHandle
 
     @staticmethod
     fn _get_libname() -> StaticString:
@@ -55,7 +55,7 @@ struct ZLib(Copyable, Movable):
 
     fn __init__(out self) raises:
         """Initialize zlib wrapper."""
-        self.lib_handle = ffi.DLHandle(Self._get_libname())
+        self.lib_handle = ffi.OwnedDLHandle(Self._get_libname())
 
     fn gzopen(
         self, mut filename: String, mut mode: String
@@ -130,9 +130,9 @@ struct GZFile(Movable, Reader):
 
         return UInt64(bytes_read)
 
-    fn unbuffered_read[
-        o: MutOrigin
-    ](mut self, buffer: Span[UInt8, o]) raises -> Int:
+    fn unbuffered_read[](
+        mut self, buffer: Span[UInt8, MutOrigin.external]
+    ) raises -> Int:
         """Read data from the gzip file.
 
         Args:
