@@ -180,6 +180,16 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
     fn as_span(self) raises -> Span[Byte, MutOrigin.external]:
         return self.buf.as_span()[self.head : self.end]
 
+    # Suggestion from Claude To avoid Error catching when reading till last line
+    @always_inline
+    fn has_more_lines(self) -> Bool:
+        """Returns True if there are more lines available to read."""
+        if self.head < self.end:
+            return True
+        if not self.IS_EOF:
+            return True
+        return False
+
     # fn as_span_mut(mut self) raises -> Span[Byte, MutOrigin.external]:
     #     return self.buf.as_span()[self.head : self.end]
 

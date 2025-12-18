@@ -18,27 +18,32 @@ struct RecordParser[
 
     fn parse_all(mut self) raises:
         while True:
+            if not self.stream.has_more_lines():
+                break
             var record: FastqRecord
             record = self._parse_record()
             record.validate_record()
 
             # ASCII validation is carried out in the reader
             @parameter
-            if check_ascii:
+            if check_quality:
                 record.validate_quality_schema()
 
     @always_inline
-    fn next(mut self) raises -> FastqRecord:
+    fn next(mut self) raises -> Optional[FastqRecord]:
         """Method that lazily returns the Next record in the file."""
-        var record: FastqRecord
-        record = self._parse_record()
-        record.validate_record()
+        if self.stream.has_more_lines():
+            var record: FastqRecord
+            record = self._parse_record()
+            record.validate_record()
 
-        # ASCII validation is carried out in the reader
-        @parameter
-        if check_ascii:
-            record.validate_quality_schema()
-        return record^
+            # ASCII validation is carried out in the reader
+            @parameter
+            if check_quality:
+                record.validate_quality_schema()
+            return record^
+        else:
+            return None
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord:
@@ -50,10 +55,6 @@ struct RecordParser[
         try:
             return FastqRecord(l1, l2, l3, l4, schema)
         except Error:
-            print(l1)
-            print(l2)
-            print(l3)
-            print(l4)
             raise
 
     @staticmethod
@@ -83,53 +84,53 @@ struct RecordParser[
         return schema^
 
 
-# struct CoordParser[
-#     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
-# ]:
-#     var stream: BufferedLineIterator[R, check_ascii=check_ascii]
+struct CoordParser[
+    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+]:
+    var stream: BufferedLineIterator[R, check_ascii=check_ascii]
 
-#     fn __init__(out self, owned reader: R) raises:
-#         self.stream = BufferedReader[check_ascii=check_ascii](
-#             reader^, DEFAULT_CAPACITY
-#         )
+    fn __init__(out self, var reader: R) raises:
+        self.stream = BufferedReader[check_ascii=check_ascii](
+            reader^, DEFAULT_CAPACITY
+        )
 
-#     @always_inline
-#     fn parse_all(mut self) raises:
-#         while True:
-#             record = self._parse_record()
-#             record.validate()
+    @always_inline
+    fn parse_all(mut self) raises:
+        while True:
+            record = self._parse_record()
+            record.validate()
 
-#             @parameter
-#             if check_quality:
-#                 record.validate_quality_schema()
+            @parameter
+            if check_quality:
+                record.validate_quality_schema()
 
-#     @always_inline
-#     fn next(
-#         mut self,
-#     ) raises -> RecordCoord[mut=False, o = __origin_of(self.stream.buf)]:
-#         read = self._parse_record()
-#         read.validate()
+    @always_inline
+    fn next(
+        mut self,
+    ) raises -> RecordCoord[mut=False, o = origin_of(self.stream.buf)]:
+        read = self._parse_record()
+        read.validate()
 
-#         @parameter
-#         if check_quality:
-#             read.validate_quality_schema()
-#         return read
+        @parameter
+        if check_quality:
+            read.validate_quality_schema()
+        return read
 
-#     @always_inline
-#     fn _parse_record(
-#         mut self,
-#     ) raises -> RecordCoord[
-#         mut=False, o = __origin_of(__origin_of(self.stream.buf))
-#     ]:
-#         var line1 = self.stream.get_next_line_span()
+    @always_inline
+    fn _parse_record(
+        mut self,
+    ) raises -> RecordCoord[
+        mut=False, o = origin_of(origin_of(self.stream.buf))
+    ]:
+        var line1 = self.stream.get_next_line_span()
 
-#         var line2 = self.stream.get_next_line_span()
-#         var line3 = self.stream.get_next_line_span()
-#         var line4 = self.stream.get_next_line_span()
+        var line2 = self.stream.get_next_line_span()
+        var line3 = self.stream.get_next_line_span()
+        var line4 = self.stream.get_next_line_span()
 
-#         return RecordCoord(
-#             line1.get_immutable(),
-#             line2.get_immutable(),
-#             line3.get_immutable(),
-#             line4.get_immutable(),
-#         )
+        return RecordCoord(
+            line1.get_immutable(),
+            line2.get_immutable(),
+            line3.get_immutable(),
+            line4.get_immutable(),
+        )
