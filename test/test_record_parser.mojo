@@ -6,111 +6,113 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 """
 
 from blazeseq import RecordParser
-from testing import assert_raises
+from blazeseq.iostream import FileReader
+from testing import assert_raises, TestSuite
 
-alias test_dir = "test/test_data/fastq_parser/"
+comptime test_dir = "test/test_data/fastq_parser/"
 
-alias corrput_qu_score = "Corrput quality score according to proivded schema"
-alias EOF = "EOF"
-alias cor_len = "Corrput Lengths"
-alias cor_seq_hed = "Sequence Header is corrupt"
-alias cor_qu_hed = "Quality Header is corrupt"
-alias non_mat_hed = "Non matching headers"
+comptime corrput_qu_score = "Corrput quality score according to proivded schema"
+comptime EOF = "EOF"
+comptime cor_len = "Quality and Sequencing string does not match in lengths"
+comptime cor_seq_hed = "Sequence header does not start with '@'"
+comptime cor_qu_hed = "Quality header dies not start with '+'"
+comptime non_mat_hed = "Quality Header is not the same as the Sequecing Header"
+comptime len_mismatch = "Quality Header is not the same length as the Sequencing header"
 
 
-fn test_invalid_file(file: String, msg: String = "") raises:
+fn invalid_file_test_fun(file: String, msg: String = "") raises:
     with assert_raises(contains=msg):
-        var parser = RecordParser(test_dir + file)
+        var parser = RecordParser(FileReader(test_dir + file))
         parser.parse_all()
 
 
-fn test_valid_file(file: String, schema: String = "generic") raises:
-    var parser = RecordParser[validate_ascii=True, validate_quality=True](
-        test_dir + file, schema
-    )
+fn valid_file_test_fun(file: String, schema: String = "generic") raises:
+    var parser = RecordParser(FileReader(test_dir + file), schema)
     try:
         parser.parse_all()
     except Error:
-        var err_msg = Error._message()
+        var err_msg = String(Error)
         if err_msg == "EOF":
             pass
         else:
             print(err_msg)
-            print(file)
             raise
 
 
 fn test_valid() raises:
-    test_valid_file("example.fastq")
-    test_valid_file("illumina_example.fastq", "illumina_1.3")
-    test_valid_file("illumina_faked.fastq", "illumina_1.3")
-    test_valid_file("illumina_full_range_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("illumina_full_range_as_sanger.fastq", "sanger")
-    test_valid_file("illumina_full_range_as_solexa.fastq", "solexa")
-    test_valid_file("illumina_full_range_original_illumina.fastq", "illumina_1.3")
-    test_valid_file("longreads_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("longreads_as_sanger.fastq", "sanger")
-    test_valid_file("longreads_as_solexa.fastq", "solexa")
-    test_valid_file("misc_dna_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("misc_dna_as_sanger.fastq", "sanger")
-    test_valid_file("misc_dna_as_solexa.fastq", "solexa")
-    test_valid_file("misc_dna_original_sanger.fastq", "sanger")
-    test_valid_file("misc_rna_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("misc_rna_as_sanger.fastq", "sanger")
-    test_valid_file("misc_rna_as_solexa.fastq", "solexa")
-    test_valid_file("misc_rna_original_sanger.fastq", "sanger")
-    test_valid_file("sanger_93.fastq", "sanger")
-    test_valid_file("sanger_faked.fastq", "sanger")
-    test_valid_file("sanger_full_range_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("sanger_full_range_as_sanger.fastq", "sanger")
-    test_valid_file("sanger_full_range_as_solexa.fastq", "solexa")
-    test_valid_file("sanger_full_range_original_sanger.fastq", "sanger")
-    test_valid_file("solexa_example.fastq", "solexa")
-    test_valid_file("solexa_faked.fastq", "solexa")
-    test_valid_file("solexa_full_range_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("solexa_full_range_as_sanger.fastq", "sanger")
-    test_valid_file("solexa_full_range_as_solexa.fastq", "solexa")
-    test_valid_file("solexa_full_range_original_solexa.fastq", "solexa")
-    test_valid_file("test1_sanger.fastq", "sanger")
-    test_valid_file("test2_solexa.fastq", "solexa")
-    test_valid_file("test3_illumina.fastq", "illumina_1.3")
-    test_valid_file("wrapping_as_illumina.fastq", "illumina_1.3")
-    test_valid_file("wrapping_as_sanger.fastq", "sanger")
-    test_valid_file("wrapping_as_solexa.fastq", "solexa")
+    valid_file_test_fun("example.fastq")
+    valid_file_test_fun("illumina_example.fastq", "illumina_1.3")
+    valid_file_test_fun("illumina_faked.fastq", "illumina_1.3")
+    valid_file_test_fun("illumina_full_range_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("illumina_full_range_as_sanger.fastq", "sanger")
+    valid_file_test_fun("illumina_full_range_as_solexa.fastq", "solexa")
+    valid_file_test_fun(
+        "illumina_full_range_original_illumina.fastq", "illumina_1.3"
+    )
+    valid_file_test_fun("longreads_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("longreads_as_sanger.fastq", "sanger")
+    valid_file_test_fun("longreads_as_solexa.fastq", "solexa")
+    valid_file_test_fun("misc_dna_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("misc_dna_as_sanger.fastq", "sanger")
+    valid_file_test_fun("misc_dna_as_solexa.fastq", "solexa")
+    valid_file_test_fun("misc_dna_original_sanger.fastq", "sanger")
+    valid_file_test_fun("misc_rna_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("misc_rna_as_sanger.fastq", "sanger")
+    valid_file_test_fun("misc_rna_as_solexa.fastq", "solexa")
+    valid_file_test_fun("misc_rna_original_sanger.fastq", "sanger")
+    valid_file_test_fun("sanger_93.fastq", "sanger")
+    valid_file_test_fun("sanger_faked.fastq", "sanger")
+    valid_file_test_fun("sanger_full_range_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("sanger_full_range_as_sanger.fastq", "sanger")
+    valid_file_test_fun("sanger_full_range_as_solexa.fastq", "solexa")
+    valid_file_test_fun("sanger_full_range_original_sanger.fastq", "sanger")
+    valid_file_test_fun("solexa_example.fastq", "solexa")
+    valid_file_test_fun("solexa_faked.fastq", "solexa")
+    valid_file_test_fun("solexa_full_range_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("solexa_full_range_as_sanger.fastq", "sanger")
+    valid_file_test_fun("solexa_full_range_as_solexa.fastq", "solexa")
+    valid_file_test_fun("solexa_full_range_original_solexa.fastq", "solexa")
+    valid_file_test_fun("test1_sanger.fastq", "sanger")
+    valid_file_test_fun("test2_solexa.fastq", "solexa")
+    valid_file_test_fun("test3_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("wrapping_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun("wrapping_as_sanger.fastq", "sanger")
+    valid_file_test_fun("wrapping_as_solexa.fastq", "solexa")
 
 
 fn test_invalid() raises:
-    test_invalid_file("empty.fastq", EOF)
-    test_invalid_file("error_diff_ids.fastq", non_mat_hed)
-    test_invalid_file("error_long_qual.fastq", cor_len)
-    test_invalid_file("error_no_qual.fastq", cor_len)
-    test_invalid_file("error_trunc_in_plus.fastq", cor_len)
-    test_invalid_file("error_trunc_at_qual.fastq", cor_len)
-    test_invalid_file("error_double_qual.fastq", cor_seq_hed)
-    test_invalid_file("error_trunc_at_seq.fastq", cor_qu_hed)
-    test_invalid_file("error_trunc_in_seq.fastq", cor_qu_hed)
-    test_invalid_file("error_trunc_in_title.fastq", cor_qu_hed)
-    test_invalid_file("error_double_seq.fastq", cor_qu_hed)
-    test_invalid_file("error_trunc_at_plus.fastq", cor_qu_hed)
-    test_invalid_file("error_qual_null.fastq", corrput_qu_score)
-    test_invalid_file("error_qual_space.fastq", corrput_qu_score)
-    test_invalid_file("error_spaces.fastq", corrput_qu_score)
-    test_invalid_file("error_qual_vtab.fastq", corrput_qu_score)
-    test_invalid_file("error_tabs.fastq", corrput_qu_score)
-    test_invalid_file("error_qual_tab.fastq", corrput_qu_score)
-    test_invalid_file("error_qual_del.fastq", corrput_qu_score)
-    test_invalid_file("error_qual_escape.fastq", corrput_qu_score)
-    test_invalid_file("solexa-invalid-description.fastq", cor_seq_hed)
-    test_invalid_file("solexa-invalid-repeat-description.fastq", cor_qu_hed)
-    test_invalid_file("sanger-invalid-description.fastq", cor_seq_hed)
-    test_invalid_file("sanger-invalid-repeat-description.fastq", cor_qu_hed)
-    test_invalid_file("illumina-invalid-description.fastq", cor_seq_hed)
-    test_invalid_file("illumina-invalid-repeat-description.fastq", cor_qu_hed)
-    test_invalid_file("error_qual_unit_sep.fastq", corrput_qu_score)
-    test_invalid_file("error_short_qual.fastq", cor_len)
-    test_invalid_file("error_trunc_in_qual.fastq", cor_len)
+    invalid_file_test_fun("empty.fastq", EOF)
+    invalid_file_test_fun("error_diff_ids.fastq", non_mat_hed)
+    invalid_file_test_fun("error_long_qual.fastq", cor_len)
+    invalid_file_test_fun("error_no_qual.fastq", cor_len)
+    invalid_file_test_fun("error_trunc_in_plus.fastq", cor_len)
+    invalid_file_test_fun("error_trunc_at_qual.fastq", cor_len)
+    invalid_file_test_fun("error_double_qual.fastq", cor_seq_hed)
+    invalid_file_test_fun("error_trunc_at_seq.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_trunc_in_seq.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_trunc_in_title.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_double_seq.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_trunc_at_plus.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_qual_null.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_space.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_spaces.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_vtab.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_tabs.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_tab.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_del.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
+    invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun("solexa-invalid-repeat-description.fastq", len_mismatch)
+    invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun("sanger-invalid-repeat-description.fastq", len_mismatch)
+    invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun(
+        "illumina-invalid-repeat-description.fastq", len_mismatch
+    )
+    invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_short_qual.fastq", cor_len)
+    invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
 
 
 fn main() raises:
-    test_invalid()
-    test_valid()
+    TestSuite.discover_tests[__functions_in_module()]().run()
