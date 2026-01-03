@@ -465,7 +465,7 @@ fn test_left_shift() raises:
     _ = buf_reader.get_next_line()
 
     var head_before = buf_reader.head
-    var end_before = buf_reader.end
+    _ = buf_reader.end
     var len_before = len(buf_reader)
 
     assert_true(head_before > 0, "Head should have moved")
@@ -517,7 +517,7 @@ fn test_fill_buffer() raises:
     var reader = FileReader(test_file)
     var buf_reader = BufferedReader(reader^, capacity=100)
 
-    var initial_end = buf_reader.end
+    _ = buf_reader.end
 
     # Read some lines to consume buffer
     for i in range(10):
