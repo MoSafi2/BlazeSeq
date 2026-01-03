@@ -6,9 +6,9 @@ from sys.info import simd_width_of
 import math
 
 
-alias NEW_LINE = 10
+comptime NEW_LINE = 10
 
-alias SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
+comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 
 # From extramojo pacakge, skipping version problems
@@ -83,7 +83,7 @@ fn memchr[
 
 @always_inline
 fn _strip_spaces[
-    mut: Bool, o: Origin[mut]
+    mut: Bool, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
     var start = 0
     # Find the first non-space character from the beginning
@@ -101,9 +101,9 @@ fn _strip_spaces[
 
 
 @always_inline
-fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
+fn _check_ascii[mut: Bool, //, o: Origin[mut=mut]](buffer: Span[Byte, o]) raises:
     var aligned_end = math.align_down(len(buffer), simd_width)
-    alias bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
+    comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 
     for i in range(0, aligned_end, simd_width):
         var vec = buffer.unsafe_ptr().load[width=simd_width](i)
@@ -118,15 +118,15 @@ fn _check_ascii[mut: Bool, //, o: Origin[mut]](buffer: Span[Byte, o]) raises:
 # Ported from the is_posix_space() in Mojo Stdlib
 @always_inline
 fn is_posix_space(c: Byte) -> Bool:
-    alias SPACE = Byte(ord(" "))
-    alias HORIZONTAL_TAB = Byte(ord("\t"))
-    alias NEW_LINE = Byte(ord("\n"))
-    alias CARRIAGE_RETURN = Byte(ord("\r"))
-    alias FORM_FEED = Byte(ord("\f"))
-    alias VERTICAL_TAB = Byte(ord("\v"))
-    alias FILE_SEP = Byte(ord("\x1c"))
-    alias GROUP_SEP = Byte(ord("\x1d"))
-    alias RECORD_SEP = Byte(ord("\x1e"))
+    comptime SPACE = Byte(ord(" "))
+    comptime HORIZONTAL_TAB = Byte(ord("\t"))
+    comptime NEW_LINE = Byte(ord("\n"))
+    comptime CARRIAGE_RETURN = Byte(ord("\r"))
+    comptime FORM_FEED = Byte(ord("\f"))
+    comptime VERTICAL_TAB = Byte(ord("\v"))
+    comptime FILE_SEP = Byte(ord("\x1c"))
+    comptime GROUP_SEP = Byte(ord("\x1d"))
+    comptime RECORD_SEP = Byte(ord("\x1e"))
 
     # This compiles to something very clever that's even faster than a LUT.
     return (

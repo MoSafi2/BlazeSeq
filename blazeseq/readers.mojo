@@ -15,26 +15,26 @@ from blazeseq.iostream import Reader, InnerBuffer
 
 
 # Constants for zlib return codes
-alias Z_OK = 0
-alias Z_STREAM_END = 1
-alias Z_NEED_DICT = 2
-alias Z_ERRNO = -1
-alias Z_STREAM_ERROR = -2
-alias Z_DATA_ERROR = -3
-alias Z_MEM_ERROR = -4
-alias Z_BUF_ERROR = -5
-alias Z_VERSION_ERROR = -6
+comptime Z_OK = 0
+comptime Z_STREAM_END = 1
+comptime Z_NEED_DICT = 2
+comptime Z_ERRNO = -1
+comptime Z_STREAM_ERROR = -2
+comptime Z_DATA_ERROR = -3
+comptime Z_MEM_ERROR = -4
+comptime Z_BUF_ERROR = -5
+comptime Z_VERSION_ERROR = -6
 
 # Type aliases for C types
-alias c_void_ptr = UnsafePointer[UInt8, MutOrigin.external]
-alias c_char_ptr = UnsafePointer[Int8]
-alias c_uint = UInt32
-alias c_int = Int32
+comptime c_void_ptr = UnsafePointer[UInt8, MutOrigin.external]
+comptime c_char_ptr = UnsafePointer[Int8]
+comptime c_uint = UInt32
+comptime c_int = Int32
 
 # Define function signatures for zlib functions
-alias gzopen_fn_type = fn (filename: c_char_ptr, mode: c_char_ptr) -> c_void_ptr
-alias gzclose_fn_type = fn (file: c_void_ptr) -> c_int
-alias gzread_fn_type = fn (
+comptime gzopen_fn_type = fn (filename: c_char_ptr, mode: c_char_ptr) -> c_void_ptr
+comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
+comptime gzread_fn_type = fn (
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
 
@@ -65,7 +65,7 @@ struct ZLib(Movable):
         var func = self.lib_handle.get_function[gzopen_fn_type]("gzopen")
 
         # Call the function
-        var result = func(filename.unsafe_cstr_ptr(), mode.unsafe_cstr_ptr())
+        var result = func(filename.as_c_string_slice(), mode.as_c_string_slice())
 
         return result
 

@@ -53,14 +53,14 @@ struct FileReader(Movable, Reader):
 struct BufferedReader[R: Reader, check_ascii: Bool = False](
     Movable, Sized, Writable
 ):
-    var source: R
+    var source: Self.R
     var buf: InnerBuffer
     var head: Int
     var end: Int
     var IS_EOF: Bool
 
     fn __init__(
-        out self, var reader: R, capacity: Int = DEFAULT_CAPACITY
+        out self, var reader: Self.R, capacity: Int = DEFAULT_CAPACITY
     ) raises:
         self.source = reader^
         self.buf = InnerBuffer(capacity)
@@ -103,7 +103,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
             self.IS_EOF = True
 
         @parameter
-        if check_ascii:
+        if Self.check_ascii:
             var s = self.buf.as_span()
             _check_ascii(s)
         return amt

@@ -7,11 +7,11 @@ import time
 struct RecordParser[
     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
 ]:
-    var stream: BufferedReader[R, check_ascii=check_ascii]
+    var stream: BufferedReader[Self.R, check_ascii=Self.check_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(out self, var reader: R, schema: String = "generic") raises:
-        self.stream = BufferedReader[check_ascii=check_ascii](
+    fn __init__(out self, var reader: Self.R, schema: String = "generic") raises:
+        self.stream = BufferedReader[check_ascii=Self.check_ascii](
             reader^, DEFAULT_CAPACITY
         )
         self.quality_schema = self._parse_schema(schema)
@@ -26,7 +26,7 @@ struct RecordParser[
 
             # ASCII validation is carried out in the reader
             @parameter
-            if check_quality:
+            if Self.check_quality:
                 record.validate_quality_schema()
 
     @always_inline
@@ -39,7 +39,7 @@ struct RecordParser[
 
             # ASCII validation is carried out in the reader
             @parameter
-            if check_quality:
+            if Self.check_quality:
                 record.validate_quality_schema()
             return record^
         else:
@@ -84,53 +84,53 @@ struct RecordParser[
         return schema^
 
 
-struct CoordParser[
-    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
-]:
-    var stream: BufferedLineIterator[R, check_ascii=check_ascii]
+# struct CoordParser[
+#     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+# ]:
+#     var stream: BufferedLineIterator[R, check_ascii=check_ascii]
 
-    fn __init__(out self, var reader: R) raises:
-        self.stream = BufferedReader[check_ascii=check_ascii](
-            reader^, DEFAULT_CAPACITY
-        )
+#     fn __init__(out self, var reader: Self.R) raises:
+#         self.stream = BufferedReader[check_ascii=check_ascii](
+#             reader^, DEFAULT_CAPACITY
+#         )
 
-    @always_inline
-    fn parse_all(mut self) raises:
-        while True:
-            record = self._parse_record()
-            record.validate()
+#     @always_inline
+#     fn parse_all(mut self) raises:
+#         while True:
+#             record = self._parse_record()
+#             record.validate()
 
-            @parameter
-            if check_quality:
-                record.validate_quality_schema()
+#             @parameter
+#             if Self.check_quality:
+#                 record.validate_quality_schema()
 
-    @always_inline
-    fn next(
-        mut self,
-    ) raises -> RecordCoord[mut=False, o = origin_of(self.stream.buf)]:
-        read = self._parse_record()
-        read.validate()
+#     @always_inline
+#     fn next(
+#         mut self,
+#     ) raises -> RecordCoord[mut=False, o = origin_of(self.stream.buf)]:
+#         read = self._parse_record()
+#         read.validate()
 
-        @parameter
-        if check_quality:
-            read.validate_quality_schema()
-        return read
+#         @parameter
+#         if check_quality:
+#             read.validate_quality_schema()
+#         return read
 
-    @always_inline
-    fn _parse_record(
-        mut self,
-    ) raises -> RecordCoord[
-        mut=False, o = origin_of(origin_of(self.stream.buf))
-    ]:
-        var line1 = self.stream.get_next_line_span()
+#     @always_inline
+#     fn _parse_record(
+#         mut self,
+#     ) raises -> RecordCoord[
+#         mut=False, o = origin_of(origin_of(self.stream.buf))
+#     ]:
+#         var line1 = self.stream.get_next_line_span()
 
-        var line2 = self.stream.get_next_line_span()
-        var line3 = self.stream.get_next_line_span()
-        var line4 = self.stream.get_next_line_span()
+#         var line2 = self.stream.get_next_line_span()
+#         var line3 = self.stream.get_next_line_span()
+#         var line4 = self.stream.get_next_line_span()
 
-        return RecordCoord(
-            line1.get_immutable(),
-            line2.get_immutable(),
-            line3.get_immutable(),
-            line4.get_immutable(),
-        )
+#         return RecordCoord(
+#             line1.get_immutable(),
+#             line2.get_immutable(),
+#             line3.get_immutable(),
+#             line4.get_immutable(),
+#         )

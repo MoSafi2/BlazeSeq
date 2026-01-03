@@ -10,16 +10,15 @@ from blazeseq.quality_schema import (
 )
 from utils.variant import Variant
 
-alias schema = Variant[String, QualitySchema]
-alias read_header = ord("@")
-alias quality_header = ord("+")
-alias new_line = ord("\n")
-alias carriage_return = ord("\r")
+comptime schema = Variant[String, QualitySchema]
+comptime read_header = ord("@")
+comptime quality_header = ord("+")
+comptime new_line = ord("\n")
+comptime carriage_return = ord("\r")
 
 
 struct FastqRecord[val: Bool = True](
     Copyable,
-    EqualityComparable,
     Hashable,
     Movable,
     Representable,
@@ -53,7 +52,7 @@ struct FastqRecord[val: Bool = True](
             self.quality_schema = quality_schema[QualitySchema].copy()
 
         @parameter
-        if val:
+        if Self.val:
             self.validate_record()
             self.validate_quality_schema()
 
@@ -70,7 +69,7 @@ struct FastqRecord[val: Bool = True](
         self.quality_schema = materialize[generic_schema]()
 
         @parameter
-        if val:
+        if Self.val:
             self.validate_record()
             self.validate_quality_schema()
 
