@@ -10,7 +10,7 @@ from time import perf_counter_ns
 
 fn generate_fastq_record(
     length: Int, schema: QualitySchema
-) raises -> FastqRecord:
+) raises -> FastqRecord[val=True]:
     var DNA_BASES = ["A", "T", "G", "C", "N"]
     var HEADER = "@"
     var QU_HEADER = "+"

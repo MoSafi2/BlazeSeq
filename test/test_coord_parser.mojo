@@ -8,14 +8,14 @@ from blazeseq import CoordParser
 from testing import assert_raises
 
 
-alias test_dir = "test/test_data/fastq_parser/"
+comptime test_dir = "test/test_data/fastq_parser/"
 
-alias corrput_qu_score = "Corrput quality score according to proivded schema"
-alias EOF = "EOF"
-alias cor_len = "Corrput Lengths"
-alias cor_seq_hed = "Sequence Header is corrupt"
-alias cor_qu_hed = "Quality Header is corrupt"
-alias non_mat_hed = "Non matching headers"
+comptime corrput_qu_score = "Corrput quality score according to proivded schema"
+comptime EOF = "EOF"
+comptime cor_len = "Corrput Lengths"
+comptime cor_seq_hed = "Sequence Header is corrupt"
+comptime cor_qu_hed = "Quality Header is corrupt"
+comptime non_mat_hed = "Non matching headers"
 
 
 fn test_invalid_file(file: String, msg: String = "") raises:
