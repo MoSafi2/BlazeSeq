@@ -1,22 +1,4 @@
 *.*
-data/*
-benchmark/*
-blazeseq/*
-!benchmark/*.mojo
-!blazeseq/*.mojo
-!.gitignore
-!cli.mojo
-!todo.md
-!QC.mojo
-!test_template.html
-!assets/*
-# pixi environments
-.pixi
-
-# pixi environments
 .pixi
 *.egg-info
-
-# magic environments
-.magic
-QC
+!*.mojo

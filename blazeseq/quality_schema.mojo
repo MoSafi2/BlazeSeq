@@ -1,6 +1,3 @@
-from blazeseq.record import QualitySchema
-from sys.info import simd_width_of
-
 comptime KB = 1024
 comptime MB = 1024 * KB
 comptime GB = 1024 * MB
@@ -12,9 +9,9 @@ comptime quality_header = 43
 comptime new_line = 10
 comptime carriage_return = 13
 
-comptime simd_width: Int = simd_width_of[UInt8]()
+comptime U8 = DType.uint8
 
-comptime DEFAULT_CAPACITY = 4 * 1024
+comptime DEFAULT_CAPACITY = 64 * KB
 comptime MAX_SHIFT = 30
 comptime MAX_CAPACITY = 2**MAX_SHIFT
 
@@ -30,3 +27,26 @@ comptime solexa_schema = QualitySchema("Solexa", 59, 126, 64)
 comptime illumina_1_3_schema = QualitySchema("Illumina v1.3", 64, 126, 64)
 comptime illumina_1_5_schema = QualitySchema("Illumina v1.5", 66, 126, 64)
 comptime illumina_1_8_schema = QualitySchema("Illumina v1.8", 33, 126, 33)
+
+
+@fieldwise_init
+struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable):
+    var SCHEMA: StringSlice[StaticConstantOrigin]
+    var LOWER: UInt8
+    var UPPER: UInt8
+    var OFFSET: UInt8
+
+    fn write_to[w: Writer](self, mut writer: w) -> None:
+        writer.write(self.__str__())
+
+    fn __str__(self) -> String:
+        return (
+            String("Quality schema: ")
+            + self.SCHEMA
+            + "\nLower: "
+            + String(self.LOWER)
+            + "\nUpper: "
+            + String(self.UPPER)
+            + "\nOffset: "
+            + String(self.OFFSET)
+        )

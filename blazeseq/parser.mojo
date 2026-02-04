@@ -1,55 +1,63 @@
 from blazeseq.record import FastqRecord, RecordCoord
-from blazeseq.helpers import (
-    find_last_read_header,
-    get_next_line,
-)
 from blazeseq.CONSTS import *
-from blazeseq.iostream import BufferedLineIterator, FileReader
+from blazeseq.iostream import BufferedReader, FileReader, Reader
 import time
 
 
-struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
-    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
+struct RecordParser[
+    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+]:
+    var stream: BufferedReader[Self.R, check_ascii = Self.check_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(out self, path: String, schema: String = "generic") raises:
-        self.stream = BufferedLineIterator[
-            FileReader, check_ascii=validate_ascii
-        ](path, DEFAULT_CAPACITY)
+    fn __init__(
+        out self, var reader: Self.R, schema: String = "generic"
+    ) raises:
+        self.stream = BufferedReader[check_ascii = Self.check_ascii](
+            reader^, DEFAULT_CAPACITY
+        )
         self.quality_schema = self._parse_schema(schema)
 
     fn parse_all(mut self) raises:
         while True:
-            var record: FastqRecord
+            if not self.stream.has_more_lines():
+                break
+            var record: FastqRecord[self.check_quality]
             record = self._parse_record()
-            # print(record)
             record.validate_record()
 
             # ASCII validation is carried out in the reader
             @parameter
-            if validate_quality:
+            if Self.check_quality:
                 record.validate_quality_schema()
 
     @always_inline
-    fn next(mut self) raises -> FastqRecord:
+    fn next(mut self) raises -> Optional[FastqRecord[val = self.check_quality]]:
         """Method that lazily returns the Next record in the file."""
-        var record: FastqRecord
-        record = self._parse_record()
-        record.validate_record()
+        if self.stream.has_more_lines():
+            var record: FastqRecord[self.check_quality]
+            record = self._parse_record()
+            record.validate_record()
 
-        # ASCII validation is carried out in the reader
-        @parameter
-        if validate_quality:
-            record.validate_quality_schema()
-        return record
+            # ASCII validation is carried out in the reader
+            @parameter
+            if Self.check_quality:
+                record.validate_quality_schema()
+            return record^
+        else:
+            return None
 
     @always_inline
-    fn _parse_record(mut self) raises -> FastqRecord:
-        var line1 = self.stream.read_next_line()
-        var line2 = self.stream.read_next_line()
-        var line3 = self.stream.read_next_line()
-        var line4 = self.stream.read_next_line()
-        return FastqRecord(line1, line2, line3, line4, self.quality_schema)
+    fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
+        l1 = self.stream.get_next_line()
+        l2 = self.stream.get_next_line()
+        l3 = self.stream.get_next_line()
+        l4 = self.stream.get_next_line()
+        schema = self.quality_schema.copy()
+        try:
+            return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
+        except Error:
+            raise
 
     @staticmethod
     @always_inline
@@ -57,63 +65,74 @@ struct RecordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
         var schema: QualitySchema
 
         if quality_format == "sanger":
-            schema = sanger_schema
+            schema = materialize[sanger_schema]()
         elif quality_format == "solexa":
-            schema = solexa_schema
+            schema = materialize[solexa_schema]()
         elif quality_format == "illumina_1.3":
-            schema = illumina_1_3_schema
+            schema = materialize[illumina_1_3_schema]()
         elif quality_format == "illumina_1.5":
-            schema = illumina_1_5_schema
+            schema = materialize[illumina_1_5_schema]()
         elif quality_format == "illumina_1.8":
-            schema = illumina_1_8_schema
+            schema = materialize[illumina_1_8_schema]()
         elif quality_format == "generic":
-            schema = generic_schema
+            schema = materialize[generic_schema]()
         else:
             print(
                 """Uknown quality schema please choose one of 'sanger', 'solexa',"
                 " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
                 Parsing with generic schema."""
             )
-            return generic_schema
-        return schema
+            return materialize[generic_schema]()
+        return schema^
 
 
-struct CoordParser[validate_ascii: Bool = True, validate_quality: Bool = True]:
-    var stream: BufferedLineIterator[FileReader, check_ascii=validate_ascii]
+# struct CoordParser[
+#     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+# ]:
+#     var stream: BufferedLineIterator[R, check_ascii=check_ascii]
 
-    fn __init__(out self, path: String) raises:
-        self.stream = BufferedLineIterator[
-            FileReader, check_ascii=validate_ascii
-        ](path, DEFAULT_CAPACITY)
+#     fn __init__(out self, var reader: Self.R) raises:
+#         self.stream = BufferedReader[check_ascii=check_ascii](
+#             reader^, DEFAULT_CAPACITY
+#         )
 
-    @always_inline
-    fn parse_all(mut self) raises:
-        while True:
-            var record: RecordCoord
-            record = self._parse_record()
-            record.validate()
+#     @always_inline
+#     fn parse_all(mut self) raises:
+#         while True:
+#             record = self._parse_record()
+#             record.validate()
 
-            @parameter
-            if validate_quality:
-                record.validate_quality_schema()
+#             @parameter
+#             if Self.check_quality:
+#                 record.validate_quality_schema()
 
-    @always_inline
-    fn next(mut self) raises -> RecordCoord:
-        read = self._parse_record()
-        read.validate()
+#     @always_inline
+#     fn next(
+#         mut self,
+#     ) raises -> RecordCoord[mut=False, o = origin_of(self.stream.buf)]:
+#         read = self._parse_record()
+#         read.validate()
 
-        @parameter
-        if validate_quality:
-            read.validate_quality_schema()
-        return read
+#         @parameter
+#         if check_quality:
+#             read.validate_quality_schema()
+#         return read
 
-    @always_inline
-    fn _parse_record(
-        mut self,
-    ) raises -> RecordCoord:
-        var line1 = self.stream.read_next_coord()
-        var line2 = self.stream.read_next_coord()
-        var line3 = self.stream.read_next_coord()
-        var line4 = self.stream.read_next_coord()
+#     @always_inline
+#     fn _parse_record(
+#         mut self,
+#     ) raises -> RecordCoord[
+#         mut=False, o = origin_of(origin_of(self.stream.buf))
+#     ]:
+#         var line1 = self.stream.get_next_line_span()
 
-        return RecordCoord(line1, line2, line3, line4)
+#         var line2 = self.stream.get_next_line_span()
+#         var line3 = self.stream.get_next_line_span()
+#         var line4 = self.stream.get_next_line_span()
+
+#         return RecordCoord(
+#             line1.get_immutable(),
+#             line2.get_immutable(),
+#             line3.get_immutable(),
+#             line4.get_immutable(),
+#         )

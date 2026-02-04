@@ -1,102 +1,326 @@
-from blazeseq.helpers import slice_tensor, write_to_buff
-from blazeseq.CONSTS import *
-from blazeseq.iostream import BufferedLineIterator
+from hashlib.hasher import default_hasher, Hasher
+from blazeseq.quality_schema import (
+    QualitySchema,
+    sanger_schema,
+    illumina_1_3_schema,
+    solexa_schema,
+    illumina_1_5_schema,
+    illumina_1_8_schema,
+    generic_schema,
+)
 from utils.variant import Variant
-from max.tensor import Tensor
-from memory import Span
-from math import align_down, remainder
-from memory import UnsafePointer
-from utils import Writable, StringSlice
 
-alias TU8 = Tensor[U8]
-alias schema = Variant[String, QualitySchema]
+comptime schema = Variant[String, QualitySchema]
+comptime read_header = ord("@")
+comptime quality_header = ord("+")
+comptime new_line = ord("\n")
+comptime carriage_return = ord("\r")
 
 
-@value
-struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
+struct FastqRecord[val: Bool = True](
+    Copyable,
+    Hashable,
+    Movable,
+    Representable,
+    Sized,
+    Writable,
+):
     """Struct that represent a single FastaQ record."""
 
-    var SeqHeader: TU8
-    var SeqStr: TU8
-    var QuHeader: TU8
-    var QuStr: TU8
+    var SeqHeader: String
+    var SeqStr: String
+    var QuHeader: String
+    var QuStr: String
     var quality_schema: QualitySchema
 
     fn __init__(
         out self,
-        SH: TU8,
-        SS: TU8,
-        QH: TU8,
-        QS: TU8,
+        SeqHeader: String,
+        SeqStr: String,
+        QuHeader: String,
+        QuStr: String,
         quality_schema: schema = "generic",
     ) raises:
-        self.SeqHeader = SH
-        self.QuHeader = QH
-        self.SeqStr = SS
-        self.QuStr = QS
+        self.SeqHeader = SeqHeader
+        self.QuHeader = QuHeader
+        self.SeqStr = SeqStr
+        self.QuStr = QuStr
 
         if quality_schema.isa[String]():
-            self.quality_schema = self._parse_schema(quality_schema[String])
+            self.quality_schema = _parse_schema(quality_schema[String])
         else:
-            self.quality_schema = quality_schema[QualitySchema]
+            self.quality_schema = quality_schema[QualitySchema].copy()
+
+        @parameter
+        if Self.val:
+            self.validate_record()
+            self.validate_quality_schema()
+
+    fn __init__(out self, sequence: String) raises:
+        var seqs = sequence.strip().split("\n")
+        if len(seqs) > 4:
+            raise Error("Sequence does not seem to be valid")
+
+        # Bug when Using
+        self.SeqHeader = String(seqs[0].strip())
+        self.SeqStr = String(seqs[1].strip())
+        self.QuHeader = String(seqs[2].strip())
+        self.QuStr = String(seqs[3].strip())
+        self.quality_schema = materialize[generic_schema]()
+
+        @parameter
+        if Self.val:
+            self.validate_record()
+            self.validate_quality_schema()
+
+    @always_inline
+    fn get_seq(self) -> StringSlice[origin_of(self.SeqStr)]:
+        return self.SeqStr.as_string_slice()
+
+    @always_inline
+    fn get_quality_string(self) -> StringSlice[origin_of(self.QuStr)]:
+        return self.QuStr.as_string_slice()
+
+    @always_inline
+    fn get_quality_scores(self, mut quality_format: schema) -> List[UInt8]:
+        var in_schema: QualitySchema
+
+        if quality_format.isa[String]():
+            in_schema = _parse_schema(quality_format.take[String]())
+        else:
+            in_schema = quality_format.take[QualitySchema]()
+
+        output = List[UInt8](length=len(self.QuStr), fill=0)
+        bytes = self.QuStr.as_bytes()
+        for i in range(len(self.QuStr)):
+            output[i] = bytes[i] - in_schema.OFFSET
+        return output^
+
+    @always_inline
+    fn get_quality_scores(self, offset: UInt8) -> List[UInt8]:
+        output = List[UInt8](length=len(self.QuStr), fill=0)
+        bytes = self.QuStr.as_bytes()
+        for i in range(len(self.QuStr)):
+            output[i] = bytes[i] - offset
+        return output^
+
+    @always_inline
+    fn get_header_string(self) -> StringSlice[origin_of(self.SeqHeader)]:
+        return self.SeqHeader.as_string_slice()
+
+    @always_inline
+    fn validate_record(self) raises:
+        if self.SeqHeader.as_bytes()[0] != read_header:
+            raise Error("Sequence header does not start with '@'")
+
+        if self.QuHeader.as_bytes()[0] != quality_header:
+            raise Error("Quality header dies not start with '+'")
+
+        if len(self.SeqStr) != len(self.QuStr):
+            raise Error(
+                "Quality and Sequencing string does not match in lengths"
+            )
+
+        if len(self.QuHeader) > 1:
+            if len(self.QuHeader) != len(self.SeqHeader):
+                raise Error(
+                    "Quality Header is not the same length as the Sequencing"
+                    " header"
+                )
+
+            if (
+                self.QuHeader.as_string_slice()[1:]
+                != self.SeqHeader.as_string_slice()[1:]
+            ):
+                raise Error(
+                    "Quality Header is not the same as the Sequecing Header"
+                )
+
+    @always_inline
+    fn validate_quality_schema(self) raises:
+        for i in range(len(self.QuStr)):
+            if (
+                self.QuStr.as_bytes()[i] > self.quality_schema.UPPER
+                or self.QuStr.as_bytes()[i] < self.quality_schema.LOWER
+            ):
+                raise Error(
+                    "Corrput quality score according to proivded schema"
+                )
+
+    @always_inline
+    fn total_length(self) -> Int:
+        return (
+            len(self.QuHeader)
+            + len(self.QuStr)
+            + len(self.SeqHeader)
+            + len(self.SeqStr)
+        )
+
+    @always_inline
+    fn __str__(self) -> String:
+        return String.write(self)
+
+    fn write_to[w: Writer](self, mut writer: w):
+        writer.write(
+            self.SeqHeader,
+            "\n",
+            self.SeqStr,
+            "\n",
+            self.QuHeader,
+            "\n",
+            self.QuStr,
+            "\n",
+        )
+
+    @always_inline
+    fn __len__(self) -> Int:
+        return len(self.SeqStr)
+
+    @always_inline
+    fn __hash__[H: Hasher](self, mut hasher: H):
+        hasher.update(self.SeqStr.as_string_slice())
+
+    @always_inline
+    fn __eq__(self, other: Self) -> Bool:
+        return self.SeqStr == other.SeqStr
+
+    fn __ne__(self, other: Self) -> Bool:
+        return not self.__eq__(other)
+
+    fn __repr__(self) -> String:
+        return self.__str__()
+
+
+@always_inline
+fn _parse_schema(quality_format: String) -> QualitySchema:
+    var schema: QualitySchema
+
+    if quality_format == "sanger":
+        schema = sanger_schema
+    elif quality_format == "solexa":
+        schema = solexa_schema
+    elif quality_format == "illumina_1.3":
+        schema = illumina_1_3_schema
+    elif quality_format == "illumina_1.5":
+        schema = illumina_1_5_schema
+    elif quality_format == "illumina_1.8":
+        schema = illumina_1_8_schema
+    elif quality_format == "generic":
+        schema = generic_schema
+    else:
+        print(
+            "Uknown quality schema please choose one of 'sanger', 'solexa',"
+            " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
+        )
+        return generic_schema
+    return schema
+
+
+
+@fieldwise_init
+struct RecordCoord[ validate_quality: Bool = False
+](Sized, Writable, Movable, Copyable):
+    """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
+    """
+
+    var SeqHeader: Span[Byte, MutExternalOrigin]
+    var SeqStr: Span[Byte, MutExternalOrigin]
+    var QuHeader: Span[Byte, MutExternalOrigin]
+    var QuStr: Span[Byte, MutExternalOrigin]
+    var quality_schema: QualitySchema
+
 
     fn __init__(
         out self,
-        SH: String,
-        SS: String,
-        QH: String,
-        QS: String,
+        SeqHeader: Span[Byte, MutExternalOrigin],
+        SeqStr: Span[Byte, MutExternalOrigin],
+        QuHeader: Span[Byte, MutExternalOrigin],
+        QuStr: Span[Byte, MutExternalOrigin],
         quality_schema: schema = "generic",
+
     ):
-        self.SeqHeader = SH._buffer
-        self.SeqStr = SS._buffer
-        self.QuHeader = QH._buffer
-        self.QuStr = QS._buffer
+        self.SeqHeader = SeqHeader
+        self.SeqStr = SeqStr
+        self.QuHeader = QuHeader
+        self.QuStr = QuStr
+
         if quality_schema.isa[String]():
-            var q: String = quality_schema[String]
-            self.quality_schema = self._parse_schema(q)
+            self.quality_schema = _parse_schema(quality_schema[String])
         else:
             self.quality_schema = quality_schema[QualitySchema]
 
+
     @always_inline
-    fn get_seq(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[__origin_of(self)](
-            ptr=self.SeqStr._ptr, length=self.SeqStr.num_elements()
+    fn get_seq(self) -> StringSlice[origin = MutExternalOrigin]:
+        
+        return StringSlice[origin = MutExternalOrigin](
+            ptr=self.SeqStr.unsafe_ptr(), length=len(self.SeqStr)
         )
 
     @always_inline
-    fn get_quality_string(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[__origin_of(self)](
-            ptr=self.QuStr._ptr, length=self.QuStr.num_elements()
+    fn get_quality(self) -> StringSlice[origin = MutExternalOrigin]:
+        return StringSlice[origin = MutExternalOrigin](
+            ptr=self.QuStr.unsafe_ptr(), length=len(self.QuStr)
         )
 
     @always_inline
-    fn get_qulity_scores(self, quality_format: String) -> Tensor[U8]:
-        var schema = self._parse_schema((quality_format))
-        output = Tensor[U8](self.len_quality())
-        for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - schema.OFFSET
-        return output
+    fn get_header(self) -> StringSlice[origin = MutExternalOrigin]:
+        return StringSlice[origin = MutExternalOrigin](
+            ptr=self.SeqHeader.unsafe_ptr(), length=len(self.SeqHeader)
+        )
 
     @always_inline
-    fn get_qulity_scores(self, schema: QualitySchema) -> Tensor[U8]:
-        output = Tensor[U8](self.len_quality())
-        for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - schema.OFFSET
-        return output
+    fn __len__(self) -> Int:
+        return self.len_record()
 
     @always_inline
-    fn get_qulity_scores(self, offset: UInt8) -> Tensor[U8]:
-        output = Tensor[U8](self.len_quality())
+    fn len_record(self) -> Int:
+        return len(self.SeqStr)
+
+    @always_inline
+    fn len_quality(self) -> Int:
+        return len(self.QuStr)
+
+    @always_inline
+    fn len_qu_header(self) -> Int:
+        return len(self.QuHeader)
+
+    @always_inline
+    fn len_seq_header(self) -> Int:
+        return len(self.SeqHeader)
+
+    @always_inline
+    fn total_length(self) -> Int:
+        return (
+            self.len_seq_header()
+            + self.len_record()
+            + self.len_qu_header()
+            + self.len_quality()
+        )
+
+    @always_inline
+    fn get_quality_scores(
+        self, quality_format: schema
+    ) -> List[Byte]:
+        if quality_format.isa[String]():
+            schema = _parse_schema((quality_format[String]))
+        else:
+            schema = quality_format[QualitySchema]
+
+        output = List[Byte](length=self.len_quality(), fill=0)
+        for i in range(self.len_quality()):
+            output[i] = self.QuStr[i] - schema.OFFSET
+        return output^
+
+    @always_inline
+    fn get_quality_scores(
+        self, offset: UInt8
+    ) -> List[Byte]:
+        output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - offset
-        return output
+        return output^
 
-    @always_inline
-    fn get_header_string(self) -> StringSlice[__origin_of(self)]:
-        return StringSlice[__origin_of(self)](
-            ptr=self.SeqHeader._ptr, length=self.SeqHeader.num_elements()
-        )
 
     @always_inline
     fn validate_record(self) raises:
@@ -118,217 +342,17 @@ struct FastqRecord(Sized, Stringable, CollectionElement, KeyElement, Writable):
                 if self.QuHeader[i] != self.SeqHeader[i]:
                     raise Error("Non matching headers")
 
+
     @always_inline
     fn validate_quality_schema(self) raises:
         for i in range(self.len_quality()):
-            if (
-                self.QuStr[i] > self.quality_schema.UPPER
-                or self.QuStr[i] < self.quality_schema.LOWER
-            ):
+            if self.QuStr[i] > Int(self.quality_schema.UPPER) or self.QuStr[i]
+             < Int(self.quality_schema.LOWER):
                 raise Error(
                     "Corrput quality score according to proivded schema"
                 )
 
-    @always_inline
-    fn total_length(self) -> Int:
-        return (
-            self.len_seq_header()
-            + self.len_record()
-            + self.len_qu_header()
-            + self.len_quality()
-            + 4
-        )
 
-    fn write_to[w: Writer](self, mut writer: w):
-        var l1 = String(
-            ptr=self.SeqHeader.unsafe_ptr(),
-            length=self.SeqHeader.num_elements(),
-        )
-        var l2 = String(
-            ptr=self.SeqStr.unsafe_ptr(), length=self.SeqStr.num_elements()
-        )
-        var l3 = String(
-            ptr=self.QuHeader.unsafe_ptr(), length=self.QuHeader.num_elements()
-        )
-        var l4 = String(
-            ptr=self.QuStr.unsafe_ptr(), length=self.QuStr.num_elements()
-        )
-        # writer.write_bytes(l1)
-        # writer.write("\n")
-        # writer.write_bytes(l2)
-        # writer.write("\n")
-        # writer.write_bytes(l3)
-        # writer.write("\n")
-        # writer.write_bytes(l4)
-        # writer.write("\n")
-
-    @staticmethod
-    @always_inline
-    fn _parse_schema(quality_format: String) -> QualitySchema:
-        var schema: QualitySchema
-
-        if quality_format == "sanger":
-            schema = sanger_schema
-        elif quality_format == "solexa":
-            schema = solexa_schema
-        elif quality_format == "illumina_1.3":
-            schema = illumina_1_3_schema
-        elif quality_format == "illumina_1.5":
-            schema = illumina_1_5_schema
-        elif quality_format == "illumina_1.8":
-            schema = illumina_1_8_schema
-        elif quality_format == "generic":
-            schema = generic_schema
-        else:
-            print(
-                "Uknown quality schema please choose one of 'sanger', 'solexa',"
-                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
-            )
-            return generic_schema
-        return schema
-
-    # BUG: returns Smaller strings that expected.
-    @always_inline
-    fn __str__(self) -> String:
-        return String.write(self)
-
-    @always_inline
-    fn __len__(self) -> Int:
-        return self.len_record()
-
-    @always_inline
-    fn len_record(self) -> Int:
-        return self.SeqStr.num_elements()
-
-    @always_inline
-    fn len_quality(self) -> Int:
-        return self.QuStr.num_elements()
-
-    @always_inline
-    fn len_qu_header(self) -> Int:
-        return self.QuHeader.num_elements()
-
-    @always_inline
-    fn len_seq_header(self) -> Int:
-        return self.SeqHeader.num_elements()
-
-    @always_inline
-    fn hash[bits: Int = 3, length: Int = 64 // bits](self) -> UInt64:
-        """Hashes the first xx bp (if possible) into one 64bit. Max length is 64/nBits per bp.
-        """
-
-        @parameter
-        if length < 32:
-            return self._hash_packed(self.SeqStr.unsafe_ptr(), length)
-        return self._hash_additive(self.SeqStr.unsafe_ptr(), length)
-
-    # Can be Vectorized
-    @staticmethod
-    @always_inline
-    fn _hash_packed[
-        bits: Int = 3
-    ](bytes: UnsafePointer[Byte], length: Int) -> UInt64:
-        """
-        Hash the DNA strand to into 64bits unsigned number using xbit encoding.
-        If the length of the bytes strand is longer than 64//bits bps, the hash is truncated.
-        ----
-
-        parameters:
-        - bits (Int): the number of least significant bits used to hash a base pair. increased bit width reduces the number of bp that can be hashed.
-
-        args:
-        - bytes (UnsafePointer[Byte]): pointer the the basepair buffer.
-        - length (Int): the length of the buffer to be hashed.
-        """
-        alias rnge: Int = 64 // bits
-        alias width = simdwidthof[Byte]()
-        var hash: UInt64 = 0
-        var mask = (0b1 << bits) - 1
-        for i in range(min(rnge, length)):
-            # Mask for for first <n> significant bits, vectorized operation.
-            var base_val = bytes[i] & mask
-            hash = (hash << bits) | Int(base_val[i])
-        return hash
-
-    # Change to a better hashing Algorithm
-    @staticmethod
-    @always_inline
-    fn _hash_additive[
-        bits: Int = 3
-    ](bytes: UnsafePointer[UInt8], length: Int) -> UInt64:
-        """Hashes longer DNA sequences . It hashes 16bps spans of the sequences and using 2 or 3 bit encoding and adds them to the hash.
-        """
-        constrained[
-            bits <= 3, "Additive hashing can only hash up to 3bit resolution"
-        ]()
-        var full_hash: UInt64 = 0
-        var mask = (0b1 << bits) - 1
-        var rounds = align_down(length, 16)
-        var rem = length % 16
-
-        for round in range(rounds):
-            var interim_hash: UInt64 = 0
-
-            @parameter
-            for i in range(16):
-                var base_val = bytes[i + 16 * round] & mask
-                interim_hash = interim_hash << bits | Int(base_val)
-            full_hash = full_hash + interim_hash
-
-        if rem > 0:
-            var interim_hash: UInt64 = 0
-            for i in range(rem):
-                var base_val = bytes[i + 16 * rounds] & mask
-                interim_hash = interim_hash << bits | Int(base_val)
-            full_hash = full_hash + interim_hash
-
-        return full_hash
-
-    @always_inline
-    fn __hash__(self) -> UInt:
-        return Int(self.hash())
-
-    @always_inline
-    fn __eq__(self, other: Self) -> Bool:
-        return self.__hash__() == other.__hash__()
-
-    fn __ne__(self, other: Self) -> Bool:
-        return self.__hash__() != other.__hash__()
-
-
-@value
-struct RecordCoord[validate_quality: Bool = False](
-    Sized, Writable, CollectionElement
-):
-    """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
-    """
-
-    var SeqHeader: Span[Byte, StaticConstantOrigin]
-    var SeqStr: Span[Byte, StaticConstantOrigin]
-    var QuHeader: Span[Byte, StaticConstantOrigin]
-    var QuStr: Span[Byte, StaticConstantOrigin]
-
-    fn __init__(
-        out self,
-        SH: Span[Byte, StaticConstantOrigin],
-        SS: Span[Byte, StaticConstantOrigin],
-        QH: Span[Byte, StaticConstantOrigin],
-        QS: Span[Byte, StaticConstantOrigin],
-    ):
-        self.SeqHeader = SH
-        self.SeqStr = SS
-        self.QuHeader = QH
-        self.QuStr = QS
-
-    @always_inline
-    fn validate(self) raises:
-        if self.seq_len() != self.qu_len():
-            raise Error("Corrput Lengths")
-        if (
-            self.qu_header_len() > 1
-            and self.qu_header_len() != self.seq_header_len()
-        ):
-            raise Error("Corrput Lengths")
 
     @always_inline
     fn seq_len(self) -> Int32:
@@ -346,22 +370,13 @@ struct RecordCoord[validate_quality: Bool = False](
     fn seq_header_len(self) -> Int32:
         return len(self.SeqHeader)
 
-    @always_inline
-    fn validate_quality_schema(self) raises:
-        for i in range(Int(self.qu_len())):
-            if self.QuStr[i] > 126 or self.QuStr[i] < 33:
-                raise Error(
-                    "Corrput quality score according to proivded schema"
-                )
-
-    fn __len__(self) -> Int:
-        return Int(self.seq_len())
 
     fn write_to[w: Writer](self, mut writer: w):
         writer.write_bytes(self.SeqHeader)
-        writer.write("/n")
+        writer.write("\n")
         writer.write_bytes(self.SeqStr)
-        writer.write("/n")
+        writer.write("\n")
         writer.write_bytes(self.QuHeader)
-        writer.write("/n")
+        writer.write("\n")
         writer.write_bytes(self.QuStr)
+
