@@ -576,5 +576,516 @@ fn test_fill_buffer_partial_read() raises:
     print("✓ test_fill_buffer_partial_read passed")
 
 
-def main():
+# ============================================================================
+# ASCII Validation Tests
+# ============================================================================
+
+
+fn test_buffered_reader_ascii_validation() raises:
+    """Test ASCII validation with valid ASCII content."""
+    var test_content = "Valid ASCII content\nLine 2\nLine 3\n"
+    var test_file = Path("test_ascii_valid.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader[check_ascii=True](reader^)
+
+    # Should read without errors
+    var line1 = buf_reader.get_next_line()
+    assert_equal(line1, "Valid ASCII content", "Should read valid ASCII")
+
+    var line2 = buf_reader.get_next_line()
+    assert_equal(line2, "Line 2", "Should read second line")
+
+    print("✓ test_buffered_reader_ascii_validation passed")
+
+
+fn test_buffered_reader_ascii_validation_invalid() raises:
+    """Test ASCII validation raises error on non-ASCII bytes."""
+    # Create file with non-ASCII bytes (byte > 127)
+    # We'll write bytes directly to create non-ASCII content
+    var test_file = Path("test_ascii_invalid.txt")
+    new_path = Path("test/test_data") / test_file
+    
+    # Write non-ASCII bytes directly
+    var non_ascii_bytes = List[Byte]()
+    non_ascii_bytes.append(ord("A"))
+    non_ascii_bytes.append(ord("B"))
+    non_ascii_bytes.append(Byte(200))  # Non-ASCII byte
+    non_ascii_bytes.append(ord("\n"))
+    
+    with open(new_path, "w") as f:
+        f.write_bytes(non_ascii_bytes)
+
+    var reader = FileReader(new_path)
+    
+    # Should raise error when check_ascii=True
+    with assert_raises(contains="Non ASCII letters found"):
+        var buf_reader = BufferedReader[check_ascii=True](reader^)
+        _ = buf_reader.get_next_line()
+
+    # Should work fine when check_ascii=False
+    var reader2 = FileReader(new_path)
+    var buf_reader2 = BufferedReader[check_ascii=False](reader2^)
+    _ = buf_reader2.get_next_line()
+
+    print("✓ test_buffered_reader_ascii_validation_invalid passed")
+
+
+# ============================================================================
+# Utility Method Tests
+# ============================================================================
+
+
+fn test_buffered_reader_usable_space() raises:
+    """Test usable space calculation."""
+    var test_content = "Test content for usable space\n"
+    var test_file = Path("test_usable_space.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^, capacity=100)
+
+    # Initially, usable space should be capacity (head=0, end < capacity)
+    var initial_usable = buf_reader.usable_space()
+    assert_true(initial_usable >= buf_reader.capacity() - buf_reader.head, "Usable space should be >= capacity initially")
+
+    # Read a line to move head
+    _ = buf_reader.get_next_line()
+
+    # After reading, usable space should be uninatialized_space + head
+    var expected_usable = buf_reader.uninatialized_space() + buf_reader.head
+    assert_equal(buf_reader.usable_space(), expected_usable, "Usable space should match calculation")
+
+    print("✓ test_buffered_reader_usable_space passed")
+
+
+fn test_buffered_reader_uninitialized_space() raises:
+    """Test uninitialized space calculation."""
+    var test_content = "Short\n"
+    var test_file = Path("test_uninitialized_space.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^, capacity=100)
+
+    # Uninitialized space should be capacity - end
+    var expected = buf_reader.capacity() - buf_reader.end
+    assert_equal(buf_reader.uninatialized_space(), expected, "Uninitialized space should be capacity - end")
+
+    # After reading, end changes but calculation should still hold
+    _ = buf_reader.get_next_line()
+    var expected_after = buf_reader.capacity() - buf_reader.end
+    assert_equal(buf_reader.uninatialized_space(), expected_after, "Uninitialized space should update correctly")
+
+    print("✓ test_buffered_reader_uninitialized_space passed")
+
+
+fn test_buffered_reader_has_more_lines() raises:
+    """Test line availability detection."""
+    var test_content = "Line 1\nLine 2\nLine 3\n"
+    var test_file = Path("test_has_more_lines.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Should have more lines initially
+    assert_true(buf_reader.has_more_lines(), "Should have more lines initially")
+
+    # Read first line
+    _ = buf_reader.get_next_line()
+    assert_true(buf_reader.has_more_lines(), "Should still have more lines")
+
+    # Read second line
+    _ = buf_reader.get_next_line()
+    assert_true(buf_reader.has_more_lines(), "Should still have more lines")
+
+    # Read third line
+    _ = buf_reader.get_next_line()
+    assert_false(buf_reader.has_more_lines(), "Should not have more lines after reading all")
+
+    print("✓ test_buffered_reader_has_more_lines passed")
+
+
+# ============================================================================
+# Buffer Resize Tests
+# ============================================================================
+
+
+fn test_buffered_reader_resize_buf() raises:
+    """Test buffer resizing functionality."""
+    var test_content = "Test content for resize\n"
+    var test_file = Path("test_resize_buf.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^, capacity=100)
+
+    var original_capacity = buf_reader.capacity()
+    var original_end = buf_reader.end
+
+    # Resize buffer
+    buf_reader._resize_buf(50, 1000)
+
+    # Capacity should increase
+    assert_true(buf_reader.capacity() > original_capacity, "Capacity should increase")
+    assert_equal(buf_reader.capacity(), original_capacity + 50, "Capacity should increase by specified amount")
+
+    # End should remain the same (data preserved)
+    assert_equal(buf_reader.end, original_end, "End should remain unchanged")
+
+    print("✓ test_buffered_reader_resize_buf passed")
+
+
+fn test_buffered_reader_resize_buf_max_capacity() raises:
+    """Test buffer resize error at max capacity."""
+    var test_content = "Test content\n"
+    var test_file = Path("test_resize_max_capacity.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^, capacity=100)
+
+    # Try to resize when already at max capacity
+    with assert_raises(contains="Buffer is at max capacity"):
+        buf_reader._resize_buf(50, 100)
+
+    print("✓ test_buffered_reader_resize_buf_max_capacity passed")
+
+
+# ============================================================================
+# Writer Interface Tests
+# ============================================================================
+
+
+fn test_buffered_reader_write_to() raises:
+    """Test writing buffer content to Writer."""
+    var test_content = "Content to write\n"
+    var test_file = Path("test_write_to.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Write buffer content to String
+    var output = String()
+    buf_reader.write_to(output)
+
+    # Verify content was written
+    assert_true(len(output) > 0, "Output should contain data")
+    assert_equal(String(output), test_content, "Written content should match original")
+
+    print("✓ test_buffered_reader_write_to passed")
+
+
+fn test_buffered_reader_str() raises:
+    """Test string representation of buffer."""
+    var test_content = "String representation test\n"
+    var test_file = Path("test_str.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Get string representation
+    var str_repr = buf_reader.__str__()
+
+    # Verify it matches buffer content
+    assert_equal(str_repr, test_content, "String representation should match buffer content")
+
+    print("✓ test_buffered_reader_str passed")
+
+
+# ============================================================================
+# Large File Tests
+# ============================================================================
+
+
+fn test_buffered_reader_large_file_multiple_fills() raises:
+    """Test multiple buffer fills with large file."""
+    # Create content larger than buffer capacity
+    var test_content = String("")
+    for i in range(200):
+        test_content += "Line " + String(i) + "\n"
+
+    var test_file = Path("test_large_file_multiple_fills.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^, capacity=100)
+
+    # Read lines, which should trigger multiple buffer fills
+    var line_count = 0
+    while buf_reader.has_more_lines():
+        try:
+            _ = buf_reader.get_next_line()
+            line_count += 1
+        except:
+            break
+
+    # Should have read all lines
+    assert_equal(line_count, 200, "Should read all 200 lines")
+
+    print("✓ test_buffered_reader_large_file_multiple_fills passed")
+
+
+fn test_buffered_reader_sequential_reading_large_file() raises:
+    """Test sequential reading across buffer boundaries."""
+    # Create content that spans multiple buffer fills
+    var test_content = String("")
+    for i in range(150):
+        test_content += "Line " + String(i) + " with some content\n"
+
+    var test_file = Path("test_sequential_reading_large.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^, capacity=200)
+
+    # Read lines sequentially
+    var lines = List[String]()
+    while buf_reader.has_more_lines():
+        try:
+            var line = buf_reader.get_next_line()
+            lines.append(line)
+        except:
+            break
+
+    # Verify we read all lines correctly
+    assert_equal(len(lines), 150, "Should read all 150 lines")
+    assert_equal(lines[0], "Line 0 with some content", "First line should be correct")
+    assert_equal(lines[149], "Line 149 with some content", "Last line should be correct")
+
+    print("✓ test_buffered_reader_sequential_reading_large_file passed")
+
+
+# ============================================================================
+# FileReader Direct Tests
+# ============================================================================
+
+
+fn test_file_reader_read_bytes() raises:
+    """Test FileReader read_bytes method."""
+    var test_content = "Test content for read_bytes\n"
+    var test_file = Path("test_read_bytes.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+
+    # Read all bytes
+    var bytes = reader.read_bytes()
+    assert_equal(len(bytes), len(test_content), "Should read all bytes")
+
+    # Read specific amount
+    var reader2 = FileReader(test_file)
+    var bytes2 = reader2.read_bytes(10)
+    assert_equal(len(bytes2), 10, "Should read specified amount")
+
+    print("✓ test_file_reader_read_bytes passed")
+
+
+fn test_file_reader_read_to_buffer() raises:
+    """Test FileReader read_to_buffer method."""
+    var test_content = "Test content for read_to_buffer\n"
+    var test_file = Path("test_read_to_buffer.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buffer = InnerBuffer(100)
+
+    # Read to buffer
+    var bytes_read = reader.read_to_buffer(buffer, len(test_content), 0)
+    assert_equal(Int(bytes_read), len(test_content), "Should read correct amount")
+
+    # Verify content was read
+    assert_equal(buffer[0], ord("T"), "First byte should be 'T'")
+    assert_equal(buffer[1], ord("e"), "Second byte should be 'e'")
+
+    print("✓ test_file_reader_read_to_buffer passed")
+
+
+fn test_file_reader_read_to_buffer_errors() raises:
+    """Test FileReader read_to_buffer error cases."""
+    var test_content = "Test content\n"
+    var test_file = Path("test_read_to_buffer_errors.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buffer = InnerBuffer(10)
+
+    # Test negative amount
+    with assert_raises(contains="should be positive"):
+        _ = reader.read_to_buffer(buffer, -1, 0)
+
+    # Test amount larger than available space
+    with assert_raises(contains="bigger than the available space"):
+        _ = reader.read_to_buffer(buffer, 100, 0)
+
+    print("✓ test_file_reader_read_to_buffer_errors passed")
+
+
+# ============================================================================
+# InnerBuffer Tests
+# ============================================================================
+
+
+fn test_inner_buffer_resize() raises:
+    """Test InnerBuffer resizing."""
+    var buffer = InnerBuffer(10)
+
+    # Set some initial values
+    buffer[0] = ord("A")
+    buffer[1] = ord("B")
+
+    var original_len = len(buffer)
+
+    # Resize buffer
+    _ = buffer.resize(20)
+
+    # Length should increase
+    assert_equal(len(buffer), 20, "Length should increase")
+
+    # Original data should be preserved
+    assert_equal(buffer[0], ord("A"), "Original data should be preserved")
+    assert_equal(buffer[1], ord("B"), "Original data should be preserved")
+
+    # Test resize error with smaller size
+    with assert_raises(contains="must be greater than current length"):
+        _ = buffer.resize(10)
+
+    print("✓ test_inner_buffer_resize passed")
+
+
+fn test_inner_buffer_as_span_with_pos() raises:
+    """Test InnerBuffer as_span with position parameter."""
+    var buffer = InnerBuffer(10)
+
+    # Set some values
+    for i in range(10):
+        buffer[i] = Byte(ord("A") + i)
+
+    # Get span from position 0
+    var span1 = buffer.as_span(0)
+    assert_equal(len(span1), 10, "Span from 0 should have full length")
+
+    # Get span from position 5
+    var span2 = buffer.as_span(5)
+    assert_equal(len(span2), 5, "Span from 5 should have remaining length")
+    assert_equal(span2[0], ord("F"), "First element should be 'F'")
+
+    # Test error with invalid position
+    with assert_raises(contains="outside the buffer"):
+        _ = buffer.as_span(20)
+
+    print("✓ test_inner_buffer_as_span_with_pos passed")
+
+
+fn test_inner_buffer_setitem() raises:
+    """Test InnerBuffer byte assignment."""
+    var buffer = InnerBuffer(10)
+
+    # Set values
+    buffer[0] = ord("X")
+    buffer[5] = ord("Y")
+    buffer[9] = ord("Z")
+
+    # Verify values were set
+    assert_equal(buffer[0], ord("X"), "First byte should be 'X'")
+    assert_equal(buffer[5], ord("Y"), "Middle byte should be 'Y'")
+    assert_equal(buffer[9], ord("Z"), "Last byte should be 'Z'")
+
+    # Test bounds checking
+    with assert_raises(contains="Out of bounds"):
+        buffer[10] = ord("A")
+
+    print("✓ test_inner_buffer_setitem passed")
+
+
+fn test_inner_buffer_bounds() raises:
+    """Test InnerBuffer bounds checking."""
+    var buffer = InnerBuffer(10)
+
+    # Valid access
+    _ = buffer[0]
+    _ = buffer[9]
+
+    # Invalid access - negative index
+    with assert_raises(contains="Out of bounds"):
+        _ = buffer[-1]
+
+    # Invalid access - beyond length
+    with assert_raises(contains="Out of bounds"):
+        _ = buffer[10]
+
+    # Invalid access - way beyond length
+    with assert_raises(contains="Out of bounds"):
+        _ = buffer[100]
+
+    print("✓ test_inner_buffer_bounds passed")
+
+
+# ============================================================================
+# Advanced Edge Cases
+# ============================================================================
+
+
+fn test_buffered_reader_slice_edge_cases() raises:
+    """Test slice operations with various edge cases."""
+    var test_content = "0123456789ABCDEF\n"
+    var test_file = Path("test_slice_edge_cases.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Test slice with step (should fail)
+    with assert_raises(contains="Step loading is not supported"):
+        _ = buf_reader[0:10:2]
+
+    # Test slice beyond end
+    with assert_raises(contains="Out of bounds"):
+        _ = buf_reader[0:1000]
+
+    # Test empty slice
+    var empty_slice = buf_reader[5:5]
+    assert_equal(len(empty_slice), 0, "Empty slice should have length 0")
+
+    # Test single element slice
+    var single_slice = buf_reader[0:1]
+    assert_equal(len(single_slice), 1, "Single element slice should have length 1")
+    assert_equal(single_slice[0], ord("0"), "Should contain correct byte")
+
+    print("✓ test_buffered_reader_slice_edge_cases passed")
+
+
+fn test_buffered_reader_custom_capacity_edge_cases() raises:
+    """Test various custom capacity scenarios."""
+    var test_content = "Test content\n"
+    
+    # Test very small capacity
+    var test_file1 = Path("test_custom_capacity_small.txt")
+    test_file1 = create_test_file(test_file1, test_content)
+    var reader1 = FileReader(test_file1)
+    var buf_reader1 = BufferedReader(reader1^, capacity=10)
+    assert_equal(buf_reader1.capacity(), 10, "Should use custom small capacity")
+
+    # Test larger capacity
+    var test_file2 = Path("test_custom_capacity_large.txt")
+    test_file2 = create_test_file(test_file2, test_content)
+    var reader2 = FileReader(test_file2)
+    var buf_reader2 = BufferedReader(reader2^, capacity=1000)
+    assert_equal(buf_reader2.capacity(), 1000, "Should use custom large capacity")
+
+    # Test capacity equal to content length
+    var test_file3 = Path("test_custom_capacity_exact.txt")
+    test_file3 = create_test_file(test_file3, test_content)
+    var reader3 = FileReader(test_file3)
+    var buf_reader3 = BufferedReader(reader3^, capacity=len(test_content))
+    assert_equal(buf_reader3.capacity(), len(test_content), "Should use exact capacity")
+
+    print("✓ test_buffered_reader_custom_capacity_edge_cases passed")
+
+
+fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
