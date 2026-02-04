@@ -47,7 +47,7 @@ fn memchr[
     @parameter
     if do_alignment:
         var v = ptr.load[width=SIMD_U8_WIDTH]()
-        var mask: SIMD[DType.bool, SIMD_U8_WIDTH] = v.eq(chr)        
+        var mask: SIMD[DType.bool, SIMD_U8_WIDTH] = v.eq(chr)
         var packed = pack_bits(mask)
         if packed:
             var index = Int(count_trailing_zeros(packed))
@@ -56,7 +56,7 @@ fn memchr[
         # Now get the alignment
         offset = SIMD_U8_WIDTH - (ptr.__int__() & (SIMD_U8_WIDTH - 1))
         # var aligned_ptr = ptr.offset(offset)
-        ptr = ptr.offset(offset)
+        ptr = ptr + offset
 
     # Find the last aligned end
     var haystack_len = len(haystack) - (start + offset)
@@ -101,7 +101,9 @@ fn _strip_spaces[
 
 
 @always_inline
-fn _check_ascii[mut: Bool, //, o: Origin[mut=mut]](buffer: Span[Byte, o]) raises:
+fn _check_ascii[
+    mut: Bool, //, o: Origin[mut=mut]
+](buffer: Span[Byte, o]) raises:
     var aligned_end = math.align_down(len(buffer), simd_width)
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 

@@ -7,11 +7,13 @@ import time
 struct RecordParser[
     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
 ]:
-    var stream: BufferedReader[Self.R, check_ascii=Self.check_ascii]
+    var stream: BufferedReader[Self.R, check_ascii = Self.check_ascii]
     var quality_schema: QualitySchema
 
-    fn __init__(out self, var reader: Self.R, schema: String = "generic") raises:
-        self.stream = BufferedReader[check_ascii=Self.check_ascii](
+    fn __init__(
+        out self, var reader: Self.R, schema: String = "generic"
+    ) raises:
+        self.stream = BufferedReader[check_ascii = Self.check_ascii](
             reader^, DEFAULT_CAPACITY
         )
         self.quality_schema = self._parse_schema(schema)
@@ -20,7 +22,7 @@ struct RecordParser[
         while True:
             if not self.stream.has_more_lines():
                 break
-            var record: FastqRecord
+            var record: FastqRecord[self.check_quality]
             record = self._parse_record()
             record.validate_record()
 
@@ -30,10 +32,10 @@ struct RecordParser[
                 record.validate_quality_schema()
 
     @always_inline
-    fn next(mut self) raises -> Optional[FastqRecord]:
+    fn next(mut self) raises -> Optional[FastqRecord[val = self.check_quality]]:
         """Method that lazily returns the Next record in the file."""
         if self.stream.has_more_lines():
-            var record: FastqRecord
+            var record: FastqRecord[self.check_quality]
             record = self._parse_record()
             record.validate_record()
 
@@ -46,14 +48,14 @@ struct RecordParser[
             return None
 
     @always_inline
-    fn _parse_record(mut self) raises -> FastqRecord:
+    fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
         l1 = self.stream.get_next_line()
         l2 = self.stream.get_next_line()
         l3 = self.stream.get_next_line()
         l4 = self.stream.get_next_line()
         schema = self.quality_schema.copy()
         try:
-            return FastqRecord(l1, l2, l3, l4, schema)
+            return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
         except Error:
             raise
 

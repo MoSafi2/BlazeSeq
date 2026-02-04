@@ -26,7 +26,7 @@ comptime Z_BUF_ERROR = -5
 comptime Z_VERSION_ERROR = -6
 
 # Type aliases for C types
-comptime c_void_ptr = UnsafePointer[UInt8, MutOrigin.external]
+comptime c_void_ptr = UnsafePointer[UInt8, MutExternalOrigin]
 comptime c_char_ptr = UnsafePointer[Int8]
 comptime c_uint = UInt32
 comptime c_int = Int32
@@ -131,7 +131,7 @@ struct GZFile(Movable, Reader):
         return UInt64(bytes_read)
 
     fn unbuffered_read[](
-        mut self, buffer: Span[UInt8, MutOrigin.external]
+        mut self, buffer: Span[UInt8, MutExternalOrigin]
     ) raises -> Int:
         """Read data from the gzip file.
 

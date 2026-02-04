@@ -223,19 +223,19 @@ struct RecordCoord[ validate_quality: Bool = False
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Span[Byte, MutOrigin.external]
-    var SeqStr: Span[Byte, MutOrigin.external]
-    var QuHeader: Span[Byte, MutOrigin.external]
-    var QuStr: Span[Byte, MutOrigin.external]
+    var SeqHeader: Span[Byte, MutExternalOrigin]
+    var SeqStr: Span[Byte, MutExternalOrigin]
+    var QuHeader: Span[Byte, MutExternalOrigin]
+    var QuStr: Span[Byte, MutExternalOrigin]
     var quality_schema: QualitySchema
 
 
     fn __init__(
         out self,
-        SeqHeader: Span[Byte, MutOrigin.external],
-        SeqStr: Span[Byte, MutOrigin.external],
-        QuHeader: Span[Byte, MutOrigin.external],
-        QuStr: Span[Byte, MutOrigin.external],
+        SeqHeader: Span[Byte, MutExternalOrigin],
+        SeqStr: Span[Byte, MutExternalOrigin],
+        QuHeader: Span[Byte, MutExternalOrigin],
+        QuStr: Span[Byte, MutExternalOrigin],
         quality_schema: schema = "generic",
 
     ):
@@ -251,21 +251,21 @@ struct RecordCoord[ validate_quality: Bool = False
 
 
     @always_inline
-    fn get_seq(self) -> StringSlice[origin = MutOrigin.external]:
+    fn get_seq(self) -> StringSlice[origin = MutExternalOrigin]:
         
-        return StringSlice[origin = MutOrigin.external](
+        return StringSlice[origin = MutExternalOrigin](
             ptr=self.SeqStr.unsafe_ptr(), length=len(self.SeqStr)
         )
 
     @always_inline
-    fn get_quality(self) -> StringSlice[origin = MutOrigin.external]:
-        return StringSlice[origin = MutOrigin.external](
+    fn get_quality(self) -> StringSlice[origin = MutExternalOrigin]:
+        return StringSlice[origin = MutExternalOrigin](
             ptr=self.QuStr.unsafe_ptr(), length=len(self.QuStr)
         )
 
     @always_inline
-    fn get_header(self) -> StringSlice[origin = MutOrigin.external]:
-        return StringSlice[origin = MutOrigin.external](
+    fn get_header(self) -> StringSlice[origin = MutExternalOrigin]:
+        return StringSlice[origin = MutExternalOrigin](
             ptr=self.SeqHeader.unsafe_ptr(), length=len(self.SeqHeader)
         )
 

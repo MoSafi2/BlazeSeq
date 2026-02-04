@@ -124,7 +124,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
     fn get_next_line(mut self) raises -> String:
         line_coord = self._line_coord()
         st_line = _strip_spaces(line_coord)
-        return String(bytes=st_line)
+        return String(unsafe_from_utf8=st_line)
 
     fn get_next_line_bytes(mut self) raises -> List[Byte]:
         line_coord = self._line_coord()
@@ -132,13 +132,13 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         return List[Byte](st_line)
 
     @always_inline
-    fn get_next_line_span(mut self) raises -> Span[Byte, MutOrigin.external]:
+    fn get_next_line_span(mut self) raises -> Span[Byte, MutExternalOrigin]:
         line = self._line_coord()
         st_line = _strip_spaces(line)
         return st_line
 
     @always_inline
-    fn _line_coord(mut self) raises -> Span[Byte, MutOrigin.external]:
+    fn _line_coord(mut self) raises -> Span[Byte, MutExternalOrigin]:
         while True:
             var search_span = self.buf.as_span()[: self.end]
             var line_end = memchr(
@@ -177,7 +177,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         _ = self.buf.resize(new_capacity)
 
     @always_inline
-    fn as_span(self) raises -> Span[Byte, MutOrigin.external]:
+    fn as_span(self) raises -> Span[Byte, MutExternalOrigin]:
         return self.buf.as_span()[self.head : self.end]
 
     # Suggestion from Claude To avoid Error catching when reading till last line
@@ -190,7 +190,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
             return True
         return False
 
-    # fn as_span_mut(mut self) raises -> Span[Byte, MutOrigin.external]:
+    # fn as_span_mut(mut self) raises -> Span[Byte, MutExternalOrigin]:
     #     return self.buf.as_span()[self.head : self.end]
 
     @always_inline
@@ -210,9 +210,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         return self.buf[index]
 
     @always_inline
-    fn __getitem__(
-        mut self, sl: Slice
-    ) raises -> Span[Byte, MutOrigin.external]:
+    fn __getitem__(mut self, sl: Slice) raises -> Span[Byte, MutExternalOrigin]:
         start = sl.start.or_else(self.head)
         end = sl.end.or_else(self.end)
         step = sl.step.or_else(1)
@@ -231,13 +229,13 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
 
 
 struct InnerBuffer(Movable, Sized):
-    var ptr: UnsafePointer[type=Byte, origin = MutOrigin.external]
+    var ptr: UnsafePointer[type=Byte, origin=MutExternalOrigin]
     var _len: Int
 
     fn __init__(out self, length: Int):
-        self.ptr: UnsafePointer[Byte, origin = MutOrigin.external] = alloc[
-            Byte
-        ](length)
+        self.ptr: UnsafePointer[Byte, origin=MutExternalOrigin] = alloc[Byte](
+            length
+        )
         self._len = length
 
     fn __getitem__(self, index: Int) raises -> Byte:
@@ -248,7 +246,7 @@ struct InnerBuffer(Movable, Sized):
 
     fn __getitem__(
         mut self, slice: Slice
-    ) raises -> Span[Byte, MutOrigin.external]:
+    ) raises -> Span[Byte, MutExternalOrigin]:
         var start = slice.start.or_else(0)
         var end = slice.end.or_else(self._len)
         var step = slice.step.or_else(1)
@@ -261,7 +259,7 @@ struct InnerBuffer(Movable, Sized):
         len = end - start
         ptr = self.ptr + start
 
-        return Span[Byte, MutOrigin.external](ptr=ptr, length=len)
+        return Span[Byte, MutExternalOrigin](ptr=ptr, length=len)
 
     fn __setitem__(mut self, index: Int, value: Byte) raises:
         if index < self._len:
@@ -282,10 +280,10 @@ struct InnerBuffer(Movable, Sized):
         self._len = new_len
         return True
 
-    fn as_span(self, pos: Int = 0) raises -> Span[Byte, MutOrigin.external]:
+    fn as_span(self, pos: Int = 0) raises -> Span[Byte, MutExternalOrigin]:
         if pos > self._len:
             raise Error("Position is outside the buffer")
-        return Span[Byte, MutOrigin.external](
+        return Span[Byte, MutExternalOrigin](
             ptr=self.ptr + pos, length=self._len - pos
         )
 
