@@ -3,19 +3,15 @@
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 
-**5/11 Update: as Mojo and Max are now distributed in one package the main branch of BlazeSeq is functional and dependent on the `tensor`package from `MAX`**  
-
-BlazeSeq is a performant and versatile FASTQ format parser that provide FASTQ parsing with fine-control knobs. It can be further utilized in several application as quality control tooling, kmer-generation, alignment ... etc.  
-It currently provides two main options: `CoordParser` a minimal-copy parser that can do limited validation of records similar to Rust's [Needletail](https://github.com/onecodex/needletail/tree/master) and `RecordParser` which is ~3X slower but also provides compile-time optional quality schema and ASCII validation of the records.
+BlazeSeq is a performant FASTQ parser with compile-time validation knobs and optional GPU-accelerated utilities. It can be used for quality control, kmer-generation, alignment, and similar workflows. The main `RecordParser` supports optional ASCII and quality-schema validation; batching and device upload are available for GPU pipelines (e.g. quality prefix-sum).
 
 **Note**: BlazeSeq is a re-write of the earlier `MojoFastTrim` which can still be accessed from [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim).
 
 ## Key Features
 
-* Zero-overhead control over parser validation guarantees through Mojo's compile time meta-programming.
-* Multiple parsing modes with progressive validation/performance compromise.
-* Parsing speed up to 5Gb/s from disk on modern hardware.
-* Different aggregation statistics modules (Length & Quality distribution, GC-content .. etc.)
+* Compile-time validation control (ASCII and quality schema) via `RecordParser[check_ascii, check_quality]`.
+* Parsing speed up to ~5 Gb/s from disk on modern hardware.
+* GPU support: `FastqBatch` / `DeviceFastqBatch`, device upload helpers, and quality prefix-sum kernel (see `examples/example_device.mojo`).
 
 ## Installation
 
@@ -53,61 +49,44 @@ Check `blazeseq_cli --help` for full list of options
 
 ### Interactive usage
 
-* Basic usage
-
 ```mojo
-from blazeseq import RecordParser, CoordParser
-fn main():
-    alias validate_ascii = True
-    alias validate_quality = True
-    # Schema can be: generic, sanger, solexa, illumina_1.3, illumina_1.5, illumina_1.8
-    var schema = "sanger"
-    var parser = RecordParser[validate_ascii, validate_quality](path="path/to/your/file.fastq", schema)
+from blazeseq import RecordParser
+from blazeseq.iostream import FileReader
+from pathlib import Path
 
-   # Only validates read headers and Ids length matching, 3X faster on average.
-   # parser = CoordParser(path="path/to/your/file.fastq") 
-
-    parser.next() # Lazily get the next FASTQ record
-    parser.parse_all() # Parse all records, fast error check.
-
+fn main() raises:
+    # Schema: generic, sanger, solexa, illumina_1.3, illumina_1.5, illumina_1.8
+    var parser = RecordParser[True, True](FileReader(Path("path/to/your/file.fastq")), "sanger")
+    while True:
+        var record = parser.next()
+        if record is None:
+            break
+        # use record
 ```
 
 ### Examples
 
-* Get total number of reads and base pairs (fast mode)
+* Count reads and base pairs
 
 ```mojo
-from blazeseq import CoordParser
-fn main():
+from blazeseq import RecordParser
+from blazeseq.iostream import FileReader
+from pathlib import Path
+
+fn main() raises:
+    var parser = RecordParser[False, False](FileReader(Path("path/to/file.fastq")), "generic")
     var total_reads = 0
     var total_base_pairs = 0
-    parser = CoordParser("path/to/your/file.fastq")
     while True:
-        try:
-            var read = parser.next()
-            total_reads += 1
-            total_base_pairs += len(read)
-        except:
-            print(total_reads, total_base_pairs)
+        var record = parser.next()
+        if record is None:
             break
-
+        total_reads += 1
+        total_base_pairs += len(record.value())
+    print(total_reads, total_base_pairs)
 ```
 
-**Lazy parse, collect record statistics**. for now only works with `RecordParser`, the `FullStats` aggregator is the only one present (_more options are under development_).
-
-```mojo
-from blazeseq import RecordParser, FullStats
-fn main() raises:
-    var parser = RecordParser(path="data/8_Swamp_S1B_MATK_2019_minq7.fastq")
-    var stats = FullStats()
-    while True:
-        try:
-            var record = parser.next()
-            stats.tally(record)
-        except:
-            print(stats)
-            break
-```
+* GPU quality prefix-sum: see `examples/example_device.mojo` (requires GPU and `gpu.host`).
 
 ## Performance
 
@@ -132,7 +111,7 @@ All tests were carried out on a personal PC with Intel core-i7 13700K processor,
 
 ### FASTQ parsing
 
-| reads  | CoordParser     | RecordParser (no validation) | RecordParser <br> (quality schama validation) | RecordParser (complete validation) |
+| reads  | CoordParser     | RecordParser (no validation) | RecordParser (quality validation) | RecordParser (full validation) |
 | ------ | --------------- | ---------------------------- | --------------------------------------------- | ---------------------------------- |
 | 40k    | 13.7 ± 5.0 ms   | 18.2 ± 4.7 ms                | 26.0 ± 4.9 ms                                 | 50.3 ± 6.3 ms                      |
 | 5.5M   | 244.8 ± 4.3 ms  | 696.9 ± 2.7 ms               | 935.8 ± 6.3 ms                                | 1.441 ± 0.024 s                    |
@@ -146,23 +125,6 @@ A dataset of toy valid/invalid FASTQ files were used for testing.
 the dataset were obtained from the [**BioJava**](https://github.com/biojava/biojava/tree/master/biojava-genome%2Fsrc%2Ftest%2Fresources%2Forg%2Fbiojava%2Fnbio%2Fgenome%2Fio%2Ffastq) project.
 The same test dataset is used for the [**Biopython**](https://biopython.org/) and [**BioPerl**](https://bioperl.org/) FASTQ parsers as well.  
 
-## Roadmap
-
-Some points of the following roadmap are tightly coupled with Mojo's evolution, as Mojo matures more options will be added.
-
-* [ ] parallel processing of Fastq files (requires stable concurrency model and concurrency primitives from Mojo)
-* [ ] Parsing over continuous (decompression , network) streams (requires Mojo implementation or binding to decompression and networking libraries).
-* [ ] Reporting output as JSON, HTML? Python inter-op for plotting?.
-* [ ] Comprehensive testing of basic aggregate statistics (GC Content, quality distribution per  base pair, read-length distribution ... etc) vs Industry standards
-* [ ] Passing custom list of aggregator to the parser.
-
-## Contribution
-
-This project welcomes all contributions! Here are some ways if you are interested:
-
-* **Bug reports**: BlazeSeq is still new, bugs and rough-edges are expected. If you encounter any bugs, please create an issue.
-* **Feature requests**: If you have ideas for new features, feel free to create an issue or a pull request.
-* **Code contributions**: Pull requests that improve existing code or add new functionalities are welcome.
 
 ## License
 
