@@ -88,53 +88,45 @@ struct RecordParser[
         return schema^
 
 
-# struct CoordParser[
-#     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
-# ]:
-#     var stream: BufferedLineIterator[R, check_ascii=check_ascii]
+struct CoordParser[
+    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
+]:
+    var stream: BufferedReader[Self.R, check_ascii = Self.check_ascii]
 
-#     fn __init__(out self, var reader: Self.R) raises:
-#         self.stream = BufferedReader[check_ascii=check_ascii](
-#             reader^, DEFAULT_CAPACITY
-#         )
+    fn __init__(out self, var reader: Self.R) raises:
+        self.stream = BufferedReader[check_ascii = self.check_ascii](
+            reader^, DEFAULT_CAPACITY
+        )
 
-#     @always_inline
-#     fn parse_all(mut self) raises:
-#         while True:
-#             record = self._parse_record()
-#             record.validate()
+    @always_inline
+    fn parse_all(mut self) raises:
+        while True:
+            record = self._parse_record()
+            record.validate_record()
 
-#             @parameter
-#             if Self.check_quality:
-#                 record.validate_quality_schema()
+            @parameter
+            if Self.check_quality:
+                record.validate_quality_schema()
 
-#     @always_inline
-#     fn next(
-#         mut self,
-#     ) raises -> RecordCoord[mut=False, o = origin_of(self.stream.buf)]:
-#         read = self._parse_record()
-#         read.validate()
+    @always_inline
+    fn next(
+        mut self,
+    ) raises -> RecordCoord[validate_quality = Self.check_quality]:
+        read = self._parse_record()
+        read.validate_record()
 
-#         @parameter
-#         if check_quality:
-#             read.validate_quality_schema()
-#         return read
+        @parameter
+        if self.check_quality:
+            read.validate_quality_schema()
+        return read^
 
-#     @always_inline
-#     fn _parse_record(
-#         mut self,
-#     ) raises -> RecordCoord[
-#         mut=False, o = origin_of(origin_of(self.stream.buf))
-#     ]:
-#         var line1 = self.stream.get_next_line_span()
+    @always_inline
+    fn _parse_record(
+        mut self,
+    ) raises -> RecordCoord[validate_quality = Self.check_quality]:
+        lines = self.stream.get_n_lines[4]()
+        l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
 
-#         var line2 = self.stream.get_next_line_span()
-#         var line3 = self.stream.get_next_line_span()
-#         var line4 = self.stream.get_next_line_span()
-
-#         return RecordCoord(
-#             line1.get_immutable(),
-#             line2.get_immutable(),
-#             line3.get_immutable(),
-#             line4.get_immutable(),
-#         )
+        return RecordCoord[validate_quality = self.check_quality](
+            l1, l2, l3, l4
+        )
