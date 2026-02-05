@@ -22,7 +22,7 @@ struct RecordParser[
         # Check if file is empty - if so, raise EOF error
         if not self.stream.has_more_lines():
             raise Error("EOF")
-        
+
         while True:
             if not self.stream.has_more_lines():
                 break
@@ -53,11 +53,8 @@ struct RecordParser[
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
-        
-        l1 = self.stream.get_next_line()
-        l2 = self.stream.get_next_line()
-        l3 = self.stream.get_next_line()
-        l4 = self.stream.get_next_line()
+        lines = self.stream.get_n_lines[4]()
+        l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
         schema = self.quality_schema.copy()
         try:
             return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)

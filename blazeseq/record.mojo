@@ -34,12 +34,27 @@ struct FastqRecord[val: Bool = True](
     var QuStr: ByteString
     var quality_schema: QualitySchema
 
+
+    @always_inline
+    fn __init__(out self, seq_header: String, seq_str: String, qu_header: String, qu_str: String, quality_schema: schema = "generic") raises:
+        self.SeqHeader = ByteString(seq_header)
+        self.SeqStr = ByteString(seq_str)
+        self.QuHeader = ByteString(qu_header)
+        self.QuStr = ByteString(qu_str)
+
+        if quality_schema.isa[String]():
+            self.quality_schema = _parse_schema(quality_schema[String])
+        else:
+            self.quality_schema = quality_schema[QualitySchema].copy()
+
+
+    @always_inline
     fn __init__(
         out self,
-        SeqHeader: String,
-        SeqStr: String,
-        QuHeader: String,
-        QuStr: String,
+        SeqHeader: Span[Byte, MutExternalOrigin],
+        SeqStr: Span[Byte, MutExternalOrigin],
+        QuHeader: Span[Byte, MutExternalOrigin],
+        QuStr: Span[Byte, MutExternalOrigin],
         quality_schema: schema = "generic",
     ) raises:
         self.SeqHeader = ByteString(SeqHeader)
