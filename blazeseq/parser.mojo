@@ -53,6 +53,7 @@ struct RecordParser[
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
+        
         l1 = self.stream.get_next_line()
         l2 = self.stream.get_next_line()
         l3 = self.stream.get_next_line()

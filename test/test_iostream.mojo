@@ -1,7 +1,8 @@
 from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from blazeseq.iostream import BufferedReader, FileReader, InnerBuffer
+from blazeseq.iostream import BufferedReader, FileReader, BufferView
+from memory import alloc
 from testing import TestSuite
 
 
@@ -74,7 +75,7 @@ fn test_buffered_reader_len() raises:
     test_file = create_test_file(test_file, test_content)
 
     var reader = FileReader(test_file)
-    var buf_reader = BufferedReader(reader^)
+    var buf_reader = BufferedReader[check_ascii=True](reader^)
 
     # Initial length should match content length (or capacity if smaller)
     var initial_len = len(buf_reader)
@@ -935,7 +936,9 @@ fn test_file_reader_read_to_buffer() raises:
     test_file = create_test_file(test_file, test_content)
 
     var reader = FileReader(test_file)
-    var buffer = InnerBuffer(100)
+    # Create a buffer using BufferView
+    var ptr = alloc[Byte](100)
+    var buffer = BufferView(ptr=ptr, _len=100)
 
     # Read to buffer
     var bytes_read = reader.read_to_buffer(buffer, len(test_content), 0)
@@ -944,8 +947,10 @@ fn test_file_reader_read_to_buffer() raises:
     )
 
     # Verify content was read
-    assert_equal(buffer[0], ord("T"), "First byte should be 'T'")
-    assert_equal(buffer[1], ord("e"), "Second byte should be 'e'")
+    assert_equal(ptr[0], ord("T"), "First byte should be 'T'")
+    assert_equal(ptr[1], ord("e"), "Second byte should be 'e'")
+
+    ptr.free()
 
     print("✓ test_file_reader_read_to_buffer passed")
 
@@ -957,7 +962,9 @@ fn test_file_reader_read_to_buffer_errors() raises:
     test_file = create_test_file(test_file, test_content)
 
     var reader = FileReader(test_file)
-    var buffer = InnerBuffer(10)
+    # Create a buffer using BufferView
+    var ptr = alloc[Byte](10)
+    var buffer = BufferView(ptr=ptr, _len=10)
 
     # Test negative amount
     with assert_raises(contains="should be positive"):
@@ -967,103 +974,16 @@ fn test_file_reader_read_to_buffer_errors() raises:
     with assert_raises(contains="bigger than the available space"):
         _ = reader.read_to_buffer(buffer, 100, 0)
 
+    ptr.free()
+
     print("✓ test_file_reader_read_to_buffer_errors passed")
 
 
 # ============================================================================
-# InnerBuffer Tests
+# InnerBuffer Tests - REMOVED
+# InnerBuffer has been merged into BufferedReader.
+# Buffer functionality is now tested through BufferedReader tests.
 # ============================================================================
-
-
-fn test_inner_buffer_resize() raises:
-    """Test InnerBuffer resizing."""
-    var buffer = InnerBuffer(10)
-
-    # Set some initial values
-    buffer[0] = ord("A")
-    buffer[1] = ord("B")
-
-    var original_len = len(buffer)
-
-    # Resize buffer
-    _ = buffer.resize(20)
-
-    # Length should increase
-    assert_equal(len(buffer), 20, "Length should increase")
-
-    # Original data should be preserved
-    assert_equal(buffer[0], ord("A"), "Original data should be preserved")
-    assert_equal(buffer[1], ord("B"), "Original data should be preserved")
-
-    # Test resize error with smaller size
-    with assert_raises(contains="must be greater than current length"):
-        _ = buffer.resize(10)
-
-    print("✓ test_inner_buffer_resize passed")
-
-
-fn test_inner_buffer_as_span_with_pos() raises:
-    """Test InnerBuffer as_span with position parameter."""
-    var buffer = InnerBuffer(10)
-
-    # Set some values
-    for i in range(10):
-        buffer[i] = Byte(ord("A") + i)
-
-    # Get span from position 0
-    var span1 = buffer.as_span(0)
-    assert_equal(len(span1), 10, "Span from 0 should have full length")
-
-    # Get span from position 5
-    var span2 = buffer.as_span(5)
-    assert_equal(len(span2), 5, "Span from 5 should have remaining length")
-    assert_equal(span2[0], ord("F"), "First element should be 'F'")
-
-    # Test error with invalid position
-    with assert_raises(contains="outside the buffer"):
-        _ = buffer.as_span(20)
-
-    print("✓ test_inner_buffer_as_span_with_pos passed")
-
-
-fn test_inner_buffer_setitem() raises:
-    """Test InnerBuffer byte assignment."""
-    var buffer = InnerBuffer(10)
-
-    # Set values
-    buffer[0] = ord("X")
-    buffer[5] = ord("Y")
-    buffer[9] = ord("Z")
-
-    # Verify values were set
-    assert_equal(buffer[0], ord("X"), "First byte should be 'X'")
-    assert_equal(buffer[5], ord("Y"), "Middle byte should be 'Y'")
-    assert_equal(buffer[9], ord("Z"), "Last byte should be 'Z'")
-
-    # Test bounds checking
-    with assert_raises(contains="Out of bounds"):
-        buffer[10] = ord("A")
-
-    print("✓ test_inner_buffer_setitem passed")
-
-
-fn test_inner_buffer_bounds() raises:
-    """Test InnerBuffer bounds checking."""
-    var buffer = InnerBuffer(10)
-
-    # Valid access
-    _ = buffer[0]
-    _ = buffer[9]
-
-    # Invalid access - beyond length
-    with assert_raises(contains="Out of bounds"):
-        _ = buffer[10]
-
-    # Invalid access - way beyond length
-    with assert_raises(contains="Out of bounds"):
-        _ = buffer[100]
-
-    print("✓ test_inner_buffer_bounds passed")
 
 
 # ============================================================================
@@ -1080,7 +1000,7 @@ fn test_buffered_reader_slice_edge_cases() raises:
     var reader = FileReader(test_file)
     var buf_reader = BufferedReader(reader^)
 
-    # Test slice with step (InnerBuffer raises; step > 1 not supported)
+    # Test slice with step (BufferedReader raises; step > 1 not supported)
     with assert_raises(contains="Step loading is not supported"):
         _ = buf_reader[0:10:2]
 
@@ -1100,8 +1020,7 @@ fn test_buffered_reader_slice_edge_cases() raises:
     assert_equal(single_slice[0], ord("0"), "Should contain correct byte")
 
     _ = single_slice
-    # Hack as origins are not right in this implementation
-    _ = buf_reader 
+    _ = buf_reader
     print("✓ test_buffered_reader_slice_edge_cases passed")
 
 
@@ -1135,6 +1054,479 @@ fn test_buffered_reader_custom_capacity_edge_cases() raises:
     )
 
     print("✓ test_buffered_reader_custom_capacity_edge_cases passed")
+
+
+# ============================================================================
+# get_n_lines Tests
+# ============================================================================
+
+
+fn test_get_n_lines_basic() raises:
+    """Read N lines when all fit in buffer."""
+    var test_content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n"
+    var test_file = Path("test_get_n_lines_basic.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 3 lines
+    var lines = buf_reader.get_n_lines[3]()
+    assert_equal(len(lines), 3, "Should return 3 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 1", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[1]), "Line 2", "Second line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[2]), "Line 3", "Third line correct"
+    )
+
+    # Verify head is positioned correctly
+    var next_line = buf_reader.get_next_line()
+    assert_equal(next_line, "Line 4", "Next line should be Line 4")
+
+    print("✓ test_get_n_lines_basic passed")
+
+
+fn test_get_n_lines_exact_buffer() raises:
+    """Read exactly N lines that fit perfectly in buffer."""
+    var test_content = "A\nB\nC\n"
+    var test_file = Path("test_get_n_lines_exact_buffer.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read all 3 lines
+    var lines = buf_reader.get_n_lines[3]()
+    assert_equal(len(lines), 3, "Should return 3 lines")
+    assert_equal(String(unsafe_from_utf8=lines[0]), "A", "First line correct")
+    assert_equal(String(unsafe_from_utf8=lines[1]), "B", "Second line correct")
+    assert_equal(String(unsafe_from_utf8=lines[2]), "C", "Third line correct")
+    _ = buf_reader
+    print("✓ test_get_n_lines_exact_buffer passed")
+
+
+fn test_get_n_lines_empty_lines() raises:
+    """Handle empty lines correctly."""
+    var test_content = "Line 1\n\nLine 3\n\n"
+    var test_file = Path("test_get_n_lines_empty_lines.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 4 lines including empty ones
+    var lines = buf_reader.get_n_lines[4]()
+    assert_equal(len(lines), 4, "Should return 4 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 1", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[1]), "", "Second line should be empty"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[2]), "Line 3", "Third line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[3]), "", "Fourth line should be empty"
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_empty_lines passed")
+
+
+fn test_get_n_lines_spans_buffer_boundary() raises:
+    """Read N lines that require buffer shift."""
+    # Create content that will require buffer shift
+    var test_content = String("")
+    for i in range(20):
+        test_content += "Line " + String(i) + "\n"
+
+    var test_file = Path("test_get_n_lines_spans_buffer_boundary.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    # Use small buffer to force boundary crossing
+    var buf_reader = BufferedReader(reader^, capacity=50)
+
+    # Read 5 lines that will span buffer boundary
+    var lines = buf_reader.get_n_lines[5]()
+    assert_equal(len(lines), 5, "Should return 5 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 0", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[4]), "Line 4", "Last line correct"
+    )
+
+    # Verify we can continue reading
+    var next_line = buf_reader.get_next_line()
+    assert_equal(next_line, "Line 5", "Next line should be Line 5")
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_spans_buffer_boundary passed")
+
+
+fn test_get_n_lines_multiple_shifts() raises:
+    """Read N lines requiring multiple buffer fills."""
+    var test_content = String("")
+    for i in range(30):
+        test_content += "Line " + String(i) + " with some content\n"
+
+    var test_file = Path("test_get_n_lines_multiple_shifts.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    # Use buffer that can hold ~3-4 lines to force multiple shifts
+    # Each line is ~30 bytes, so 10 lines need ~300 bytes
+    # Buffer of 150 bytes can hold ~5 lines, requiring multiple refills for 10 lines
+    # But must be large enough to hold all 10 lines after shifting (need at least 300 bytes)
+    # Actually, the buffer needs to be able to hold all lines being read, so use 350 bytes
+    var buf_reader = BufferedReader(reader^, capacity=350)
+
+    # Read 10 lines that will require multiple shifts
+    var lines = buf_reader.get_n_lines[10]()
+    assert_equal(len(lines), 10, "Should return 10 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]),
+        "Line 0 with some content",
+        "First line correct",
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[9]),
+        "Line 9 with some content",
+        "Last line correct",
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_multiple_shifts passed")
+
+
+fn test_get_n_lines_large_n() raises:
+    """Read many lines."""
+    var test_content = String("")
+    for i in range(50):
+        test_content += "Line " + String(i) + "\n"
+
+    var test_file = Path("test_get_n_lines_large_n.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 20 lines
+    var lines = buf_reader.get_n_lines[20]()
+    assert_equal(len(lines), 20, "Should return 20 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 0", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[19]), "Line 19", "Last line correct"
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_large_n passed")
+
+
+fn test_get_n_lines_eof_before_n() raises:
+    """EOF reached before getting N lines (should raise error)."""
+    var test_content = "Line 1\nLine 2\n"
+    var test_file = Path("test_get_n_lines_eof_before_n.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Try to read 5 lines when only 2 exist
+    with assert_raises(
+        contains="EOF reached before getting all requested lines"
+    ):
+        _ = buf_reader.get_n_lines[5]()
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_eof_before_n passed")
+
+
+fn test_get_n_lines_no_trailing_newline() raises:
+    """Last line without newline."""
+    var test_content = "Line 1\nLine 2\nLine 3"
+    var test_file = Path("test_get_n_lines_no_trailing_newline.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read all 3 lines
+    var lines = buf_reader.get_n_lines[3]()
+    assert_equal(len(lines), 3, "Should return 3 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 1", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[1]), "Line 2", "Second line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[2]),
+        "Line 3",
+        "Last line without newline correct",
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_no_trailing_newline passed")
+
+
+fn test_get_n_lines_single_line() raises:
+    """Test reading a single line (n=1 case)."""
+    var test_content = "Single line\n"
+    var test_file = Path("test_get_n_lines_single_line.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 1 line
+    var lines = buf_reader.get_n_lines[1]()
+    assert_equal(len(lines), 1, "Should return 1 line")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Single line", "Line correct"
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_single_line passed")
+
+
+fn test_get_n_lines_all_remaining() raises:
+    """Read all remaining lines in file."""
+    var test_content = "Line 1\nLine 2\nLine 3\nLine 4\n"
+    var test_file = Path("test_get_n_lines_all_remaining.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read first line
+    _ = buf_reader.get_next_line()
+
+    # Read all remaining 3 lines
+    var lines = buf_reader.get_n_lines[3]()
+    assert_equal(len(lines), 3, "Should return 3 lines")
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 2", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[2]), "Line 4", "Last line correct"
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_all_remaining passed")
+
+
+fn test_get_n_lines_preserves_buffer() raises:
+    """Verify earlier lines remain in buffer."""
+    var test_content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n"
+    var test_file = Path("test_get_n_lines_preserves_buffer.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 3 lines
+    var lines = buf_reader.get_n_lines[3]()
+    assert_equal(len(lines), 3, "Should return 3 lines")
+
+    # Verify the spans still reference valid buffer positions
+    # by checking their content
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 1", "First span valid"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[1]), "Line 2", "Second span valid"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[2]), "Line 3", "Third span valid"
+    )
+
+    # Verify we can continue reading
+    var next_line = buf_reader.get_next_line()
+    assert_equal(next_line, "Line 4", "Can continue reading after get_n_lines")
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_preserves_buffer passed")
+
+
+fn test_get_n_lines_head_position() raises:
+    """Verify head is correctly positioned after reading."""
+    var test_content = "Line 1\nLine 2\nLine 3\nLine 4\n"
+    var test_file = Path("test_get_n_lines_head_position.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    var head_before = buf_reader.head
+
+    # Read 2 lines
+    var lines = buf_reader.get_n_lines[2]()
+    assert_equal(len(lines), 2, "Should return 2 lines")
+
+    # Head should have advanced
+    assert_true(buf_reader.head > head_before, "Head should have advanced")
+
+    # Next read should continue from correct position
+    var next_line = buf_reader.get_next_line()
+    assert_equal(next_line, "Line 3", "Next line should be Line 3")
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_head_position passed")
+
+
+fn test_get_n_lines_span_references() raises:
+    """Verify returned spans reference correct buffer positions."""
+    var test_content = "Line 1\nLine 2\nLine 3\n"
+    var test_file = Path("test_get_n_lines_span_references.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 2 lines
+    var lines = buf_reader.get_n_lines[2]()
+    assert_equal(len(lines), 2, "Should return 2 lines")
+
+    # Verify spans have correct content
+    var line1_str = String(unsafe_from_utf8=lines[0])
+    var line2_str = String(unsafe_from_utf8=lines[1])
+    assert_equal(line1_str, "Line 1", "First span content correct")
+    assert_equal(line2_str, "Line 2", "Second span content correct")
+
+    # Verify spans are non-empty
+    assert_true(len(lines[0]) > 0, "First span should not be empty")
+    assert_true(len(lines[1]) > 0, "Second span should not be empty")
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_span_references passed")
+
+
+fn test_get_n_lines_zero() raises:
+    """Test n=0 case (should return empty list)."""
+    var test_content = "Line 1\nLine 2\n"
+    var test_file = Path("test_get_n_lines_zero.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var buf_reader = BufferedReader(reader^)
+
+    # Read 0 lines
+    var lines = buf_reader.get_n_lines[0]()
+    assert_equal(len(lines), 0, "Should return empty list")
+
+    # Should still be able to read normally
+    var next_line = buf_reader.get_next_line()
+    assert_equal(next_line, "Line 1", "Should still be able to read after n=0")
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_zero passed")
+
+
+fn test_get_n_lines_spans_valid_after_refill() raises:
+    """Verify spans remain valid after buffer shift and refill."""
+    # Create content that will require buffer shift
+    var test_content = String("")
+    for i in range(15):
+        test_content += "Line " + String(i) + " with content\n"
+
+    var test_file = Path("test_get_n_lines_spans_valid_after_refill.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    # Use buffer that can hold ~2-3 lines to force refill during reading
+    # Each line is ~25 bytes, so 5 lines need ~125 bytes
+    # Buffer must be large enough to hold all 5 lines after shifting
+    # Use 150 bytes to ensure we can fit all 5 lines
+    var buf_reader = BufferedReader(reader^, capacity=150)
+
+    # Read 5 lines that will require buffer shift and refill
+    var lines = buf_reader.get_n_lines[5]()
+    assert_equal(len(lines), 5, "Should return 5 lines")
+
+    # Verify all spans are valid and contain correct content
+    # This is critical - spans should remain valid even after buffer shift
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]),
+        "Line 0 with content",
+        "First span valid after refill",
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[1]),
+        "Line 1 with content",
+        "Second span valid after refill",
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[2]),
+        "Line 2 with content",
+        "Third span valid after refill",
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[3]),
+        "Line 3 with content",
+        "Fourth span valid after refill",
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[4]),
+        "Line 4 with content",
+        "Fifth span valid after refill",
+    )
+
+    # Verify we can continue reading correctly
+    var next_line = buf_reader.get_next_line()
+    assert_equal(
+        next_line, "Line 5 with content", "Can continue reading after refill"
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_spans_valid_after_refill passed")
+
+
+fn test_get_n_lines_restarts_after_refill() raises:
+    """Verify that reading restarts from beginning after refill."""
+    # Create content where first few lines fit, but later lines need refill
+    var test_content = String("")
+    for i in range(20):
+        test_content += "Line " + String(i) + "\n"
+
+    var test_file = Path("test_get_n_lines_restarts_after_refill.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    # Use buffer that can hold ~3 lines, so reading 5 lines will need refill
+    var buf_reader = BufferedReader(reader^, capacity=40)
+
+    # Read 5 lines - this will trigger refill and restart
+    var lines = buf_reader.get_n_lines[5]()
+    assert_equal(len(lines), 5, "Should return 5 lines")
+
+    # All lines should be correct, even though refill happened
+    for i in range(5):
+        var expected = "Line " + String(i)
+        assert_equal(
+            String(unsafe_from_utf8=lines[i]),
+            expected,
+            "Line " + String(i) + " should be correct after restart",
+        )
+
+    # Verify spans are all valid and in order
+    assert_equal(
+        String(unsafe_from_utf8=lines[0]), "Line 0", "First line correct"
+    )
+    assert_equal(
+        String(unsafe_from_utf8=lines[4]), "Line 4", "Last line correct"
+    )
+
+    _ = buf_reader
+    print("✓ test_get_n_lines_restarts_after_refill passed")
 
 
 fn main() raises:

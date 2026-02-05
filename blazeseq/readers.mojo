@@ -11,7 +11,7 @@ BufferedReader.
 from memory import memset_zero, UnsafePointer
 from sys import ffi
 from sys.info import CompilationTarget
-from blazeseq.iostream import Reader, InnerBuffer
+from blazeseq.iostream import Reader, BufferView
 
 
 # Constants for zlib return codes
@@ -112,7 +112,7 @@ struct GZFile(Movable, Reader):
         self.mode = other.mode^
 
     fn read_to_buffer(
-        mut self, mut buf: InnerBuffer, amt: Int, pos: Int
+        mut self, mut buf: BufferView, amt: Int, pos: Int
     ) raises -> UInt64:
         s = buf.as_span(pos=pos)
         if amt > len(s):

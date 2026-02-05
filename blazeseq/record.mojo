@@ -217,24 +217,26 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
 
 
 @fieldwise_init
-struct RecordCoord[ validate_quality: Bool = False
+struct RecordCoord[
+    validate_quality: Bool = False,
+    origin: Origin[mut=True] = MutExternalOrigin
 ](Sized, Writable, Movable, Copyable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
-    var SeqHeader: Span[Byte, MutExternalOrigin]
-    var SeqStr: Span[Byte, MutExternalOrigin]
-    var QuHeader: Span[Byte, MutExternalOrigin]
-    var QuStr: Span[Byte, MutExternalOrigin]
+    var SeqHeader: Span[Byte, Self.origin]
+    var SeqStr: Span[Byte, Self.origin]
+    var QuHeader: Span[Byte, Self.origin]
+    var QuStr: Span[Byte, Self.origin]
     var quality_schema: QualitySchema
 
 
     fn __init__(
         out self,
-        SeqHeader: Span[Byte, MutExternalOrigin],
-        SeqStr: Span[Byte, MutExternalOrigin],
-        QuHeader: Span[Byte, MutExternalOrigin],
-        QuStr: Span[Byte, MutExternalOrigin],
+        SeqHeader: Span[Byte, Self.origin],
+        SeqStr: Span[Byte, Self.origin],
+        QuHeader: Span[Byte, Self.origin],
+        QuStr: Span[Byte, Self.origin],
         quality_schema: schema = "generic",
 
     ):
@@ -250,23 +252,16 @@ struct RecordCoord[ validate_quality: Bool = False
 
 
     @always_inline
-    fn get_seq(self) -> StringSlice[origin = MutExternalOrigin]:
-        
-        return StringSlice[origin = MutExternalOrigin](
-            ptr=self.SeqStr.unsafe_ptr(), length=len(self.SeqStr)
-        )
+    fn get_seq(self) -> StringSlice[origin = Self.origin]:
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.SeqStr)
 
     @always_inline
-    fn get_quality(self) -> StringSlice[origin = MutExternalOrigin]:
-        return StringSlice[origin = MutExternalOrigin](
-            ptr=self.QuStr.unsafe_ptr(), length=len(self.QuStr)
-        )
+    fn get_quality(self) -> StringSlice[origin = Self.origin]:
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.QuStr)
 
     @always_inline
-    fn get_header(self) -> StringSlice[origin = MutExternalOrigin]:
-        return StringSlice[origin = MutExternalOrigin](
-            ptr=self.SeqHeader.unsafe_ptr(), length=len(self.SeqHeader)
-        )
+    fn get_header(self) -> StringSlice[origin = Self.origin]:
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.SeqHeader)
 
     @always_inline
     fn __len__(self) -> Int:
