@@ -26,9 +26,9 @@ from time import perf_counter_ns as now
 from memory import UnsafePointer
 
 # 10M reads, subbatch 256k (configurable in 128k-256k range)
-comptime NUM_RECORDS = 10_000_000
+comptime NUM_RECORDS = 3_000_000
 comptime READ_LENGTH = 85
-comptime SUBBATCH_SIZE = 256_000
+comptime SUBBATCH_SIZE = 32_000
 
 
 # ---------------------------------------------------------------------------
