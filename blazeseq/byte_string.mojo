@@ -1,6 +1,10 @@
+# Adapted from: https://github.com/BioRadOpenSource/ish/blob/main/ishlib/vendor/kseq.mojo
+# Adapted from Kseq crystal implementation by ssstadick
+
 from memory import memcpy, UnsafePointer, Span, alloc
 from collections.string import StringSlice, String
 from blazeseq.utils import memchr
+
 
 struct ByteString(Copyable, Movable, Sized):
     # TODO: add address_space
@@ -22,21 +26,19 @@ struct ByteString(Copyable, Movable, Sized):
         self.size = len(s)
         self.cap = len(s)
 
-
     fn __init__(out self, s: Span[UInt8, MutExternalOrigin]):
         self.ptr = alloc[UInt8](len(s))
         for i in range(len(s)):
             self.ptr[i] = s[i]
         self.size = len(s)
         self.cap = len(s)
-    
+
     fn __init__(out self, s: StringSlice[MutExternalOrigin]):
         self.ptr = alloc[UInt8](len(s))
         for i in range(len(s)):
             self.ptr[i] = s.as_bytes()[i]
         self.size = len(s)
         self.cap = len(s)
-
 
     fn __del__(deinit self):
         self.ptr.free()
@@ -61,7 +63,9 @@ struct ByteString(Copyable, Movable, Sized):
 
     # TODO: rename offset
     @always_inline
-    fn addr[I: Indexer](mut self, i: I) -> UnsafePointer[UInt8, MutExternalOrigin]:
+    fn addr[
+        I: Indexer
+    ](mut self, i: I) -> UnsafePointer[UInt8, MutExternalOrigin]:
         return self.ptr + i
 
     @staticmethod
@@ -111,7 +115,9 @@ struct ByteString(Copyable, Movable, Sized):
 
     # TODO: rename extend
     @always_inline
-    fn append(mut self, ptr: UnsafePointer[UInt8, MutExternalOrigin], length: Int):
+    fn append(
+        mut self, ptr: UnsafePointer[UInt8, MutExternalOrigin], length: Int
+    ):
         if length <= 0:
             return
 
@@ -145,7 +151,6 @@ struct ByteString(Copyable, Movable, Sized):
 
     fn to_string(self) -> String:
         return String(StringSlice(unsafe_from_utf8=self.as_span()))
-
 
     @always_inline
     fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
