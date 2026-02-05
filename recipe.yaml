@@ -1,6 +1,6 @@
 context:
   version: "0.1.0"
-  max_version: "=0.26.1"
+  mojo_version: "=0.26.1"
 
 package:
   name: "blazeseq"
@@ -17,9 +17,9 @@ build:
 
 requirements:
   host:
-    - max ${{ max_version }}
+    - max ${{ mojo_version }}
   run:
-    - max ${{ max_version }}
+    - max ${{ mojo_version }}
 
 tests:
   - script:
@@ -29,7 +29,7 @@ tests:
           - mojo test -I ${{ PREFIX }}/lib/mojo/BlazeSeq.mojopkg tests/test_iostream.mojo
     requirements:
       run:
-        - max ${{ max_version }}
+        - max ${{ mojo_version }}
     files:
       recipe:
         - tests/test_device_record.mojo

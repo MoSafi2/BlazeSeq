@@ -56,10 +56,7 @@ struct RecordParser[
         lines = self.stream.get_n_lines[4]()
         l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
         schema = self.quality_schema.copy()
-        try:
-            return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
-        except Error:
-            raise
+        return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
 
     @staticmethod
     @always_inline

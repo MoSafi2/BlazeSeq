@@ -6,6 +6,27 @@ authors = []
 channels = ["conda-forge", "https://conda.modular.com/max"]
 platforms = ["linux-64", "osx-arm64"]
 license = "MIT"
+preview = ["pixi-build"]
+
+[package]
+name = "blazeseq"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-mojo", version = "0.*", channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+] }
+
+[package.host-dependencies]
+mojo-compiler = "0.26.*"
+
+[package.build-dependencies]
+mojo-compiler = "0.26.*"
+rattler-build = "*"
+
+[package.run-dependencies]
+mojo-compiler = "0.26.*"
 
 [dependencies]
 mojo = "0.26.*"
@@ -15,7 +36,7 @@ build = "mojo package blazeseq -o BlazeSeq.mojopkg"
 t = { cmd = "sh -c 'find ./tests -name test_*.mojo -not -name test_coord_parser.mojo | xargs -I % mojo test -I BlazeSeq.mojopkg -D ASSERT=all %'", depends-on = [
     "build",
 ] }
-rbuild = "rattler-build build -c conda-forge -c https://conda.modular.com/max recipe.yaml"
-rtest = { cmd = "rattler-build test -c conda-forge -c https://conda.modular.com/max --package-file ./blazeseq*.conda", depends-on = [
+rbuild = "pixi build"
+rtest = { cmd = "sh -c 'PKG=$(ls ./blazeseq*.conda 2>/dev/null || find .pixi/build -name \"blazeseq*.conda\" -type f 2>/dev/null | head -1); test -n \"$PKG\" && rattler-build test -c conda-forge -c https://conda.modular.com/max --package-file \"$PKG\"'", depends-on = [
     "rbuild",
 ] }
