@@ -42,10 +42,10 @@ struct FastqRecord[val: Bool = True](
         QuStr: String,
         quality_schema: schema = "generic",
     ) raises:
-        self.SeqHeader = ByteString.from_string(SeqHeader)
-        self.QuHeader = ByteString.from_string(QuHeader)
-        self.SeqStr = ByteString.from_string(SeqStr)
-        self.QuStr = ByteString.from_string(QuStr)
+        self.SeqHeader = ByteString(SeqHeader)
+        self.QuHeader = ByteString(QuHeader)
+        self.SeqStr = ByteString(SeqStr)
+        self.QuStr = ByteString(QuStr)
 
         if quality_schema.isa[String]():
             self.quality_schema = _parse_schema(quality_schema[String])
@@ -63,10 +63,10 @@ struct FastqRecord[val: Bool = True](
             raise Error("Sequence does not seem to be valid")
 
         # Bug when Using
-        self.SeqHeader = ByteString.from_string(String(seqs[0].strip()))
-        self.SeqStr = ByteString.from_string(String(seqs[1].strip()))
-        self.QuHeader = ByteString.from_string(String(seqs[2].strip()))
-        self.QuStr = ByteString.from_string(String(seqs[3].strip()))
+        self.SeqHeader = ByteString(String(seqs[0].strip()))
+        self.SeqStr = ByteString(String(seqs[1].strip()))
+        self.QuHeader = ByteString(String(seqs[2].strip()))
+        self.QuStr = ByteString(String(seqs[3].strip()))
         self.quality_schema = materialize[generic_schema]()
 
         @parameter
@@ -110,6 +110,7 @@ struct FastqRecord[val: Bool = True](
     @always_inline
     fn validate_record(self) raises:
         if self.SeqHeader[0] != read_header:
+            print(self.SeqHeader[0])
             raise Error("Sequence header does not start with '@'")
 
         if self.QuHeader[0] != quality_header:

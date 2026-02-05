@@ -15,13 +15,31 @@ struct ByteString(Copyable, Movable, Sized):
         if capacity > 0:
             self.resize(UInt32(capacity))
 
+    fn __init__(out self, s: String):
+        self.ptr = alloc[UInt8](len(s))
+        for i in range(len(s)):
+            self.ptr[i] = s.as_bytes()[i]
+        self.size = len(s)
+        self.cap = len(s)
+
+
+    fn __init__(out self, s: Span[UInt8, MutExternalOrigin]):
+        self.ptr = alloc[UInt8](len(s))
+        for i in range(len(s)):
+            self.ptr[i] = s[i]
+        self.size = len(s)
+        self.cap = len(s)
+    
+    fn __init__(out self, s: StringSlice[MutExternalOrigin]):
+        self.ptr = alloc[UInt8](len(s))
+        for i in range(len(s)):
+            self.ptr[i] = s.as_bytes()[i]
+        self.size = len(s)
+        self.cap = len(s)
+
+
     fn __del__(deinit self):
         self.ptr.free()
-
-    fn __moveinit__(out self, deinit other: Self):
-        self.ptr = other.ptr
-        self.size = other.size
-        self.cap = other.cap
 
     fn __copyinit__(out self, read other: Self):
         self.cap = other.cap
@@ -128,31 +146,6 @@ struct ByteString(Copyable, Movable, Sized):
     fn to_string(self) -> String:
         return String(StringSlice(unsafe_from_utf8=self.as_span()))
 
-    @staticmethod
-    fn from_string(s: String) -> ByteString:
-        """Construct ByteString from String by copying bytes."""
-        var bs = ByteString(capacity=UInt(len(s)))
-        var bytes = s.as_bytes()
-        for i in range(len(s)):
-            bs.push(bytes[i])
-        return bs^
-
-    @staticmethod
-    fn from_string_slice[o: Origin](slice: StringSlice[o]) -> ByteString:
-        """Construct ByteString from StringSlice by copying bytes."""
-        var bs = ByteString(capacity=UInt(len(slice)))
-        var bytes = slice.as_bytes()
-        for i in range(len(slice)):
-            bs.push(bytes[i])
-        return bs^
-
-    @staticmethod
-    fn from_span[o: Origin](span: Span[UInt8, o]) -> ByteString:
-        """Construct ByteString from Span[UInt8] by copying bytes."""
-        var bs = ByteString(capacity=UInt(len(span)))
-        for i in range(len(span)):
-            bs.push(span[i])
-        return bs^
 
     @always_inline
     fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
