@@ -1,10 +1,8 @@
-"""Tests for DeviceFastqRecord, DeviceFastqBatch, and quality prefix-sum kernel."""
+"""Tests for  FastqBatch, and quality prefix-sum kernel."""
 
 from blazeseq import (
     FastqRecord,
-    DeviceFastqBatch,
-    DeviceFastqRecord,
-    from_fastq_record,
+    FastqBatch,
     upload_batch_to_device,
     enqueue_quality_prefix_sum,
 )
@@ -33,25 +31,9 @@ fn cpu_quality_prefix_sum(
     return out^
 
 
-fn test_device_fastq_record_from_fastq() raises:
-    """DeviceFastqRecord can be built from FastqRecord with given offsets."""
-    var record = FastqRecord("@id", "ACGT", "+", "!!!!")
-    var dev_rec = from_fastq_record(record, qual_start=0, seq_start=0)
-    assert_equal(dev_rec.qual_start, 0)
-    assert_equal(dev_rec.qual_len, 4)
-    assert_equal(dev_rec.seq_start, 0)
-    assert_equal(dev_rec.seq_len, 4)
-
-    dev_rec = from_fastq_record(record, qual_start=10, seq_start=20)
-    assert_equal(dev_rec.qual_start, 10)
-    assert_equal(dev_rec.qual_len, 4)
-    assert_equal(dev_rec.seq_start, 20)
-    assert_equal(dev_rec.seq_len, 4)
-
-
 fn test_device_fastq_batch_add_and_layout() raises:
-    """DeviceFastqBatch stacks records and builds correct qual_ends."""
-    var batch = DeviceFastqBatch()
+    """FastqBatch stacks records and builds correct qual_ends."""
+    var batch = FastqBatch()
     var r1 = FastqRecord("@a", "AC", "+", "!!")
     var r2 = FastqRecord("@b", "GT", "+", "!!")
     batch.add(r1)
@@ -87,10 +69,11 @@ fn test_device_batch_prefix_sum_on_gpu() raises:
     When a GPU is available: upload batch, run kernel, copy back,
     assert prefix-sum output matches CPU reference.
     """
+
     @parameter
     if not has_accelerator():
         return
-    var batch = DeviceFastqBatch()
+    var batch = FastqBatch()
     var r1 = FastqRecord("@a", "AC", "+", "!!")
     var r2 = FastqRecord("@b", "G", "+", "!")
     batch.add(r1)

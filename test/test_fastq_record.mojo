@@ -30,8 +30,8 @@ fn test_valid_fastq_record() raises:
     assert_equal(len(read.SeqStr), len(read.QuStr))
 
     # Test header validation
-    assert_true(read.SeqHeader.startswith("@"))
-    assert_true(read.QuHeader.startswith("+"))
+    assert_true(read.SeqHeader.startswith(String("@")))
+    assert_true(read.QuHeader.startswith(String("+")))
 
     # Test string representation
     var str_repr = read.__str__()

@@ -1,0 +1,183 @@
+from memory import memcpy, UnsafePointer, Span, alloc
+from collections.string import StringSlice, String
+from blazeseq.utils import memchr
+
+struct ByteString(Copyable, Movable, Sized):
+    # TODO: add address_space
+    var size: UInt32
+    var cap: UInt32
+    var ptr: UnsafePointer[UInt8, MutExternalOrigin]
+
+    fn __init__(out self, capacity: UInt = 0):
+        self.ptr = alloc[UInt8](0)
+        self.size = 0
+        self.cap = 0
+        if capacity > 0:
+            self.resize(UInt32(capacity))
+
+    fn __del__(deinit self):
+        self.ptr.free()
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.ptr = other.ptr
+        self.size = other.size
+        self.cap = other.cap
+
+    fn __copyinit__(out self, read other: Self):
+        self.cap = other.cap
+        self.size = other.size
+        self.ptr = alloc[UInt8](Int(self.cap))
+        memcpy(dest=self.ptr, src=other.ptr, count=Int(other.size))
+
+    @always_inline
+    fn __getitem__[I: Indexer](read self, idx: I) -> UInt8:
+        return self.ptr[idx]
+
+    @always_inline
+    fn __setitem__[I: Indexer](mut self, idx: I, val: UInt8):
+        self.ptr[idx] = val
+
+    @always_inline
+    fn __len__(read self) -> Int:
+        return Int(self.size)
+
+    # TODO: rename offset
+    @always_inline
+    fn addr[I: Indexer](mut self, i: I) -> UnsafePointer[UInt8, MutExternalOrigin]:
+        return self.ptr + i
+
+    @staticmethod
+    @always_inline
+    fn _roundup32(val: UInt32) -> UInt32:
+        var x = val
+        x -= 1
+        x |= x >> 1
+        x |= x >> 2
+        x |= x >> 4
+        x |= x >> 8
+        x |= x >> 16
+        return x + 1
+
+    @always_inline
+    fn clear(mut self):
+        self.size = 0
+
+    @always_inline
+    fn reserve(mut self, cap: UInt32):
+        if cap < self.cap:
+            return
+        self.cap = cap
+        var new_data = alloc[UInt8](Int(self.cap))
+        memcpy(dest=new_data, src=self.ptr, count=len(self))
+        self.ptr.free()
+        self.ptr = new_data
+
+    @always_inline
+    fn resize(mut self, size: UInt32):
+        var old_size = self.size
+        self.size = size
+        if self.size <= self.cap:
+            return
+        self.cap = Self._roundup32(self.size)
+        var new_data = alloc[UInt8](Int(self.cap))
+        memcpy(dest=new_data, src=self.ptr, count=Int(old_size))
+
+        self.ptr.free()
+        self.ptr = new_data
+
+    # TODO: rename append
+    @always_inline
+    fn push(mut self, c: UInt8):
+        self.resize(len(self) + 1)
+        self.ptr[len(self) - 1] = c
+
+    # TODO: rename extend
+    @always_inline
+    fn append(mut self, ptr: UnsafePointer[UInt8, MutExternalOrigin], length: Int):
+        if length <= 0:
+            return
+
+        var old_size = len(self)
+        self.resize(len(self) + length)
+        memcpy(dest=self.ptr + old_size, src=ptr, count=Int(length))
+
+    fn find_chr[c: UInt8](read self, start: Int, end: Int) -> Int:
+        var p = memchr[do_alignment=False](
+            Span[UInt8, MutExternalOrigin](
+                ptr=self.ptr + start, length=end - start
+            ),
+            c,
+        )
+
+        return end if p == -1 else p + start
+
+    fn find_chr(read self, c: UInt8, start: Int, end: Int) -> Int:
+        var p = memchr[do_alignment=False](
+            Span[UInt8, MutExternalOrigin](
+                ptr=self.ptr + start, length=end - start
+            ),
+            c,
+        )
+
+        return end if p == -1 else p + start
+
+    @always_inline
+    fn as_span(self) -> Span[UInt8, MutExternalOrigin]:
+        return Span[UInt8, MutExternalOrigin](ptr=self.ptr, length=len(self))
+
+    fn to_string(self) -> String:
+        return String(StringSlice(unsafe_from_utf8=self.as_span()))
+
+    @staticmethod
+    fn from_string(s: String) -> ByteString:
+        """Construct ByteString from String by copying bytes."""
+        var bs = ByteString(capacity=UInt(len(s)))
+        var bytes = s.as_bytes()
+        for i in range(len(s)):
+            bs.push(bytes[i])
+        return bs^
+
+    @staticmethod
+    fn from_string_slice[o: Origin](slice: StringSlice[o]) -> ByteString:
+        """Construct ByteString from StringSlice by copying bytes."""
+        var bs = ByteString(capacity=UInt(len(slice)))
+        var bytes = slice.as_bytes()
+        for i in range(len(slice)):
+            bs.push(bytes[i])
+        return bs^
+
+    @staticmethod
+    fn from_span[o: Origin](span: Span[UInt8, o]) -> ByteString:
+        """Construct ByteString from Span[UInt8] by copying bytes."""
+        var bs = ByteString(capacity=UInt(len(span)))
+        for i in range(len(span)):
+            bs.push(span[i])
+        return bs^
+
+    @always_inline
+    fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
+        """Return StringSlice view of ByteString bytes."""
+        return StringSlice(unsafe_from_utf8=self.as_span())
+
+    fn startswith(self, prefix: String) -> Bool:
+        """Check if ByteString starts with the given prefix string."""
+        if len(self) < len(prefix):
+            return False
+        var prefix_bytes = prefix.as_bytes()
+        for i in range(len(prefix)):
+            if self[i] != prefix_bytes[i]:
+                return False
+        return True
+
+    fn __eq__(self, other: Self) -> Bool:
+        """Compare two ByteStrings for equality."""
+        if len(self) != len(other):
+            return False
+        for i in range(len(self)):
+            if self[i] != other[i]:
+                return False
+        return True
+
+    fn __ne__(self, other: Self) -> Bool:
+        """Compare two ByteStrings for inequality."""
+        return not self.__eq__(other)

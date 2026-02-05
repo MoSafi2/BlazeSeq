@@ -8,6 +8,7 @@ from blazeseq.quality_schema import (
     illumina_1_8_schema,
     generic_schema,
 )
+from blazeseq.byte_string import ByteString
 from utils.variant import Variant
 
 comptime schema = Variant[String, QualitySchema]
@@ -27,10 +28,10 @@ struct FastqRecord[val: Bool = True](
 ):
     """Struct that represent a single FastaQ record."""
 
-    var SeqHeader: String
-    var SeqStr: String
-    var QuHeader: String
-    var QuStr: String
+    var SeqHeader: ByteString
+    var SeqStr: ByteString
+    var QuHeader: ByteString
+    var QuStr: ByteString
     var quality_schema: QualitySchema
 
     fn __init__(
@@ -41,10 +42,10 @@ struct FastqRecord[val: Bool = True](
         QuStr: String,
         quality_schema: schema = "generic",
     ) raises:
-        self.SeqHeader = SeqHeader
-        self.QuHeader = QuHeader
-        self.SeqStr = SeqStr
-        self.QuStr = QuStr
+        self.SeqHeader = ByteString.from_string(SeqHeader)
+        self.QuHeader = ByteString.from_string(QuHeader)
+        self.SeqStr = ByteString.from_string(SeqStr)
+        self.QuStr = ByteString.from_string(QuStr)
 
         if quality_schema.isa[String]():
             self.quality_schema = _parse_schema(quality_schema[String])
@@ -62,10 +63,10 @@ struct FastqRecord[val: Bool = True](
             raise Error("Sequence does not seem to be valid")
 
         # Bug when Using
-        self.SeqHeader = String(seqs[0].strip())
-        self.SeqStr = String(seqs[1].strip())
-        self.QuHeader = String(seqs[2].strip())
-        self.QuStr = String(seqs[3].strip())
+        self.SeqHeader = ByteString.from_string(String(seqs[0].strip()))
+        self.SeqStr = ByteString.from_string(String(seqs[1].strip()))
+        self.QuHeader = ByteString.from_string(String(seqs[2].strip()))
+        self.QuStr = ByteString.from_string(String(seqs[3].strip()))
         self.quality_schema = materialize[generic_schema]()
 
         @parameter
@@ -74,11 +75,11 @@ struct FastqRecord[val: Bool = True](
             self.validate_quality_schema()
 
     @always_inline
-    fn get_seq(self) -> StringSlice[origin_of(self.SeqStr)]:
+    fn get_seq(self) -> StringSlice[MutExternalOrigin]:
         return self.SeqStr.as_string_slice()
 
     @always_inline
-    fn get_quality_string(self) -> StringSlice[origin_of(self.QuStr)]:
+    fn get_quality_string(self) -> StringSlice[MutExternalOrigin]:
         return self.QuStr.as_string_slice()
 
     @always_inline
@@ -91,29 +92,27 @@ struct FastqRecord[val: Bool = True](
             in_schema = quality_format.take[QualitySchema]()
 
         output = List[UInt8](length=len(self.QuStr), fill=0)
-        bytes = self.QuStr.as_bytes()
         for i in range(len(self.QuStr)):
-            output[i] = bytes[i] - in_schema.OFFSET
+            output[i] = self.QuStr[i] - in_schema.OFFSET
         return output^
 
     @always_inline
     fn get_quality_scores(self, offset: UInt8) -> List[UInt8]:
         output = List[UInt8](length=len(self.QuStr), fill=0)
-        bytes = self.QuStr.as_bytes()
         for i in range(len(self.QuStr)):
-            output[i] = bytes[i] - offset
+            output[i] = self.QuStr[i] - offset
         return output^
 
     @always_inline
-    fn get_header_string(self) -> StringSlice[origin_of(self.SeqHeader)]:
+    fn get_header_string(self) -> StringSlice[MutExternalOrigin]:
         return self.SeqHeader.as_string_slice()
 
     @always_inline
     fn validate_record(self) raises:
-        if self.SeqHeader.as_bytes()[0] != read_header:
+        if self.SeqHeader[0] != read_header:
             raise Error("Sequence header does not start with '@'")
 
-        if self.QuHeader.as_bytes()[0] != quality_header:
+        if self.QuHeader[0] != quality_header:
             raise Error("Quality header dies not start with '+'")
 
         if len(self.SeqStr) != len(self.QuStr):
@@ -128,10 +127,9 @@ struct FastqRecord[val: Bool = True](
                     " header"
                 )
 
-            if (
-                self.QuHeader.as_string_slice()[1:]
-                != self.SeqHeader.as_string_slice()[1:]
-            ):
+            var qu_header_slice = self.QuHeader.as_string_slice()[1:]
+            var seq_header_slice = self.SeqHeader.as_string_slice()[1:]
+            if qu_header_slice != seq_header_slice:
                 raise Error(
                     "Quality Header is not the same as the Sequecing Header"
                 )
@@ -140,8 +138,8 @@ struct FastqRecord[val: Bool = True](
     fn validate_quality_schema(self) raises:
         for i in range(len(self.QuStr)):
             if (
-                self.QuStr.as_bytes()[i] > self.quality_schema.UPPER
-                or self.QuStr.as_bytes()[i] < self.quality_schema.LOWER
+                self.QuStr[i] > self.quality_schema.UPPER
+                or self.QuStr[i] < self.quality_schema.LOWER
             ):
                 raise Error(
                     "Corrput quality score according to proivded schema"
@@ -162,13 +160,13 @@ struct FastqRecord[val: Bool = True](
 
     fn write_to[w: Writer](self, mut writer: w):
         writer.write(
-            self.SeqHeader,
+            self.SeqHeader.to_string(),
             "\n",
-            self.SeqStr,
+            self.SeqStr.to_string(),
             "\n",
-            self.QuHeader,
+            self.QuHeader.to_string(),
             "\n",
-            self.QuStr,
+            self.QuStr.to_string(),
             "\n",
         )
 

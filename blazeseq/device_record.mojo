@@ -7,78 +7,31 @@ from gpu.host.device_context import DeviceBuffer
 from gpu import block_idx, thread_idx
 from memory import UnsafePointer
 
-# ---------------------------------------------------------------------------
-# DeviceFastqRecord: slice descriptor (offsets/lengths) for packed buffers.
-# Used on host when building a batch; kernel uses qual_offsets buffer instead.
-# ---------------------------------------------------------------------------
-
-
-struct DeviceFastqRecord(Copyable, Movable, ImplicitlyCopyable):
-    """
-    Descriptor for one Fastq record's slice in packed quality/sequence buffers.
-    Holds qual_start, qual_len, seq_start, seq_len (Int32). Can be built from
-    FastqRecord given current buffer offsets.
-    """
-
-    var qual_start: Int32
-    var qual_len: Int32
-    var seq_start: Int32
-    var seq_len: Int32
-
-    fn __init__(
-        out self,
-        qual_start: Int32,
-        qual_len: Int32,
-        seq_start: Int32,
-        seq_len: Int32,
-    ):
-        self.qual_start = qual_start
-        self.qual_len = qual_len
-        self.seq_start = seq_start
-        self.seq_len = seq_len
-
-
-@always_inline
-fn from_fastq_record(
-    record: FastqRecord,
-    qual_start: Int32,
-    seq_start: Int32,
-) -> DeviceFastqRecord:
-    """
-    Build a DeviceFastqRecord from a FastqRecord given current buffer offsets.
-    Call this when appending the record's bytes to packed buffers; qual_start
-    and seq_start are the start indices for this record in those buffers.
-    """
-    var qual_len = Int32(len(record.QuStr))
-    var seq_len = Int32(len(record.SeqStr))
-    return DeviceFastqRecord(
-        qual_start=qual_start,
-        qual_len=qual_len,
-        seq_start=seq_start,
-        seq_len=seq_len,
-    )
 
 
 # ---------------------------------------------------------------------------
-# DeviceFastqBatch: host-side builder, stacks records and uploads to device
+# FastqBatch: host-side builder, stacks records and uploads to device
 # ---------------------------------------------------------------------------
 
 
-struct DeviceFastqBatch:
+struct FastqBatch:
     """
     Host-side container that stacks multiple FastqRecords into packed quality
     (and sequence) byte buffers and an offsets index, then uploads to device.
     """
-
+    var _header_bytes: List[UInt8]
+    var _header_ends: List[Int32]
     var _quality_bytes: List[UInt8]
     var _sequence_bytes: List[UInt8]
     var _qual_ends: List[Int32]
     var _quality_offset: UInt8
 
     fn __init__(out self):
-        self._quality_bytes = List[UInt8]()
-        self._sequence_bytes = List[UInt8]()
-        self._qual_ends = List[Int32]()
+        self._header_bytes = List[UInt8](capacity=1024 * 100)
+        self._header_ends = List[Int32](capacity=1025)
+        self._quality_bytes = List[UInt8](capacity=1024 * 100)
+        self._sequence_bytes = List[UInt8](capacity=1024 * 100)
+        self._qual_ends = List[Int32](capacity=1025)
         self._quality_offset = 33
 
     fn add(mut self, record: FastqRecord):
@@ -89,13 +42,15 @@ struct DeviceFastqBatch:
         """
         if len(self._qual_ends) == 0:
             self._quality_offset = record.quality_schema.OFFSET
-        var qu_bytes = record.QuStr.as_bytes()
-        var seq_bytes = record.SeqStr.as_bytes()
         for i in range(len(record.QuStr)):
-            self._quality_bytes.append(qu_bytes[i])
+            self._quality_bytes.append(record.QuStr[i])
         for i in range(len(record.SeqStr)):
-            self._sequence_bytes.append(seq_bytes[i])
+            self._sequence_bytes.append(record.SeqStr[i])
         self._qual_ends.append(Int32(len(self._quality_bytes)))
+
+        for i in range(len(record.SeqHeader)):
+            self._header_bytes.append(record.SeqHeader[i])
+        self._header_ends.append(Int32(len(self._header_bytes)))
 
     fn num_records(self) -> Int:
         return len(self._qual_ends)
@@ -108,7 +63,7 @@ struct DeviceFastqBatch:
 
 
 @fieldwise_init
-struct DeviceFastqBatchOnDevice:
+struct DeviceFastqBatch:
     """
     Device-side buffers and metadata after upload. Holds device buffers and
     num_records / quality_offset for launching the prefix-sum kernel.
@@ -122,8 +77,8 @@ struct DeviceFastqBatchOnDevice:
 
 
 fn upload_batch_to_device(
-    batch: DeviceFastqBatch, ctx: DeviceContext
-) raises -> DeviceFastqBatchOnDevice:
+    batch: FastqBatch, ctx: DeviceContext
+) raises -> DeviceFastqBatch:
     """
     Allocate device buffers and copy batch data to the given DeviceContext.
     Returns a handle holding device buffers and metadata for kernel launch.
@@ -132,20 +87,21 @@ fn upload_batch_to_device(
     var n = batch.num_records()
     var qual_buf = ctx.enqueue_create_buffer[DType.uint8](total_qual)
     var offsets_buf = ctx.enqueue_create_buffer[DType.int32](n + 1)
-    var host_offsets = List[Int32](length=n + 1, fill=0)
-    host_offsets[0] = 0
-    for i in range(n):
-        host_offsets[i + 1] = batch._qual_ends[i]
+
     var host_qual = ctx.enqueue_create_host_buffer[DType.uint8](total_qual)
     var host_offs = ctx.enqueue_create_host_buffer[DType.int32](n + 1)
     ctx.synchronize()
+
     for i in range(total_qual):
         host_qual[i] = batch._quality_bytes[i]
-    for i in range(n + 1):
-        host_offs[i] = host_offsets[i]
+
+    host_offs[0] = 0
+    for i in range(n):
+        host_offs[i + 1] = batch._qual_ends[i]
     ctx.enqueue_copy(src_buf=host_qual, dst_buf=qual_buf)
     ctx.enqueue_copy(src_buf=host_offs, dst_buf=offsets_buf)
-    return DeviceFastqBatchOnDevice(
+
+    return DeviceFastqBatch(
         qual_buffer=qual_buf,
         offsets_buffer=offsets_buf,
         num_records=n,
@@ -158,7 +114,7 @@ fn upload_batch_to_device(
 # Prefix-sum kernel: one block per record, writes Int32 prefix sums to output
 # ---------------------------------------------------------------------------
 
-comptime BLOCK_SIZE = 256
+comptime BLOCK_SIZE = 1
 
 
 fn quality_prefix_sum_kernel(
@@ -190,7 +146,7 @@ fn quality_prefix_sum_kernel(
 
 
 fn enqueue_quality_prefix_sum(
-    on_device: DeviceFastqBatchOnDevice,
+    on_device: DeviceFastqBatch,
     ctx: DeviceContext,
 ) raises -> DeviceBuffer[DType.int32]:
     """

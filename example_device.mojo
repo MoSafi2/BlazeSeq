@@ -2,7 +2,7 @@
 
 This example demonstrates:
 1. Creating multiple FastqRecord instances
-2. Building a DeviceFastqBatch to stack records
+2. Building a FastqBatch to stack records
 3. Uploading the batch to GPU device memory
 4. Running the quality prefix-sum kernel in parallel
 5. Copying results back and displaying them
@@ -10,7 +10,7 @@ This example demonstrates:
 
 from blazeseq import (
     FastqRecord,
-    DeviceFastqBatch,
+    FastqBatch,
     upload_batch_to_device,
     enqueue_quality_prefix_sum,
 )
@@ -52,7 +52,7 @@ fn generate_random_fastq_record(
 
 
 def cpu_quality_prefix_sum(
-    batch: DeviceFastqBatch,
+    batch: FastqBatch,
     records: List[FastqRecord[val=True]],
 ) -> List[Int32]:
     """
@@ -88,8 +88,8 @@ def main():
     print("=" * 60, "\nGPU Quality Prefix-Sum Example\n", "=" * 60, "\n")
 
     # Step 1: Generate 100 random FastqRecords with 150 bp and high quality
-    var num_records = 128_000
-    var read_length = 300
+    var num_records = 512_000
+    var read_length = 150
     var records = List[FastqRecord[val=True]](capacity=num_records)
     print("Step 1: Generating", num_records, "random FastqRecords...")
 
@@ -101,9 +101,9 @@ def main():
 
     print("  Created " + String(len(records)) + " records")
 
-    # Step 2: Build a DeviceFastqBatch
-    print("Step 2: Building DeviceFastqBatch...")
-    var batch = DeviceFastqBatch()
+    # Step 2: Build a FastqBatch
+    print("Step 2: Building FastqBatch...")
+    var batch = FastqBatch()
     for i in range(len(records)):
         batch.add(records[i])
     print("  Total records:        " + String(batch.num_records()))
@@ -114,8 +114,11 @@ def main():
     # Step 3: Initialize GPU context and upload to device
     print("Step 3: Uploading batch to GPU...")
     var ctx = DeviceContext()
-    print("  GPU device: " + ctx.name())
+    var gpu_start = now()
     var on_device = upload_batch_to_device(batch, ctx)
+    var gpu_upload_time = now()
+    var gpu_upload = Float64(gpu_upload_time - gpu_start) / 1e9
+
     print("  Uploaded " + String(on_device.num_records) + " records")
     print(
         "  Total quality bytes on device: "
@@ -124,11 +127,10 @@ def main():
 
     # Step 4: Run the prefix-sum kernel (GPU)
     print("Step 4: Running quality prefix-sum kernel (GPU)...")
-    var gpu_start = now()
     var prefix_sum_output = enqueue_quality_prefix_sum(on_device, ctx)
     ctx.synchronize()
     var gpu_end = now()
-    var gpu_time_seconds = Float64(gpu_end - gpu_start) / Float64(1e9)
+    var gpu_time_seconds = Float64(gpu_end - gpu_upload_time) / Float64(1e9)
 
     # Step 5: Copy results back to host
     print("Step 5: Copying prefix-sum results back to host...")
@@ -154,6 +156,7 @@ def main():
     # Step 5c: Benchmark comparison
     print("Step 5c: Benchmark Comparison:")
     print("-" * 60)
+    print("  GPU upload time:      " + String(gpu_upload) + " seconds")
     print("  GPU compute time:     " + String(gpu_time_seconds) + " seconds")
     print("  GPU copy time:        " + String(copy_time_seconds) + " seconds")
     print("  GPU total time:       " + String(total_gpu_time) + " seconds")
