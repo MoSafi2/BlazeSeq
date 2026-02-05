@@ -2,3 +2,5 @@
 .pixi
 *.egg-info
 !*.mojo
+!*.toml
+!*.yaml

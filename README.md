@@ -22,12 +22,24 @@ It currently provides two main options: `CoordParser` a minimal-copy parser that
 `BlazeSeq`  is always updated to the latest `Mojo nightly` on Ubuntu, Mac or WSL2 on windows as `Mojo` is moving forward quite fast.  
 You can get `BlazeSeq` source code as well as pre-compiled CLI tool from the releases page, you can clone and compile the repository yourself.
 
+### From source
+
 ```bash
 git clone [add repo]
 cd [repo]
 mojo build blazeseq/cli.mojo -o blazeseq_cli //CLI tool
 mojo pkg blazeseq //mojo pkg
 ```
+
+### Conda (rattler-build package)
+
+After the package is published to a channel, install with:
+
+```bash
+conda install -c conda-forge -c https://conda.modular.com/max-nightly blazeseq
+```
+
+Use the library in your Mojo scripts with: `mojo run -I $CONDA_PREFIX/lib/mojo/BlazeSeq.mojopkg your_script.mojo`
 
 ## Getting started
 
