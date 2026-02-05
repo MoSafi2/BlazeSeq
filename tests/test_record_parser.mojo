@@ -9,7 +9,7 @@ from blazeseq import RecordParser
 from blazeseq.iostream import FileReader
 from testing import assert_raises, TestSuite
 
-comptime test_dir = "test/test_data/fastq_parser/"
+comptime test_dir = "tests/test_data/fastq_parser/"
 
 comptime corrput_qu_score = "Corrput quality score according to proivded schema"
 comptime EOF = "EOF"

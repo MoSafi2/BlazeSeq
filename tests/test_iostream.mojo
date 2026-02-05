@@ -8,7 +8,7 @@ from testing import TestSuite
 
 fn create_test_file(path: Path, content: String) raises -> Path:
     """Helper function to create test files."""
-    new_path = Path("test/test_data") / path
+    new_path = Path("tests/test_data") / path
     with open(new_path, "w") as f:
         f.write(content)
 
@@ -609,7 +609,7 @@ fn test_buffered_reader_ascii_validation_invalid() raises:
     # Create file with non-ASCII bytes (byte > 127)
     # We'll write bytes directly to create non-ASCII content
     var test_file = Path("test_ascii_invalid.txt")
-    new_path = Path("test/test_data") / test_file
+    new_path = Path("tests/test_data") / test_file
 
     # Write non-ASCII bytes directly
     var non_ascii_bytes = List[Byte]()
