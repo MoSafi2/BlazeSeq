@@ -381,11 +381,11 @@ struct RecordCoord[
 
 
     fn write_to[w: Writer](self, mut writer: w):
-        writer.write_bytes(self.SeqHeader)
+        writer.write_string(StringSlice(unsafe_from_utf8=self.SeqHeader))
         writer.write("\n")
-        writer.write_bytes(self.SeqStr)
+        writer.write_string(StringSlice(unsafe_from_utf8=self.SeqStr))
         writer.write("\n")
-        writer.write_bytes(self.QuHeader)
+        writer.write_string(StringSlice(unsafe_from_utf8=self.QuHeader))
         writer.write("\n")
-        writer.write_bytes(self.QuStr)
+        writer.write_string(StringSlice(unsafe_from_utf8=self.QuStr))
 

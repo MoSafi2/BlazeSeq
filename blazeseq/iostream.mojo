@@ -391,7 +391,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
 
     fn write_to[w: Writer](self, mut writer: w):
         try:
-            writer.write_bytes(self.as_span())
+            writer.write_string(StringSlice(unsafe_from_utf8=self.as_span()))
         except:
             writer.write("")
 
