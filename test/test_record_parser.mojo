@@ -102,9 +102,13 @@ fn test_invalid() raises:
     invalid_file_test_fun("error_qual_del.fastq", corrput_qu_score)
     invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
     invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
-    invalid_file_test_fun("solexa-invalid-repeat-description.fastq", len_mismatch)
+    invalid_file_test_fun(
+        "solexa-invalid-repeat-description.fastq", len_mismatch
+    )
     invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
-    invalid_file_test_fun("sanger-invalid-repeat-description.fastq", len_mismatch)
+    invalid_file_test_fun(
+        "sanger-invalid-repeat-description.fastq", len_mismatch
+    )
     invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
     invalid_file_test_fun(
         "illumina-invalid-repeat-description.fastq", len_mismatch

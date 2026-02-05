@@ -19,6 +19,10 @@ struct RecordParser[
         self.quality_schema = self._parse_schema(schema)
 
     fn parse_all(mut self) raises:
+        # Check if file is empty - if so, raise EOF error
+        if not self.stream.has_more_lines():
+            raise Error("EOF")
+        
         while True:
             if not self.stream.has_more_lines():
                 break
