@@ -3,7 +3,7 @@
 from blazeseq.record import FastqRecord
 from blazeseq.quality_schema import QualitySchema
 from gpu.host import DeviceContext
-from gpu.host.device_context import DeviceBuffer
+from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
 from memory import UnsafePointer
 
@@ -111,63 +111,57 @@ fn upload_batch_to_device(
 
 
 # ---------------------------------------------------------------------------
-# Prefix-sum kernel: one block per record, writes Int32 prefix sums to output
+# Subbatch slice upload: fill host buffers from batch slice, upload to device
 # ---------------------------------------------------------------------------
 
-comptime BLOCK_SIZE = 1
+
+fn fill_subbatch_host_buffers(
+    batch: FastqBatch,
+    start_rec: Int,
+    end_rec: Int,
+    host_qual: HostBuffer[DType.uint8],
+    host_offs: HostBuffer[DType.int32],
+) raises -> None:
+    """
+    Fill pre-allocated host buffers with the quality bytes and offsets for
+    the record range [start_rec, end_rec). Offsets are 0-based relative to
+    the slice. Caller must ensure host_qual has size >= total_qual and
+    host_offs has size >= (end_rec - start_rec) + 1.
+    """
+    var qual_start = 0 if start_rec == 0 else Int(batch._qual_ends[start_rec - 1])
+    var qual_end = Int(batch._qual_ends[end_rec - 1])
+    var total_qual = qual_end - qual_start
+    var n = end_rec - start_rec
+
+    for i in range(total_qual):
+        host_qual[i] = batch._quality_bytes[qual_start + i]
+
+    host_offs[0] = 0
+    for i in range(n):
+        host_offs[i + 1] = batch._qual_ends[start_rec + i] - Int32(qual_start)
 
 
-fn quality_prefix_sum_kernel(
-    qual_ptr: UnsafePointer[UInt8, MutAnyOrigin],
-    offsets_ptr: UnsafePointer[Int32, MutAnyOrigin],
-    prefix_sum_out_ptr: UnsafePointer[Int32, MutAnyOrigin],
-    num_records: Int,
+fn upload_subbatch_from_host_buffers(
+    host_qual: HostBuffer[DType.uint8],
+    host_offs: HostBuffer[DType.int32],
+    n: Int,
+    total_qual: Int,
     quality_offset: UInt8,
-):
-    """
-    GPU kernel: for each record i, compute prefix sum of (quality_byte - offset)
-    over [offsets[i], offsets[i+1]) and write Int32 results to prefix_sum_out.
-    One thread block per record; thread 0 in the block does the scan.
-    """
-    var record_id = block_idx.x
-    if record_id >= num_records:
-        return
-    var qual_start = offsets_ptr[record_id]
-    var qual_end = offsets_ptr[record_id + 1]
-    var qual_len = qual_end - qual_start
-    var base = qual_start
-    if thread_idx.x == 0:
-        var s: Int32 = 0
-        var j: Int32 = 0
-        while j < qual_len:
-            s += Int32(qual_ptr[base + j]) - Int32(quality_offset)
-            prefix_sum_out_ptr[base + j] = s
-            j += 1
-
-
-fn enqueue_quality_prefix_sum(
-    on_device: DeviceFastqBatch,
     ctx: DeviceContext,
-) raises -> DeviceBuffer[DType.int32]:
+) raises -> DeviceFastqBatch:
     """
-    Allocate output buffer, compile and enqueue quality_prefix_sum_kernel, return
-    the output DeviceBuffer (length = total_quality_len). Caller should
-    synchronize and copy back if needed.
+    Allocate device buffers and enqueue copy from the given host buffers.
+    Does not synchronize; caller may overlap with other work.
     """
-    var out_buf = ctx.enqueue_create_buffer[DType.int32](
-        on_device.total_quality_len
+    var qual_buf = ctx.enqueue_create_buffer[DType.uint8](total_qual)
+    var offsets_buf = ctx.enqueue_create_buffer[DType.int32](n + 1)
+    ctx.enqueue_copy(src_buf=host_qual, dst_buf=qual_buf)
+    ctx.enqueue_copy(src_buf=host_offs, dst_buf=offsets_buf)
+    return DeviceFastqBatch(
+        qual_buffer=qual_buf,
+        offsets_buffer=offsets_buf,
+        num_records=n,
+        total_quality_len=total_qual,
+        quality_offset=quality_offset,
     )
-    var kernel = ctx.compile_function[
-        quality_prefix_sum_kernel, quality_prefix_sum_kernel
-    ]()
-    ctx.enqueue_function(
-        kernel,
-        on_device.qual_buffer,
-        on_device.offsets_buffer,
-        out_buf,
-        on_device.num_records,
-        on_device.quality_offset,
-        grid_dim=on_device.num_records,
-        block_dim=BLOCK_SIZE,
-    )
-    return out_buf
+

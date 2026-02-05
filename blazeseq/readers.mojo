@@ -9,6 +9,7 @@ BufferedReader.
 """
 
 from memory import memset_zero, UnsafePointer
+from memory.legacy_unsafe_pointer import LegacyUnsafePointer
 from sys import ffi
 from sys.info import CompilationTarget
 from blazeseq.iostream import Reader, BufferView
@@ -26,13 +27,15 @@ comptime Z_BUF_ERROR = -5
 comptime Z_VERSION_ERROR = -6
 
 # Type aliases for C types
-comptime c_void_ptr = UnsafePointer[UInt8, MutExternalOrigin]
-comptime c_char_ptr = UnsafePointer[Int8]
+comptime c_void_ptr = LegacyUnsafePointer[mut=False, UInt8]
+comptime c_char_ptr = LegacyUnsafePointer[mut=False, Int8]
 comptime c_uint = UInt32
 comptime c_int = Int32
 
 # Define function signatures for zlib functions
-comptime gzopen_fn_type = fn (filename: c_char_ptr, mode: c_char_ptr) -> c_void_ptr
+comptime gzopen_fn_type = fn (
+    filename: c_char_ptr, mode: c_char_ptr
+) -> c_void_ptr
 comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
 comptime gzread_fn_type = fn (
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
@@ -65,7 +68,10 @@ struct ZLib(Movable):
         var func = self.lib_handle.get_function[gzopen_fn_type]("gzopen")
 
         # Call the function
-        var result = func(filename.as_c_string_slice(), mode.as_c_string_slice())
+        var result = func(
+            filename.as_c_string_slice().unsafe_ptr(),
+            mode.as_c_string_slice().unsafe_ptr(),
+        )
 
         return result
 

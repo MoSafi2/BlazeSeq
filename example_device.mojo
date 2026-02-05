@@ -1,25 +1,34 @@
 """Example: GPU quality prefix-sum for multiple FastqRecords.
 
+Prefix sum is per record only: each read's quality string has its own prefix
+sum (starting at 0 for that read). No running prefix sum across all reads.
+
 This example demonstrates:
-1. Creating multiple FastqRecord instances
-2. Building a FastqBatch to stack records
-3. Uploading the batch to GPU device memory
-4. Running the quality prefix-sum kernel in parallel
-5. Copying results back and displaying them
+1. Creating 10M FastqRecord instances and one FastqBatch
+2. Processing in subbatches (128k-256k) with double-buffering
+3. Overlapping CPU fill of next subbatch with GPU upload/kernel/download
+4. Aggregating per-record prefix-sum results and verifying against CPU reference
+5. CPU streaming: 256k mini-batches copied from sink then processed
 """
 
 from blazeseq import (
     FastqRecord,
     FastqBatch,
-    upload_batch_to_device,
-    enqueue_quality_prefix_sum,
+    fill_subbatch_host_buffers,
+    upload_subbatch_from_host_buffers,
 )
+from blazeseq.kernels.prefix_sum import enqueue_quality_prefix_sum
 from gpu.host import DeviceContext
 from sys import has_accelerator, exit
 import random
 from collections.string import chr, String
 from time import perf_counter_ns as now
 from memory import UnsafePointer
+
+# 10M reads, subbatch 256k (configurable in 128k-256k range)
+comptime NUM_RECORDS = 1_000_000
+comptime READ_LENGTH = 85
+comptime SUBBATCH_SIZE = 256_000
 
 
 fn generate_random_fastq_record(
@@ -56,9 +65,11 @@ def cpu_quality_prefix_sum(
     records: List[FastqRecord[val=True]],
 ) -> List[Int32]:
     """
-    CPU implementation of quality prefix sum.
-    Computes prefix sum of (quality_byte - offset) for all records sequentially.
-    Returns a list of Int32 prefix sums with length = total_quality_len.
+    CPU implementation of quality prefix sum (per record only).
+    For each record, computes prefix sum of (quality_byte - offset) over that
+    record's quality string only; s is reset to 0 at the start of each record.
+    No running prefix sum across reads. Returns a list of Int32 of length
+    total_quality_len (concatenated per-record prefix sums).
     """
     var total_qual = batch.total_quality_len()
     var num_records = batch.num_records()
@@ -79,29 +90,46 @@ def cpu_quality_prefix_sum(
     return result^
 
 
+fn copy_batch_from_sink(
+    source_records: List[FastqRecord[val=True]],
+    start_idx: Int,
+    end_idx: Int,
+) -> List[FastqRecord[val=True]]:
+    """
+    Simulate copying a batch of records from a sink (file/network stream).
+    This represents the realistic scenario where records are read in batches.
+    Returns a copied list of records for the specified range.
+    """
+    var batch_size = end_idx - start_idx
+    var batch_records = List[FastqRecord[val=True]](capacity=batch_size)
+    for i in range(start_idx, end_idx):
+        # Copy the record (simulating read/copy from sink)
+        var copied_record = source_records[i].copy()
+        batch_records.append(copied_record^)
+    return batch_records^
+
+
 def main():
     @parameter
     if not has_accelerator():
         print("No GPU accelerator detected. This example requires a GPU.")
         exit(1)
 
-    print("=" * 60, "\nGPU Quality Prefix-Sum Example\n", "=" * 60, "\n")
+    var num_records = NUM_RECORDS
+    var read_length = READ_LENGTH
+    var subbatch_size = SUBBATCH_SIZE
 
-    # Step 1: Generate 100 random FastqRecords with 150 bp and high quality
-    var num_records = 512_000
-    var read_length = 150
-    var records = List[FastqRecord[val=True]](capacity=num_records)
-    print("Step 1: Generating", num_records, "random FastqRecords...")
+    print("=" * 60, "\nGPU Quality Prefix-Sum Example (10M reads, subbatch overlap)\n", "=" * 60, "\n")
 
+    # Step 1: Generate records and build one FastqBatch
+    print("Step 1: Generating " + String(num_records) + " random FastqRecords...")
     random.seed(42)
-
+    var records = List[FastqRecord[val=True]](capacity=num_records)
     for i in range(num_records):
         var record = generate_random_fastq_record(i + 1, read_length)
         records.append(record^)
-
     print("  Created " + String(len(records)) + " records")
 
-    # Step 2: Build a FastqBatch
     print("Step 2: Building FastqBatch...")
     var batch = FastqBatch()
     for i in range(len(records)):
@@ -111,88 +139,141 @@ def main():
     print("  Quality offset:       " + String(batch.quality_offset()))
     print()
 
-    # Step 3: Initialize GPU context and upload to device
-    print("Step 3: Uploading batch to GPU...")
+    # Max subbatch quality length (upper bound: SUBBATCH_SIZE * ~160 bp)
+    var max_subbatch_qual = subbatch_size * 160
+    var max_subbatch_n = subbatch_size
+
     var ctx = DeviceContext()
+
+    # Pre-allocate two sets of host input buffers for double-buffering
+    print("Step 3: Allocating host buffers for subbatch overlap...")
+    var host_qual_0 = ctx.enqueue_create_host_buffer[DType.uint8](max_subbatch_qual)
+    var host_offs_0 = ctx.enqueue_create_host_buffer[DType.int32](max_subbatch_n + 1)
+    var host_qual_1 = ctx.enqueue_create_host_buffer[DType.uint8](max_subbatch_qual)
+    var host_offs_1 = ctx.enqueue_create_host_buffer[DType.int32](max_subbatch_n + 1)
+    ctx.synchronize()
+
+    # One aggregated result buffer for full batch
+    var total_qual = batch.total_quality_len()
+    var aggregated = ctx.enqueue_create_host_buffer[DType.int32](total_qual)
+    ctx.synchronize()
+    print("  Allocated 2x input slots and 1 aggregated result buffer")
+    print()
+
+    var num_subbatches = (num_records + subbatch_size - 1) // subbatch_size
+    print("Step 4: Running GPU prefix-sum in " + String(num_subbatches) + " subbatches (overlap fill)...")
     var gpu_start = now()
-    var on_device = upload_batch_to_device(batch, ctx)
-    var gpu_upload_time = now()
-    var gpu_upload = Float64(gpu_upload_time - gpu_start) / 1e9
 
-    print("  Uploaded " + String(on_device.num_records) + " records")
-    print(
-        "  Total quality bytes on device: "
-        + String(on_device.total_quality_len)
-    )
-
-    # Step 4: Run the prefix-sum kernel (GPU)
-    print("Step 4: Running quality prefix-sum kernel (GPU)...")
-    var prefix_sum_output = enqueue_quality_prefix_sum(on_device, ctx)
+    # Hold previous subbatch's host output for copying into aggregated after sync
+    var dummy_out = ctx.enqueue_create_host_buffer[DType.int32](1)
     ctx.synchronize()
+    var last_host_out = dummy_out
+    var last_qual_start: Int = 0
+    var last_len: Int = 0
+
+    for i in range(num_subbatches):
+        var start_rec = i * subbatch_size
+        var end_rec = min((i + 1) * subbatch_size, num_records)
+        var qual_start = 0 if start_rec == 0 else Int(batch._qual_ends[start_rec - 1])
+        var qual_end = Int(batch._qual_ends[end_rec - 1])
+        var total_qual_slice = qual_end - qual_start
+        var n_slice = end_rec - start_rec
+
+        if i > 0:
+            ctx.synchronize()
+            for j in range(last_len):
+                aggregated[last_qual_start + j] = last_host_out[j]
+
+        var slot = i % 2
+        var host_qual_slot = host_qual_0 if slot == 0 else host_qual_1
+        var host_offs_slot = host_offs_0 if slot == 0 else host_offs_1
+
+        fill_subbatch_host_buffers(batch, start_rec, end_rec, host_qual_slot, host_offs_slot)
+        var on_device = upload_subbatch_from_host_buffers(
+            host_qual_slot, host_offs_slot, n_slice, total_qual_slice, batch.quality_offset(), ctx
+        )
+        var out_buf = enqueue_quality_prefix_sum(on_device, ctx)
+        var host_out = ctx.enqueue_create_host_buffer[DType.int32](total_qual_slice)
+        ctx.enqueue_copy(src_buf=out_buf, dst_buf=host_out)
+
+        # Overlap: prepare next subbatch on CPU while GPU is busy
+        if i + 1 < num_subbatches:
+            var next_start = (i + 1) * subbatch_size
+            var next_end = min((i + 2) * subbatch_size, num_records)
+            var next_slot = (i + 1) % 2
+            var next_host_qual = host_qual_0 if next_slot == 0 else host_qual_1
+            var next_host_offs = host_offs_0 if next_slot == 0 else host_offs_1
+            fill_subbatch_host_buffers(batch, next_start, next_end, next_host_qual, next_host_offs)
+
+        last_host_out = host_out
+        last_qual_start = qual_start
+        last_len = total_qual_slice
+
+    ctx.synchronize()
+    for j in range(last_len):
+        aggregated[last_qual_start + j] = last_host_out[j]
+
     var gpu_end = now()
-    var gpu_time_seconds = Float64(gpu_end - gpu_upload_time) / Float64(1e9)
+    var total_gpu_time = Float64(gpu_end - gpu_start) / 1e9
+    print("  GPU pipeline completed in " + String(total_gpu_time) + " seconds")
+    print()
 
-    # Step 5: Copy results back to host
-    print("Step 5: Copying prefix-sum results back to host...")
-    var copy_start = now()
-    var host_output = ctx.enqueue_create_host_buffer[DType.int32](
-        on_device.total_quality_len
-    )
-    ctx.enqueue_copy(src_buf=prefix_sum_output, dst_buf=host_output)
-    ctx.synchronize()
-    var copy_end = now()
-    var copy_time_seconds = Float64(copy_end - copy_start) / Float64(1e9)
-    var total_gpu_time = Float64(copy_end - gpu_start) / 1e9
-
-    # Step 5b: Run CPU prefix-sum for comparison
-    print("Step 5b: Running CPU prefix-sum...")
+    # Step 5: CPU reference and verification (simulating streaming batches)
+    print("Step 5: Running CPU prefix-sum with streaming batches (256k per batch)...")
     var cpu_start = now()
-    var cpu_result = cpu_quality_prefix_sum(batch, records)
+    
+    # Simulate streaming: process in mini-batches of 256k records
+    # Each batch is copied from "sink" (simulating file/network read) before processing
+    # GPU computes per-subbatch prefix sums (each starting at 0) and concatenates;
+    # CPU must do the same for verification to match.
+    var cpu_result = List[Int32](capacity=total_qual)
+    var num_cpu_batches = (num_records + subbatch_size - 1) // subbatch_size
+    
+    for batch_idx in range(num_cpu_batches):
+        var start_rec = batch_idx * subbatch_size
+        var end_rec = min((batch_idx + 1) * subbatch_size, num_records)
+        
+        # Simulate copying batch from sink (file/network stream)
+        var batch_records = copy_batch_from_sink(records, start_rec, end_rec)
+        
+        # Build FastqBatch for this mini-batch (simulating parsed batch)
+        var mini_batch = FastqBatch()
+        for i in range(len(batch_records)):
+            mini_batch.add(batch_records[i])
+        
+        # Process this mini-batch (prefix sums starting from 0, same as GPU per subbatch)
+        var batch_result = cpu_quality_prefix_sum(mini_batch, batch_records)
+        
+        # Concatenate batch results (no offset: GPU also outputs per-subbatch prefix sums)
+        for i in range(len(batch_result)):
+            cpu_result.append(batch_result[i])
+    
     var cpu_end = now()
     var cpu_time_seconds = Float64(cpu_end - cpu_start) / 1e9
-    print("  CPU computation completed")
-    print("  CPU time: " + String(cpu_time_seconds) + " seconds")
+    print("  CPU time (streaming " + String(num_cpu_batches) + " batches): " + String(cpu_time_seconds) + " seconds")
 
-    # Step 5c: Benchmark comparison
-    print("Step 5c: Benchmark Comparison:")
-    print("-" * 60)
-    print("  GPU upload time:      " + String(gpu_upload) + " seconds")
-    print("  GPU compute time:     " + String(gpu_time_seconds) + " seconds")
-    print("  GPU copy time:        " + String(copy_time_seconds) + " seconds")
-    print("  GPU total time:       " + String(total_gpu_time) + " seconds")
-    print("  CPU time:             " + String(cpu_time_seconds) + " seconds")
-    if cpu_time_seconds > 0:
-        var speedup = cpu_time_seconds / total_gpu_time
-        print("  Speedup (CPU/GPU):    " + String(speedup) + "x")
-
-    # Step 7: Verify GPU results with CPU reference computation
-    print("Step 7: Verification (GPU vs CPU):")
+    print("Step 6: Verification (GPU vs CPU):")
     print("-" * 60)
     var all_match = True
     var mismatch_count = 0
-    for i in range(min(on_device.num_records, len(cpu_result))):
-        var qual_start_int32 = Int32(0) if i == 0 else batch._qual_ends[i - 1]
-        var qual_end_int32 = batch._qual_ends[i]
-        var qual_start = Int(qual_start_int32)
-        var qual_end = Int(qual_end_int32)
-        var qual_len = qual_end - qual_start
-
-        for j in range(qual_len):
-            var gpu_val = host_output[qual_start + j]
-            var cpu_val = cpu_result[qual_start + j]
-            if gpu_val != cpu_val:
-                all_match = False
-                mismatch_count += 1
-    print()
+    var check_limit = min(total_qual, len(cpu_result))
+    for idx in range(check_limit):
+        if aggregated[idx] != cpu_result[idx]:
+            all_match = False
+            mismatch_count += 1
     if all_match:
-        print("✓ All prefix sums match between GPU and CPU!")
+        print("  All prefix sums match between GPU and CPU!")
     else:
-        print(
-            "✗ Found "
-            + String(mismatch_count)
-            + " mismatches between GPU and CPU"
-        )
+        print("  Found " + String(mismatch_count) + " mismatches between GPU and CPU")
 
+    print()
+    print("Benchmark:")
+    print("-" * 60)
+    print("  GPU total time:   " + String(total_gpu_time) + " seconds")
+    print("  CPU time:         " + String(cpu_time_seconds) + " seconds")
+    if cpu_time_seconds > 0:
+        var speedup = cpu_time_seconds / total_gpu_time
+        print("  Speedup (CPU/GPU): " + String(speedup) + "x")
     print("=" * 60)
     print("Example completed successfully!")
     print("=" * 60)

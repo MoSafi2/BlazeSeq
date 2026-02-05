@@ -4,7 +4,7 @@ from blazeseq.parser import RecordParser
 
 
 def main():
-    reader = RecordParser[check_quality=True, check_ascii=True](
-        FileReader("./data/SRR4381933_1.fastq"),
-    )
-    reader.parse_all()
+    file = GZFile("data/SRR16012060.fastq.gz", "rb")
+    file2 = FileReader("data/SRR16012060.fastq")
+    parser = RecordParser(file2^)
+    parser.parse_all()
