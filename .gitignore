@@ -1,10 +1,4 @@
-*.*
-.pixi
-*.html
-*.egg-info
-!*.mojo
-!*.toml
-!*.yaml
-data/*
-tests/test_data
-!docs/
+*.fastq*
+*.mojopkg
+*.conda
+llm*
