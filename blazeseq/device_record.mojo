@@ -13,7 +13,7 @@ from memory import UnsafePointer
 # ---------------------------------------------------------------------------
 
 
-struct FastqBatch(Movable, Sized):
+struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
     """
     Structure-of-Arrays batch format: host-side container that stacks multiple FastqRecords
     into packed quality (and sequence) byte buffers and an offsets index, then uploads to device.
