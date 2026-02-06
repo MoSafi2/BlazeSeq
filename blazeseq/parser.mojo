@@ -147,10 +147,10 @@ struct BatchedParser[
         Extract a batch of records in Array-of-Structures format for CPU parallelism.
 
         Args:
-            max_records: Maximum number of records to extract (default: batch_size)
+            max_records: Maximum number of records to extract (default: batch_size).
 
         Returns:
-            List[FastqRecord[Self.check_quality]] containing the extracted records
+            List[FastqRecord[Self.check_quality]] containing the extracted records.
         """
         var actual_max = min(max_records, self._batch_size)
         var batch = List[FastqRecord[Self.check_quality]](capacity=actual_max)
@@ -164,10 +164,10 @@ struct BatchedParser[
         Extract a batch of records in Structure-of-Arrays format for GPU operations.
 
         Args:
-            max_records: Maximum number of records to extract (default: batch_size)
+            max_records: Maximum number of records to extract (default: batch_size).
 
         Returns:
-            FastqBatch containing the extracted records in SoA format
+            FastqBatch containing the extracted records in SoA format.
         """
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)

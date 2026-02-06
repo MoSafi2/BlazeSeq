@@ -31,10 +31,10 @@ fn example_record_parser(file_path: String) raises:
     print()
 
     # Create parser with validation enabled
-    # Parameters: [check_ascii, check_quality]
+    # Parameters: [Reader type, check_ascii, check_quality]
     # Schema options: "generic", "sanger", "solexa", "illumina_1.3", 
     #                 "illumina_1.5", "illumina_1.8"
-    var parser = RecordParser[True, True](
+    var parser = RecordParser[FileReader, True, True](
         FileReader(Path(file_path)), schema="generic"
     )
 
@@ -42,21 +42,27 @@ fn example_record_parser(file_path: String) raises:
     var total_base_pairs = 0
 
     # Iterate through records using lazy evaluation
+    # Note: Using try/except pattern as Mojo's Optional unwrapping has limitations
     while True:
-        var record = parser.next()
-        if record is None:
+        try:
+            var record = parser.next()
+            if record is None:
+                break
+            record_val = record.take()
+            # Mojo's type system should narrow Optional after None check
+            # Access record fields directly
+            record_count += 1
+            total_base_pairs += len(record_val)
+
+            # Print first 3 records as examples  
+            if record_count <= 3:
+                print("Record " + String(record_count) + ":")
+                print("  Header: " + String(record_val.get_header_string()))
+                print("  Sequence length: " + String(len(record_val)))
+                print("  Quality length: " + String(len(record_val.get_quality_string())))
+                print()
+        except:
             break
-
-        record_count += 1
-        total_base_pairs += len(record.value())
-
-        # Print first 3 records as examples
-        if record_count <= 3:
-            print("Record " + String(record_count) + ":")
-            print("  Header: " + record.header())
-            print("  Sequence length: " + String(len(record.value())))
-            print("  Quality length: " + String(len(record.quality())))
-            print()
 
     print("Summary:")
     print("  Total records: " + String(record_count))
@@ -80,16 +86,19 @@ fn example_record_parser_no_validation(file_path: String) raises:
     print()
 
     # Disable both ASCII and quality validation for maximum performance
-    var parser = RecordParser[False, False](
+    var parser = RecordParser[FileReader, False, False](
         FileReader(Path(file_path)), schema="generic"
     )
 
     var record_count = 0
     while True:
-        var record = parser.next()
-        if record is None:
+        try:
+            var record = parser.next()
+            if record is None:
+                break
+            record_count += 1
+        except:
             break
-        record_count += 1
 
     print("Parsed " + String(record_count) + " records (no validation)")
     print()
@@ -112,8 +121,8 @@ fn example_batched_parser_cpu(file_path: String) raises:
     print()
 
     # Create batched parser with batch size of 1024 records
-    # Parameters: [check_ascii, check_quality, batch_size]
-    var parser = BatchedParser[True, True, 1024](
+    # Parameters: [Reader type, check_ascii, check_quality, batch_size]
+    var parser = BatchedParser[FileReader, True, True, 1024](
         FileReader(Path(file_path)), schema="generic", default_batch_size=1024
     )
 
@@ -134,7 +143,7 @@ fn example_batched_parser_cpu(file_path: String) raises:
         # Process each record in the batch (can be parallelized)
         var batch_base_pairs = 0
         for i in range(len(batch)):
-            batch_base_pairs += len(batch[i].value())
+            batch_base_pairs += len(batch[i])
 
         print(
             "Batch "
@@ -169,7 +178,7 @@ fn example_batched_parser_gpu(file_path: String) raises:
     print()
 
     # Create batched parser with batch size of 2048 records
-    var parser = BatchedParser[True, True, 2048](
+    var parser = BatchedParser[FileReader, True, True, 2048](
         FileReader(Path(file_path)), schema="generic", default_batch_size=2048
     )
 
@@ -230,7 +239,7 @@ fn example_batched_parser_custom_size(file_path: String) raises:
     print("=" * 60)
     print()
 
-    var parser = BatchedParser[False, False, 1024](
+    var parser = BatchedParser[FileReader, False, False, 1024](
         FileReader(Path(file_path)), schema="generic", default_batch_size=1024
     )
 
@@ -271,11 +280,12 @@ fn example_batched_parser_custom_size(file_path: String) raises:
 fn main() raises:
     """Main function that runs all parser examples."""
 
-    if len(argv) < 2:
+    var args = argv()
+    if len(args) < 2:
         print("Usage: mojo run examples/example_parser.mojo /path/to/file.fastq")
         return
 
-    var file_path = argv[1]
+    var file_path = args[1]
 
     # Run all examples
     example_record_parser(file_path)
