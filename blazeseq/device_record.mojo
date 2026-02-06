@@ -8,17 +8,18 @@ from gpu import block_idx, thread_idx
 from memory import UnsafePointer
 
 
-
 # ---------------------------------------------------------------------------
-# FastqBatch: host-side builder, stacks records and uploads to device
+# FastqBatch: Structure-of-Arrays batch format for GPU operations
 # ---------------------------------------------------------------------------
 
 
-struct FastqBatch:
+struct FastqBatch(Movable, Sized):
     """
-    Host-side container that stacks multiple FastqRecords into packed quality
-    (and sequence) byte buffers and an offsets index, then uploads to device.
+    Structure-of-Arrays batch format: host-side container that stacks multiple FastqRecords
+    into packed quality (and sequence) byte buffers and an offsets index, then uploads to device.
+    Optimized for GPU operations with coalesced memory access.
     """
+
     var _header_bytes: List[UInt8]
     var _header_ends: List[Int32]
     var _quality_bytes: List[UInt8]
@@ -26,12 +27,12 @@ struct FastqBatch:
     var _qual_ends: List[Int32]
     var _quality_offset: UInt8
 
-    fn __init__(out self):
-        self._header_bytes = List[UInt8](capacity=1024 * 100)
-        self._header_ends = List[Int32](capacity=1025)
-        self._quality_bytes = List[UInt8](capacity=1024 * 100)
-        self._sequence_bytes = List[UInt8](capacity=1024 * 100)
-        self._qual_ends = List[Int32](capacity=1025)
+    fn __init__(out self, batch_size: Int = 100):
+        self._header_bytes = List[UInt8](capacity=100 * batch_size)
+        self._header_ends = List[Int32](capacity=100 * batch_size + 1)
+        self._quality_bytes = List[UInt8](capacity=100 * batch_size)
+        self._sequence_bytes = List[UInt8](capacity=100 * batch_size)
+        self._qual_ends = List[Int32](capacity=100 * batch_size + 1)
         self._quality_offset = 33
 
     fn add(mut self, record: FastqRecord):
@@ -60,6 +61,9 @@ struct FastqBatch:
 
     fn quality_offset(self) -> UInt8:
         return self._quality_offset
+
+    fn __len__(self) -> Int:
+        return self.num_records()
 
 
 @fieldwise_init
@@ -128,7 +132,9 @@ fn fill_subbatch_host_buffers(
     the slice. Caller must ensure host_qual has size >= total_qual and
     host_offs has size >= (end_rec - start_rec) + 1.
     """
-    var qual_start = 0 if start_rec == 0 else Int(batch._qual_ends[start_rec - 1])
+    var qual_start = 0 if start_rec == 0 else Int(
+        batch._qual_ends[start_rec - 1]
+    )
     var qual_end = Int(batch._qual_ends[end_rec - 1])
     var total_qual = qual_end - qual_start
     var n = end_rec - start_rec
@@ -164,4 +170,3 @@ fn upload_subbatch_from_host_buffers(
         total_quality_len=total_qual,
         quality_offset=quality_offset,
     )
-

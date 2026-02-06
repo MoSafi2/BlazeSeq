@@ -1,4 +1,4 @@
-from .parser import RecordParser
+from .parser import RecordParser, BatchedParser
 from .record import RecordCoord
 from .record import FastqRecord
 from .iostream import BufferedReader
