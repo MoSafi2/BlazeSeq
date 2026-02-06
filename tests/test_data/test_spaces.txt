@@ -1,0 +1,3 @@
+  Leading spaces
+Trailing spaces  
+  Both sides  

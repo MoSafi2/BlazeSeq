@@ -1,0 +1,11 @@
+PASS	Basic Statistics	SRR16012060.fastq
+PASS	Per base sequence quality	SRR16012060.fastq
+PASS	Per tile sequence quality	SRR16012060.fastq
+PASS	Per sequence quality scores	SRR16012060.fastq
+FAIL	Per base sequence content	SRR16012060.fastq
+WARN	Per sequence GC content	SRR16012060.fastq
+PASS	Per base N content	SRR16012060.fastq
+PASS	Sequence Length Distribution	SRR16012060.fastq
+FAIL	Sequence Duplication Levels	SRR16012060.fastq
+FAIL	Overrepresented sequences	SRR16012060.fastq
+FAIL	Adapter Content	SRR16012060.fastq

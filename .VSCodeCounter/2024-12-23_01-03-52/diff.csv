@@ -1,0 +1,16 @@
+"filename", "language", "mojo", "Markdown", "comment", "blank", "total"
+"/home/mohamed/Documents/Projects/BlazeSeq/benchmark/__init__.mojo", "mojo", 0, 0, 0, -1, -1
+"/home/mohamed/Documents/Projects/BlazeSeq/benchmark/benchmark_all_parser_modes.mojo", "mojo", -79, 0, 0, -9, -88
+"/home/mohamed/Documents/Projects/BlazeSeq/benchmark/benchmark_coord_parser.mojo", "mojo", -18, 0, 0, -3, -21
+"/home/mohamed/Documents/Projects/BlazeSeq/benchmark/benchmark_record_parser_allvalid.mojo", "mojo", -20, 0, 0, -4, -24
+"/home/mohamed/Documents/Projects/BlazeSeq/benchmark/benchmark_record_parser_novalid.mojo", "mojo", -20, 0, 0, -4, -24
+"/home/mohamed/Documents/Projects/BlazeSeq/benchmark/benchmark_record_parser_qu_valid.mojo", "mojo", -20, 0, 0, -4, -24
+"/home/mohamed/Documents/Projects/BlazeSeq/blazeseq/__init__.mojo", "mojo", 0, 0, 0, 1, 1
+"/home/mohamed/Documents/Projects/BlazeSeq/blazeseq/helpers.mojo", "mojo", 1, 0, 0, 0, 1
+"/home/mohamed/Documents/Projects/BlazeSeq/blazeseq/iostream.mojo", "mojo", -15, 0, 15, 0, 0
+"/home/mohamed/Documents/Projects/BlazeSeq/blazeseq/parser.mojo", "mojo", 30, 0, -45, -1, -16
+"/home/mohamed/Documents/Projects/BlazeSeq/blazeseq/record.mojo", "mojo", 7, 0, 0, 0, 7
+"/home/mohamed/Documents/Projects/BlazeSeq/blazeseq/stats.mojo", "mojo", 252, 0, 16, 42, 310
+"/home/mohamed/Documents/Projects/BlazeSeq/cli.mojo", "mojo", -146, 0, 0, -24, -170
+"/home/mohamed/Documents/Projects/BlazeSeq/todo.md", "Markdown", 0, -18, 0, -5, -23
+"Total", "-", -28, -18, -14, -12, -72
