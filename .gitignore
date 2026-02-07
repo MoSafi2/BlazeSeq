@@ -2,3 +2,4 @@
 *.mojopkg
 *.conda
 llm*
+.cursor/rules/*

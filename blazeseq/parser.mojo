@@ -2,7 +2,94 @@ from blazeseq.record import FastqRecord, RecordCoord
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedReader, FileReader, Reader
 from blazeseq.device_record import FastqBatch
+from blazeseq.utils import memchr
 import time
+
+
+@always_inline
+fn _has_more_lines[R: Reader, check_ascii: Bool](
+    stream: BufferedReader[R, check_ascii],
+) -> Bool:
+    """True if there are more lines (data in buffer or more data can be read)."""
+    return stream.available() > 0 or not stream.is_eof()
+
+
+fn _get_n_lines[R: Reader, n: Int, check_ascii: Bool](
+    mut stream: BufferedReader[R, check_ascii],
+) raises -> InlineArray[Span[Byte, MutExternalOrigin], n]:
+    """
+    Read exactly n lines from the buffer. Edge cases: EOF before n lines (raise),
+    last line without newline (count as one line), line longer than capacity (raise).
+    """
+    if n == 0:
+        return InlineArray[Span[Byte, MutExternalOrigin], n](uninitialized=True)
+
+    var batch_start: Int = 0
+
+    while True:
+        if not stream.ensure_available(1):
+            if stream.available() == 0:
+                raise Error(
+                    "EOF reached before getting all requested lines"
+                )
+        var view = stream.peek(stream.available())
+        var current = batch_start
+        var results = InlineArray[Span[Byte, MutExternalOrigin], n](
+            uninitialized=True
+        )
+        var need_refill = False
+
+        for i in range(n):
+            while True:
+                var search_start = current
+                if search_start >= len(view):
+                    need_refill = True
+                    break
+                var line_end = memchr(
+                    haystack=view, chr=UInt8(new_line), start=search_start
+                )
+
+                if line_end >= 0:
+                    results[i] = view[current:line_end]
+                    current = line_end + 1
+                    break
+
+                if stream.is_eof():
+                    if current < len(view):
+                        results[i] = view[current:len(view)]
+                        current = len(view)
+                        if i + 1 < n:
+                            raise Error(
+                                "EOF reached before getting all requested lines"
+                            )
+                        stream.consume(current)
+                        return results^
+                    else:
+                        raise Error(
+                            "EOF reached before getting all requested lines"
+                        )
+
+                need_refill = True
+                var data_to_preserve = len(view) - batch_start
+                if data_to_preserve > stream.capacity():
+                    raise Error(
+                        "Batch of lines is longer than the buffer capacity."
+                    )
+                stream.compact_from(stream.read_position() + batch_start)
+                batch_start = 0
+                if not stream.ensure_available(stream.available() + 1):
+                    raise Error(
+                        "EOF reached before getting all requested lines"
+                    )
+                view = stream.peek(stream.available())
+                break
+
+            if need_refill:
+                break
+
+        if not need_refill:
+            stream.consume(current)
+            return results^
 
 
 struct RecordParser[
@@ -21,11 +108,11 @@ struct RecordParser[
 
     fn parse_all(mut self) raises:
         # Check if file is empty - if so, raise EOF error
-        if not self.stream.has_more_lines():
+        if not _has_more_lines(self.stream):
             raise Error("EOF")
 
         while True:
-            if not self.stream.has_more_lines():
+            if not _has_more_lines(self.stream):
                 break
             var record: FastqRecord[self.check_quality]
             record = self._parse_record()
@@ -39,7 +126,7 @@ struct RecordParser[
     @always_inline
     fn next(mut self) raises -> Optional[FastqRecord[val = self.check_quality]]:
         """Method that lazily returns the Next record in the file."""
-        if self.stream.has_more_lines():
+        if _has_more_lines(self.stream):
             var record: FastqRecord[self.check_quality]
             record = self._parse_record()
             record.validate_record()
@@ -54,8 +141,11 @@ struct RecordParser[
 
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
-        lines = self.stream.get_n_lines[4]()
-        l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
+        var lines = _get_n_lines[Self.R, 4, Self.check_ascii](self.stream)
+        var l1 = lines[0]
+        var l2 = lines[1]
+        var l3 = lines[2]
+        var l4 = lines[3]
         schema = self.quality_schema.copy()
         return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
 
@@ -154,7 +244,7 @@ struct BatchedParser[
         """
         var actual_max = min(max_records, self._batch_size)
         var batch = List[FastqRecord[Self.check_quality]](capacity=actual_max)
-        while len(batch) < actual_max and self.stream.has_more_lines():
+        while len(batch) < actual_max and _has_more_lines(self.stream):
             batch.append(self._parse_record())
 
         return batch^
@@ -172,7 +262,7 @@ struct BatchedParser[
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
 
-        while len(batch) < actual_max and self.stream.has_more_lines():
+        while len(batch) < actual_max and _has_more_lines(self.stream):
             var record = self._parse_record()
             batch.add(record^)
         return batch^
@@ -180,8 +270,11 @@ struct BatchedParser[
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
         """Parse a single FASTQ record (4 lines) from the stream."""
-        lines = self.stream.get_n_lines[4]()
-        l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
+        var lines = _get_n_lines[Self.R, 4, Self.check_ascii](self.stream)
+        var l1 = lines[0]
+        var l2 = lines[1]
+        var l3 = lines[2]
+        var l4 = lines[3]
         schema = self.quality_schema.copy()
         return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
 
