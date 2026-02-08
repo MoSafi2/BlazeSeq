@@ -2,7 +2,7 @@ from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from blazeseq.CONSTS import DEFAULT_CAPACITY
 from blazeseq.iostream import BufferedReader, FileReader, BufferView
-from blazeseq.parser import _has_more_lines, _get_n_lines
+from blazeseq.parser import _has_more_lines, _get_n_lines, LineIterator
 from blazeseq.utils import _strip_spaces
 from memory import alloc
 from testing import TestSuite
@@ -168,8 +168,8 @@ fn test_buffered_reader_slice() raises:
     print("✓ test_buffered_reader_slice passed")
 
 
-fn test_buffered_reader_as_span() raises:
-    """Test span creation."""
+fn test_buffered_reader_view() raises:
+    """Test view() returns span of unconsumed bytes."""
     var test_content = "Span test content\n"
     var test_file = Path("test_as_span.txt")
     test_file = create_test_file(test_file, test_content)
@@ -178,7 +178,7 @@ fn test_buffered_reader_as_span() raises:
     var buf_reader = BufferedReader(reader^)
 
     # Get span of available data
-    var span = buf_reader.as_span()
+    var span = buf_reader.view()
 
     assert_equal(
         len(span), len(buf_reader), "Span length should match buffer length"
@@ -193,7 +193,7 @@ fn test_buffered_reader_as_span() raises:
     assert_equal(span[0], ord("S"), "First byte should be 'S'")
     assert_equal(span[1], ord("p"), "Second byte should be 'p'")
 
-    print("✓ test_buffered_reader_as_span passed")
+    print("✓ test_buffered_reader_view passed")
 
     _ = buf_reader  # Hack to keep the reader alive
 
@@ -478,6 +478,27 @@ fn test_get_next_line_only_newlines() raises:
     print("✓ test_get_next_line_only_newlines passed")
 
 
+fn test_line_iterator_for_loop() raises:
+    """LineIterator implements Iterator protocol: for line in line_iter works."""
+    var test_content = "a\nb\nc\n"
+    var test_file = Path("test_line_iter_for.txt")
+    test_file = create_test_file(test_file, test_content)
+
+    var reader = FileReader(test_file)
+    var line_iter = LineIterator[FileReader, False](reader^)
+
+    var lines = List[String]()
+    for line in line_iter:
+        lines.append(String(unsafe_from_utf8=line))
+
+    assert_equal(len(lines), 3, "Should yield 3 lines")
+    assert_equal(lines[0], "a", "First line")
+    assert_equal(lines[1], "b", "Second line")
+    assert_equal(lines[2], "c", "Third line")
+
+    print("✓ test_line_iterator_for_loop passed")
+
+
 # ============================================================================
 # Buffer Management Tests
 # ============================================================================
@@ -533,11 +554,12 @@ fn test_fill_buffer() raises:
 
     _ = buf_reader.read_position() + buf_reader.available()
 
-    # Read some lines to consume buffer
+    # Read some lines to consume buffer (no auto-compact; head advances)
     for i in range(10):
         x = _get_n_lines[FileReader, 1, False](buf_reader)
 
-    # This should trigger buffer refill
+    # Caller must compact to make room before refill
+    buf_reader.compact_from(buf_reader.read_position())
     var bytes_read = buf_reader._fill_buffer()
 
     # Verify buffer was refilled

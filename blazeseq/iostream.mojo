@@ -123,11 +123,10 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
 
     @always_inline
     fn _fill_buffer(mut self) raises -> UInt64:
-        """Returns the number of bytes read into the buffer."""
+        """Returns the number of bytes read into the buffer. Caller must call compact_from() when buffer is full to make room."""
         if self._is_eof:
             return 0
 
-        self._compact()
         var space = self.uninitialized_space()
         if space == 0:
             return 0
@@ -148,25 +147,10 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         """Current number of bytes in the buffer (same as __len__)."""
         return self.end - self.head
 
-    fn peek(self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
-        """
-        View next up to `size` bytes without consuming.
-        Valid until next mutating call. Returns min(size, available()) bytes.
-        Raises if size < 0.
-        """
-        if size < 0:
-            raise Error("peek size must be non-negative, got " + String(size))
-        var n = min(size, self.available())
-        return Span[Byte, MutExternalOrigin](
-            ptr=self.ptr + self.head, length=n
-        )
-
     fn consume(mut self, size: Int) raises:
         """
         Advance read position by `size`. Must not exceed available().
-        May trigger internal compaction when head > capacity/2.
-        _stream_position is updated only when data is discarded in _compact()/compact_from(),
-        not here, because consumed bytes remain in the buffer until compaction.
+        Does not compact; caller must call compact_from() when needed.
         """
         if size < 0:
             raise Error("consume size must be non-negative, got " + String(size))
@@ -176,8 +160,6 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
                 + " available"
             )
         self.head += size
-        if self.head > self._len // 2:
-            self._compact()
 
     fn ensure_available(mut self, min_bytes: Int) raises -> Bool:
         """
@@ -193,7 +175,6 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         """
         Read exactly `size` bytes. Raises if EOF is reached before that many bytes.
         Returns owned bytes (safe to use after further mutating calls).
-        Common pattern for parsers that need a fixed-size chunk.
         """
         if size < 0:
             raise Error("read_exact size must be non-negative, got " + String(size))
@@ -202,10 +183,10 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
                 "Unexpected EOF: needed " + String(size) + " bytes, only "
                 + String(self.available()) + " available"
             )
-        var view = self.peek(size)
+        var v = self.view()
         var result = List[Byte](capacity=size)
         for i in range(size):
-            result.append(view[i])
+            result.append(v[i])
         self.consume(size)
         return result^
 
@@ -269,8 +250,8 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn as_span(ref self) raises -> Span[Byte, MutExternalOrigin]:
-        # Return span with MutExternalOrigin - lifetime tracked through ref self
+    fn view(ref self) raises -> Span[Byte, MutExternalOrigin]:
+        """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self.ptr + self.head, length=self.end - self.head
         )
@@ -332,7 +313,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
 
     fn write_to[w: Writer](self, mut writer: w):
         try:
-            writer.write_string(StringSlice(unsafe_from_utf8=self.as_span()))
+            writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
         except:
             writer.write("")
 
