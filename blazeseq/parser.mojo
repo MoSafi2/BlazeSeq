@@ -80,21 +80,23 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()]:
             if self.config.check_quality:
                 record.validate_quality_schema()
 
-    # @always_inline
-    # fn next(mut self) raises -> Optional[FastqRecord[val = self.check_quality]]:
-    #     """Method that lazily returns the Next record in the file."""
-    #     if self.line_iter.has_more():
-    #         var record: FastqRecord[self.check_quality]
-    #         record = self._parse_record()
-    #         record.validate_record()
+    @always_inline
+    fn next(
+        mut self,
+    ) raises -> Optional[FastqRecord[val = self.config.check_quality]]:
+        """Method that lazily returns the Next record in the file."""
+        if self.line_iter.has_more():
+            var record: FastqRecord[self.config.check_quality]
+            record = self._parse_record()
+            record.validate_record()
 
-    #         # ASCII validation is carried out in the reader
-    #         @parameter
-    #         if self.config.check_quality:
-    #             record.validate_quality_schema()
-    #         return record^
-    #     else:
-    #         return None
+            # ASCII validation is carried out in the reader
+            @parameter
+            if self.config.check_quality:
+                record.validate_quality_schema()
+            return record^
+        else:
+            return None
 
     @always_inline
     fn _parse_record(
@@ -108,32 +110,6 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()]:
         return FastqRecord[val = self.config.check_quality](
             line1, line2, line3, line4, schema
         )
-
-    # @staticmethod
-    # @always_inline
-    # fn _parse_schema(quality_format: String) -> QualitySchema:
-    #     var schema: QualitySchema
-
-    #     if quality_format == "sanger":
-    #         schema = materialize[sanger_schema]()
-    #     elif quality_format == "solexa":
-    #         schema = materialize[solexa_schema]()
-    #     elif quality_format == "illumina_1.3":
-    #         schema = materialize[illumina_1_3_schema]()
-    #     elif quality_format == "illumina_1.5":
-    #         schema = materialize[illumina_1_5_schema]()
-    #     elif quality_format == "illumina_1.8":
-    #         schema = materialize[illumina_1_8_schema]()
-    #     elif quality_format == "generic":
-    #         schema = materialize[generic_schema]()
-    #     else:
-    #         print(
-    #             """Uknown quality schema please choose one of 'sanger', 'solexa',"
-    #             " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
-    #             Parsing with generic schema."""
-    #         )
-    #         return materialize[generic_schema]()
-    #     return schema^
 
     # struct BatchedParser[
     #     R: Reader,

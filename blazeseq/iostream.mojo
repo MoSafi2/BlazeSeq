@@ -424,7 +424,6 @@ struct _LineIteratorIter[R: Reader, check_ascii: Bool, origin: Origin](
         return self._src[].has_more()
 
     fn __next__(mut self) raises StopIteration -> Self.Element:
-        # Rebind pointer to mutable origin so we can call next_line().
         var mut_ptr = rebind[
             Pointer[LineIterator[Self.R, Self.check_ascii], MutExternalOrigin]
         ](self._src)
@@ -434,7 +433,4 @@ struct _LineIteratorIter[R: Reader, check_ascii: Bool, origin: Origin](
                 raise StopIteration()
             return opt
         except:
-            # I/O or other errors from next_line() surfaced as StopIteration
-            # so the Iterator trait is satisfied; callers using next_line()
-            # directly still get proper Error propagation.
             raise StopIteration()
