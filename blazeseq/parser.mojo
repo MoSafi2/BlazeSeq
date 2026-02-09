@@ -97,13 +97,6 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
         """
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
-    fn __iter__(
-        ref self,
-    ) -> _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)]:
-        """Return an iterator for use in ``for line in self``."""
-        return _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)](
-            Pointer(to=self)
-        )
 
     fn next_line(mut self) raises -> Optional[Span[Byte, MutExternalOrigin]]:
         """
@@ -287,6 +280,13 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                 self.buffer.consume(current)
                 return results^
 
+    fn __iter__(
+        ref self,
+    ) -> _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)]:
+        """Return an iterator for use in ``for line in self``."""
+        return _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)](
+            Pointer(to=self)
+        )
 
 # ---------------------------------------------------------------------------
 # Iterator adapter for LineIterator so that ``for line in line_iter`` works.
