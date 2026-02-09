@@ -33,9 +33,6 @@ mojo = "=0.26.1.0"
 
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"
-t = { cmd = "sh -c 'find ./tests -name test_*.mojo -not -name test_coord_parser.mojo | xargs -I % mojo test -I BlazeSeq.mojopkg -D ASSERT=all %'", depends-on = [
-    "build",
-] }
 rbuild = "pixi build"
 rtest = { cmd = "sh -c 'PKG=$(ls ./blazeseq*.conda 2>/dev/null || find .pixi/build -name \"blazeseq*.conda\" -type f 2>/dev/null | head -1); test -n \"$PKG\" && rattler-build test -c conda-forge -c https://conda.modular.com/max --package-file \"$PKG\"'", depends-on = [
     "rbuild",

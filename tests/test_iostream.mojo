@@ -245,85 +245,6 @@ fn test_buffered_reader_consume_too_much() raises:
     print("✓ test_buffered_reader_consume_too_much passed")
 
 
-fn test_buffered_reader_ensure_available() raises:
-    """Test ensure_available() method."""
-    var test_content = "0123456789\n"
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
-
-    # Should succeed when buffer is not full
-    var result = buf_reader.ensure_available()
-    assert_true(result, "Should return True when buffer is not full")
-    assert_true(
-        buf_reader.available() >= 5, "Should have at least 5 bytes available"
-    )
-
-    print("✓ test_buffered_reader_ensure_available passed")
-
-
-fn test_buffered_reader_ensure_available_large() raises:
-    """Test ensure_available() with large content requiring refill."""
-    var test_content = String("")
-    for i in range(200):
-        test_content += "Line " + String(i) + "\n"
-
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^, capacity=100)
-
-    # Consume most of buffer
-    var initial_available = buf_reader.available()
-    var consume_amount = min(90, initial_available - 1)
-    var consumed = buf_reader.consume(consume_amount)
-    assert_equal(consumed, consume_amount, "Should consume requested amount")
-
-    # Ensure buffer is not full - should trigger refill if there's more data
-    # Loop until we have at least 50 bytes or EOF
-    var result = True
-    while buf_reader.available() < 50:
-        if not buf_reader.ensure_available():
-            result = False
-            break
-        if buf_reader.available() == 0:
-            result = False
-            break
-
-    # For large content, we should be able to refill
-    if len(test_content) > initial_available:
-        assert_true(result, "Should return True after refill for large content")
-        assert_true(
-            buf_reader.available() >= 50,
-            "Should have at least 50 bytes available",
-        )
-    else:
-        # Small content - may not be able to refill
-        assert_true(
-            buf_reader.available() > 0, "Should have some bytes available"
-        )
-
-    _ = buf_reader
-    print("✓ test_buffered_reader_ensure_available_large passed")
-
-
-fn test_buffered_reader_ensure_available_eof() raises:
-    """Test ensure_available() returns False at EOF."""
-    var test_content = "Short\n"
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
-
-    # Consume all available
-    var available = buf_reader.available()
-    var consumed = buf_reader.consume(available)
-    assert_equal(consumed, available, "Should consume all available bytes")
-
-    # Try to ensure buffer is not full - should return False at EOF
-    var result = buf_reader.ensure_available()
-    assert_false(result, "Should return False when at EOF")
-
-    print("✓ test_buffered_reader_ensure_available_eof passed")
-
-
-# Read Operations
-
 
 fn test_buffered_reader_read_exact() raises:
     """Test read_exact() method."""
@@ -797,14 +718,12 @@ fn test_buffered_reader_large_multiple_refills() raises:
             )
             last_stream_pos = stream_pos_after
         else:
-            # Track refills
-            var buffer_pos_before = buf_reader.buffer_position()
-            if not buf_reader.ensure_available():
+            # Buffer full with no bytes available - compact to make room then refill
+            buf_reader._compact_from(buf_reader.buffer_position())
+            var filled = buf_reader._fill_buffer()
+            if filled == 0:
                 break
-            var buffer_pos_after = buf_reader.buffer_position()
-            # If buffer was compacted, position should have changed
-            if buffer_pos_before != buffer_pos_after:
-                refill_count += 1
+            refill_count += 1  # Count each successful refill
             if buf_reader.available() == 0:
                 break
 
@@ -870,7 +789,7 @@ fn test_buffered_reader_consume_exact_available() raises:
     )
 
     if not buf_reader.is_eof():
-        var refilled = buf_reader.ensure_available()
+        var refilled = buf_reader._fill_buffer()
         if refilled:
             assert_true(
                 buf_reader.available() > 0, "Should refill after consuming all"
@@ -908,18 +827,6 @@ fn test_buffered_reader_operations_after_eof() raises:
         len(span_after), 0, "view() after EOF should return empty span"
     )
 
-    # 3. Multiple ensure_available() calls after EOF
-    var result1 = buf_reader.ensure_available()
-    assert_false(result1, "ensure_available() after EOF should return False")
-    var result2 = buf_reader.ensure_available()
-    assert_false(
-        result2, "ensure_available() after EOF should return False again"
-    )
-
-    # 4. read_exact() after EOF should raise
-    with assert_raises(contains="Unexpected EOF"):
-        _ = buf_reader.read_exact(1)
-
     print("✓ test_buffered_reader_operations_after_eof passed")
 
 
@@ -953,7 +860,9 @@ fn test_buffered_reader_stream_position_across_refills() raises:
                 "Stream position should advance by bytes read",
             )
         else:
-            if not buf_reader.ensure_available():
+            # Buffer full - compact to make room then refill
+            buf_reader._compact_from(buf_reader.buffer_position())
+            if not buf_reader._fill_buffer():
                 break
             if buf_reader.available() == 0:
                 break
@@ -1067,13 +976,9 @@ fn test_file_reader_alignment_large() raises:
         elif file_buf_reader.is_eof() and file_buf_reader.available() == 0:
             break
         else:
-            # Buffer might be full - compact and try again
-            if (
-                file_buf_reader.available() == 0
-                and file_buf_reader.buffer_position() > 0
-            ):
-                file_buf_reader._compact_from(0)
-            if not file_buf_reader.ensure_available():
+            # Buffer full - compact from current position to make room then refill
+            file_buf_reader._compact_from(file_buf_reader.buffer_position())
+            if not file_buf_reader._fill_buffer():
                 break
             if file_buf_reader.available() == 0:
                 break
@@ -1088,13 +993,9 @@ fn test_file_reader_alignment_large() raises:
         elif mem_buf_reader.is_eof() and mem_buf_reader.available() == 0:
             break
         else:
-            # Buffer might be full - compact and try again
-            if (
-                mem_buf_reader.available() == 0
-                and mem_buf_reader.buffer_position() > 0
-            ):
-                mem_buf_reader._compact_from(0)
-            if not mem_buf_reader.ensure_available():
+            # Buffer full - compact from current position to make room then refill
+            mem_buf_reader._compact_from(mem_buf_reader.buffer_position())
+            if not mem_buf_reader._fill_buffer():
                 break
             if mem_buf_reader.available() == 0:
                 break

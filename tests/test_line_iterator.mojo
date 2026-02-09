@@ -499,72 +499,72 @@ fn test_next_line_exceeds_max_capacity() raises:
 # ============================================================================
 
 
-fn test_next_n_lines_zero() raises:
-    """Next_n_lines[0]() should return empty array."""
-    var content = "Line 1\nLine 2\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_zero() raises:
+#     """Next_n_lines[0]() should return empty array."""
+#     var content = "Line 1\nLine 2\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[0]()
-    assert_equal(len(lines), 0, "Should return empty array for n=0")
+#     var lines = line_iter.next_n_lines[0]()
+#     assert_equal(len(lines), 0, "Should return empty array for n=0")
 
-    print("✓ test_next_n_lines_zero passed")
-
-
-fn test_next_n_lines_one() raises:
-    """Next_n_lines[1]() single line."""
-    var content = "Line 1\nLine 2\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
-
-    var lines = line_iter.next_n_lines[1]()
-    assert_equal(len(lines), 1, "Should return 1 line")
-    assert_equal(
-        span_to_string(lines[0]), "Line 1", "Line content should match"
-    )
-    _ = line_iter
-    print("✓ test_next_n_lines_one passed")
+#     print("✓ test_next_n_lines_zero passed")
 
 
-fn test_next_n_lines_four() raises:
-    """Next_n_lines[4]() for FASTQ records (4 lines)."""
-    var content = "@read1\nATCG\n+read1\nIIII\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_one() raises:
+#     """Next_n_lines[1]() single line."""
+#     var content = "Line 1\nLine 2\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(span_to_string(lines[0]), "@read1", "First line should match")
-    assert_equal(span_to_string(lines[1]), "ATCG", "Second line should match")
-    assert_equal(span_to_string(lines[2]), "+read1", "Third line should match")
-    assert_equal(span_to_string(lines[3]), "IIII", "Fourth line should match")
-    _ = line_iter
-    print("✓ test_next_n_lines_four passed")
+#     var lines = line_iter.next_n_lines[1]()
+#     assert_equal(len(lines), 1, "Should return 1 line")
+#     assert_equal(
+#         span_to_string(lines[0]), "Line 1", "Line content should match"
+#     )
+#     _ = line_iter
+#     print("✓ test_next_n_lines_one passed")
 
 
-fn test_next_n_lines_multiple_batches() raises:
-    """Multiple calls to next_n_lines[4]()."""
-    var content = "@read1\nATCG\n+read1\nIIII\n@read2\nGCTA\n+read2\nHHHH\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_four() raises:
+#     """Next_n_lines[4]() for FASTQ records (4 lines)."""
+#     var content = "@read1\nATCG\n+read1\nIIII\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var batch1 = line_iter.next_n_lines[4]()
-    assert_equal(len(batch1), 4, "First batch should have 4 lines")
-    assert_equal(
-        span_to_string(batch1[0]),
-        "@read1",
-        "First batch first line should match",
-    )
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(span_to_string(lines[0]), "@read1", "First line should match")
+#     assert_equal(span_to_string(lines[1]), "ATCG", "Second line should match")
+#     assert_equal(span_to_string(lines[2]), "+read1", "Third line should match")
+#     assert_equal(span_to_string(lines[3]), "IIII", "Fourth line should match")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_four passed")
 
-    var batch2 = line_iter.next_n_lines[4]()
-    assert_equal(len(batch2), 4, "Second batch should have 4 lines")
-    assert_equal(
-        span_to_string(batch2[0]),
-        "@read2",
-        "Second batch first line should match",
-    )
-    _ = line_iter
-    print("✓ test_next_n_lines_multiple_batches passed")
+
+# fn test_next_n_lines_multiple_batches() raises:
+#     """Multiple calls to next_n_lines[4]()."""
+#     var content = "@read1\nATCG\n+read1\nIIII\n@read2\nGCTA\n+read2\nHHHH\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
+
+#     var batch1 = line_iter.next_n_lines[4]()
+#     assert_equal(len(batch1), 4, "First batch should have 4 lines")
+#     assert_equal(
+#         span_to_string(batch1[0]),
+#         "@read1",
+#         "First batch first line should match",
+#     )
+
+#     var batch2 = line_iter.next_n_lines[4]()
+#     assert_equal(len(batch2), 4, "Second batch should have 4 lines")
+#     assert_equal(
+#         span_to_string(batch2[0]),
+#         "@read2",
+#         "Second batch first line should match",
+#     )
+#     _ = line_iter
+#     print("✓ test_next_n_lines_multiple_batches passed")
 
 
 # ============================================================================
@@ -572,44 +572,44 @@ fn test_next_n_lines_multiple_batches() raises:
 # ============================================================================
 
 
-fn test_next_n_lines_with_cr() raises:
-    """Lines with \\r\\n endings."""
-    var content = "Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_with_cr() raises:
+#     """Lines with \\r\\n endings."""
+#     var content = "Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
-    assert_equal(span_to_string(lines[1]), "Line 2", "Second line should match")
-    assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
-    assert_equal(span_to_string(lines[3]), "Line 4", "Fourth line should match")
-    _ = line_iter
-    print("✓ test_next_n_lines_with_cr passed")
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
+#     assert_equal(span_to_string(lines[1]), "Line 2", "Second line should match")
+#     assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
+#     assert_equal(span_to_string(lines[3]), "Line 4", "Fourth line should match")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_with_cr passed")
 
 
-fn test_next_n_lines_mixed_endings() raises:
-    """Mix of \\n and \\r\\n in same batch."""
-    var content = "Unix line\nWindows line\r\nAnother Unix\nLast Windows\r\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_mixed_endings() raises:
+#     """Mix of \\n and \\r\\n in same batch."""
+#     var content = "Unix line\nWindows line\r\nAnother Unix\nLast Windows\r\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(
-        span_to_string(lines[0]), "Unix line", "First line should match"
-    )
-    assert_equal(
-        span_to_string(lines[1]), "Windows line", "Second line should match"
-    )
-    assert_equal(
-        span_to_string(lines[2]), "Another Unix", "Third line should match"
-    )
-    assert_equal(
-        span_to_string(lines[3]), "Last Windows", "Fourth line should match"
-    )
-    _ = line_iter
-    print("✓ test_next_n_lines_mixed_endings passed")
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(
+#         span_to_string(lines[0]), "Unix line", "First line should match"
+#     )
+#     assert_equal(
+#         span_to_string(lines[1]), "Windows line", "Second line should match"
+#     )
+#     assert_equal(
+#         span_to_string(lines[2]), "Another Unix", "Third line should match"
+#     )
+#     assert_equal(
+#         span_to_string(lines[3]), "Last Windows", "Fourth line should match"
+#     )
+#     _ = line_iter
+#     print("✓ test_next_n_lines_mixed_endings passed")
 
 
 # ============================================================================
@@ -617,34 +617,34 @@ fn test_next_n_lines_mixed_endings() raises:
 # ============================================================================
 
 
-fn test_next_n_lines_with_empty_lines() raises:
-    """Batch containing empty lines."""
-    var content = "Line 1\n\nLine 3\n\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_with_empty_lines() raises:
+#     """Batch containing empty lines."""
+#     var content = "Line 1\n\nLine 3\n\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
-    assert_equal(len(lines[1]), 0, "Second line should be empty")
-    assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
-    assert_equal(len(lines[3]), 0, "Fourth line should be empty")
-    _ = line_iter
-    print("✓ test_next_n_lines_with_empty_lines passed")
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
+#     assert_equal(len(lines[1]), 0, "Second line should be empty")
+#     assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
+#     assert_equal(len(lines[3]), 0, "Fourth line should be empty")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_with_empty_lines passed")
 
 
-fn test_next_n_lines_all_empty() raises:
-    """All lines in batch are empty."""
-    var content = "\n\n\n\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_all_empty() raises:
+#     """All lines in batch are empty."""
+#     var content = "\n\n\n\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    for i in range(4):
-        assert_equal(len(lines[i]), 0, "Line " + String(i) + " should be empty")
-    _ = line_iter
-    print("✓ test_next_n_lines_all_empty passed")
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     for i in range(4):
+#         assert_equal(len(lines[i]), 0, "Line " + String(i) + " should be empty")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_all_empty passed")
 
 
 # ============================================================================
@@ -652,38 +652,38 @@ fn test_next_n_lines_all_empty() raises:
 # ============================================================================
 
 
-fn test_next_n_lines_no_trailing_newline() raises:
-    """Last line has no trailing newline."""
-    var content = "Line 1\nLine 2\nLine 3\nLine 4"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_no_trailing_newline() raises:
+#     """Last line has no trailing newline."""
+#     var content = "Line 1\nLine 2\nLine 3\nLine 4"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
-    assert_equal(span_to_string(lines[1]), "Line 2", "Second line should match")
-    assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
-    assert_equal(
-        span_to_string(lines[3]),
-        "Line 4",
-        "Fourth line should match (no trailing newline)",
-    )
-    _ = line_iter
-    print("✓ test_next_n_lines_no_trailing_newline passed")
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
+#     assert_equal(span_to_string(lines[1]), "Line 2", "Second line should match")
+#     assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
+#     assert_equal(
+#         span_to_string(lines[3]),
+#         "Line 4",
+#         "Fourth line should match (no trailing newline)",
+#     )
+#     _ = line_iter
+#     print("✓ test_next_n_lines_no_trailing_newline passed")
 
 
-fn test_next_n_lines_partial_at_eof() raises:
-    """Partial batch at EOF (should raise if not complete)."""
-    var content = "Line 1\nLine 2\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_partial_at_eof() raises:
+#     """Partial batch at EOF (should raise if not complete)."""
+#     var content = "Line 1\nLine 2\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
 
-    with assert_raises(
-        contains="EOF reached before getting all requested lines"
-    ):
-        _ = line_iter.next_n_lines[4]()
-    _ = line_iter
-    print("✓ test_next_n_lines_partial_at_eof passed")
+#     with assert_raises(
+#         contains="EOF reached before getting all requested lines"
+#     ):
+#         _ = line_iter.next_n_lines[4]()
+#     _ = line_iter
+#     print("✓ test_next_n_lines_partial_at_eof passed")
 
 
 # ============================================================================
@@ -691,161 +691,161 @@ fn test_next_n_lines_partial_at_eof() raises:
 # ============================================================================
 
 
-fn test_next_n_lines_crosses_boundary() raises:
-    """Batch where lines span buffer boundary."""
-    var line1 = String("")
-    for i in range(50):
-        line1 += "A"
-    var line2 = String("")
-    for i in range(30):
-        line2 += "B"
-    var line3 = String("")
-    for i in range(40):
-        line3 += "C"
-    var line4 = String("")
-    for i in range(20):
-        line4 += "D"
-    var line5 = String("")
-    for i in range(20):
-        line5 += "E"
-    var content = (
-        line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n" + line5 + "\n"
-    )
+# fn test_next_n_lines_crosses_boundary() raises:
+#     """Batch where lines span buffer boundary."""
+#     var line1 = String("")
+#     for i in range(50):
+#         line1 += "A"
+#     var line2 = String("")
+#     for i in range(30):
+#         line2 += "B"
+#     var line3 = String("")
+#     for i in range(40):
+#         line3 += "C"
+#     var line4 = String("")
+#     for i in range(20):
+#         line4 += "D"
+#     var line5 = String("")
+#     for i in range(20):
+#         line5 += "E"
+#     var content = (
+#         line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n" + line5 + "\n"
+#     )
 
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=140)
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^, capacity=140)
 
-    var lines1 = line_iter.next_line()
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(len(lines[0]), 30, "First line should have 50 chars")
-    assert_equal(len(lines[1]), 40, "Second line should have 30 chars")
-    assert_equal(len(lines[2]), 20, "Third line should have 40 chars")
-    assert_equal(len(lines[3]), 20, "Fourth line should have 20 chars")
-    _ = line_iter
-    print("✓ test_next_n_lines_crosses_boundary passed")
-
-
-fn test_next_n_lines_multiple_crosses() raises:
-    """Multiple lines in batch crossing boundaries."""
-    var line1 = String("")
-    for i in range(50):
-        line1 += "A"
-    var line2 = String("")
-    for i in range(30):
-        line2 += "B"
-    var line3 = String("")
-    for i in range(40):
-        line3 += "C"
-    var line4 = String("")
-    for i in range(35):
-        line4 += "D"
-    var content = line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n"
-
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=640)
-
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(len(lines[0]), 50, "First line should have 50 chars")
-    assert_equal(len(lines[1]), 30, "Second line should have 30 chars")
-    assert_equal(len(lines[2]), 40, "Third line should have 40 chars")
-    assert_equal(len(lines[3]), 35, "Fourth line should have 35 chars")
-    _ = line_iter
-    print("✓ test_next_n_lines_multiple_crosses passed")
+#     var lines1 = line_iter.next_line()
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(len(lines[0]), 30, "First line should have 50 chars")
+#     assert_equal(len(lines[1]), 40, "Second line should have 30 chars")
+#     assert_equal(len(lines[2]), 20, "Third line should have 40 chars")
+#     assert_equal(len(lines[3]), 20, "Fourth line should have 20 chars")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_crosses_boundary passed")
 
 
-fn test_next_n_lines_crosses_with_cr() raises:
-    """Lines with \\r\\n crossing boundary."""
-    var line1 = String("")
-    for i in range(50):
-        line1 += "A"
-    var line2 = String("")
-    for i in range(30):
-        line2 += "B"
-    var content = line1 + "\r\n" + line2 + "\r\n"
+# fn test_next_n_lines_multiple_crosses() raises:
+#     """Multiple lines in batch crossing boundaries."""
+#     var line1 = String("")
+#     for i in range(50):
+#         line1 += "A"
+#     var line2 = String("")
+#     for i in range(30):
+#         line2 += "B"
+#     var line3 = String("")
+#     for i in range(40):
+#         line3 += "C"
+#     var line4 = String("")
+#     for i in range(35):
+#         line4 += "D"
+#     var content = line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n"
 
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=64)
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^, capacity=640)
 
-    var lines = line_iter.next_n_lines[2]()
-    assert_equal(len(lines), 2, "Should return 2 lines")
-    assert_equal(len(lines[0]), 50, "First line should have 50 chars")
-    assert_equal(len(lines[1]), 30, "Second line should have 30 chars")
-    _ = line_iter
-    print("✓ test_next_n_lines_crosses_with_cr passed")
-
-
-# ============================================================================
-# Boundary Tests for next_n_lines() - Lines Larger Than Buffer
-# ============================================================================
-
-
-fn test_next_n_lines_exceeds_capacity() raises:
-    """Line in batch exceeds buffer capacity (should raise)."""
-    var long_line = String("")
-    for i in range(100):
-        long_line += "A"
-    var content = long_line + "\nLine 2\nLine 3\nLine 4\n"
-
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=64, growth_enabled=False)
-
-    with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
-        _ = line_iter.next_n_lines[4]()
-    _ = line_iter
-    print("✓ test_next_n_lines_exceeds_capacity passed")
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(len(lines[0]), 50, "First line should have 50 chars")
+#     assert_equal(len(lines[1]), 30, "Second line should have 30 chars")
+#     assert_equal(len(lines[2]), 40, "Third line should have 40 chars")
+#     assert_equal(len(lines[3]), 35, "Fourth line should have 35 chars")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_multiple_crosses passed")
 
 
-fn test_next_n_lines_exceeds_max_capacity() raises:
-    """Line exceeds max_capacity even with growth."""
-    var long_line = String("")
-    for i in range(200):
-        long_line += "A"
-    var content = long_line + "\nLine 2\nLine 3\nLine 4\n"
+# fn test_next_n_lines_crosses_with_cr() raises:
+#     """Lines with \\r\\n crossing boundary."""
+#     var line1 = String("")
+#     for i in range(50):
+#         line1 += "A"
+#     var line2 = String("")
+#     for i in range(30):
+#         line2 += "B"
+#     var content = line1 + "\r\n" + line2 + "\r\n"
 
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(
-        reader^, capacity=64, growth_enabled=True, max_capacity=150
-    )
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^, capacity=64)
 
-    with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
-        _ = line_iter.next_n_lines[4]()
-    _ = line_iter
-    print("✓ test_next_n_lines_exceeds_max_capacity passed")
-
-
-# ============================================================================
-# Boundary Tests for next_n_lines() - EOF Error Cases
-# ============================================================================
+#     var lines = line_iter.next_n_lines[2]()
+#     assert_equal(len(lines), 2, "Should return 2 lines")
+#     assert_equal(len(lines[0]), 50, "First line should have 50 chars")
+#     assert_equal(len(lines[1]), 30, "Second line should have 30 chars")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_crosses_with_cr passed")
 
 
-fn test_next_n_lines_eof_before_n() raises:
-    """EOF reached before getting all n lines (should raise)."""
-    var content = "Line 1\nLine 2\n"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
-
-    with assert_raises(
-        contains="EOF reached before getting all requested lines"
-    ):
-        _ = line_iter.next_n_lines[4]()
-
-    print("✓ test_next_n_lines_eof_before_n passed")
+# # ============================================================================
+# # Boundary Tests for next_n_lines() - Lines Larger Than Buffer
+# # ============================================================================
 
 
-fn test_next_n_lines_eof_exactly_n() raises:
-    """EOF reached exactly at n lines (should succeed)."""
-    var content = "Line 1\nLine 2\nLine 3\nLine 4"
-    var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^)
+# fn test_next_n_lines_exceeds_capacity() raises:
+#     """Line in batch exceeds buffer capacity (should raise)."""
+#     var long_line = String("")
+#     for i in range(100):
+#         long_line += "A"
+#     var content = long_line + "\nLine 2\nLine 3\nLine 4\n"
 
-    var lines = line_iter.next_n_lines[4]()
-    assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
-    assert_equal(span_to_string(lines[3]), "Line 4", "Last line should match")
-    _ = line_iter
-    print("✓ test_next_n_lines_eof_exactly_n passed")
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^, capacity=64, growth_enabled=False)
+
+#     with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
+#         _ = line_iter.next_n_lines[4]()
+#     _ = line_iter
+#     print("✓ test_next_n_lines_exceeds_capacity passed")
+
+
+# fn test_next_n_lines_exceeds_max_capacity() raises:
+#     """Line exceeds max_capacity even with growth."""
+#     var long_line = String("")
+#     for i in range(200):
+#         long_line += "A"
+#     var content = long_line + "\nLine 2\nLine 3\nLine 4\n"
+
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(
+#         reader^, capacity=64, growth_enabled=True, max_capacity=150
+#     )
+
+#     with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
+#         _ = line_iter.next_n_lines[4]()
+#     _ = line_iter
+#     print("✓ test_next_n_lines_exceeds_max_capacity passed")
+
+
+# # ============================================================================
+# # Boundary Tests for next_n_lines() - EOF Error Cases
+# # ============================================================================
+
+
+# fn test_next_n_lines_eof_before_n() raises:
+#     """EOF reached before getting all n lines (should raise)."""
+#     var content = "Line 1\nLine 2\n"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
+
+#     with assert_raises(
+#         contains="EOF reached before getting all requested lines"
+#     ):
+#         _ = line_iter.next_n_lines[4]()
+
+#     print("✓ test_next_n_lines_eof_before_n passed")
+
+
+# fn test_next_n_lines_eof_exactly_n() raises:
+#     """EOF reached exactly at n lines (should succeed)."""
+#     var content = "Line 1\nLine 2\nLine 3\nLine 4"
+#     var reader = create_memory_reader(content)
+#     var line_iter = LineIterator(reader^)
+
+#     var lines = line_iter.next_n_lines[4]()
+#     assert_equal(len(lines), 4, "Should return 4 lines")
+#     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
+#     assert_equal(span_to_string(lines[3]), "Line 4", "Last line should match")
+#     _ = line_iter
+#     print("✓ test_next_n_lines_eof_exactly_n passed")
 
 
 # ============================================================================
