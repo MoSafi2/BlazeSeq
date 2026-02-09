@@ -8,7 +8,7 @@ BufferedReader.
 
 """
 
-from memory import memset_zero, UnsafePointer, Span
+from memory import memset_zero, UnsafePointer, Span, memcpy
 from memory.legacy_unsafe_pointer import LegacyUnsafePointer
 from sys import ffi
 from sys.info import CompilationTarget
@@ -84,6 +84,84 @@ struct FileReader(Movable, Reader):
             raise Error("The amount to be read should be positive")
         read = self.handle.read(buffer=s)
         return read
+
+
+struct MemoryReader(Movable, Reader):
+    """Reader that reads from an in-memory buffer.
+    
+    Allows BufferedReader to read from memory instead of disk I/O,
+    enabling disk I/O independent performance testing.
+    """
+    var data: List[Byte]
+    var position: Int
+
+    fn __init__(out self, var data: List[Byte]):
+        """Initialize with a List[Byte] buffer.
+        
+        Args:
+            data: The source data buffer (owned).
+        """
+        self.data = data^
+        self.position = 0
+
+    fn __init__(out self, data: Span[Byte]):
+        """Initialize with a Span[Byte] buffer (copies into owned list).
+        
+        Args:
+            data: The source data buffer (will be copied).
+        """
+        self.data = List[Byte](capacity=len(data))
+        for i in range(len(data)):
+            self.data.append(data[i])
+        self.position = 0
+
+    @always_inline
+    fn read_to_buffer(
+        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+    ) raises -> UInt64:
+        """Read bytes from the memory buffer into the destination buffer.
+        
+        Args:
+            buf: The destination buffer to write into.
+            amt: The number of bytes to read.
+            pos: The position in the destination buffer to start writing.
+        
+        Returns:
+            The number of bytes actually read (0 if EOF).
+        """
+        if pos > len(buf):
+            raise Error("Position is outside the buffer")
+        var s = Span[Byte, MutExternalOrigin](
+            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        )
+        if amt > len(s):
+            raise Error(
+                "Number of elements to read is bigger than the available space"
+                " in the buffer"
+            )
+        if amt < 0:
+            raise Error("The amount to be read should be positive")
+        
+        # Check if we've reached EOF
+        if self.position >= len(self.data):
+            return 0
+        
+        # Calculate how many bytes we can actually read
+        var available = len(self.data) - self.position
+        var bytes_to_read = min(amt, available)
+        
+        # Copy bytes from data to destination buffer
+        if bytes_to_read > 0:
+            for i in range(bytes_to_read):
+                s[i] = self.data[self.position + i]
+            self.position += bytes_to_read
+        
+        return UInt64(bytes_to_read)
+
+    fn __moveinit__(out self, deinit other: Self):
+        """Move constructor for Movable trait compliance."""
+        self.data = other.data^
+        self.position = other.position
 
 
 @fieldwise_init

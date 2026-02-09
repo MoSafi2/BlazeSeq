@@ -21,6 +21,13 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
     fn __init__(
         out self, var reader: Self.R, capacity: Int = DEFAULT_CAPACITY
     ) raises:
+        if capacity <= 0:
+            raise Error(
+                "Can't have BufferedReader with the follwing capacity: ",
+                capacity,
+                " Bytes",
+            )
+
         self.source = reader^
         self._ptr = alloc[Byte](capacity)
         self._len = capacity
@@ -36,34 +43,41 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         return self._end - self._head
 
     @always_inline
-    fn consume(mut self, size: Int) raises:
+    fn consume(mut self, size: Int) -> Int:
         """
         Advance read position by `size`. Must not exceed available().
         Does not compact; caller must call compact_from() when needed.
         """
-        if size < 0:
-            raise Error(
-                "consume size must be non-negative, got " + String(size)
-            )
-        if size > self.available():
-            raise Error(
-                "Cannot consume "
-                + String(size)
-                + " bytes: only "
-                + String(self.available())
-                + " available"
-            )
-        self._head += size
+        var cons_size = min(size, self.available())
+        self._head += cons_size
+        return cons_size
 
-    # TODO: Remove if not needed
     @always_inline
-    fn ensure_available(mut self, min_bytes: Int) raises -> Bool:
+    fn ensure_available(mut self) raises -> Bool:
         """
-        Refill until available() >= min_bytes or source exhausted.
-        Returns False only when no more data can be read.
+        Ensures that the buffer is not full. If it is full, compacts and refills the buffer.
+        Returns False only when no more data can be read (EOF).
         """
-        while self.available() < min_bytes:
-            if self._fill_buffer() == 0:
+
+        if self._is_eof and self.available() == 0:
+            return False
+
+        if self.capacity() == self._end:
+            if self._head > 0:
+                self._compact_from(self._head)
+            else:
+                return False
+            var filled = self._fill_buffer()
+            if filled == 0:
+                self._is_eof = True
+                return False
+
+        elif self.available() == 0:
+            if self._head > 0:
+                self._compact_from(self._head)
+            var filled = self._fill_buffer()
+            if filled == 0:
+                self._is_eof = True
                 return False
         return True
 
@@ -77,19 +91,29 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
             raise Error(
                 "read_exact size must be non-negative, got " + String(size)
             )
-        if not self.ensure_available(size):
-            raise Error(
-                "Unexpected EOF: needed "
-                + String(size)
-                + " bytes, only "
-                + String(self.available())
-                + " available"
-            )
+        # Ensure buffer is not full and has enough bytes available
+        while self.available() < size:
+            if not self.ensure_available():
+                raise Error(
+                    "Unexpected EOF: needed "
+                    + String(size)
+                    + " bytes, only "
+                    + String(self.available())
+                    + " available"
+                )
         var v = self.view()
         var result = List[Byte](capacity=size)
         for i in range(size):
             result.append(v[i])
-        self.consume(size)
+        var consumed = self.consume(size)
+        # Since we ensured size bytes are available, consumed should equal size
+        if consumed != size:
+            raise Error(
+                "Internal error: consume() returned "
+                + String(consumed)
+                + " but expected "
+                + String(size)
+            )
         return result^
 
     @always_inline
@@ -123,7 +147,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         """
         if self.capacity() >= max_capacity:
             raise Error("Buffer already at max capacity")
-        self._compact_from(0)
+        self._compact_from(self._head)
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
 
@@ -139,6 +163,16 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
             writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
         except:
             writer.write("")
+
+    @always_inline
+    fn peek(ref self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
+        """
+        Peek at the next `amt` bytes in the buffer without consuming them.
+        """
+        var peek_amt = min(amt, self.available())
+        return Span[Byte, MutExternalOrigin](
+            ptr=self._ptr + self._head, length=peek_amt
+        )
 
     @always_inline
     fn _compact_from(mut self, from_pos: Int = 0) raises:

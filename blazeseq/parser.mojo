@@ -104,11 +104,15 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
         Invalidated by next next_line() or any buffer mutation.
         """
         while True:
-            if not self.buffer.ensure_available(1):
-                if self.buffer.available() == 0:
-                    return None
+            # Ensure buffer is not full
+            if not self.buffer.ensure_available():
+                return None
+            # Check if we have at least 1 byte available
+            if self.buffer.available() == 0:
+                return None
+
             var view = self.buffer.view()
-            var line_end = memchr(haystack=view, chr=UInt8(new_line), start=0)
+            var line_end = memchr(haystack=view, chr=UInt8(new_line))
             if line_end >= 0:
                 var start = 0
                 var end = line_end
@@ -118,51 +122,14 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                 self.buffer.consume(line_end + 1)
                 return span
 
+            # EOF, return remaining data
             if self.buffer.is_eof():
-                if len(view) > 0:
-                    var end = len(view)
-                    if end > 0 and view[end - 1] == carriage_return:
-                        end -= 1
-                    var span = view[0:end]
-                    self.buffer.consume(len(view))
-                    return span
-                return None
+                return self._handle_eof_line(view)
 
-            if len(view) > self.buffer.capacity():
-                if self._growth_enabled:
-                    # Try to grow buffer
-                    var current_capacity = self.buffer.capacity()
-                    if current_capacity >= self._max_capacity:
-                        raise Error(
-                            "Line is longer than the maximum buffer capacity."
-                        )
-                    # Grow by doubling capacity or adding fixed amount, up to max
-                    var growth_amount = min(
-                        current_capacity, self._max_capacity - current_capacity
-                    )
-                    if growth_amount > 0:
-                        self.buffer.grow_buffer(
-                            growth_amount, self._max_capacity
-                        )
-                        # Retry reading after growth - continue loop to read more data
-                        continue
-                    else:
-                        raise Error(
-                            "Line is longer than the maximum buffer capacity."
-                        )
-                else:
-                    raise Error("Line is longer than the buffer capacity.")
+            if len(view) >= self.buffer.capacity():
+                raise Error("Line is longer than the buffer capacity.")
+
             self.buffer._compact_from(self.buffer.buffer_position())
-            if not self.buffer.ensure_available(self.buffer.available() + 1):
-                if self.buffer.available() == 0:
-                    return None
-                var v = self.buffer.view()
-                var e = len(v)
-                if e > 0 and v[e - 1] == carriage_return:
-                    e -= 1
-                var sp = v[0:e]
-                self.buffer.consume(len(v))
-                return sp
 
     fn next_n_lines[
         n: Int
@@ -176,11 +143,17 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
             )
         var batch_start: Int = 0
         while True:
-            if not self.buffer.ensure_available(1):
+            # Ensure buffer is not full
+            if not self.buffer.ensure_available():
                 if self.buffer.available() == 0:
                     raise Error(
                         "EOF reached before getting all requested lines"
                     )
+            # Check if we have at least 1 byte available
+            if self.buffer.available() == 0:
+                raise Error(
+                    "EOF reached before getting all requested lines"
+                )
             var view = self.buffer.view()
             var current = batch_start
             var results = InlineArray[Span[Byte, MutExternalOrigin], n](
@@ -244,13 +217,20 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                                     growth_amount, self._max_capacity
                                 )
                                 # Retry reading after growth - continue inner loop
-                                if not self.buffer.ensure_available(
-                                    self.buffer.available() + 1
-                                ):
-                                    raise Error(
-                                        "EOF reached before getting all"
-                                        " requested lines"
-                                    )
+                                # Ensure buffer is not full and has more bytes
+                                var prev_available = self.buffer.available()
+                                while self.buffer.available() <= prev_available:
+                                    if not self.buffer.ensure_available():
+                                        raise Error(
+                                            "EOF reached before getting all"
+                                            " requested lines"
+                                        )
+                                    if self.buffer.available() == prev_available:
+                                        # No progress made, EOF reached
+                                        raise Error(
+                                            "EOF reached before getting all"
+                                            " requested lines"
+                                        )
                                 view = self.buffer.view()
                                 continue
                             else:
@@ -266,12 +246,18 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                         self.buffer.buffer_position() + batch_start
                     )
                     batch_start = 0
-                    if not self.buffer.ensure_available(
-                        self.buffer.available() + 1
-                    ):
-                        raise Error(
-                            "EOF reached before getting all requested lines"
-                        )
+                    # Ensure buffer is not full and has more bytes
+                    var prev_available = self.buffer.available()
+                    while self.buffer.available() <= prev_available:
+                        if not self.buffer.ensure_available():
+                            raise Error(
+                                "EOF reached before getting all requested lines"
+                            )
+                        if self.buffer.available() == prev_available:
+                            # No progress made, EOF reached
+                            raise Error(
+                                "EOF reached before getting all requested lines"
+                            )
                     view = self.buffer.view()
                     break
                 if need_refill:
@@ -280,6 +266,24 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                 self.buffer.consume(current)
                 return results^
 
+                
+    @always_inline
+    fn _handle_eof_line(
+        mut self, view: Span[Byte, MutExternalOrigin]
+    ) raises -> Optional[Span[Byte, MutExternalOrigin]]:
+        """
+        Handle EOF case: return remaining data with trailing \\r trimmed, or None if no data.
+        Assumes buffer.is_eof() is True when called.
+        """
+        if len(view) > 0:
+            var end = len(view)
+            if end > 0 and view[end - 1] == carriage_return:
+                end -= 1
+            var span = view[0:end]
+            self.buffer.consume(len(view))
+            return span
+        return None
+
     fn __iter__(
         ref self,
     ) -> _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)]:
@@ -287,6 +291,7 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
         return _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)](
             Pointer(to=self)
         )
+
 
 # ---------------------------------------------------------------------------
 # Iterator adapter for LineIterator so that ``for line in line_iter`` works.
@@ -354,9 +359,13 @@ fn _get_n_lines[
     var batch_start: Int = 0
 
     while True:
-        if not stream.ensure_available(1):
+        # Ensure buffer is not full
+        if not stream.ensure_available():
             if stream.available() == 0:
                 raise Error("EOF reached before getting all requested lines")
+        # Check if we have at least 1 byte available
+        if stream.available() == 0:
+            raise Error("EOF reached before getting all requested lines")
         var view = stream.view()
         var current = batch_start
         var results = InlineArray[Span[Byte, MutExternalOrigin], n](
@@ -400,10 +409,18 @@ fn _get_n_lines[
                     raise Error("Line is longer than the buffer capacity.")
                 stream._compact_from(stream.buffer_position() + batch_start)
                 batch_start = 0
-                if not stream.ensure_available(stream.available() + 1):
-                    raise Error(
-                        "EOF reached before getting all requested lines"
-                    )
+                # Ensure buffer is not full and has more bytes
+                var prev_available = stream.available()
+                while stream.available() <= prev_available:
+                    if not stream.ensure_available():
+                        raise Error(
+                            "EOF reached before getting all requested lines"
+                        )
+                    if stream.available() == prev_available:
+                        # No progress made, EOF reached
+                        raise Error(
+                            "EOF reached before getting all requested lines"
+                        )
                 view = stream.view()
                 break
 
