@@ -493,6 +493,7 @@ fn test_next_line_exceeds_max_capacity() raises:
 
     print("✓ test_next_line_exceeds_max_capacity passed")
 
+
 # ============================================================================
 # Iterator Protocol Tests (Sanity Checks) - Basic Iterator Behavior
 # ============================================================================

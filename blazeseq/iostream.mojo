@@ -1,10 +1,12 @@
 from memory import memcpy, UnsafePointer, Span, alloc
-from blazeseq.CONSTS import DEFAULT_CAPACITY
 from blazeseq.utils import _check_ascii
 from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
 from blazeseq.readers import Reader
+from blazeseq.CONSTS import *
+from blazeseq.utils import memchr
+
 
 
 struct BufferedReader[R: Reader, check_ascii: Bool = False](
@@ -268,3 +270,171 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
     fn __del__(deinit self):
         if self._ptr:
             self._ptr.free()
+
+
+@always_inline
+fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
+    """
+    Return the exclusive end index for line content, trimming a single trailing \\r.
+    Use when the line may end with \\r (e.g. before \\n or at EOF).
+    """
+    if end > 0 and view[end - 1] == carriage_return:
+        return end - 1
+    return end
+
+
+struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
+    """
+    Iterates over newline-separated lines from a BufferedReader.
+    Owns the buffer; parsers hold LineIterator and use next_line/next_n_lines.
+
+    Supports the Mojo Iterator protocol: ``for line in line_iterator`` works.
+    Each ``line`` is a ``Span[Byte, MutExternalOrigin]`` invalidated by the
+    next iteration or any buffer mutation (same contract as ``next_line()``).
+    """
+
+    comptime IteratorType[
+        mut: Bool, origin: Origin[mut=mut]
+    ] = _LineIteratorIter[Self.R, Self.check_ascii, origin]
+
+    var buffer: BufferedReader[Self.R, check_ascii = Self.check_ascii]
+    var _growth_enabled: Bool
+    var _max_capacity: Int
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
+        capacity: Int = DEFAULT_CAPACITY,
+        growth_enabled: Bool = False,
+        max_capacity: Int = MAX_CAPACITY,
+    ) raises:
+        self.buffer = BufferedReader[check_ascii = Self.check_ascii](
+            reader^, capacity
+        )
+        self._growth_enabled = growth_enabled
+        self._max_capacity = max_capacity
+
+    @always_inline
+    fn position(self) -> Int:
+        """Logical byte position of next line start (for errors and compaction).
+        """
+        return self.buffer.stream_position()
+
+    @always_inline
+    fn has_more(self) -> Bool:
+        """True if there is at least one more line (data in buffer or more can be read).
+        """
+        return self.buffer.available() > 0 or not self.buffer.is_eof()
+
+    @always_inline
+    fn next_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
+        """
+        Next line as span excluding newline (and trimming trailing \\r). None at EOF.
+        Invalidated by next next_line() or any buffer mutation.
+        """
+        while True:
+            _ = self.buffer._fill_buffer()
+            if self.buffer.available() == 0:
+                raise Error("EOF")
+
+            var view = self.buffer.view()
+            var newline_at = memchr(haystack=view, chr=UInt8(new_line))
+            if newline_at >= 0:
+                var end = _trim_trailing_cr(view, newline_at)
+                var span = view[0:end]
+                _ = self.buffer.consume(newline_at + 1)
+                return span
+
+            if self.buffer.is_eof():
+                return self._handle_eof_line(view)
+
+            if len(view) >= self.buffer.capacity():
+                self._handle_line_exceeds_capacity()
+                continue
+
+            self.buffer._compact_from(self.buffer.buffer_position())
+
+    @always_inline
+    fn _handle_line_exceeds_capacity(mut self) raises:
+        """
+        Line does not fit in current buffer. Either raise (no growth or at max)
+        or grow the buffer so the caller can retry.
+        """
+        if not self._growth_enabled:
+            raise Error(
+                "Line exceeds buffer capacity of "
+                + String(self.buffer.capacity())
+                + " bytes"
+            )
+        if self.buffer.capacity() >= self._max_capacity:
+            raise Error(
+                "Line exceeds max buffer capacity of "
+                + String(self._max_capacity)
+                + " bytes"
+            )
+        var current_cap = self.buffer.capacity()
+        var growth_amount = min(current_cap, self._max_capacity - current_cap)
+        self.buffer.grow_buffer(growth_amount, self._max_capacity)
+
+    @always_inline
+    fn _handle_eof_line(
+        mut self, view: Span[Byte, MutExternalOrigin]
+    ) raises -> Span[Byte, MutExternalOrigin]:
+        """
+        Handle EOF case: return remaining data with trailing \\r trimmed, or None if no data.
+        Assumes buffer.is_eof() is True when called.
+        """
+        if len(view) > 0:
+            var end = _trim_trailing_cr(view, len(view))
+            var span = view[0:end]
+            _ = self.buffer.consume(len(view))
+            return span
+        raise Error("EOF")
+
+    fn __iter__(
+        ref self,
+    ) -> _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)]:
+        """Return an iterator for use in ``for line in self``."""
+        return _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)](
+            Pointer(to=self)
+        )
+
+
+# ---------------------------------------------------------------------------
+# Iterator adapter for LineIterator so that ``for line in line_iter`` works.
+# ---------------------------------------------------------------------------
+
+
+struct _LineIteratorIter[R: Reader, check_ascii: Bool, origin: Origin](
+    Iterator
+):
+    """Iterator over lines; yields Span[Byte, MutExternalOrigin] per line."""
+
+    comptime Element = Span[Byte, MutExternalOrigin]
+
+    var _src: Pointer[LineIterator[Self.R, Self.check_ascii], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[LineIterator[Self.R, Self.check_ascii], Self.origin],
+    ):
+        self._src = src
+
+    fn __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        # Rebind pointer to mutable origin so we can call next_line().
+        var mut_ptr = rebind[
+            Pointer[LineIterator[Self.R, Self.check_ascii], MutExternalOrigin]
+        ](self._src)
+        try:
+            var opt = mut_ptr[].next_line()
+            if not opt:
+                raise StopIteration()
+            return opt
+        except:
+            # I/O or other errors from next_line() surfaced as StopIteration
+            # so the Iterator trait is satisfied; callers using next_line()
+            # directly still get proper Error propagation.
+            raise StopIteration()
