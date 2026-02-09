@@ -52,7 +52,6 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         self._head += cons_size
         return cons_size
 
-
     @always_inline
     fn read_exact(mut self, size: Int) raises -> List[Byte]:
         """
@@ -123,7 +122,6 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
 
-
     @always_inline
     fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
@@ -184,7 +182,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         )
         var amt = self.source.read_to_buffer(buf_span, space, self._end)
         self._end += Int(amt)
-        if amt < space:
+        if amt == 0:
             self._is_eof = True
 
         @parameter

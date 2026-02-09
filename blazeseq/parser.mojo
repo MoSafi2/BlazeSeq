@@ -97,7 +97,6 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
         """
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
-
     fn next_line(mut self) raises -> Optional[Span[Byte, MutExternalOrigin]]:
         """
         Next line as span excluding newline (and trimming trailing \\r). None at EOF.
@@ -105,7 +104,7 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
         """
         while True:
             # Ensure buffer is not full
-            if not self.buffer.ensure_available():
+            if not self.buffer._fill_buffer():
                 return None
             # Check if we have at least 1 byte available
             if self.buffer.available() == 0:
@@ -144,16 +143,14 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
         var batch_start: Int = 0
         while True:
             # Ensure buffer is not full
-            if not self.buffer.ensure_available():
+            if not self.buffer._fill_buffer():
                 if self.buffer.available() == 0:
                     raise Error(
                         "EOF reached before getting all requested lines"
                     )
             # Check if we have at least 1 byte available
             if self.buffer.available() == 0:
-                raise Error(
-                    "EOF reached before getting all requested lines"
-                )
+                raise Error("EOF reached before getting all requested lines")
             var view = self.buffer.view()
             var current = batch_start
             var results = InlineArray[Span[Byte, MutExternalOrigin], n](
@@ -220,12 +217,15 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                                 # Ensure buffer is not full and has more bytes
                                 var prev_available = self.buffer.available()
                                 while self.buffer.available() <= prev_available:
-                                    if not self.buffer.ensure_available():
+                                    if not self.buffer._fill_buffer():
                                         raise Error(
                                             "EOF reached before getting all"
                                             " requested lines"
                                         )
-                                    if self.buffer.available() == prev_available:
+                                    if (
+                                        self.buffer.available()
+                                        == prev_available
+                                    ):
                                         # No progress made, EOF reached
                                         raise Error(
                                             "EOF reached before getting all"
@@ -249,7 +249,7 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                     # Ensure buffer is not full and has more bytes
                     var prev_available = self.buffer.available()
                     while self.buffer.available() <= prev_available:
-                        if not self.buffer.ensure_available():
+                        if not self.buffer._fill_buffer():
                             raise Error(
                                 "EOF reached before getting all requested lines"
                             )
@@ -266,7 +266,6 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                 self.buffer.consume(current)
                 return results^
 
-                
     @always_inline
     fn _handle_eof_line(
         mut self, view: Span[Byte, MutExternalOrigin]
@@ -360,7 +359,7 @@ fn _get_n_lines[
 
     while True:
         # Ensure buffer is not full
-        if not stream.ensure_available():
+        if not stream._fill_buffer():
             if stream.available() == 0:
                 raise Error("EOF reached before getting all requested lines")
         # Check if we have at least 1 byte available
@@ -412,7 +411,7 @@ fn _get_n_lines[
                 # Ensure buffer is not full and has more bytes
                 var prev_available = stream.available()
                 while stream.available() <= prev_available:
-                    if not stream.ensure_available():
+                    if not stream._fill_buffer():
                         raise Error(
                             "EOF reached before getting all requested lines"
                         )

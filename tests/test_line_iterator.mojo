@@ -1,5 +1,10 @@
 from testing import assert_equal, assert_raises, assert_true, assert_false
-from blazeseq.CONSTS import DEFAULT_CAPACITY, MAX_CAPACITY, new_line, carriage_return
+from blazeseq.CONSTS import (
+    DEFAULT_CAPACITY,
+    MAX_CAPACITY,
+    new_line,
+    carriage_return,
+)
 from blazeseq.parser import LineIterator
 from blazeseq.readers import MemoryReader
 from memory import Span
@@ -33,14 +38,16 @@ fn test_next_line_single_line() raises:
     var content = "Hello World\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line = line_iter.next_line()
     assert_true(line is not None, "Should return a line")
-    assert_equal(span_to_string(line.value()), "Hello World", "Line content should match")
-    
+    assert_equal(
+        span_to_string(line.value()), "Hello World", "Line content should match"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_single_line passed")
 
 
@@ -49,22 +56,28 @@ fn test_next_line_multiple_lines() raises:
     var content = "Line 1\nLine 2\nLine 3\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None, "Should return first line")
-    assert_equal(span_to_string(line1.value()), "Line 1", "First line should match")
-    
+    assert_equal(
+        span_to_string(line1.value()), "Line 1", "First line should match"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None, "Should return second line")
-    assert_equal(span_to_string(line2.value()), "Line 2", "Second line should match")
-    
+    assert_equal(
+        span_to_string(line2.value()), "Line 2", "Second line should match"
+    )
+
     var line3 = line_iter.next_line()
     assert_true(line3 is not None, "Should return third line")
-    assert_equal(span_to_string(line3.value()), "Line 3", "Third line should match")
-    
+    assert_equal(
+        span_to_string(line3.value()), "Line 3", "Third line should match"
+    )
+
     var line4 = line_iter.next_line()
     assert_true(line4 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_multiple_lines passed")
 
 
@@ -73,10 +86,10 @@ fn test_next_line_empty_content() raises:
     var content = ""
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line = line_iter.next_line()
     assert_true(line is None, "Should return None for empty content")
-    
+
     print("✓ test_next_line_empty_content passed")
 
 
@@ -85,14 +98,18 @@ fn test_next_line_single_line_no_newline() raises:
     var content = "Hello World"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line = line_iter.next_line()
-    assert_true(line is not None, "Should return a line even without trailing newline")
-    assert_equal(span_to_string(line.value()), "Hello World", "Line content should match")
-    
+    assert_true(
+        line is not None, "Should return a line even without trailing newline"
+    )
+    assert_equal(
+        span_to_string(line.value()), "Hello World", "Line content should match"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_single_line_no_newline passed")
 
 
@@ -106,18 +123,22 @@ fn test_next_line_carriage_return() raises:
     var content = "Line 1\r\nLine 2\r\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None, "Should return first line")
-    assert_equal(span_to_string(line1.value()), "Line 1", "Line should not include \\r")
-    
+    assert_equal(
+        span_to_string(line1.value()), "Line 1", "Line should not include \\r"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None, "Should return second line")
-    assert_equal(span_to_string(line2.value()), "Line 2", "Line should not include \\r")
-    
+    assert_equal(
+        span_to_string(line2.value()), "Line 2", "Line should not include \\r"
+    )
+
     var line3 = line_iter.next_line()
     assert_true(line3 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_carriage_return passed")
 
 
@@ -126,22 +147,32 @@ fn test_next_line_mixed_line_endings() raises:
     var content = "Unix line\nWindows line\r\nAnother Unix\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None)
-    assert_equal(span_to_string(line1.value()), "Unix line", "Unix line should match")
-    
+    assert_equal(
+        span_to_string(line1.value()), "Unix line", "Unix line should match"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None)
-    assert_equal(span_to_string(line2.value()), "Windows line", "Windows line should match")
-    
+    assert_equal(
+        span_to_string(line2.value()),
+        "Windows line",
+        "Windows line should match",
+    )
+
     var line3 = line_iter.next_line()
     assert_true(line3 is not None)
-    assert_equal(span_to_string(line3.value()), "Another Unix", "Another Unix line should match")
-    
+    assert_equal(
+        span_to_string(line3.value()),
+        "Another Unix",
+        "Another Unix line should match",
+    )
+
     var line4 = line_iter.next_line()
     assert_true(line4 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_mixed_line_endings passed")
 
 
@@ -150,10 +181,14 @@ fn test_next_line_carriage_return_no_newline() raises:
     var content = "Line with only\r"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line = line_iter.next_line()
     assert_true(line is not None, "Should return a line")
-    assert_equal(span_to_string(line.value()), "Line with only", "Line should trim trailing \\r")
+    assert_equal(
+        span_to_string(line.value()),
+        "Line with only",
+        "Line should trim trailing \\r",
+    )
     _ = line_iter
     print("✓ test_next_line_carriage_return_no_newline passed")
 
@@ -168,22 +203,22 @@ fn test_next_line_multiple_empty_lines() raises:
     var content = "\n\n\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None, "Should return first empty line")
     assert_equal(len(line1.value()), 0, "First line should be empty")
-    
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None, "Should return second empty line")
     assert_equal(len(line2.value()), 0, "Second line should be empty")
-    
+
     var line3 = line_iter.next_line()
     assert_true(line3 is not None, "Should return third empty line")
     assert_equal(len(line3.value()), 0, "Third line should be empty")
-    
+
     var line4 = line_iter.next_line()
     assert_true(line4 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_multiple_empty_lines passed")
 
 
@@ -192,15 +227,17 @@ fn test_next_line_empty_line_at_start() raises:
     var content = "\nLine 2\nLine 3\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None, "Should return first empty line")
     assert_equal(len(line1.value()), 0, "First line should be empty")
-    
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None, "Should return second line")
-    assert_equal(span_to_string(line2.value()), "Line 2", "Second line should match")
-    
+    assert_equal(
+        span_to_string(line2.value()), "Line 2", "Second line should match"
+    )
+
     _ = line_iter
     print("✓ test_next_line_empty_line_at_start passed")
 
@@ -210,22 +247,26 @@ fn test_next_line_empty_line_at_end() raises:
     var content = "Line 1\nLine 2\n\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None)
-    assert_equal(span_to_string(line1.value()), "Line 1", "First line should match")
-    
+    assert_equal(
+        span_to_string(line1.value()), "Line 1", "First line should match"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None)
-    assert_equal(span_to_string(line2.value()), "Line 2", "Second line should match")
-    
+    assert_equal(
+        span_to_string(line2.value()), "Line 2", "Second line should match"
+    )
+
     var line3 = line_iter.next_line()
     assert_true(line3 is not None, "Should return empty line")
     assert_equal(len(line3.value()), 0, "Last line should be empty")
-    
+
     var line4 = line_iter.next_line()
     assert_true(line4 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_empty_line_at_end passed")
 
 
@@ -234,27 +275,33 @@ fn test_next_line_empty_line_middle() raises:
     var content = "Line 1\n\nLine 3\n\nLine 5\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None)
-    assert_equal(span_to_string(line1.value()), "Line 1", "First line should match")
-    
+    assert_equal(
+        span_to_string(line1.value()), "Line 1", "First line should match"
+    )
+
     var line2 = line_iter.next_line()
     assert_true(line2 is not None)
     assert_equal(len(line2.value()), 0, "Second line should be empty")
-    
+
     var line3 = line_iter.next_line()
     assert_true(line3 is not None)
-    assert_equal(span_to_string(line3.value()), "Line 3", "Third line should match")
-    
+    assert_equal(
+        span_to_string(line3.value()), "Line 3", "Third line should match"
+    )
+
     var line4 = line_iter.next_line()
     assert_true(line4 is not None)
     assert_equal(len(line4.value()), 0, "Fourth line should be empty")
-    
+
     var line5 = line_iter.next_line()
     assert_true(line5 is not None)
-    assert_equal(span_to_string(line5.value()), "Line 5", "Fifth line should match")
-    
+    assert_equal(
+        span_to_string(line5.value()), "Line 5", "Fifth line should match"
+    )
+
     print("✓ test_next_line_empty_line_middle passed")
 
 
@@ -268,18 +315,24 @@ fn test_next_line_no_trailing_newline() raises:
     var content = "Line 1\nLine 2"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line1 = line_iter.next_line()
     assert_true(line1 is not None, "Should return first line")
-    assert_equal(span_to_string(line1.value()), "Line 1", "First line should match")
-    
+    assert_equal(
+        span_to_string(line1.value()), "Line 1", "First line should match"
+    )
+
     var line2 = line_iter.next_line()
-    assert_true(line2 is not None, "Should return last line even without newline")
-    assert_equal(span_to_string(line2.value()), "Line 2", "Last line should match")
-    
+    assert_true(
+        line2 is not None, "Should return last line even without newline"
+    )
+    assert_equal(
+        span_to_string(line2.value()), "Line 2", "Last line should match"
+    )
+
     var line3 = line_iter.next_line()
     assert_true(line3 is None, "Should return None at EOF")
-    
+
     print("✓ test_next_line_no_trailing_newline passed")
 
 
@@ -288,10 +341,10 @@ fn test_next_line_no_trailing_newline_empty() raises:
     var content = ""
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var line = line_iter.next_line()
     assert_true(line is None, "Should return None for empty content")
-    
+
     print("✓ test_next_line_no_trailing_newline_empty passed")
 
 
@@ -311,18 +364,18 @@ fn test_next_line_crosses_boundary() raises:
     for i in range(30):
         line2 += "B"
     var content = line1 + "\n" + line2 + "\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
-    
+
     var result1 = line_iter.next_line()
     assert_true(result1 is not None, "Should return first line")
     assert_equal(len(result1.value()), 50, "First line should have 50 chars")
-    
+
     var result2 = line_iter.next_line()
     assert_true(result2 is not None, "Should return second line")
     assert_equal(len(result2.value()), 30, "Second line should have 30 chars")
-    
+
     print("✓ test_next_line_crosses_boundary passed")
 
 
@@ -338,22 +391,22 @@ fn test_next_line_crosses_boundary_multiple() raises:
     for i in range(40):
         line3 += "C"
     var content = line1 + "\n" + line2 + "\n" + line3 + "\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
-    
+
     var result1 = line_iter.next_line()
     assert_true(result1 is not None)
     assert_equal(len(result1.value()), 50, "First line should have 50 chars")
-    
+
     var result2 = line_iter.next_line()
     assert_true(result2 is not None)
     assert_equal(len(result2.value()), 30, "Second line should have 30 chars")
-    
+
     var result3 = line_iter.next_line()
     assert_true(result3 is not None)
     assert_equal(len(result3.value()), 40, "Third line should have 40 chars")
-    
+
     print("✓ test_next_line_crosses_boundary_multiple passed")
 
 
@@ -366,18 +419,18 @@ fn test_next_line_crosses_boundary_with_cr() raises:
     for i in range(30):
         line2 += "B"
     var content = line1 + "\r\n" + line2 + "\r\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
-    
+
     var result1 = line_iter.next_line()
     assert_true(result1 is not None)
     assert_equal(len(result1.value()), 50, "First line should have 50 chars")
-    
+
     var result2 = line_iter.next_line()
     assert_true(result2 is not None)
     assert_equal(len(result2.value()), 30, "Second line should have 30 chars")
-    
+
     print("✓ test_next_line_crosses_boundary_with_cr passed")
 
 
@@ -392,13 +445,13 @@ fn test_next_line_exceeds_capacity() raises:
     for i in range(100):
         long_line += "A"
     var content = long_line + "\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64, growth_enabled=False)
-    
+
     with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
         _ = line_iter.next_line()
-    
+
     print("✓ test_next_line_exceeds_capacity passed")
 
 
@@ -408,14 +461,16 @@ fn test_next_line_exceeds_capacity_with_growth() raises:
     for i in range(100):
         long_line += "A"
     var content = long_line + "\n"
-    
+
     var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=64, growth_enabled=True, max_capacity=200)
-    
+    var line_iter = LineIterator(
+        reader^, capacity=64, growth_enabled=True, max_capacity=200
+    )
+
     var line = line_iter.next_line()
     assert_true(line is not None, "Should return line after growing buffer")
     assert_equal(len(line.value()), 100, "Line should have 100 chars")
-    
+
     print("✓ test_next_line_exceeds_capacity_with_growth passed")
 
 
@@ -425,13 +480,17 @@ fn test_next_line_exceeds_max_capacity() raises:
     for i in range(200):
         long_line += "A"
     var content = long_line + "\n"
-    
+
     var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=64, growth_enabled=True, max_capacity=150)
-    
-    with assert_raises(contains="Line exceeds max buffer capacity of 150 bytes"):
+    var line_iter = LineIterator(
+        reader^, capacity=64, growth_enabled=True, max_capacity=150
+    )
+
+    with assert_raises(
+        contains="Line exceeds max buffer capacity of 150 bytes"
+    ):
         _ = line_iter.next_line()
-    
+
     print("✓ test_next_line_exceeds_max_capacity passed")
 
 
@@ -445,10 +504,10 @@ fn test_next_n_lines_zero() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[0]()
     assert_equal(len(lines), 0, "Should return empty array for n=0")
-    
+
     print("✓ test_next_n_lines_zero passed")
 
 
@@ -457,10 +516,12 @@ fn test_next_n_lines_one() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[1]()
     assert_equal(len(lines), 1, "Should return 1 line")
-    assert_equal(span_to_string(lines[0]), "Line 1", "Line content should match")
+    assert_equal(
+        span_to_string(lines[0]), "Line 1", "Line content should match"
+    )
     _ = line_iter
     print("✓ test_next_n_lines_one passed")
 
@@ -470,7 +531,7 @@ fn test_next_n_lines_four() raises:
     var content = "@read1\nATCG\n+read1\nIIII\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     assert_equal(span_to_string(lines[0]), "@read1", "First line should match")
@@ -486,14 +547,22 @@ fn test_next_n_lines_multiple_batches() raises:
     var content = "@read1\nATCG\n+read1\nIIII\n@read2\nGCTA\n+read2\nHHHH\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var batch1 = line_iter.next_n_lines[4]()
     assert_equal(len(batch1), 4, "First batch should have 4 lines")
-    assert_equal(span_to_string(batch1[0]), "@read1", "First batch first line should match")
-    
+    assert_equal(
+        span_to_string(batch1[0]),
+        "@read1",
+        "First batch first line should match",
+    )
+
     var batch2 = line_iter.next_n_lines[4]()
     assert_equal(len(batch2), 4, "Second batch should have 4 lines")
-    assert_equal(span_to_string(batch2[0]), "@read2", "Second batch first line should match")
+    assert_equal(
+        span_to_string(batch2[0]),
+        "@read2",
+        "Second batch first line should match",
+    )
     _ = line_iter
     print("✓ test_next_n_lines_multiple_batches passed")
 
@@ -508,7 +577,7 @@ fn test_next_n_lines_with_cr() raises:
     var content = "Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
@@ -524,13 +593,21 @@ fn test_next_n_lines_mixed_endings() raises:
     var content = "Unix line\nWindows line\r\nAnother Unix\nLast Windows\r\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
-    assert_equal(span_to_string(lines[0]), "Unix line", "First line should match")
-    assert_equal(span_to_string(lines[1]), "Windows line", "Second line should match")
-    assert_equal(span_to_string(lines[2]), "Another Unix", "Third line should match")
-    assert_equal(span_to_string(lines[3]), "Last Windows", "Fourth line should match")
+    assert_equal(
+        span_to_string(lines[0]), "Unix line", "First line should match"
+    )
+    assert_equal(
+        span_to_string(lines[1]), "Windows line", "Second line should match"
+    )
+    assert_equal(
+        span_to_string(lines[2]), "Another Unix", "Third line should match"
+    )
+    assert_equal(
+        span_to_string(lines[3]), "Last Windows", "Fourth line should match"
+    )
     _ = line_iter
     print("✓ test_next_n_lines_mixed_endings passed")
 
@@ -545,7 +622,7 @@ fn test_next_n_lines_with_empty_lines() raises:
     var content = "Line 1\n\nLine 3\n\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
@@ -561,7 +638,7 @@ fn test_next_n_lines_all_empty() raises:
     var content = "\n\n\n\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     for i in range(4):
@@ -580,13 +657,17 @@ fn test_next_n_lines_no_trailing_newline() raises:
     var content = "Line 1\nLine 2\nLine 3\nLine 4"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
     assert_equal(span_to_string(lines[1]), "Line 2", "Second line should match")
     assert_equal(span_to_string(lines[2]), "Line 3", "Third line should match")
-    assert_equal(span_to_string(lines[3]), "Line 4", "Fourth line should match (no trailing newline)")
+    assert_equal(
+        span_to_string(lines[3]),
+        "Line 4",
+        "Fourth line should match (no trailing newline)",
+    )
     _ = line_iter
     print("✓ test_next_n_lines_no_trailing_newline passed")
 
@@ -596,8 +677,10 @@ fn test_next_n_lines_partial_at_eof() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
-    with assert_raises(contains="EOF reached before getting all requested lines"):
+
+    with assert_raises(
+        contains="EOF reached before getting all requested lines"
+    ):
         _ = line_iter.next_n_lines[4]()
     _ = line_iter
     print("✓ test_next_n_lines_partial_at_eof passed")
@@ -625,11 +708,13 @@ fn test_next_n_lines_crosses_boundary() raises:
     var line5 = String("")
     for i in range(20):
         line5 += "E"
-    var content = line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n" + line5 + "\n"
-    
+    var content = (
+        line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n" + line5 + "\n"
+    )
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=140)
-    
+
     var lines1 = line_iter.next_line()
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
@@ -656,10 +741,10 @@ fn test_next_n_lines_multiple_crosses() raises:
     for i in range(35):
         line4 += "D"
     var content = line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=640)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     assert_equal(len(lines[0]), 50, "First line should have 50 chars")
@@ -679,15 +764,15 @@ fn test_next_n_lines_crosses_with_cr() raises:
     for i in range(30):
         line2 += "B"
     var content = line1 + "\r\n" + line2 + "\r\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
-    
+
     var lines = line_iter.next_n_lines[2]()
     assert_equal(len(lines), 2, "Should return 2 lines")
     assert_equal(len(lines[0]), 50, "First line should have 50 chars")
     assert_equal(len(lines[1]), 30, "Second line should have 30 chars")
-    _ = line_iter   
+    _ = line_iter
     print("✓ test_next_n_lines_crosses_with_cr passed")
 
 
@@ -702,15 +787,14 @@ fn test_next_n_lines_exceeds_capacity() raises:
     for i in range(100):
         long_line += "A"
     var content = long_line + "\nLine 2\nLine 3\nLine 4\n"
-    
+
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64, growth_enabled=False)
-    
+
     with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
         _ = line_iter.next_n_lines[4]()
-    _ = line_iter   
+    _ = line_iter
     print("✓ test_next_n_lines_exceeds_capacity passed")
-
 
 
 fn test_next_n_lines_exceeds_max_capacity() raises:
@@ -719,10 +803,12 @@ fn test_next_n_lines_exceeds_max_capacity() raises:
     for i in range(200):
         long_line += "A"
     var content = long_line + "\nLine 2\nLine 3\nLine 4\n"
-    
+
     var reader = create_memory_reader(content)
-    var line_iter = LineIterator(reader^, capacity=64, growth_enabled=True, max_capacity=150)
-    
+    var line_iter = LineIterator(
+        reader^, capacity=64, growth_enabled=True, max_capacity=150
+    )
+
     with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
         _ = line_iter.next_n_lines[4]()
     _ = line_iter
@@ -739,10 +825,12 @@ fn test_next_n_lines_eof_before_n() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
-    with assert_raises(contains="EOF reached before getting all requested lines"):
+
+    with assert_raises(
+        contains="EOF reached before getting all requested lines"
+    ):
         _ = line_iter.next_n_lines[4]()
-    
+
     print("✓ test_next_n_lines_eof_before_n passed")
 
 
@@ -751,7 +839,7 @@ fn test_next_n_lines_eof_exactly_n() raises:
     var content = "Line 1\nLine 2\nLine 3\nLine 4"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = line_iter.next_n_lines[4]()
     assert_equal(len(lines), 4, "Should return 4 lines")
     assert_equal(span_to_string(lines[0]), "Line 1", "First line should match")
@@ -770,16 +858,16 @@ fn test_line_iterator_for_loop() raises:
     var content = "Line 1\nLine 2\nLine 3\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = List[String]()
     for line in line_iter:
         lines.append(span_to_string(line))
-    
+
     assert_equal(len(lines), 3, "Should iterate over 3 lines")
     assert_equal(lines[0], "Line 1", "First line should match")
     assert_equal(lines[1], "Line 2", "Second line should match")
     assert_equal(lines[2], "Line 3", "Third line should match")
-    
+
     print("✓ test_line_iterator_for_loop passed")
 
 
@@ -788,15 +876,15 @@ fn test_line_iterator_for_loop_multiple_lines() raises:
     var content = "A\nB\nC\nD\nE\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = List[String]()
     for line in line_iter:
         lines.append(span_to_string(line))
-    
+
     assert_equal(len(lines), 5, "Should iterate over 5 lines")
     assert_equal(lines[0], "A", "First line should match")
     assert_equal(lines[4], "E", "Last line should match")
-    
+
     print("✓ test_line_iterator_for_loop_multiple_lines passed")
 
 
@@ -805,21 +893,21 @@ fn test_line_iterator_stop_iteration() raises:
     var content = "Line 1\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var lines = List[String]()
     for line in line_iter:
         lines.append(span_to_string(line))
-    
+
     assert_equal(len(lines), 1, "Should iterate over 1 line")
     assert_equal(lines[0], "Line 1", "Line should match")
-    
+
     # Next iteration should not execute (StopIteration raised internally)
     var count = 0
     for line in line_iter:
         count += 1
-    
+
     assert_equal(count, 0, "Should not iterate after EOF")
-    
+
     print("✓ test_line_iterator_stop_iteration passed")
 
 
@@ -833,12 +921,14 @@ fn test_has_more_true() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     assert_true(line_iter.has_more(), "Should have more lines initially")
-    
+
     _ = line_iter.next_line()
-    assert_true(line_iter.has_more(), "Should have more lines after reading one")
-    
+    assert_true(
+        line_iter.has_more(), "Should have more lines after reading one"
+    )
+
     print("✓ test_has_more_true passed")
 
 
@@ -847,7 +937,7 @@ fn test_has_more_false() raises:
     var content = "Line 1\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     _ = line_iter.next_line()
     _ = line_iter.next_line()
     assert_false(line_iter.has_more(), "Should not have more lines at EOF")
@@ -860,18 +950,20 @@ fn test_has_more_after_consuming() raises:
     var content = "Line 1\nLine 2\nLine 3\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     assert_true(line_iter.has_more(), "Should have more lines initially")
-    
+
     _ = line_iter.next_line()
     assert_true(line_iter.has_more(), "Should have more lines")
-    
+
     _ = line_iter.next_line()
     assert_true(line_iter.has_more(), "Should have more lines")
-    
+
     _ = line_iter.next_line()
-    assert_false(line_iter.has_more(), "Should not have more lines after consuming all")
-    
+    assert_false(
+        line_iter.has_more(), "Should not have more lines after consuming all"
+    )
+
     print("✓ test_has_more_after_consuming passed")
 
 
@@ -885,9 +977,9 @@ fn test_position_initial() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     assert_equal(line_iter.position(), 0, "Initial position should be 0")
-    
+
     print("✓ test_position_initial passed")
 
 
@@ -896,14 +988,14 @@ fn test_position_advances() raises:
     var content = "Line 1\nLine 2\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var pos1 = line_iter.position()
     assert_equal(pos1, 0, "Initial position should be 0")
-    
+
     _ = line_iter.next_line()
     var pos2 = line_iter.position()
     assert_true(pos2 > pos1, "Position should advance after reading line")
-    
+
     print("✓ test_position_advances passed")
 
 
@@ -912,7 +1004,7 @@ fn test_position_after_multiple_lines() raises:
     var content = "A\nB\nC\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
-    
+
     var pos0 = line_iter.position()
     _ = line_iter.next_line()
     var pos1 = line_iter.position()
@@ -920,12 +1012,12 @@ fn test_position_after_multiple_lines() raises:
     var pos2 = line_iter.position()
     _ = line_iter.next_line()
     var pos3 = line_iter.position()
-    
+
     assert_equal(pos0, 0, "Initial position should be 0")
     assert_true(pos1 > pos0, "Position should advance after first line")
     assert_true(pos2 > pos1, "Position should advance after second line")
     assert_true(pos3 > pos2, "Position should advance after third line")
-    
+
     print("✓ test_position_after_multiple_lines passed")
 
 
