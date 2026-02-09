@@ -5,6 +5,7 @@ from blazeseq.readers import Reader
 from blazeseq.device_record import FastqBatch
 from std.iter import Iterable, Iterator
 import time
+from blazeseq.byte_string import ByteString
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +76,6 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.quality_schema.copy(),
         )
 
-
     fn __init__(
         out self,
         var reader: Self.R,
@@ -94,7 +94,6 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.quality_schema.copy(),
         )
 
-
     fn parse_all(mut self) raises:
         # Check if file is empty - if so, raise EOF error
         if not self.line_iter.has_more():
@@ -110,10 +109,10 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     @always_inline
     fn next(
         mut self,
-    ) raises -> Optional[FastqRecord[val = self.config.check_quality]]:
+    ) raises -> Optional[FastqRecord]:
         """Method that lazily returns the Next record in the file."""
         if self.line_iter.has_more():
-            var record: FastqRecord[self.config.check_quality]
+            var record: FastqRecord
             record = self._parse_record()
             self.validator.validate(record)
             return record^
@@ -123,15 +122,13 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     @always_inline
     fn _parse_record(
         mut self,
-    ) raises -> FastqRecord[val = self.config.check_quality]:
-        var line1 = self.line_iter.next_line()
-        var line2 = self.line_iter.next_line()
-        var line3 = self.line_iter.next_line()
-        var line4 = self.line_iter.next_line()
+    ) raises -> FastqRecord:
+        var line1 = ByteString(self.line_iter.next_line())
+        var line2 = ByteString(self.line_iter.next_line())
+        var line3 = ByteString(self.line_iter.next_line())
+        var line4 = ByteString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
-        return FastqRecord[val = self.config.check_quality](
-            line1, line2, line3, line4, schema
-        )
+        return FastqRecord(line1, line2, line3, line4, schema)
 
     # struct BatchedParser[
     #     R: Reader,
