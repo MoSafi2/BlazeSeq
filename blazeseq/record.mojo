@@ -78,6 +78,13 @@ struct FastqRecord(
         self.QuStr = ByteString(String(seqs[3].strip()))
         self.quality_schema = materialize[generic_schema]()
 
+    fn __init__(out self, var seq_header: ByteString, var seq_str: ByteString, var qu_header: ByteString, var qu_str: ByteString, quality_schema: QualitySchema):
+        self.SeqHeader = seq_header^
+        self.SeqStr = seq_str^
+        self.QuHeader = qu_header^
+        self.QuStr = qu_str^
+        self.quality_schema = quality_schema
+
     @always_inline
     fn get_seq(self) -> StringSlice[MutExternalOrigin]:
         return self.SeqStr.as_string_slice()

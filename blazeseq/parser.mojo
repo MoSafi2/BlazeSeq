@@ -128,7 +128,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var line3 = ByteString(self.line_iter.next_line())
         var line4 = ByteString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
-        return FastqRecord(line1, line2, line3, line4, schema)
+        return FastqRecord(line1^, line2^, line3^, line4^, schema)
 
     # struct BatchedParser[
     #     R: Reader,
