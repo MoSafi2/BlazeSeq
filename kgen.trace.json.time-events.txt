@@ -1,0 +1,62 @@
+Thread   Start(us)  B/E     Dur(us)  Name/Detail
+------  ----------  ---  ----------  ------------------------------
+119907     2105249  BEG        1729  AnnotateKernels
+119907     2106979  END        1729  AnnotateKernels
+119907     2106980  BEG         282  VerifyKernels
+119907     2107263  END         282  VerifyKernels
+119907     2107263  BEG        2819  LowerSemanticCF
+119907     2110083  END        2819  LowerSemanticCF
+119907     2110084  BEG       31884  CheckLifetimes
+119907     2111123  BEG           6  (A) SymbolTableAnalysis
+119907     2111129  END           6  (A) SymbolTableAnalysis
+119907     2141968  END       31884  CheckLifetimes
+119907    30115572  BEG        1781  AnnotateKernels
+119907    30117353  END        1781  AnnotateKernels
+119907    30117354  BEG         299  VerifyKernels
+119907    30117653  END         299  VerifyKernels
+119907    30117654  BEG        2919  LowerSemanticCF
+119907    30120573  END        2919  LowerSemanticCF
+119907    30120574  BEG       34306  CheckLifetimes
+119907    30121715  BEG           6  (A) SymbolTableAnalysis
+119907    30121722  END           6  (A) SymbolTableAnalysis
+119907    30154881  END       34306  CheckLifetimes
+119907    98689673  BEG        1826  AnnotateKernels
+119907    98691499  END        1826  AnnotateKernels
+119907    98691501  BEG         294  VerifyKernels
+119907    98691795  END         294  VerifyKernels
+119907    98691796  BEG        2918  LowerSemanticCF
+119907    98694714  END        2918  LowerSemanticCF
+119907    98694716  BEG       33605  CheckLifetimes
+119907    98695786  BEG           6  (A) SymbolTableAnalysis
+119907    98695793  END           6  (A) SymbolTableAnalysis
+119907    98728321  END       33605  CheckLifetimes
+119907   115542338  BEG        2103  AnnotateKernels
+119907   115544441  END        2103  AnnotateKernels
+119907   115544443  BEG         302  VerifyKernels
+119907   115544745  END         302  VerifyKernels
+119907   115544746  BEG        2950  LowerSemanticCF
+119907   115547697  END        2950  LowerSemanticCF
+119907   117554354  BEG        1817  AnnotateKernels
+119907   117556171  END        1817  AnnotateKernels
+119907   117556173  BEG         297  VerifyKernels
+119907   117556471  END         297  VerifyKernels
+119907   117556472  BEG        2850  LowerSemanticCF
+119907   117559323  END        2850  LowerSemanticCF
+119907   132207637  BEG        1831  AnnotateKernels
+119907   132209469  END        1831  AnnotateKernels
+119907   132209470  BEG         306  VerifyKernels
+119907   132209776  END         306  VerifyKernels
+119907   132209776  BEG        3092  LowerSemanticCF
+119907   132212869  END        3092  LowerSemanticCF
+119907   133059923  BEG        1804  AnnotateKernels
+119907   133061728  END        1804  AnnotateKernels
+119907   133061729  BEG         300  VerifyKernels
+119907   133062029  END         300  VerifyKernels
+119907   133062030  BEG        2726  LowerSemanticCF
+119907   133064757  END        2726  LowerSemanticCF
+119907   149510956  BEG        1714  AnnotateKernels
+119907   149512670  END        1714  AnnotateKernels
+119907   149512671  BEG         304  VerifyKernels
+119907   149512976  END         304  VerifyKernels
+119907   149512977  BEG        2907  LowerSemanticCF
+119907   149515885  END        2907  LowerSemanticCF

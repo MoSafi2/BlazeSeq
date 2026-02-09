@@ -52,34 +52,6 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         self._head += cons_size
         return cons_size
 
-    @always_inline
-    fn ensure_available(mut self) raises -> Bool:
-        """
-        Ensures that the buffer is not full. If it is full, compacts and refills the buffer.
-        Returns False only when no more data can be read (EOF).
-        """
-
-        if self._is_eof and self.available() == 0:
-            return False
-
-        if self.capacity() == self._end:
-            if self._head > 0:
-                self._compact_from(self._head)
-            else:
-                return False
-            var filled = self._fill_buffer()
-            if filled == 0:
-                self._is_eof = True
-                return False
-
-        elif self.available() == 0:
-            if self._head > 0:
-                self._compact_from(self._head)
-            var filled = self._fill_buffer()
-            if filled == 0:
-                self._is_eof = True
-                return False
-        return True
 
     @always_inline
     fn read_exact(mut self, size: Int) raises -> List[Byte]:
@@ -93,7 +65,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
             )
         # Ensure buffer is not full and has enough bytes available
         while self.available() < size:
-            if not self.ensure_available():
+            if not self._fill_buffer():
                 raise Error(
                     "Unexpected EOF: needed "
                     + String(size)
@@ -150,6 +122,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         self._compact_from(self._head)
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
+
 
     @always_inline
     fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
@@ -211,7 +184,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         )
         var amt = self.source.read_to_buffer(buf_span, space, self._end)
         self._end += Int(amt)
-        if amt == 0:
+        if amt < space:
             self._is_eof = True
 
         @parameter
