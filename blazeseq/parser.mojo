@@ -8,6 +8,44 @@ import time
 
 
 # ---------------------------------------------------------------------------
+# ParserConfig: Configuration struct for parser options
+# ---------------------------------------------------------------------------
+
+struct ParserConfig:
+    """
+    Configuration struct for FASTQ parser options.
+    Centralizes buffer capacity, growth policy, validation flags, and quality schema settings.
+    """
+
+    var buffer_capacity: Int
+    var buffer_max_capacity: Int
+    var buffer_growth_enabled: Bool
+    var check_ascii: Bool
+    var check_quality: Bool
+    var quality_schema: String
+    var batch_size: Optional[Int]
+
+    fn __init__(
+        out self,
+        buffer_capacity: Int = DEFAULT_CAPACITY,
+        buffer_max_capacity: Int = MAX_CAPACITY,
+        buffer_growth_enabled: Bool = False,
+        check_ascii: Bool = True,
+        check_quality: Bool = True,
+        quality_schema: String = "generic",
+        batch_size: Optional[Int] = None,
+    ):
+        """Initialize ParserConfig with default or custom values."""
+        self.buffer_capacity = buffer_capacity
+        self.buffer_max_capacity = buffer_max_capacity
+        self.buffer_growth_enabled = buffer_growth_enabled
+        self.check_ascii = check_ascii
+        self.check_quality = check_quality
+        self.quality_schema = quality_schema
+        self.batch_size = batch_size
+
+
+# ---------------------------------------------------------------------------
 # LineIterator: newline-separated line reading on top of BufferedReader.
 # Line bytes exclude newline; optionally trim trailing \\r.
 # Caller must not hold returned spans across next next_line() or buffer mutation.
@@ -29,13 +67,21 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
     ] = _LineIteratorIter[Self.R, Self.check_ascii, origin]
 
     var buffer: BufferedReader[Self.R, check_ascii = Self.check_ascii]
+    var _growth_enabled: Bool
+    var _max_capacity: Int
 
     fn __init__(
-        out self, var reader: Self.R, capacity: Int = DEFAULT_CAPACITY
+        out self,
+        var reader: Self.R,
+        capacity: Int = DEFAULT_CAPACITY,
+        growth_enabled: Bool = False,
+        max_capacity: Int = MAX_CAPACITY,
     ) raises:
         self.buffer = BufferedReader[check_ascii = Self.check_ascii](
             reader^, capacity
         )
+        self._growth_enabled = growth_enabled
+        self._max_capacity = max_capacity
 
     @always_inline
     fn position(self) -> Int:
@@ -86,9 +132,27 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                 return None
 
             if len(view) > self.buffer.capacity():
-                raise Error(
-                    "Line is longer than the buffer capacity."
-                )
+                if self._growth_enabled:
+                    # Try to grow buffer
+                    var current_capacity = self.buffer.capacity()
+                    if current_capacity >= self._max_capacity:
+                        raise Error(
+                            "Line is longer than the maximum buffer capacity."
+                        )
+                    # Grow by doubling capacity or adding fixed amount, up to max
+                    var growth_amount = min(current_capacity, self._max_capacity - current_capacity)
+                    if growth_amount > 0:
+                        self.buffer.grow_buffer(growth_amount, self._max_capacity)
+                        # Retry reading after growth - continue loop to read more data
+                        continue
+                    else:
+                        raise Error(
+                            "Line is longer than the maximum buffer capacity."
+                        )
+                else:
+                    raise Error(
+                        "Line is longer than the buffer capacity."
+                    )
             self.buffer.compact_from(self.buffer.read_position())
             if not self.buffer.ensure_available(self.buffer.available() + 1):
                 if self.buffer.available() == 0:
@@ -156,9 +220,34 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
                     need_refill = True
                     var data_to_preserve = len(view) - batch_start
                     if data_to_preserve > self.buffer.capacity():
-                        raise Error(
-                            "Line is longer than the buffer capacity."
-                        )
+                        if self._growth_enabled:
+                            # Try to grow buffer
+                            var current_capacity = self.buffer.capacity()
+                            if current_capacity >= self._max_capacity:
+                                raise Error(
+                                    "Line is longer than the maximum buffer capacity."
+                                )
+                            # Grow by doubling capacity or adding fixed amount, up to max
+                            var growth_amount = min(current_capacity, self._max_capacity - current_capacity)
+                            if growth_amount > 0:
+                                self.buffer.grow_buffer(growth_amount, self._max_capacity)
+                                # Retry reading after growth - continue inner loop
+                                if not self.buffer.ensure_available(
+                                    self.buffer.available() + 1
+                                ):
+                                    raise Error(
+                                        "EOF reached before getting all requested lines"
+                                    )
+                                view = self.buffer.view()
+                                continue
+                            else:
+                                raise Error(
+                                    "Line is longer than the maximum buffer capacity."
+                                )
+                        else:
+                            raise Error(
+                                "Line is longer than the buffer capacity."
+                            )
                     self.buffer.compact_from(
                         self.buffer.read_position() + batch_start
                     )
@@ -310,12 +399,33 @@ struct RecordParser[
     var quality_schema: QualitySchema
 
     fn __init__(
-        out self, var reader: Self.R, schema: String = "generic"
+        out self,
+        var reader: Self.R,
+        config: ParserConfig = ParserConfig(),
     ) raises:
+        """Initialize RecordParser with optional ParserConfig."""
         self.line_iter = LineIterator[check_ascii = Self.check_ascii](
-            reader^, DEFAULT_CAPACITY
+            reader^,
+            config.buffer_capacity,
+            config.buffer_growth_enabled,
+            config.buffer_max_capacity,
         )
-        self.quality_schema = self._parse_schema(schema)
+        self.quality_schema = self._parse_schema(config.quality_schema)
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
+        schema: String = "generic",
+    ) raises:
+        """Legacy constructor for backward compatibility."""
+        var config = ParserConfig(quality_schema=schema)
+        self.line_iter = LineIterator[check_ascii = Self.check_ascii](
+            reader^,
+            config.buffer_capacity,
+            config.buffer_growth_enabled,
+            config.buffer_max_capacity,
+        )
+        self.quality_schema = self._parse_schema(config.quality_schema)
 
     fn parse_all(mut self) raises:
         # Check if file is empty - if so, raise EOF error
@@ -405,14 +515,45 @@ struct BatchedParser[
     fn __init__(
         out self,
         var reader: Self.R,
+        config: ParserConfig = ParserConfig(),
+    ) raises:
+        """Initialize BatchedParser with optional ParserConfig."""
+        self.line_iter = LineIterator[check_ascii = Self.check_ascii](
+            reader^,
+            config.buffer_capacity,
+            config.buffer_growth_enabled,
+            config.buffer_max_capacity,
+        )
+        self.quality_schema = self._parse_schema(config.quality_schema)
+        # Use config batch_size if provided, otherwise use compile-time parameter
+        if config.batch_size:
+            self._batch_size = config.batch_size.value()
+        else:
+            self._batch_size = Self.batch_size
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
         schema: String = "generic",
         default_batch_size: Int = 1024,
     ) raises:
-        self.line_iter = LineIterator[check_ascii = Self.check_ascii](
-            reader^, DEFAULT_CAPACITY
+        """Legacy constructor for backward compatibility."""
+        var config = ParserConfig(
+            quality_schema=schema,
+            batch_size=default_batch_size,
         )
-        self.quality_schema = self._parse_schema(schema)
-        self._batch_size = default_batch_size
+        self.line_iter = LineIterator[check_ascii = Self.check_ascii](
+            reader^,
+            config.buffer_capacity,
+            config.buffer_growth_enabled,
+            config.buffer_max_capacity,
+        )
+        self.quality_schema = self._parse_schema(config.quality_schema)
+        # Use config batch_size if provided, otherwise use compile-time parameter
+        if config.batch_size:
+            self._batch_size = config.batch_size.value()
+        else:
+            self._batch_size = Self.batch_size
 
     @staticmethod
     @always_inline
