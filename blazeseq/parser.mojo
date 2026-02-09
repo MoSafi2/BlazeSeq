@@ -23,7 +23,7 @@ struct ParserConfig(Copyable):
     var buffer_growth_enabled: Bool
     var check_ascii: Bool
     var check_quality: Bool
-    var quality_schema: String
+    var quality_schema: Optional[String]
     var batch_size: Optional[Int]
 
     fn __init__(
@@ -33,7 +33,7 @@ struct ParserConfig(Copyable):
         buffer_growth_enabled: Bool = False,
         check_ascii: Bool = True,
         check_quality: Bool = True,
-        quality_schema: String = "generic",
+        quality_schema: Optional[String] = None,
         batch_size: Optional[Int] = None,
     ):
         """Initialize ParserConfig with default or custom values."""
@@ -62,11 +62,38 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.config.buffer_growth_enabled,
             self.config.buffer_max_capacity,
         )
-        self.quality_schema = self._parse_schema(self.config.quality_schema)
+
+        if self.config.quality_schema:
+            self.quality_schema = self._parse_schema(
+                self.config.quality_schema.value()
+            )
+        else:
+            self.quality_schema = materialize[generic_schema]()
+
         self.validator = Validator(
             self.config.check_quality,
             self.quality_schema.copy(),
         )
+
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
+        quality_schema: String,
+    ) raises:
+        """Initialize RecordParser with optional ParserConfig."""
+        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+            reader^,
+            self.config.buffer_capacity,
+            self.config.buffer_growth_enabled,
+            self.config.buffer_max_capacity,
+        )
+        self.quality_schema = self._parse_schema(quality_schema)
+        self.validator = Validator(
+            self.config.check_quality,
+            self.quality_schema.copy(),
+        )
+
 
     fn parse_all(mut self) raises:
         # Check if file is empty - if so, raise EOF error
@@ -76,7 +103,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         while True:
             if not self.line_iter.has_more():
                 break
-            var record: FastqRecord[val = self.config.check_quality]
+            var record: FastqRecord
             record = self._parse_record()
             self.validator.validate(record)
 
