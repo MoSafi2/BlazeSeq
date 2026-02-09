@@ -6,7 +6,7 @@ from collections.string import StringSlice, String
 from blazeseq.utils import memchr
 
 
-struct ByteString(Copyable, Movable, Sized):
+struct ByteString(Copyable, Movable, Sized, Writable):
     # TODO: add address_space
     var size: UInt32
     var cap: UInt32
@@ -179,3 +179,6 @@ struct ByteString(Copyable, Movable, Sized):
     fn __ne__(self, other: Self) -> Bool:
         """Compare two ByteStrings for inequality."""
         return not self.__eq__(other)
+
+    fn write_to[w: Writer](self, mut writer: w) -> None:
+        writer.write(self.as_string_slice())

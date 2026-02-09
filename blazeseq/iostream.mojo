@@ -332,6 +332,11 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
         Invalidated by next next_line() or any buffer mutation.
         """
         while True:
+            if self.buffer.available() == 0:
+                if self.buffer.is_eof():
+                    raise Error("EOF")
+                    
+                self.buffer._compact_from(self.buffer.buffer_position())
             _ = self.buffer._fill_buffer()
             if self.buffer.available() == 0:
                 raise Error("EOF")
