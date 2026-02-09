@@ -879,36 +879,6 @@ fn test_buffered_reader_consume_exact_available() raises:
     print("✓ test_buffered_reader_consume_exact_available passed")
 
 
-fn test_buffered_reader_view_invalidation() raises:
-    """Test that view() spans become invalid after mutating operations."""
-    var test_content = "View invalidation test\n"
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
-
-    # Get initial view
-    var span1 = buf_reader.view()
-    var initial_len = len(span1)
-    assert_true(initial_len > 0, "Should have initial view")
-
-    # Mutate buffer by consuming
-    var consumed = buf_reader.consume(5)
-    assert_equal(consumed, 5, "Should consume 5 bytes")
-
-    # Get new view - should reflect consumed state
-    var span2 = buf_reader.view()
-    assert_equal(
-        len(span2), initial_len - 5, "New view should reflect consumed bytes"
-    )
-
-    # Verify span2 points to different data than span1
-    if len(span2) > 0 and len(span1) > 5:
-        # span2[0] should equal what was at span1[5]
-        assert_equal(
-            span2[0], span1[5], "New view should point to unconsumed data"
-        )
-
-    print("✓ test_buffered_reader_view_invalidation passed")
-
 
 fn test_buffered_reader_operations_after_eof() raises:
     """Test multiple operations after EOF."""

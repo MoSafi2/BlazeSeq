@@ -152,7 +152,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref self) raises -> Span[Byte, MutExternalOrigin]:
+    fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head
