@@ -18,7 +18,7 @@ comptime new_line = ord("\n")
 comptime carriage_return = ord("\r")
 
 
-struct FastqRecord[val: Bool = True](
+struct FastqRecord(
     Copyable,
     Hashable,
     Movable,
@@ -47,7 +47,6 @@ struct FastqRecord[val: Bool = True](
         else:
             self.quality_schema = quality_schema[QualitySchema].copy()
 
-
     @always_inline
     fn __init__(
         out self,
@@ -67,11 +66,6 @@ struct FastqRecord[val: Bool = True](
         else:
             self.quality_schema = quality_schema[QualitySchema].copy()
 
-        @parameter
-        if Self.val:
-            self.validate_record()
-            self.validate_quality_schema()
-
     fn __init__(out self, sequence: String) raises:
         var seqs = sequence.strip().split("\n")
         if len(seqs) > 4:
@@ -83,11 +77,6 @@ struct FastqRecord[val: Bool = True](
         self.QuHeader = ByteString(String(seqs[2].strip()))
         self.QuStr = ByteString(String(seqs[3].strip()))
         self.quality_schema = materialize[generic_schema]()
-
-        @parameter
-        if Self.val:
-            self.validate_record()
-            self.validate_quality_schema()
 
     @always_inline
     fn get_seq(self) -> StringSlice[MutExternalOrigin]:
@@ -124,42 +113,15 @@ struct FastqRecord[val: Bool = True](
 
     @always_inline
     fn validate_record(self) raises:
-        if self.SeqHeader[0] != read_header:
-            print(self.SeqHeader[0])
-            raise Error("Sequence header does not start with '@'")
-
-        if self.QuHeader[0] != quality_header:
-            raise Error("Quality header dies not start with '+'")
-
-        if len(self.SeqStr) != len(self.QuStr):
-            raise Error(
-                "Quality and Sequencing string does not match in lengths"
-            )
-
-        if len(self.QuHeader) > 1:
-            if len(self.QuHeader) != len(self.SeqHeader):
-                raise Error(
-                    "Quality Header is not the same length as the Sequencing"
-                    " header"
-                )
-
-            var qu_header_slice = self.QuHeader.as_string_slice()[1:]
-            var seq_header_slice = self.SeqHeader.as_string_slice()[1:]
-            if qu_header_slice != seq_header_slice:
-                raise Error(
-                    "Quality Header is not the same as the Sequecing Header"
-                )
+        """Delegate to default Validator for backward compatibility."""
+        var v = Validator(check_quality=False, quality_schema=self.quality_schema.copy())
+        v.validate_record(self)
 
     @always_inline
     fn validate_quality_schema(self) raises:
-        for i in range(len(self.QuStr)):
-            if (
-                self.QuStr[i] > self.quality_schema.UPPER
-                or self.QuStr[i] < self.quality_schema.LOWER
-            ):
-                raise Error(
-                    "Corrput quality score according to proivded schema"
-                )
+        """Delegate to default Validator for backward compatibility."""
+        var v = Validator(check_quality=True, quality_schema=self.quality_schema.copy())
+        v.validate_quality_schema(self)
 
     @always_inline
     fn total_length(self) -> Int:
@@ -203,6 +165,74 @@ struct FastqRecord[val: Bool = True](
 
     fn __repr__(self) -> String:
         return self.__str__()
+
+
+# ---------------------------------------------------------------------------
+# Validator: FASTQ record validation, instantiable from ParserConfig
+# ---------------------------------------------------------------------------
+
+
+struct Validator(Copyable):
+    """
+    Validator for FASTQ record structure and optional quality-schema checks.
+    Instantiate with check_quality and quality_schema (e.g. from ParserConfig)
+    and attach to a parser, or use for one-off validation of FastqRecords.
+    """
+
+    var check_quality: Bool
+    var quality_schema: QualitySchema
+
+    fn __init__(out self, check_quality: Bool, quality_schema: QualitySchema):
+        """Initialize Validator with quality-check flag and schema for bounds."""
+        self.check_quality = check_quality
+        self.quality_schema = quality_schema.copy()
+
+    @always_inline
+    fn validate_record(self, record: FastqRecord) raises:
+        """Validate record structure: @ header, + header, seq/qual length, optional header match."""
+        if record.SeqHeader[0] != read_header:
+            raise Error("Sequence header does not start with '@'")
+
+        if record.QuHeader[0] != quality_header:
+            raise Error("Quality header does not start with '+'")
+
+        if len(record.SeqStr) != len(record.QuStr):
+            raise Error(
+                "Quality and Sequencing string does not match in lengths"
+            )
+
+        if len(record.QuHeader) > 1:
+            if len(record.QuHeader) != len(record.SeqHeader):
+                raise Error(
+                    "Quality Header is not the same length as the Sequencing"
+                    " header"
+                )
+
+            var qu_header_slice = record.QuHeader.as_string_slice()[1:]
+            var seq_header_slice = record.SeqHeader.as_string_slice()[1:]
+            if qu_header_slice != seq_header_slice:
+                raise Error(
+                    "Quality Header is not the same as the Sequencing Header"
+                )
+
+    @always_inline
+    fn validate_quality_schema(self, record: FastqRecord) raises:
+        """Validate each quality byte is within schema LOWER..UPPER."""
+        for i in range(len(record.QuStr)):
+            if (
+                record.QuStr[i] > self.quality_schema.UPPER
+                or record.QuStr[i] < self.quality_schema.LOWER
+            ):
+                raise Error(
+                    "Corrupt quality score according to provided schema"
+                )
+
+    @always_inline
+    fn validate(self, record: FastqRecord) raises:
+        """Run structure validation and, if check_quality, quality-schema validation."""
+        self.validate_record(record)
+        if self.check_quality:
+            self.validate_quality_schema(record)
 
 
 @always_inline

@@ -5,18 +5,19 @@ Truncated files were padded with 1, 2, or 3, extra line terminators to prevent `
 Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ.
 """
 
-from blazeseq import RecordParser
-from blazeseq.iostream import FileReader
+from blazeseq.parser import RecordParser
+from blazeseq.readers import FileReader
+from blazeseq.parser import ParserConfig
 from testing import assert_raises, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 
-comptime corrput_qu_score = "Corrput quality score according to proivded schema"
+comptime corrput_qu_score = "Corrupt quality score according to provided schema"
 comptime EOF = "EOF"
 comptime cor_len = "Quality and Sequencing string does not match in lengths"
 comptime cor_seq_hed = "Sequence header does not start with '@'"
-comptime cor_qu_hed = "Quality header dies not start with '+'"
-comptime non_mat_hed = "Quality Header is not the same as the Sequecing Header"
+comptime cor_qu_hed = "Quality header does not start with '+'"
+comptime non_mat_hed = "Quality Header is not the same as the Sequencing Header"
 comptime len_mismatch = "Quality Header is not the same length as the Sequencing header"
 
 
@@ -27,7 +28,7 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
 
 
 fn valid_file_test_fun(file: String, schema: String = "generic") raises:
-    var parser = RecordParser(FileReader(test_dir + file), schema)
+    var parser = RecordParser[FileReader](FileReader(test_dir + file))
     try:
         parser.parse_all()
     except Error:

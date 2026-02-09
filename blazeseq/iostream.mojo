@@ -8,7 +8,6 @@ from blazeseq.CONSTS import *
 from blazeseq.utils import memchr
 
 
-
 struct BufferedReader[R: Reader, check_ascii: Bool = False](
     Movable, Sized, Writable
 ):
@@ -283,7 +282,7 @@ fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     return end
 
 
-struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable):
+struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
     """
     Iterates over newline-separated lines from a BufferedReader.
     Owns the buffer; parsers hold LineIterator and use next_line/next_n_lines.

@@ -1,4 +1,4 @@
-from blazeseq.record import FastqRecord, RecordCoord
+from blazeseq.record import FastqRecord, RecordCoord, Validator
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedReader, Reader, LineIterator
 from blazeseq.readers import Reader
@@ -46,9 +46,10 @@ struct ParserConfig(Copyable):
         self.batch_size = batch_size
 
 
-struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()]:
+struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     var line_iter: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
     var quality_schema: QualitySchema
+    var validator: Validator
 
     fn __init__(
         out self,
@@ -62,6 +63,10 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()]:
             self.config.buffer_max_capacity,
         )
         self.quality_schema = self._parse_schema(self.config.quality_schema)
+        self.validator = Validator(
+            self.config.check_quality,
+            self.quality_schema.copy(),
+        )
 
     fn parse_all(mut self) raises:
         # Check if file is empty - if so, raise EOF error
@@ -73,12 +78,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()]:
                 break
             var record: FastqRecord[val = self.config.check_quality]
             record = self._parse_record()
-            record.validate_record()
-
-            # ASCII validation is carried out in the reader
-            @parameter
-            if self.config.check_quality:
-                record.validate_quality_schema()
+            self.validator.validate(record)
 
     @always_inline
     fn next(
@@ -88,12 +88,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()]:
         if self.line_iter.has_more():
             var record: FastqRecord[self.config.check_quality]
             record = self._parse_record()
-            record.validate_record()
-
-            # ASCII validation is carried out in the reader
-            @parameter
-            if self.config.check_quality:
-                record.validate_quality_schema()
+            self.validator.validate(record)
             return record^
         else:
             return None
