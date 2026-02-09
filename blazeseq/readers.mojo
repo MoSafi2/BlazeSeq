@@ -8,11 +8,11 @@ BufferedReader.
 
 """
 
-from memory import memset_zero, UnsafePointer
+from memory import memset_zero, UnsafePointer, Span
 from memory.legacy_unsafe_pointer import LegacyUnsafePointer
 from sys import ffi
 from sys.info import CompilationTarget
-from blazeseq.iostream import Reader, BufferView
+from pathlib import Path
 
 
 # Constants for zlib return codes
@@ -40,6 +40,50 @@ comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
 comptime gzread_fn_type = fn (
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
+
+
+trait Reader:
+    fn read_to_buffer(
+        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
+    ) raises -> UInt64:
+        ...
+
+    fn __moveinit__(out self, deinit other: Self):
+        ...
+
+
+# Implement functionality from: Buffer-Reudx rust cate allowing for BufferedReader that supports partial reading and filling ,
+# https://github.com/dignifiedquire/buffer-redux
+
+
+struct FileReader(Movable, Reader):
+    var handle: FileHandle
+
+    fn __init__(out self, path: Path) raises:
+        self.handle = open(path, "r")
+
+    @always_inline
+    fn read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
+        return self.handle.read_bytes(amt)
+
+    @always_inline
+    fn read_to_buffer(
+        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+    ) raises -> UInt64:
+        if pos > len(buf):
+            raise Error("Position is outside the buffer")
+        var s = Span[Byte, MutExternalOrigin](
+            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        )
+        if amt > len(s):
+            raise Error(
+                "Number of elements to read is bigger than the available space"
+                " in the buffer"
+            )
+        if amt < 0:
+            raise Error("The amount to be read should be positive")
+        read = self.handle.read(buffer=s)
+        return read
 
 
 @fieldwise_init
@@ -118,17 +162,20 @@ struct GZFile(Movable, Reader):
         self.mode = other.mode^
 
     fn read_to_buffer(
-        mut self, mut buf: BufferView, amt: Int, pos: Int
+        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
-        s = buf.as_span(pos=pos)
+        if pos > len(buf):
+            raise Error("Position is outside the buffer")
+        var s = Span[Byte, MutExternalOrigin](
+            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        )
         if amt > len(s):
             raise Error(
                 "Number of elements to read is bigger than the available space"
                 " in the buffer"
             )
         if amt < 0:
-            if amt < 0:
-                raise Error("The amount to be read should be positive")
+            raise Error("The amount to be read should be positive")
 
         var bytes_read = self.lib.gzread(
             self.handle, s.unsafe_ptr(), c_uint(len(s))

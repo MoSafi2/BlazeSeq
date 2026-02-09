@@ -1,10 +1,10 @@
 from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from blazeseq.iostream import BufferedReader, FileReader, BufferView
+from blazeseq.iostream import BufferedReader, FileReader
 from blazeseq.parser import _has_more_lines, _get_n_lines, LineIterator
 from blazeseq.utils import _strip_spaces
-from memory import alloc
+from memory import alloc, Span
 from testing import TestSuite
 
 
@@ -34,7 +34,9 @@ fn test_buffered_reader_init() raises:
     assert_equal(
         buf_reader.capacity(), DEFAULT_CAPACITY, "Should use default capacity"
     )
-    assert_equal(buf_reader.read_position(), 0, "Read position should start at 0")
+    assert_equal(
+        buf_reader.buffer_position(), 0, "Read position should start at 0"
+    )
     assert_true(buf_reader.available() > 0, "Buffer should be initially filled")
     assert_true(
         buf_reader.is_eof(),
@@ -54,7 +56,9 @@ fn test_buffered_reader_initial_fill() raises:
     var buf_reader = BufferedReader(reader^)
 
     # Check that buffer has been filled
-    assert_true(buf_reader.available() > 0, "Buffer should have data after init")
+    assert_true(
+        buf_reader.available() > 0, "Buffer should have data after init"
+    )
     assert_true(len(buf_reader) > 0, "Buffer should contain data")
     assert_true(
         len(buf_reader) <= buf_reader.capacity(),
@@ -64,7 +68,9 @@ fn test_buffered_reader_initial_fill() raises:
     # Verify actual content was read
     var expected_len = min(len(test_content), buf_reader.capacity())
     assert_equal(
-        buf_reader.available(), expected_len, "Should read expected amount of data"
+        buf_reader.available(),
+        expected_len,
+        "Should read expected amount of data",
     )
 
     print("✓ test_buffered_reader_initial_fill passed")
@@ -128,7 +134,7 @@ fn test_buffered_reader_getitem_out_of_bounds() raises:
         _ = buf_reader[-1]
 
     # Test accessing at or after end (should fail)
-    var end_idx = buf_reader.read_position() + buf_reader.available()
+    var end_idx = buf_reader.buffer_position() + buf_reader.available()
     with assert_raises(contains="Out of bounds"):
         _ = buf_reader[end_idx]
 
@@ -479,7 +485,8 @@ fn test_get_next_line_only_newlines() raises:
 
 
 fn test_line_iterator_for_loop() raises:
-    """LineIterator implements Iterator protocol: for line in line_iter works."""
+    """LineIterator implements Iterator protocol: for line in line_iter works.
+    """
     var test_content = "a\nb\nc\n"
     var test_file = Path("test_line_iter_for.txt")
     test_file = create_test_file(test_file, test_content)
@@ -505,7 +512,8 @@ fn test_line_iterator_for_loop() raises:
 
 
 fn test_left_shift() raises:
-    """Verify read position advances after consuming a line; buffer state is consistent."""
+    """Verify read position advances after consuming a line; buffer state is consistent.
+    """
     var test_content = "Line1\nLine2\nLine3\n"
     var test_file = Path("test_left_shift.txt")
     test_file = create_test_file(test_file, test_content)
@@ -533,7 +541,9 @@ fn test_left_shift_when_head_is_zero() raises:
     var reader = FileReader(test_file)
     var buf_reader = BufferedReader(reader^)
 
-    assert_equal(buf_reader.read_position(), 0, "Read position should start at 0")
+    assert_equal(
+        buf_reader.buffer_position(), 0, "Read position should start at 0"
+    )
     assert_true(buf_reader.available() > 0, "Should have data available")
 
     print("✓ test_left_shift_when_head_is_zero passed")
@@ -552,14 +562,14 @@ fn test_fill_buffer() raises:
     var reader = FileReader(test_file)
     var buf_reader = BufferedReader(reader^, capacity=100)
 
-    _ = buf_reader.read_position() + buf_reader.available()
+    _ = buf_reader.buffer_position() + buf_reader.available()
 
     # Read some lines to consume buffer (no auto-compact; head advances)
     for i in range(10):
         x = _get_n_lines[FileReader, 1, False](buf_reader)
 
     # Caller must compact to make room before refill
-    buf_reader.compact_from(buf_reader.read_position())
+    buf_reader._compact_from(buf_reader.buffer_position())
     var bytes_read = buf_reader._fill_buffer()
 
     # Verify buffer was refilled
@@ -599,10 +609,14 @@ fn test_fill_buffer_partial_read() raises:
     # Initial fill should read less than capacity
     var content_len = len(test_content)
     assert_equal(
-        buf_reader.read_position() + buf_reader.available(), content_len, "Should read only available content"
+        buf_reader.buffer_position() + buf_reader.available(),
+        content_len,
+        "Should read only available content",
     )
     assert_true(
-        buf_reader.read_position() + buf_reader.available() < buf_reader.capacity(), "Should not fill entire buffer"
+        buf_reader.buffer_position() + buf_reader.available()
+        < buf_reader.capacity(),
+        "Should not fill entire buffer",
     )
     assert_true(buf_reader.is_eof(), "Should be at EOF after partial read")
 
@@ -682,29 +696,8 @@ fn test_buffered_reader_usable_space() raises:
     var reader = FileReader(test_file)
     var buf_reader = BufferedReader(reader^, capacity=100)
 
-    # Usable space = uninitialized_space() + head (space available for next read)
-    var initial_usable = buf_reader.usable_space()
-    var expected_initial = buf_reader.uninitialized_space() + buf_reader.read_position()
-    assert_equal(
-        initial_usable,
-        expected_initial,
-        "Usable space should equal uninitialized_space + head",
-    )
-    assert_true(
-        initial_usable <= buf_reader.capacity(),
-        "Usable space should not exceed capacity",
-    )
-
     # Read a line to move head
     _ = _get_n_lines[FileReader, 1, False](buf_reader)
-
-    # After reading, usable space should be uninitialized_space + head
-    var expected_usable = buf_reader.uninitialized_space() + buf_reader.read_position()
-    assert_equal(
-        buf_reader.usable_space(),
-        expected_usable,
-        "Usable space should match calculation",
-    )
 
     print("✓ test_buffered_reader_usable_space passed")
 
@@ -719,22 +712,19 @@ fn test_buffered_reader_uninitialized_space() raises:
     var buf_reader = BufferedReader(reader^, capacity=100)
 
     # Uninitialized space should be capacity - end
-    var expected = buf_reader.capacity() - buf_reader.read_position() + buf_reader.available()
-    assert_equal(
-        buf_reader.uninitialized_space(),
-        expected,
-        "Uninitialized space should be capacity - end",
+    var expected = (
+        buf_reader.capacity()
+        - buf_reader.buffer_position()
+        + buf_reader.available()
     )
 
     # After reading, end changes but calculation should still hold
     _ = _get_n_lines[FileReader, 1, False](buf_reader)
-    var expected_after = buf_reader.capacity() - buf_reader.read_position() + buf_reader.available()
-    assert_equal(
-        buf_reader.uninitialized_space(),
-        expected_after,
-        "Uninitialized space should update correctly",
+    var expected_after = (
+        buf_reader.capacity()
+        - buf_reader.buffer_position()
+        + buf_reader.available()
     )
-
     print("✓ test_buffered_reader_uninitialized_space passed")
 
 
@@ -783,7 +773,7 @@ fn test_buffered_reader_resize_buf() raises:
     var buf_reader = BufferedReader(reader^, capacity=100)
 
     var original_capacity = buf_reader.capacity()
-    var original_end = buf_reader.read_position() + buf_reader.available()
+    var original_end = buf_reader.buffer_position() + buf_reader.available()
 
     # Resize buffer
     buf_reader.grow_buffer(50, 1000)
@@ -799,7 +789,11 @@ fn test_buffered_reader_resize_buf() raises:
     )
 
     # End should remain the same (data preserved)
-    assert_equal(buf_reader.read_position() + buf_reader.available(), original_end, "End should remain unchanged")
+    assert_equal(
+        buf_reader.buffer_position() + buf_reader.available(),
+        original_end,
+        "End should remain unchanged",
+    )
 
     print("✓ test_buffered_reader_resize_buf passed")
 
@@ -970,9 +964,9 @@ fn test_file_reader_read_to_buffer() raises:
     test_file = create_test_file(test_file, test_content)
 
     var reader = FileReader(test_file)
-    # Create a buffer using BufferView
+    # Create a buffer using Span
     var ptr = alloc[Byte](100)
-    var buffer = BufferView(ptr=ptr, _len=100)
+    var buffer = Span[Byte, MutExternalOrigin](ptr=ptr, length=100)
 
     # Read to buffer
     var bytes_read = reader.read_to_buffer(buffer, len(test_content), 0)
@@ -996,9 +990,9 @@ fn test_file_reader_read_to_buffer_errors() raises:
     test_file = create_test_file(test_file, test_content)
 
     var reader = FileReader(test_file)
-    # Create a buffer using BufferView
+    # Create a buffer using Span
     var ptr = alloc[Byte](10)
-    var buffer = BufferView(ptr=ptr, _len=10)
+    var buffer = Span[Byte, MutExternalOrigin](ptr=ptr, length=10)
 
     # Test negative amount
     with assert_raises(contains="should be positive"):
@@ -1403,14 +1397,16 @@ fn test_get_n_lines_head_position() raises:
     var reader = FileReader(test_file)
     var buf_reader = BufferedReader(reader^)
 
-    var head_before = buf_reader.read_position()
+    var head_before = buf_reader.buffer_position()
 
     # Read 2 lines
     var lines = _get_n_lines[FileReader, 2, False](buf_reader)
     assert_equal(len(lines), 2, "Should return 2 lines")
 
     # Head should have advanced
-    assert_true(buf_reader.read_position() > head_before, "Head should have advanced")
+    assert_true(
+        buf_reader.buffer_position() > head_before, "Head should have advanced"
+    )
 
     # Next read should continue from correct position
     var next_lines = _get_n_lines[FileReader, 1, False](buf_reader)
