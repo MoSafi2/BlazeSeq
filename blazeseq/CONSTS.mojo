@@ -1,4 +1,4 @@
-from blazeseq.record import QualitySchema
+from blazeseq.quality_schema import QualitySchema
 from sys.info import simd_width_of
 
 comptime KB = 1024

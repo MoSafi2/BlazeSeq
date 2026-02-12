@@ -1,37 +1,32 @@
 from blazeseq.record import FastqRecord
-from blazeseq.quality_schema import (
-    QualitySchema,
-    generic_schema,
-)
 import random
 from collections.string import chr, String
 from time import perf_counter_ns
 
+comptime QUAL_LOWER: Int64 = 33
+comptime QUAL_UPPER: Int64 = 126
+
 
 fn generate_fastq_record(
-    length: Int, schema: QualitySchema
-) raises -> FastqRecord[val=True]:
+    length: Int, quality_offset: Int8 = 33
+) raises -> FastqRecord:
     var DNA_BASES = ["A", "T", "G", "C", "N"]
     var HEADER = "@"
     var QU_HEADER = "+"
 
-    seq = String(capacity=length)
-    qual = String(capacity=length)
-    low = Int64(schema.LOWER)
-    high = Int64(schema.UPPER)
+    var seq = String(capacity=length)
+    var qual = String(capacity=length)
 
     random.seed(Int(perf_counter_ns()) % (2**32))
 
     for _ in range(length):
-        index = random.random_si64(min=0, max=len(DNA_BASES) - 1)
-        letter = DNA_BASES[index]
+        var index = random.random_si64(min=0, max=len(DNA_BASES) - 1)
+        var letter = DNA_BASES[index]
         seq += letter
-        chr_ = Int(random.random_si64(min=low, max=high))
+        var chr_ = Int(random.random_si64(min=QUAL_LOWER, max=QUAL_UPPER))
         qual += chr(chr_)
-    return FastqRecord(
-        SeqHeader=HEADER, SeqStr=seq, QuHeader=QU_HEADER, QuStr=qual
-    )
+    return FastqRecord(HEADER, seq, QU_HEADER, qual, quality_offset)
 
 
 fn main() raises:
-    print(generate_fastq_record(50, generic_schema))
+    print(generate_fastq_record(50))

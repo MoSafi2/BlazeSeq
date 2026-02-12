@@ -1,17 +1,10 @@
 from hashlib.hasher import default_hasher, Hasher
 from blazeseq.quality_schema import (
     QualitySchema,
-    sanger_schema,
-    illumina_1_3_schema,
-    solexa_schema,
-    illumina_1_5_schema,
-    illumina_1_8_schema,
     generic_schema,
 )
 from blazeseq.byte_string import ByteString
-from utils.variant import Variant
 
-comptime schema = Variant[String, QualitySchema]
 comptime read_header = ord("@")
 comptime quality_header = ord("+")
 comptime new_line = ord("\n")
@@ -32,20 +25,23 @@ struct FastqRecord(
     var SeqStr: ByteString
     var QuHeader: ByteString
     var QuStr: ByteString
-    var quality_schema: QualitySchema
-
+    var quality_offset: Int8
 
     @always_inline
-    fn __init__(out self, seq_header: String, seq_str: String, qu_header: String, qu_str: String, quality_schema: schema = "generic") raises:
+    fn __init__(out self, seq_header: String, seq_str: String, qu_header: String, qu_str: String, quality_offset: Int8 = 33) raises:
         self.SeqHeader = ByteString(seq_header)
         self.SeqStr = ByteString(seq_str)
         self.QuHeader = ByteString(qu_header)
         self.QuStr = ByteString(qu_str)
+        self.quality_offset = quality_offset
 
-        if quality_schema.isa[String]():
-            self.quality_schema = _parse_schema(quality_schema[String])
-        else:
-            self.quality_schema = quality_schema[QualitySchema].copy()
+    @always_inline
+    fn __init__(out self, seq_header: String, seq_str: String, qu_header: String, qu_str: String, quality_schema: String) raises:
+        self.SeqHeader = ByteString(seq_header)
+        self.SeqStr = ByteString(seq_str)
+        self.QuHeader = ByteString(qu_header)
+        self.QuStr = ByteString(qu_str)
+        self.quality_offset = _schema_string_to_offset(quality_schema)
 
     @always_inline
     fn __init__(
@@ -54,36 +50,53 @@ struct FastqRecord(
         SeqStr: Span[Byte, MutExternalOrigin],
         QuHeader: Span[Byte, MutExternalOrigin],
         QuStr: Span[Byte, MutExternalOrigin],
-        quality_schema: schema = "generic",
+        quality_offset: Int8 = 33,
     ) raises:
         self.SeqHeader = ByteString(SeqHeader)
         self.QuHeader = ByteString(QuHeader)
         self.SeqStr = ByteString(SeqStr)
         self.QuStr = ByteString(QuStr)
+        self.quality_offset = quality_offset
 
-        if quality_schema.isa[String]():
-            self.quality_schema = _parse_schema(quality_schema[String])
-        else:
-            self.quality_schema = quality_schema[QualitySchema].copy()
+    @always_inline
+    fn __init__(
+        out self,
+        SeqHeader: Span[Byte, MutExternalOrigin],
+        SeqStr: Span[Byte, MutExternalOrigin],
+        QuHeader: Span[Byte, MutExternalOrigin],
+        QuStr: Span[Byte, MutExternalOrigin],
+        quality_schema: String,
+    ) raises:
+        self.SeqHeader = ByteString(SeqHeader)
+        self.QuHeader = ByteString(QuHeader)
+        self.SeqStr = ByteString(SeqStr)
+        self.QuStr = ByteString(QuStr)
+        self.quality_offset = _schema_string_to_offset(quality_schema)
 
     fn __init__(out self, sequence: String) raises:
         var seqs = sequence.strip().split("\n")
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
-        # Bug when Using
         self.SeqHeader = ByteString(String(seqs[0].strip()))
         self.SeqStr = ByteString(String(seqs[1].strip()))
         self.QuHeader = ByteString(String(seqs[2].strip()))
         self.QuStr = ByteString(String(seqs[3].strip()))
-        self.quality_schema = materialize[generic_schema]()
+        self.quality_offset = 33
+
+    fn __init__(out self, var seq_header: ByteString, var seq_str: ByteString, var qu_header: ByteString, var qu_str: ByteString, quality_offset: Int8):
+        self.SeqHeader = seq_header^
+        self.SeqStr = seq_str^
+        self.QuHeader = qu_header^
+        self.QuStr = qu_str^
+        self.quality_offset = quality_offset
 
     fn __init__(out self, var seq_header: ByteString, var seq_str: ByteString, var qu_header: ByteString, var qu_str: ByteString, quality_schema: QualitySchema):
         self.SeqHeader = seq_header^
         self.SeqStr = seq_str^
         self.QuHeader = qu_header^
         self.QuStr = qu_str^
-        self.quality_schema = quality_schema
+        self.quality_offset = Int8(quality_schema.OFFSET)
 
     @always_inline
     fn get_seq(self) -> StringSlice[MutExternalOrigin]:
@@ -94,17 +107,10 @@ struct FastqRecord(
         return self.QuStr.as_string_slice()
 
     @always_inline
-    fn get_quality_scores(self, mut quality_format: schema) -> List[UInt8]:
-        var in_schema: QualitySchema
-
-        if quality_format.isa[String]():
-            in_schema = _parse_schema(quality_format.take[String]())
-        else:
-            in_schema = quality_format.take[QualitySchema]()
-
+    fn get_quality_scores(self) -> List[UInt8]:
         output = List[UInt8](length=len(self.QuStr), fill=0)
         for i in range(len(self.QuStr)):
-            output[i] = self.QuStr[i] - in_schema.OFFSET
+            output[i] = self.QuStr[i] - UInt8(self.quality_offset)
         return output^
 
     @always_inline
@@ -121,13 +127,13 @@ struct FastqRecord(
     @always_inline
     fn validate_record(self) raises:
         """Delegate to default Validator for backward compatibility."""
-        var v = Validator(check_quality=False, quality_schema=self.quality_schema.copy())
+        var v = Validator(check_quality=False, quality_schema=materialize[generic_schema]())
         v.validate_record(self)
 
     @always_inline
     fn validate_quality_schema(self) raises:
-        """Delegate to default Validator for backward compatibility."""
-        var v = Validator(check_quality=True, quality_schema=self.quality_schema.copy())
+        """Delegate to default Validator for backward compatibility (generic bounds)."""
+        var v = Validator(check_quality=True, quality_schema=materialize[generic_schema]())
         v.validate_quality_schema(self)
 
     @always_inline
@@ -243,32 +249,20 @@ struct Validator(Copyable):
 
 
 @always_inline
-fn _parse_schema(quality_format: String) -> QualitySchema:
-    var schema: QualitySchema
-
-    if quality_format == "sanger":
-        schema = sanger_schema
-    elif quality_format == "solexa":
-        schema = solexa_schema
-    elif quality_format == "illumina_1.3":
-        schema = illumina_1_3_schema
-    elif quality_format == "illumina_1.5":
-        schema = illumina_1_5_schema
-    elif quality_format == "illumina_1.8":
-        schema = illumina_1_8_schema
-    elif quality_format == "generic":
-        schema = generic_schema
-    else:
-        print(
-            "Uknown quality schema please choose one of 'sanger', 'solexa',"
-            " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'"
-        )
-        return generic_schema
-    return schema
+fn _schema_string_to_offset(quality_format: String) -> Int8:
+    """Map schema name to Phred offset (33 or 64). Used by record/coord constructors."""
+    if quality_format == "sanger" or quality_format == "generic" or quality_format == "illumina_1.8":
+        return 33
+    if quality_format == "solexa" or quality_format == "illumina_1.3" or quality_format == "illumina_1.5":
+        return 64
+    print(
+        "Unknown quality schema; use one of 'sanger', 'solexa',"
+        " 'illumina_1.3', 'illumina_1.5', 'illumina_1.8', or 'generic'. Using 33."
+    )
+    return 33
 
 
 
-@fieldwise_init
 struct RecordCoord[
     validate_quality: Bool = False,
     origin: Origin[mut=True] = MutExternalOrigin
@@ -280,8 +274,7 @@ struct RecordCoord[
     var SeqStr: Span[Byte, Self.origin]
     var QuHeader: Span[Byte, Self.origin]
     var QuStr: Span[Byte, Self.origin]
-    var quality_schema: QualitySchema
-
+    var quality_offset: Int8
 
     fn __init__(
         out self,
@@ -289,19 +282,27 @@ struct RecordCoord[
         SeqStr: Span[Byte, Self.origin],
         QuHeader: Span[Byte, Self.origin],
         QuStr: Span[Byte, Self.origin],
-        quality_schema: schema = "generic",
-
+        quality_offset: Int8 = 33,
     ):
         self.SeqHeader = SeqHeader
         self.SeqStr = SeqStr
         self.QuHeader = QuHeader
         self.QuStr = QuStr
+        self.quality_offset = quality_offset
 
-        if quality_schema.isa[String]():
-            self.quality_schema = _parse_schema(quality_schema[String])
-        else:
-            self.quality_schema = quality_schema[QualitySchema]
-
+    fn __init__(
+        out self,
+        SeqHeader: Span[Byte, Self.origin],
+        SeqStr: Span[Byte, Self.origin],
+        QuHeader: Span[Byte, Self.origin],
+        QuStr: Span[Byte, Self.origin],
+        quality_schema: String,
+    ):
+        self.SeqHeader = SeqHeader
+        self.SeqStr = SeqStr
+        self.QuHeader = QuHeader
+        self.QuStr = QuStr
+        self.quality_offset = _schema_string_to_offset(quality_schema)
 
     @always_inline
     fn get_seq(self) -> StringSlice[origin = Self.origin]:
@@ -345,23 +346,14 @@ struct RecordCoord[
         )
 
     @always_inline
-    fn get_quality_scores(
-        self, quality_format: schema
-    ) -> List[Byte]:
-        if quality_format.isa[String]():
-            schema = _parse_schema((quality_format[String]))
-        else:
-            schema = quality_format[QualitySchema]
-
+    fn get_quality_scores(self) -> List[Byte]:
         output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - schema.OFFSET
+            output[i] = self.QuStr[i] - UInt8(self.quality_offset)
         return output^
 
     @always_inline
-    fn get_quality_scores(
-        self, offset: UInt8
-    ) -> List[Byte]:
+    fn get_quality_scores(self, offset: UInt8) -> List[Byte]:
         output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - offset
@@ -392,10 +384,9 @@ struct RecordCoord[
     @always_inline
     fn validate_quality_schema(self) raises:
         for i in range(self.len_quality()):
-            if self.QuStr[i] > Int(self.quality_schema.UPPER) or self.QuStr[i]
-             < Int(self.quality_schema.LOWER):
+            if self.QuStr[i] > 126 or self.QuStr[i] < 33:
                 raise Error(
-                    "Corrput quality score according to proivded schema"
+                    "Corrupt quality score according to provided schema"
                 )
 
 

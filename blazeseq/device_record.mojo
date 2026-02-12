@@ -1,7 +1,6 @@
 """Device-compatible Fastq record descriptor and batch for GPU kernels."""
 
 from blazeseq.record import FastqRecord
-from blazeseq.quality_schema import QualitySchema
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
@@ -42,7 +41,7 @@ struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
         Uses the record's quality_schema.OFFSET for the first record only.
         """
         if len(self._qual_ends) == 0:
-            self._quality_offset = record.quality_schema.OFFSET
+            self._quality_offset = UInt8(record.quality_offset)
         for i in range(len(record.QuStr)):
             self._quality_bytes.append(record.QuStr[i])
         for i in range(len(record.SeqStr)):

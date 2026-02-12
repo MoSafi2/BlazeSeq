@@ -67,7 +67,7 @@ struct CpuPrefixSumResult:
 
 fn generate_random_fastq_record(
     record_id: Int, length: Int
-) raises -> FastqRecord[val=True]:
+) raises -> FastqRecord:
     """
     Generate a random FastqRecord with specified length and high quality scores.
     Uses high quality characters (Q40-Q41, ASCII 73-74) for quality string.
@@ -96,7 +96,7 @@ fn generate_random_fastq_record(
 
 def cpu_quality_prefix_sum(
     batch: FastqBatch,
-    records: List[FastqRecord[val=True]],
+    records: List[FastqRecord],
 ) -> List[Int32]:
     """
     CPU implementation of quality prefix sum (per record only).
@@ -125,17 +125,17 @@ def cpu_quality_prefix_sum(
 
 
 fn copy_batch_from_sink(
-    source_records: List[FastqRecord[val=True]],
+    source_records: List[FastqRecord],
     start_idx: Int,
     end_idx: Int,
-) -> List[FastqRecord[val=True]]:
+) -> List[FastqRecord]:
     """
     Simulate copying a batch of records from a sink (file/network stream).
     This represents the realistic scenario where records are read in batches.
     Returns a copied list of records for the specified range.
     """
     var batch_size = end_idx - start_idx
-    var batch_records = List[FastqRecord[val=True]](capacity=batch_size)
+    var batch_records = List[FastqRecord](capacity=batch_size)
     for i in range(start_idx, end_idx):
         # Copy the record (simulating read/copy from sink)
         var copied_record = source_records[i].copy()
@@ -254,7 +254,7 @@ fn run_gpu_prefix_sum(
 
 
 def run_cpu_prefix_sum(
-    records: List[FastqRecord[val=True]],
+    records: List[FastqRecord],
     batch: FastqBatch,
     subbatch_size: Int,
 ) -> CpuPrefixSumResult:
@@ -311,7 +311,7 @@ fn main() raises:
         "Step 1: Generating " + String(num_records) + " random FastqRecords..."
     )
     random.seed(42)
-    var records = List[FastqRecord[val=True]](capacity=num_records)
+    var records = List[FastqRecord](capacity=num_records)
     for i in range(num_records):
         var record = generate_random_fastq_record(i + 1, read_length)
         records.append(record^)

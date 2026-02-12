@@ -8,7 +8,6 @@ from blazeseq import (
     upload_subbatch_from_host_buffers,
     enqueue_quality_prefix_sum,
 )
-from blazeseq.quality_schema import generic_schema
 from gpu.host import DeviceContext
 from sys import has_accelerator
 from testing import assert_equal, assert_true, TestSuite
