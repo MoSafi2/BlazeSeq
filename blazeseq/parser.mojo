@@ -32,8 +32,8 @@ struct ParserConfig(Copyable):
         buffer_capacity: Int = DEFAULT_CAPACITY,
         buffer_max_capacity: Int = MAX_CAPACITY,
         buffer_growth_enabled: Bool = False,
-        check_ascii: Bool = True,
-        check_quality: Bool = True,
+        check_ascii: Bool = False,
+        check_quality: Bool = False,
         quality_schema: Optional[String] = None,
         batch_size: Optional[Int] = None,
     ):
@@ -47,7 +47,9 @@ struct ParserConfig(Copyable):
         self.batch_size = batch_size
 
 
-struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, Movable):
+struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
+    Iterable, Movable
+):
     """
     FASTQ record parser over a Reader. Supports ``for record in parser``;
     each element is a FastqRecord.
@@ -116,21 +118,9 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, 
             self.validator.validate(record)
 
     @always_inline
-    fn next(
-        mut self,
-    ) raises -> Optional[FastqRecord]:
-        """Method that lazily returns the Next record in the file."""
-        if self.line_iter.has_more():
-            var record: FastqRecord
-            record = self._parse_record()
-            self.validator.validate(record)
-            return record^
-        else:
-            return None
-
-    @always_inline
     fn has_more(self) -> Bool:
-        """True if there may be more records (more input in the buffer or stream)."""
+        """True if there may be more records (more input in the buffer or stream).
+        """
         return self.line_iter.has_more()
 
     fn __iter__(

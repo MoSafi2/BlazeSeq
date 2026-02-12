@@ -4,3 +4,4 @@
 llm*
 .cursor/rules/*
 tests/test_data/*.txt
+test_file.mojo
