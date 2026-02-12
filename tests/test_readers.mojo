@@ -252,7 +252,7 @@ fn test_memory_reader_read_to_buffer_invalid_pos() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
     
     with assert_raises(contains="Position is outside the buffer"):
-        reader.read_to_buffer(span, 3, pos=10)
+        _ = reader.read_to_buffer(span, 3, pos=10)
     
     buf.free()
     print("✓ test_memory_reader_read_to_buffer_invalid_pos passed")
@@ -267,7 +267,7 @@ fn test_memory_reader_read_to_buffer_negative_amt() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
     
     with assert_raises(contains="The amount to be read should be positive"):
-        reader.read_to_buffer(span, -1)
+        _ = reader.read_to_buffer(span, -1)
     
     buf.free()
     print("✓ test_memory_reader_read_to_buffer_negative_amt passed")
@@ -282,7 +282,7 @@ fn test_memory_reader_read_to_buffer_amt_too_large() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
     
     with assert_raises(contains="Number of elements to read is bigger than the available space"):
-        reader.read_to_buffer(span, 10, pos=0)
+        _ = reader.read_to_buffer(span, 10, pos=0)
     
     buf.free()
     print("✓ test_memory_reader_read_to_buffer_amt_too_large passed")
@@ -297,7 +297,7 @@ fn test_memory_reader_read_to_buffer_amt_too_large_with_pos() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=10)
     
     with assert_raises(contains="Number of elements to read is bigger than the available space"):
-        reader.read_to_buffer(span, 8, pos=5)
+        _ = reader.read_to_buffer(span, 8, pos=5)
     
     buf.free()
     print("✓ test_memory_reader_read_to_buffer_amt_too_large_with_pos passed")
@@ -536,7 +536,7 @@ fn test_file_reader_read_to_buffer_invalid_pos() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
     
     with assert_raises(contains="Position is outside the buffer"):
-        reader.read_to_buffer(span, 3, pos=10)
+        _ = reader.read_to_buffer(span, 3, pos=10)
     
     buf.free()
     print("✓ test_file_reader_read_to_buffer_invalid_pos passed")
@@ -553,7 +553,7 @@ fn test_file_reader_read_to_buffer_negative_amt() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
     
     with assert_raises(contains="The amount to be read should be positive"):
-        reader.read_to_buffer(span, -1)
+        _ = reader.read_to_buffer(span, -1)
     
     buf.free()
     print("✓ test_file_reader_read_to_buffer_negative_amt passed")
@@ -570,7 +570,7 @@ fn test_file_reader_read_to_buffer_amt_too_large() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
     
     with assert_raises(contains="Number of elements to read is bigger than the available space"):
-        reader.read_to_buffer(span, 10, pos=0)
+        _ = reader.read_to_buffer(span, 10, pos=0)
     
     buf.free()
     print("✓ test_file_reader_read_to_buffer_amt_too_large passed")
@@ -587,7 +587,7 @@ fn test_file_reader_read_to_buffer_amt_too_large_with_pos() raises:
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=10)
     
     with assert_raises(contains="Number of elements to read is bigger than the available space"):
-        reader.read_to_buffer(span, 8, pos=5)
+        _ = reader.read_to_buffer(span, 8, pos=5)
     
     buf.free()
     print("✓ test_file_reader_read_to_buffer_amt_too_large_with_pos passed")

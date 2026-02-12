@@ -3,3 +3,4 @@
 *.conda
 llm*
 .cursor/rules/*
+tests/test_data/*.txt
