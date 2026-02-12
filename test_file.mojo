@@ -1,5 +1,5 @@
-from blazeseq.iostream import FileReader, BufferedReader
-from blazeseq.readers import GZFile
+from blazeseq.iostream import BufferedReader
+from blazeseq.readers import GZFile, FileReader
 from blazeseq.parser import RecordParser
 
 

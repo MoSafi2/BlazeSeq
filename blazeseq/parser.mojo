@@ -47,7 +47,16 @@ struct ParserConfig(Copyable):
         self.batch_size = batch_size
 
 
-struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
+struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, Movable):
+    """
+    FASTQ record parser over a Reader. Supports ``for record in parser``;
+    each element is a FastqRecord.
+    """
+
+    comptime IteratorType[
+        mut: Bool, origin: Origin[mut=mut]
+    ] = _RecordParserIter[Self.R, Self.config, origin]
+
     var line_iter: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
     var quality_schema: QualitySchema
     var validator: Validator
@@ -120,6 +129,19 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             return None
 
     @always_inline
+    fn has_more(self) -> Bool:
+        """True if there may be more records (more input in the buffer or stream)."""
+        return self.line_iter.has_more()
+
+    fn __iter__(
+        ref self,
+    ) -> _RecordParserIter[Self.R, Self.config, origin_of(self)]:
+        """Return an iterator for use in ``for record in self``."""
+        return _RecordParserIter[Self.R, Self.config, origin_of(self)](
+            Pointer(to=self)
+        )
+
+    @always_inline
     fn _parse_record(
         mut self,
     ) raises -> FastqRecord:
@@ -155,6 +177,42 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             )
             return materialize[generic_schema]()
         return schema^
+
+
+# ---------------------------------------------------------------------------
+# Iterator adapter for RecordParser so that ``for record in parser`` works.
+# ---------------------------------------------------------------------------
+
+
+struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
+    Iterator
+):
+    """Iterator over FASTQ records; yields FastqRecord per record."""
+
+    comptime Element = FastqRecord
+
+    var _src: Pointer[RecordParser[Self.R, Self.config], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[RecordParser[Self.R, Self.config], Self.origin],
+    ):
+        self._src = src
+
+    fn __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[
+            Pointer[RecordParser[Self.R, Self.config], MutExternalOrigin]
+        ](self._src)
+        try:
+            var opt = mut_ptr[].next()
+            if not opt:
+                raise StopIteration()
+            return opt.take()
+        except:
+            raise StopIteration()
 
 
 # struct BatchedParser[

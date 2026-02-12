@@ -6,9 +6,10 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 """
 
 from blazeseq.parser import RecordParser
-from blazeseq.readers import FileReader
+from blazeseq.readers import FileReader, MemoryReader
 from blazeseq.parser import ParserConfig
-from testing import assert_raises, TestSuite
+from blazeseq.record import FastqRecord
+from testing import assert_equal, assert_raises, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 
@@ -117,6 +118,48 @@ fn test_invalid() raises:
     invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
     invalid_file_test_fun("error_short_qual.fastq", cor_len)
     invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
+
+
+fn test_record_parser_for_loop() raises:
+    """Basic ``for record in parser`` iteration."""
+    var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = RecordParser[MemoryReader](reader^, "generic")
+
+    var records = List[FastqRecord]()
+    for record in parser:
+        records.append(record^)
+
+    assert_equal(len(records), 2, "Should iterate over 2 records")
+    assert_equal(
+        records[0].SeqHeader.to_string(), "@r1",
+        "First record header should match"
+    )
+    assert_equal(
+        records[0].SeqStr.to_string(), "ACGT",
+        "First record sequence should match"
+    )
+    assert_equal(
+        records[1].SeqHeader.to_string(), "@r2",
+        "Second record header should match"
+    )
+
+
+fn test_record_parser_for_loop_stop_iteration() raises:
+    """Iterator raises StopIteration at EOF; second loop yields no records."""
+    var content = "@r1\nACGT\n+\n!!!!\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = RecordParser[MemoryReader](reader^, "generic")
+
+    var count = 0
+    for record in parser:
+        count += 1
+    assert_equal(count, 1, "Should iterate over 1 record")
+
+    var count_after = 0
+    for record in parser:
+        count_after += 1
+    assert_equal(count_after, 0, "Should not iterate after EOF")
 
 
 fn main() raises:
