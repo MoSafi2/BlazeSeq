@@ -210,7 +210,7 @@ struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
             Pointer[RecordParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            var opt = mut_ptr[].next()
+            var opt = mut_ptr[]._next()
             if not opt:
                 raise StopIteration()
             return opt.take()
