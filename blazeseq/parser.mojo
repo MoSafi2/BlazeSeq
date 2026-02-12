@@ -118,6 +118,19 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
             self.validator.validate(record)
 
     @always_inline
+    fn _next(
+        mut self,
+    ) raises -> Optional[FastqRecord]:
+        """Method that lazily returns the Next record in the file."""
+        if self.line_iter.has_more():
+            var record: FastqRecord
+            record = self._parse_record()
+            self.validator.validate(record)
+            return record^
+        else:
+            return None
+
+    @always_inline
     fn has_more(self) -> Bool:
         """True if there may be more records (more input in the buffer or stream).
         """
