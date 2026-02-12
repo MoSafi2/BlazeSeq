@@ -4,6 +4,7 @@ from bit import count_trailing_zeros
 import math
 from sys.info import simd_width_of
 import math
+from blazeseq.CONSTS import *
 
 
 comptime NEW_LINE = 10
@@ -142,3 +143,30 @@ fn is_posix_space(c: Byte) -> Bool:
         or c == GROUP_SEP
         or c == RECORD_SEP
     )
+
+
+@always_inline
+fn _parse_schema(quality_format: String) -> QualitySchema:
+    """Parse quality schema string into QualitySchema."""
+    var schema: QualitySchema
+
+    if quality_format == "sanger":
+        schema = materialize[sanger_schema]()
+    elif quality_format == "solexa":
+        schema = materialize[solexa_schema]()
+    elif quality_format == "illumina_1.3":
+        schema = materialize[illumina_1_3_schema]()
+    elif quality_format == "illumina_1.5":
+        schema = materialize[illumina_1_5_schema]()
+    elif quality_format == "illumina_1.8":
+        schema = materialize[illumina_1_8_schema]()
+    elif quality_format == "generic":
+        schema = materialize[generic_schema]()
+    else:
+        print(
+            """Unknown quality schema please choose one of 'sanger', 'solexa',"
+            " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
+            Parsing with generic schema."""
+        )
+        return materialize[generic_schema]()
+    return schema^
