@@ -28,6 +28,9 @@ struct GPUPayload(Equatable, ImplicitlyCopyable):
     fn __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+    fn __ge__(self, other: Self) -> Bool:
+        return self._value >= other._value
+
 
 # ---------------------------------------------------------------------------
 # Trait for host-side batches that can be uploaded to the device
@@ -207,9 +210,7 @@ struct DeviceFastqBatch:
     var num_records: Int
     var total_quality_len: Int
     var quality_offset: UInt8
-    # Optional: present when payload is quality_and_sequence or full
     var sequence_buffer: Optional[DeviceBuffer[DType.uint8]]
-    # Optional: present when payload is full
     var header_buffer: Optional[DeviceBuffer[DType.uint8]]
     var header_ends: Optional[DeviceBuffer[DType.int32]]
 
@@ -249,7 +250,7 @@ fn upload_batch_to_device(
     var hdr_buf: Optional[DeviceBuffer[DType.uint8]] = None
     var hdr_ends_buf: Optional[DeviceBuffer[DType.int32]] = None
 
-    if payload >= GpuBatchPayload_quality_and_sequence:
+    if payload >= GPUPayload.QUALITY_AND_SEQUENCE:
         var host_seq = ctx.enqueue_create_host_buffer[DType.uint8](total_qual)
         ctx.synchronize()
         for i in range(total_qual):
@@ -258,7 +259,7 @@ fn upload_batch_to_device(
         ctx.enqueue_copy(src_buf=host_seq, dst_buf=sb)
         seq_buf = sb
 
-    if payload >= GpuBatchPayload_full and n > 0:
+    if payload >= GPUPayload.FULL and n > 0:
         var total_hdr = Int(batch._header_ends[n - 1])
         var host_hdr = ctx.enqueue_create_host_buffer[DType.uint8](total_hdr)
         var host_hdr_ends = ctx.enqueue_create_host_buffer[DType.int32](n)
