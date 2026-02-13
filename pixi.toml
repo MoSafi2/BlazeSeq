@@ -3,7 +3,7 @@ name = "blazeseq"
 version = "0.1.0"
 description = "Fast FASTQ parsing and GPU-accelerated sequencing utilities in Mojo."
 authors = []
-channels = ["conda-forge", "https://conda.modular.com/max"]
+channels = ["conda-forge", "https://conda.modular.com/max-nightly"]
 platforms = ["linux-64", "osx-arm64"]
 license = "MIT"
 preview = ["pixi-build"]
@@ -19,17 +19,17 @@ backend = { name = "pixi-build-mojo", version = "0.*", channels = [
 ] }
 
 [package.host-dependencies]
-mojo-compiler = "=0.26.1.0"
+mojo-compiler = "*"
 
 [package.build-dependencies]
-mojo-compiler = "=0.26.1.0"
+mojo-compiler = "*"
 rattler-build = "*"
 
 [package.run-dependencies]
-mojo-compiler = "=0.26.1.0"
+mojo-compiler = "*"
 
 [dependencies]
-mojo = "=0.26.1.0"
+mojo = "*"
 
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"
