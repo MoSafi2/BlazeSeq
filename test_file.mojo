@@ -1,6 +1,6 @@
 from blazeseq.iostream import BufferedReader
 from blazeseq.readers import GZFile, FileReader
-from blazeseq.parser import RecordParser
+from blazeseq import RecordParser
 
 
 def main():
