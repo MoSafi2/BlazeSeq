@@ -358,3 +358,18 @@ fn upload_subbatch_from_host_buffers(
         header_buffer=no_hdr,
         header_ends=no_hdr_ends,
     )
+
+
+
+fn main() raises:
+    var batch = FastqBatch()
+    batch.add(FastqRecord("@a", "ACGT", "+", "!!!!"))
+    batch.add(FastqRecord("@b", "TGCA", "+", "!!!!"))
+    batch.add(FastqRecord("@c", "N", "+", "!"))
+
+
+    var back_list = batch.to_records()
+    for record in back_list:
+        print(record)
+
+    
