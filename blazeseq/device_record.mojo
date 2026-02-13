@@ -360,16 +360,36 @@ fn upload_subbatch_from_host_buffers(
     )
 
 
-
 fn main() raises:
     var batch = FastqBatch()
-    batch.add(FastqRecord("@a", "ACGT", "+", "!!!!"))
-    batch.add(FastqRecord("@b", "TGCA", "+", "!!!!"))
-    batch.add(FastqRecord("@c", "N", "+", "!"))
+    batch.add(
+        FastqRecord(
+            "@a",
+            "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTAC",
+            "+",
+            "!" * 50,
+        )
+    )
+    batch.add(
+        FastqRecord(
+            "@b",
+            "TGCAATGCAATGCAATGCAATGCAATGCAATGCAATGCAATGCAATCAAT",
+            "+",
+            "I" * 50,
+        )
+    )
+    batch.add(
+        FastqRecord(
+            "@c",
+            "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+            "+",
+            "$" * 50,
+        )
+    )
 
-
+    print(batch.get_record(0))
+    print(batch.get_record(1))
+    print(batch.get_record(2))
     var back_list = batch.to_records()
     for record in back_list:
         print(record)
-
-    
