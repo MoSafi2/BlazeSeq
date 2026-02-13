@@ -8,13 +8,52 @@ from gpu import block_idx, thread_idx
 from memory import UnsafePointer
 from collections.string import String
 
+# ---------------------------------------------------------------------------
+# GPU batch payload: what gets uploaded to device
+# ---------------------------------------------------------------------------
+
+
+# TODO: Eventually replace with an Enum when mojo gets those.
+@fieldwise_init
+struct GPUPayload(Equatable, ImplicitlyCopyable):
+    var _value: Int
+
+    comptime QUALITY_ONLY = GPUPayload(0)
+    comptime QUALITY_AND_SEQUENCE = GPUPayload(1)
+    comptime FULL = GPUPayload(2)
+
+    fn __eq__(self, other: Self) -> Bool:
+        return self._value == other._value
+
+    fn __ne__(self, other: Self) -> Bool:
+        return not (self == other)
+
+
+# ---------------------------------------------------------------------------
+# Trait for host-side batches that can be uploaded to the device
+# ---------------------------------------------------------------------------
+
+
+trait GpuMovableBatch:
+    """Host-side batch type that can be moved to the device with a chosen payload.
+    """
+
+    fn num_records(self) -> Int:
+        ...
+
+    fn upload_to_device(
+        self, ctx: DeviceContext, payload: GPUPayload = GPUPayload.QUALITY_ONLY
+    ) raises -> DeviceFastqBatch:
+        ...
+
 
 # ---------------------------------------------------------------------------
 # FastqBatch: Structure-of-Arrays batch format for GPU operations
 # ---------------------------------------------------------------------------
 
 
-struct FastqBatch(Copyable, ImplicitlyDestructible, Sized):
+# TODO: Test two-way trip between FastqBatch and List[FastqRecord]
+struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     """
     Structure-of-Arrays batch format: host-side container that stacks multiple FastqRecords
     into packed quality (and sequence) byte buffers and an offsets index, then uploads to device.
@@ -87,6 +126,13 @@ struct FastqBatch(Copyable, ImplicitlyDestructible, Sized):
     fn num_records(self) -> Int:
         return len(self._qual_ends)
 
+    fn upload_to_device(
+        self, ctx: DeviceContext, payload: GPUPayload = GPUPayload.QUALITY_ONLY
+    ) raises -> DeviceFastqBatch:
+        """Upload this batch to the device with the given payload (GpuMovableBatch).
+        """
+        return upload_batch_to_device(self, ctx, payload)
+
     fn total_quality_len(self) -> Int:
         return len(self._quality_bytes)
 
@@ -152,6 +198,8 @@ struct DeviceFastqBatch:
     """
     Device-side buffers and metadata after upload. Holds device buffers and
     num_records / quality_offset for launching the prefix-sum kernel.
+    Quality and offsets are always present; sequence and header buffers are
+    optional and set when upload uses quality_and_sequence or full payload.
     """
 
     var qual_buffer: DeviceBuffer[DType.uint8]
@@ -159,13 +207,24 @@ struct DeviceFastqBatch:
     var num_records: Int
     var total_quality_len: Int
     var quality_offset: UInt8
+    # Optional: present when payload is quality_and_sequence or full
+    var sequence_buffer: Optional[DeviceBuffer[DType.uint8]]
+    # Optional: present when payload is full
+    var header_buffer: Optional[DeviceBuffer[DType.uint8]]
+    var header_ends: Optional[DeviceBuffer[DType.int32]]
 
 
 fn upload_batch_to_device(
-    batch: FastqBatch, ctx: DeviceContext
+    batch: FastqBatch,
+    ctx: DeviceContext,
+    payload: GPUPayload = GPUPayload.QUALITY_ONLY,
 ) raises -> DeviceFastqBatch:
     """
     Allocate device buffers and copy batch data to the given DeviceContext.
+    `payload` controls what is uploaded:
+    - GpuBatchPayload_quality_only (0): quality bytes + offsets only (default).
+    - GpuBatchPayload_quality_and_sequence (1): quality + sequence (same offsets).
+    - GpuBatchPayload_full (2): quality + sequence + header + header_ends.
     Returns a handle holding device buffers and metadata for kernel launch.
     """
     var total_qual = batch.total_quality_len()
@@ -186,17 +245,58 @@ fn upload_batch_to_device(
     ctx.enqueue_copy(src_buf=host_qual, dst_buf=qual_buf)
     ctx.enqueue_copy(src_buf=host_offs, dst_buf=offsets_buf)
 
+    var seq_buf: Optional[DeviceBuffer[DType.uint8]] = None
+    var hdr_buf: Optional[DeviceBuffer[DType.uint8]] = None
+    var hdr_ends_buf: Optional[DeviceBuffer[DType.int32]] = None
+
+    if payload >= GpuBatchPayload_quality_and_sequence:
+        var host_seq = ctx.enqueue_create_host_buffer[DType.uint8](total_qual)
+        ctx.synchronize()
+        for i in range(total_qual):
+            host_seq[i] = batch._sequence_bytes[i]
+        var sb = ctx.enqueue_create_buffer[DType.uint8](total_qual)
+        ctx.enqueue_copy(src_buf=host_seq, dst_buf=sb)
+        seq_buf = sb
+
+    if payload >= GpuBatchPayload_full and n > 0:
+        var total_hdr = Int(batch._header_ends[n - 1])
+        var host_hdr = ctx.enqueue_create_host_buffer[DType.uint8](total_hdr)
+        var host_hdr_ends = ctx.enqueue_create_host_buffer[DType.int32](n)
+        ctx.synchronize()
+        for i in range(total_hdr):
+            host_hdr[i] = batch._header_bytes[i]
+        for i in range(n):
+            host_hdr_ends[i] = batch._header_ends[i]
+        var hb = ctx.enqueue_create_buffer[DType.uint8](total_hdr)
+        var heb = ctx.enqueue_create_buffer[DType.int32](n)
+        ctx.enqueue_copy(src_buf=host_hdr, dst_buf=hb)
+        ctx.enqueue_copy(src_buf=host_hdr_ends, dst_buf=heb)
+        hdr_buf = hb
+        hdr_ends_buf = heb
+
     return DeviceFastqBatch(
         qual_buffer=qual_buf,
         offsets_buffer=offsets_buf,
         num_records=n,
         total_quality_len=total_qual,
         quality_offset=batch.quality_offset(),
+        sequence_buffer=seq_buf,
+        header_buffer=hdr_buf,
+        header_ends=hdr_ends_buf,
     )
 
 
 # ---------------------------------------------------------------------------
 # Subbatch slice upload: fill host buffers from batch slice, upload to device
+# ---------------------------------------------------------------------------
+#
+# Transfer-friendly host storage (Option B): FastqBatch keeps List[UInt8]
+# storage. For maximum transfer throughput and to avoid an extra host-side
+# copy, use subbatch upload with pre-allocated host buffers: allocate
+# HostBuffer(s) once, then repeatedly call fill_subbatch_host_buffers() and
+# upload_subbatch_from_host_buffers() (e.g. with double-buffering) so that
+# upload is a single enqueue_copy from host buffer to device. See
+# examples/example_device.mojo for a full pattern.
 # ---------------------------------------------------------------------------
 
 
@@ -244,10 +344,16 @@ fn upload_subbatch_from_host_buffers(
     var offsets_buf = ctx.enqueue_create_buffer[DType.int32](n + 1)
     ctx.enqueue_copy(src_buf=host_qual, dst_buf=qual_buf)
     ctx.enqueue_copy(src_buf=host_offs, dst_buf=offsets_buf)
+    var no_seq: Optional[DeviceBuffer[DType.uint8]] = None
+    var no_hdr: Optional[DeviceBuffer[DType.uint8]] = None
+    var no_hdr_ends: Optional[DeviceBuffer[DType.int32]] = None
     return DeviceFastqBatch(
         qual_buffer=qual_buf,
         offsets_buffer=offsets_buf,
         num_records=n,
         total_quality_len=total_qual,
         quality_offset=quality_offset,
+        sequence_buffer=no_seq,
+        header_buffer=no_hdr,
+        header_ends=no_hdr_ends,
     )
