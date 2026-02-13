@@ -221,7 +221,9 @@ struct BatchedParser[
             Self.config.buffer_growth_enabled,
             Self.config.buffer_max_capacity,
         )
-        self.quality_schema = self._parse_schema(Self.config.quality_schema.value())
+        self.quality_schema = self._parse_schema(
+            Self.config.quality_schema.value()
+        )
         if self.config.batch_size:
             self._batch_size = self.config.batch_size.value()
         else:
@@ -240,7 +242,9 @@ struct BatchedParser[
             Self.config.buffer_growth_enabled,
             Self.config.buffer_max_capacity,
         )
-        self.quality_schema = self._parse_schema(Self.config.quality_schema.value())
+        self.quality_schema = self._parse_schema(
+            Self.config.quality_schema.value()
+        )
         # Use config batch_size if provided, otherwise use compile-time parameter
         if Self.config.batch_size:
             self._batch_size = Self.config.batch_size.value()
@@ -274,7 +278,7 @@ struct BatchedParser[
             return materialize[generic_schema]()
         return schema^
 
-    fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
+    fn _next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
         """
         Extract a batch of records in Structure-of-Arrays format for GPU operations.
 
@@ -293,8 +297,9 @@ struct BatchedParser[
         return batch^
 
     @always_inline
-    fn has_more(self) -> Bool:
-        """True if there may be more input (more lines in the buffer or stream)."""
+    fn _has_more(self) -> Bool:
+        """True if there may be more input (more lines in the buffer or stream).
+        """
         return self.line_iter.has_more()
 
     fn __iter__(
@@ -338,14 +343,14 @@ struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
         self._src = src
 
     fn __has_next__(self) -> Bool:
-        return self._src[].has_more()
+        return self._src[]._has_more()
 
     fn __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[BatchedParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            var batch = mut_ptr[].next_batch()
+            var batch = mut_ptr[]._next_batch()
             if len(batch) == 0:
                 raise StopIteration()
             return batch^
