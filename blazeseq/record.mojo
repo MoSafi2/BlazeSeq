@@ -216,6 +216,7 @@ struct Validator(Copyable):
                     "Quality Header is not the same as the Sequencing Header"
                 )
 
+    # TODO: Convert to SIMD accelerated version
     @always_inline
     fn validate_quality_schema(self, record: FastqRecord) raises:
         """Validate each quality byte is within schema LOWER..UPPER."""
