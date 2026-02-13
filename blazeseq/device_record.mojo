@@ -19,8 +19,10 @@ struct GPUPayload(Equatable, ImplicitlyCopyable):
     var _value: Int
 
     comptime QUALITY_ONLY = GPUPayload(0)
-    comptime QUALITY_AND_SEQUENCE = GPUPayload(1)
-    comptime FULL = GPUPayload(2)
+    comptime SEQUENCE_ONLY = GPUPayload(1)
+    comptime HEADER_ONLY = GPUPayload(2)
+    comptime QUALITY_AND_SEQUENCE = GPUPayload(3)
+    comptime FULL = GPUPayload(4)
 
     fn __eq__(self, other: Self) -> Bool:
         return self._value == other._value
