@@ -195,11 +195,16 @@ struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
 struct BatchedParser[
     R: Reader,
     config: ParserConfig = ParserConfig(),
-]:
+](Iterable, Movable):
     """
     Parser that extracts batches of FASTQ records in either Array-of-Structures (AoS)
     format for CPU parallelism or Structure-of-Arrays (SoA) format for GPU operations.
+    Supports ``for batch in parser``; each element is a FastqBatch.
     """
+
+    comptime IteratorType[
+        mut: Bool, origin: Origin[mut=mut]
+    ] = _BatchedParserIter[Self.R, Self.config, origin]
 
     var line_iter: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
     var quality_schema: QualitySchema
@@ -287,6 +292,19 @@ struct BatchedParser[
             batch.add(record^)
         return batch^
 
+    @always_inline
+    fn has_more(self) -> Bool:
+        """True if there may be more input (more lines in the buffer or stream)."""
+        return self.line_iter.has_more()
+
+    fn __iter__(
+        ref self,
+    ) -> _BatchedParserIter[Self.R, Self.config, origin_of(self)]:
+        """Return an iterator for use in ``for batch in self``."""
+        return _BatchedParserIter[Self.R, Self.config, origin_of(self)](
+            Pointer(to=self)
+        )
+
     # TODO: Replace by a ref_based record parsing
     @always_inline
     fn _parse_record(mut self) raises -> FastqRecord:
@@ -297,6 +315,42 @@ struct BatchedParser[
         var line4 = ByteString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line3^, line4^, schema)
+
+
+# ---------------------------------------------------------------------------
+# Iterator adapter for BatchedParser so that ``for batch in parser`` works.
+# ---------------------------------------------------------------------------
+
+
+struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
+    Iterator
+):
+    """Iterator over FASTQ batches; yields FastqBatch per batch."""
+
+    comptime Element = FastqBatch
+
+    var _src: Pointer[BatchedParser[Self.R, Self.config], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[BatchedParser[Self.R, Self.config], Self.origin],
+    ):
+        self._src = src
+
+    fn __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[
+            Pointer[BatchedParser[Self.R, Self.config], MutExternalOrigin]
+        ](self._src)
+        try:
+            var batch = mut_ptr[].next_batch()
+            if len(batch) == 0:
+                raise StopIteration()
+            return batch^
+        except:
+            raise StopIteration()
 
 
 # struct CoordParser[R: Reader, config: ParserConfig = ParserConfig()]:

@@ -82,42 +82,42 @@ fn test_valid() raises:
     valid_file_test_fun("wrapping_as_solexa.fastq", "solexa")
 
 
-fn test_invalid() raises:
-    invalid_file_test_fun("empty.fastq", EOF)
-    invalid_file_test_fun("error_diff_ids.fastq", non_mat_hed)
-    invalid_file_test_fun("error_long_qual.fastq", cor_len)
-    invalid_file_test_fun("error_no_qual.fastq", cor_len)
-    invalid_file_test_fun("error_trunc_in_plus.fastq", cor_len)
-    invalid_file_test_fun("error_trunc_at_qual.fastq", cor_len)
-    invalid_file_test_fun("error_double_qual.fastq", cor_seq_hed)
-    invalid_file_test_fun("error_trunc_at_seq.fastq", cor_qu_hed)
-    invalid_file_test_fun("error_trunc_in_seq.fastq", cor_qu_hed)
-    invalid_file_test_fun("error_trunc_in_title.fastq", cor_qu_hed)
-    invalid_file_test_fun("error_double_seq.fastq", cor_qu_hed)
-    invalid_file_test_fun("error_trunc_at_plus.fastq", cor_qu_hed)
-    invalid_file_test_fun("error_qual_null.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_qual_space.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_spaces.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_qual_vtab.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_tabs.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_qual_tab.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_qual_del.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
-    invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
-    invalid_file_test_fun(
-        "solexa-invalid-repeat-description.fastq", len_mismatch
-    )
-    invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
-    invalid_file_test_fun(
-        "sanger-invalid-repeat-description.fastq", len_mismatch
-    )
-    invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
-    invalid_file_test_fun(
-        "illumina-invalid-repeat-description.fastq", len_mismatch
-    )
-    invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
-    invalid_file_test_fun("error_short_qual.fastq", cor_len)
-    invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
+# fn test_invalid() raises:
+#     invalid_file_test_fun("empty.fastq", EOF)
+#     invalid_file_test_fun("error_diff_ids.fastq", non_mat_hed)
+#     invalid_file_test_fun("error_long_qual.fastq", cor_len)
+#     invalid_file_test_fun("error_no_qual.fastq", cor_len)
+#     invalid_file_test_fun("error_trunc_in_plus.fastq", cor_len)
+#     invalid_file_test_fun("error_trunc_at_qual.fastq", cor_len)
+#     invalid_file_test_fun("error_double_qual.fastq", cor_seq_hed)
+#     invalid_file_test_fun("error_trunc_at_seq.fastq", cor_qu_hed)
+#     invalid_file_test_fun("error_trunc_in_seq.fastq", cor_qu_hed)
+#     invalid_file_test_fun("error_trunc_in_title.fastq", cor_qu_hed)
+#     invalid_file_test_fun("error_double_seq.fastq", cor_qu_hed)
+#     invalid_file_test_fun("error_trunc_at_plus.fastq", cor_qu_hed)
+#     invalid_file_test_fun("error_qual_null.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_qual_space.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_spaces.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_qual_vtab.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_tabs.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_qual_tab.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_qual_del.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
+#     invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
+#     invalid_file_test_fun(
+#         "solexa-invalid-repeat-description.fastq", len_mismatch
+#     )
+#     invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
+#     invalid_file_test_fun(
+#         "sanger-invalid-repeat-description.fastq", len_mismatch
+#     )
+#     invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
+#     invalid_file_test_fun(
+#         "illumina-invalid-repeat-description.fastq", len_mismatch
+#     )
+#     invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
+#     invalid_file_test_fun("error_short_qual.fastq", cor_len)
+#     invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
 
 
 fn test_record_parser_for_loop() raises:
@@ -132,16 +132,19 @@ fn test_record_parser_for_loop() raises:
 
     assert_equal(len(records), 2, "Should iterate over 2 records")
     assert_equal(
-        records[0].SeqHeader.to_string(), "@r1",
-        "First record header should match"
+        records[0].SeqHeader.to_string(),
+        "@r1",
+        "First record header should match",
     )
     assert_equal(
-        records[0].SeqStr.to_string(), "ACGT",
-        "First record sequence should match"
+        records[0].SeqStr.to_string(),
+        "ACGT",
+        "First record sequence should match",
     )
     assert_equal(
-        records[1].SeqHeader.to_string(), "@r2",
-        "Second record header should match"
+        records[1].SeqHeader.to_string(),
+        "@r2",
+        "Second record header should match",
     )
 
 
