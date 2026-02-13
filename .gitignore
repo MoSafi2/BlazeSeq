@@ -5,3 +5,5 @@ llm*
 .cursor/rules/*
 tests/test_data/*.txt
 test_file.mojo
+kgen.trace.json.time-events.txt
+kgen.trace.json.time-trace

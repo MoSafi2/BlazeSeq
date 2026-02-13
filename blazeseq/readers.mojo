@@ -10,7 +10,7 @@ BufferedReader.
 
 from memory import memset_zero, UnsafePointer, Span, memcpy
 from memory.legacy_unsafe_pointer import LegacyUnsafePointer
-from sys import ffi
+import ffi
 from sys.info import CompilationTarget
 from pathlib import Path
 
@@ -33,16 +33,16 @@ comptime c_uint = UInt32
 comptime c_int = Int32
 
 # Define function signatures for zlib functions
-comptime gzopen_fn_type = fn (
+comptime gzopen_fn_type = fn(
     filename: c_char_ptr, mode: c_char_ptr
 ) -> c_void_ptr
-comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
-comptime gzread_fn_type = fn (
+comptime gzclose_fn_type = fn(file: c_void_ptr) -> c_int
+comptime gzread_fn_type = fn(
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
 
 
-trait Reader:
+trait Reader(ImplicitlyDestructible):
     fn read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
@@ -83,21 +83,22 @@ struct FileReader(Movable, Reader):
         if amt < 0:
             raise Error("The amount to be read should be positive")
         read = self.handle.read(buffer=s)
-        return read
+        return UInt64(read)
 
 
 struct MemoryReader(Movable, Reader):
     """Reader that reads from an in-memory buffer.
-    
+
     Allows BufferedReader to read from memory instead of disk I/O,
     enabling disk I/O independent performance testing.
     """
+
     var data: List[Byte]
     var position: Int
 
     fn __init__(out self, var data: List[Byte]):
         """Initialize with a List[Byte] buffer.
-        
+
         Args:
             data: The source data buffer (owned).
         """
@@ -106,7 +107,7 @@ struct MemoryReader(Movable, Reader):
 
     fn __init__(out self, data: Span[Byte]):
         """Initialize with a Span[Byte] buffer (copies into owned list).
-        
+
         Args:
             data: The source data buffer (will be copied).
         """
@@ -120,12 +121,12 @@ struct MemoryReader(Movable, Reader):
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Read bytes from the memory buffer into the destination buffer.
-        
+
         Args:
             buf: The destination buffer to write into.
             amt: The number of bytes to read.
             pos: The position in the destination buffer to start writing.
-        
+
         Returns:
             The number of bytes actually read (0 if EOF).
         """
@@ -141,21 +142,21 @@ struct MemoryReader(Movable, Reader):
             )
         if amt < 0:
             raise Error("The amount to be read should be positive")
-        
+
         # Check if we've reached EOF
         if self.position >= len(self.data):
             return 0
-        
+
         # Calculate how many bytes we can actually read
         var available = len(self.data) - self.position
         var bytes_to_read = min(amt, available)
-        
+
         # Copy bytes from data to destination buffer
         if bytes_to_read > 0:
             for i in range(bytes_to_read):
                 s[i] = self.data[self.position + i]
             self.position += bytes_to_read
-        
+
         return UInt64(bytes_to_read)
 
     fn __moveinit__(out self, deinit other: Self):

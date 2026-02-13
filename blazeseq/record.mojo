@@ -203,10 +203,10 @@ struct Validator(Copyable):
     @always_inline
     fn validate_record(self, record: FastqRecord) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match."""
-        if record.SeqHeader[0] != read_header:
+        if record.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
 
-        if record.QuHeader[0] != quality_header:
+        if record.QuHeader[0] != UInt8(quality_header):
             raise Error("Quality header does not start with '+'")
 
         if len(record.SeqStr) != len(record.QuStr):
@@ -362,10 +362,10 @@ struct RecordCoord[
 
     @always_inline
     fn validate_record(self) raises:
-        if self.SeqHeader[0] != read_header:
+        if self.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence Header is corrupt")
 
-        if self.QuHeader[0] != quality_header:
+        if self.QuHeader[0] != UInt8(quality_header):
             raise Error("Quality Header is corrupt")
 
         if self.len_record() != self.len_quality():
@@ -393,19 +393,19 @@ struct RecordCoord[
 
     @always_inline
     fn seq_len(self) -> Int32:
-        return len(self.SeqStr)
+        return Int32(len(self.SeqStr))
 
     @always_inline
     fn qu_len(self) -> Int32:
-        return len(self.QuStr)
+        return Int32(len(self.QuStr))
 
     @always_inline
     fn qu_header_len(self) -> Int32:
-        return len(self.QuHeader)
+        return Int32(len(self.QuHeader))
 
     @always_inline
     fn seq_header_len(self) -> Int32:
-        return len(self.SeqHeader)
+        return Int32(len(self.SeqHeader))
 
 
     fn write_to[w: Writer](self, mut writer: w):

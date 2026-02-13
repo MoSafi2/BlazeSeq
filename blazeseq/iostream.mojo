@@ -9,7 +9,7 @@ from blazeseq.utils import memchr
 
 
 struct BufferedReader[R: Reader, check_ascii: Bool = False](
-    Movable, Sized, Writable
+    ImplicitlyDestructible, Movable, Sized, Writable
 ):
     var source: Self.R
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
@@ -124,7 +124,7 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
+    fn view(ref[_] self) raises -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head
@@ -266,9 +266,10 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
             ptr=self._ptr + start, length=end - start
         )
 
-    fn __del__(deinit self):
-        if self._ptr:
-            self._ptr.free()
+    # fn __del__(deinit self):
+    #     if self._ptr:
+    #         self._ptr.free()
+        
 
 
 @always_inline
@@ -335,14 +336,14 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
             if self.buffer.available() == 0:
                 if self.buffer.is_eof():
                     raise Error("EOF")
-                    
+
                 self.buffer._compact_from(self.buffer.buffer_position())
             _ = self.buffer._fill_buffer()
             if self.buffer.available() == 0:
                 raise Error("EOF")
 
             var view = self.buffer.view()
-            var newline_at = memchr(haystack=view, chr=UInt8(new_line))
+            var newline_at = memchr(haystack=view, chr=new_line)
             if newline_at >= 0:
                 var end = _trim_trailing_cr(view, newline_at)
                 var span = view[0:end]

@@ -23,22 +23,22 @@ struct ByteString(Copyable, Movable, Sized, Writable):
         self.ptr = alloc[UInt8](len(s))
         for i in range(len(s)):
             self.ptr[i] = s.as_bytes()[i]
-        self.size = len(s)
-        self.cap = len(s)
+        self.size = UInt32(len(s))
+        self.cap = UInt32(len(s))
 
     fn __init__(out self, s: Span[UInt8, MutExternalOrigin]):
         self.ptr = alloc[UInt8](len(s))
         for i in range(len(s)):
             self.ptr[i] = s[i]
-        self.size = len(s)
-        self.cap = len(s)
+        self.size = UInt32(len(s))
+        self.cap = UInt32(len(s))
 
     fn __init__(out self, s: StringSlice[MutExternalOrigin]):
         self.ptr = alloc[UInt8](len(s))
         for i in range(len(s)):
             self.ptr[i] = s.as_bytes()[i]
-        self.size = len(s)
-        self.cap = len(s)
+        self.size = UInt32(len(s))
+        self.cap = UInt32(len(s))
 
     fn __del__(deinit self):
         self.ptr.free()
@@ -110,7 +110,7 @@ struct ByteString(Copyable, Movable, Sized, Writable):
     # TODO: rename append
     @always_inline
     fn push(mut self, c: UInt8):
-        self.resize(len(self) + 1)
+        self.resize(UInt32(len(self) + 1))
         self.ptr[len(self) - 1] = c
 
     # TODO: rename extend
@@ -122,7 +122,7 @@ struct ByteString(Copyable, Movable, Sized, Writable):
             return
 
         var old_size = len(self)
-        self.resize(len(self) + length)
+        self.resize(UInt32(len(self) + length))
         memcpy(dest=self.ptr + old_size, src=ptr, count=Int(length))
 
     fn find_chr[c: UInt8](read self, start: Int, end: Int) -> Int:
