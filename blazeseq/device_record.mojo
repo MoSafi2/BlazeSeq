@@ -14,7 +14,7 @@ from collections.string import String
 # ---------------------------------------------------------------------------
 
 
-struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
+struct FastqBatch(Copyable, ImplicitlyDestructible, Sized):
     """
     Structure-of-Arrays batch format: host-side container that stacks multiple FastqRecords
     into packed quality (and sequence) byte buffers and an offsets index, then uploads to device.
@@ -28,27 +28,41 @@ struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
     var _qual_ends: List[Int32]
     var _quality_offset: UInt8
 
-    fn __init__(out self, batch_size: Int = 100):
-        self._header_bytes = List[UInt8](capacity=100 * batch_size)
-        self._header_ends = List[Int32](capacity=100 * batch_size + 1)
-        self._quality_bytes = List[UInt8](capacity=100 * batch_size)
-        self._sequence_bytes = List[UInt8](capacity=100 * batch_size)
-        self._qual_ends = List[Int32](capacity=100 * batch_size + 1)
-        self._quality_offset = 33
+    fn __init__(
+        out self,
+        batch_size: Int = 100,
+        avg_record_size: Int = 100,
+        quality_offset: UInt8 = 33,
+    ):
+        self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
+        self._header_ends = List[Int32](capacity=batch_size * 2)
+        self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
+        self._sequence_bytes = List[UInt8](
+            capacity=avg_record_size * batch_size
+        )
+        self._qual_ends = List[Int32](capacity=batch_size * 2)
+        self._quality_offset = quality_offset
 
-    fn __init__(out self, records: List[FastqRecord]):
+    fn __init__(
+        out self,
+        records: List[FastqRecord],
+        avg_record_size: Int = 100,
+        quality_offset: UInt8 = 33,
+    ):
         """
         Build a FastqBatch from a list of FastqRecords in one shot.
         Uses the first record's quality_offset for the batch; empty list yields an empty batch.
         """
         var n = len(records)
         var batch_size = max(1, n)
-        self._header_bytes = List[UInt8](capacity=100 * batch_size)
-        self._header_ends = List[Int32](capacity=100 * batch_size + 1)
-        self._quality_bytes = List[UInt8](capacity=100 * batch_size)
-        self._sequence_bytes = List[UInt8](capacity=100 * batch_size)
-        self._qual_ends = List[Int32](capacity=100 * batch_size + 1)
-        self._quality_offset = 33
+        self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
+        self._header_ends = List[Int32](capacity=batch_size * 2)
+        self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
+        self._sequence_bytes = List[UInt8](
+            capacity=avg_record_size * batch_size
+        )
+        self._qual_ends = List[Int32](capacity=batch_size * 2)
+        self._quality_offset = quality_offset
         for i in range(n):
             self.add(records[i])
 
@@ -90,7 +104,9 @@ struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
         var n = self.num_records()
         if index < 0 or index >= n:
             raise Error("FastqBatch.get_record index out of range")
-        var header_start = 0 if index == 0 else Int(self._header_ends[index - 1])
+        var header_start = 0 if index == 0 else Int(
+            self._header_ends[index - 1]
+        )
         var header_end = Int(self._header_ends[index])
         var header_len = header_end - header_start
         var qual_start = 0 if index == 0 else Int(self._qual_ends[index - 1])
