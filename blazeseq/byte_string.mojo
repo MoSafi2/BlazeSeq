@@ -6,7 +6,7 @@ from collections.string import StringSlice, String
 from blazeseq.utils import memchr
 
 
-struct ByteString(Copyable, Movable, Sized, Writable):
+struct ByteString(Copyable, Movable, Sized, Writable, Equatable):
     # TODO: add address_space
     var size: UInt32
     var cap: UInt32
@@ -60,6 +60,16 @@ struct ByteString(Copyable, Movable, Sized, Writable):
     @always_inline
     fn __len__(read self) -> Int:
         return Int(self.size)
+
+    @always_inline
+    fn __eq__(self, other: Self) -> Bool:
+        if len(self) != len(other):
+            return False
+        for i in range(len(self)):
+            if self[i] != other[i]:
+                return False
+        return True
+
 
     # TODO: rename offset
     @always_inline
@@ -164,15 +174,6 @@ struct ByteString(Copyable, Movable, Sized, Writable):
         var prefix_bytes = prefix.as_bytes()
         for i in range(len(prefix)):
             if self[i] != prefix_bytes[i]:
-                return False
-        return True
-
-    fn __eq__(self, other: Self) -> Bool:
-        """Compare two ByteStrings for equality."""
-        if len(self) != len(other):
-            return False
-        for i in range(len(self)):
-            if self[i] != other[i]:
                 return False
         return True
 
