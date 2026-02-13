@@ -1,10 +1,12 @@
 """Device-compatible Fastq record descriptor and batch for GPU kernels."""
 
 from blazeseq.record import FastqRecord
+from blazeseq.byte_string import ByteString
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
 from memory import UnsafePointer
+from collections.string import String
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +35,22 @@ struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
         self._sequence_bytes = List[UInt8](capacity=100 * batch_size)
         self._qual_ends = List[Int32](capacity=100 * batch_size + 1)
         self._quality_offset = 33
+
+    fn __init__(out self, records: List[FastqRecord]):
+        """
+        Build a FastqBatch from a list of FastqRecords in one shot.
+        Uses the first record's quality_offset for the batch; empty list yields an empty batch.
+        """
+        var n = len(records)
+        var batch_size = max(1, n)
+        self._header_bytes = List[UInt8](capacity=100 * batch_size)
+        self._header_ends = List[Int32](capacity=100 * batch_size + 1)
+        self._quality_bytes = List[UInt8](capacity=100 * batch_size)
+        self._sequence_bytes = List[UInt8](capacity=100 * batch_size)
+        self._qual_ends = List[Int32](capacity=100 * batch_size + 1)
+        self._quality_offset = 33
+        for i in range(n):
+            self.add(records[i])
 
     fn add(mut self, record: FastqRecord):
         """
@@ -63,6 +81,54 @@ struct FastqBatch(Copyable, Sized, ImplicitlyDestructible):
 
     fn __len__(self) -> Int:
         return self.num_records()
+
+    fn get_record(self, index: Int) raises -> FastqRecord:
+        """
+        Return the record at the given index as a FastqRecord.
+        Bounds-checked; raises if index < 0 or index >= num_records().
+        """
+        var n = self.num_records()
+        if index < 0 or index >= n:
+            raise Error("FastqBatch.get_record index out of range")
+        var header_start = 0 if index == 0 else Int(self._header_ends[index - 1])
+        var header_end = Int(self._header_ends[index])
+        var header_len = header_end - header_start
+        var qual_start = 0 if index == 0 else Int(self._qual_ends[index - 1])
+        var qual_end = Int(self._qual_ends[index])
+        var seg_len = qual_end - qual_start
+
+        var header_bs = ByteString(capacity=header_len)
+        for j in range(header_len):
+            header_bs[j] = self._header_bytes[header_start + j]
+
+        var seq_bs = ByteString(capacity=seg_len)
+        for j in range(seg_len):
+            seq_bs[j] = self._sequence_bytes[qual_start + j]
+
+        var qu_header_bs = ByteString("+")
+
+        var qual_bs = ByteString(capacity=seg_len)
+        for j in range(seg_len):
+            qual_bs[j] = self._quality_bytes[qual_start + j]
+
+        return FastqRecord(
+            header_bs^,
+            seq_bs^,
+            qu_header_bs^,
+            qual_bs^,
+            Int8(self._quality_offset),
+        )
+
+    fn to_records(self) raises -> List[FastqRecord]:
+        """
+        Reconstruct a List[FastqRecord] from the batch's SoA arrays.
+        QuHeader is set to "+" for each record per FASTQ convention.
+        """
+        var n = self.num_records()
+        var out = List[FastqRecord](capacity=n)
+        for i in range(n):
+            out.append(self.get_record(i))
+        return out^
 
 
 @fieldwise_init

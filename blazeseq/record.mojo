@@ -125,18 +125,6 @@ struct FastqRecord(
         return self.SeqHeader.as_string_slice()
 
     @always_inline
-    fn validate_record(self) raises:
-        """Delegate to default Validator for backward compatibility."""
-        var v = Validator(check_quality=False, quality_schema=materialize[generic_schema]())
-        v.validate_record(self)
-
-    @always_inline
-    fn validate_quality_schema(self) raises:
-        """Delegate to default Validator for backward compatibility (generic bounds)."""
-        var v = Validator(check_quality=True, quality_schema=materialize[generic_schema]())
-        v.validate_quality_schema(self)
-
-    @always_inline
     fn total_length(self) -> Int:
         return (
             len(self.QuHeader)

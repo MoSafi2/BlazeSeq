@@ -192,139 +192,111 @@ struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
             raise StopIteration()
 
 
-# struct BatchedParser[
-#     R: Reader,
-#     check_ascii: Bool = True,
-#     check_quality: Bool = True,
-#     batch_size: Int = 1024,
-# ]:
-#     """
-#     Parser that extracts batches of FASTQ records in either Array-of-Structures (AoS)
-#     format for CPU parallelism or Structure-of-Arrays (SoA) format for GPU operations.
-#     """
+struct BatchedParser[
+    R: Reader,
+    config: ParserConfig = ParserConfig(),
+]:
+    """
+    Parser that extracts batches of FASTQ records in either Array-of-Structures (AoS)
+    format for CPU parallelism or Structure-of-Arrays (SoA) format for GPU operations.
+    """
 
-#     var line_iter: LineIterator[Self.R, check_ascii = Self.check_ascii]
-#     var quality_schema: QualitySchema
-#     var _batch_size: Int
+    var line_iter: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
+    var quality_schema: QualitySchema
+    var _batch_size: Int
 
-#     fn __init__(
-#         out self,
-#         var reader: Self.R,
-#         config: ParserConfig = ParserConfig(),
-#     ) raises:
-#         """Initialize BatchedParser with optional ParserConfig."""
-#         self.line_iter = LineIterator[check_ascii = Self.check_ascii](
-#             reader^,
-#             config.buffer_capacity,
-#             config.buffer_growth_enabled,
-#             config.buffer_max_capacity,
-#         )
-#         self.quality_schema = self._parse_schema(config.quality_schema)
-#         # Use config batch_size if provided, otherwise use compile-time parameter
-#         if config.batch_size:
-#             self._batch_size = config.batch_size.value()
-#         else:
-#             self._batch_size = Self.batch_size
+    fn __init__(
+        out self,
+        var reader: Self.R,
+    ) raises:
+        """Initialize BatchedParser with optional ParserConfig."""
+        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+            reader^,
+            Self.config.buffer_capacity,
+            Self.config.buffer_growth_enabled,
+            Self.config.buffer_max_capacity,
+        )
+        self.quality_schema = self._parse_schema(Self.config.quality_schema.value())
+        if self.config.batch_size:
+            self._batch_size = self.config.batch_size.value()
+        else:
+            self._batch_size = 1000
 
-#     fn __init__(
-#         out self,
-#         var reader: Self.R,
-#         schema: String = "generic",
-#         default_batch_size: Int = 1024,
-#     ) raises:
-#         """Legacy constructor for backward compatibility."""
-#         var config = ParserConfig(
-#             quality_schema=schema,
-#             batch_size=default_batch_size,
-#         )
-#         self.line_iter = LineIterator[check_ascii = Self.check_ascii](
-#             reader^,
-#             config.buffer_capacity,
-#             config.buffer_growth_enabled,
-#             config.buffer_max_capacity,
-#         )
-#         self.quality_schema = self._parse_schema(config.quality_schema)
-#         # Use config batch_size if provided, otherwise use compile-time parameter
-#         if config.batch_size:
-#             self._batch_size = config.batch_size.value()
-#         else:
-#             self._batch_size = Self.batch_size
+    fn __init__(
+        out self,
+        var reader: Self.R,
+        schema: String = "generic",
+        default_batch_size: Int = 1024,
+    ) raises:
+        """Legacy constructor for backward compatibility."""
+        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+            reader^,
+            Self.config.buffer_capacity,
+            Self.config.buffer_growth_enabled,
+            Self.config.buffer_max_capacity,
+        )
+        self.quality_schema = self._parse_schema(Self.config.quality_schema.value())
+        # Use config batch_size if provided, otherwise use compile-time parameter
+        if Self.config.batch_size:
+            self._batch_size = Self.config.batch_size.value()
+        else:
+            self._batch_size = 1000
 
-#     @staticmethod
-#     @always_inline
-#     fn _parse_schema(quality_format: String) -> QualitySchema:
-#         """Parse quality schema string into QualitySchema."""
-#         var schema: QualitySchema
+    @staticmethod
+    @always_inline
+    fn _parse_schema(quality_format: String) -> QualitySchema:
+        """Parse quality schema string into QualitySchema."""
+        var schema: QualitySchema
 
-#         if quality_format == "sanger":
-#             schema = materialize[sanger_schema]()
-#         elif quality_format == "solexa":
-#             schema = materialize[solexa_schema]()
-#         elif quality_format == "illumina_1.3":
-#             schema = materialize[illumina_1_3_schema]()
-#         elif quality_format == "illumina_1.5":
-#             schema = materialize[illumina_1_5_schema]()
-#         elif quality_format == "illumina_1.8":
-#             schema = materialize[illumina_1_8_schema]()
-#         elif quality_format == "generic":
-#             schema = materialize[generic_schema]()
-#         else:
-#             print(
-#                 """Unknown quality schema please choose one of 'sanger', 'solexa',"
-#                 " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
-#                 Parsing with generic schema."""
-#             )
-#             return materialize[generic_schema]()
-#         return schema^
+        if quality_format == "sanger":
+            schema = materialize[sanger_schema]()
+        elif quality_format == "solexa":
+            schema = materialize[solexa_schema]()
+        elif quality_format == "illumina_1.3":
+            schema = materialize[illumina_1_3_schema]()
+        elif quality_format == "illumina_1.5":
+            schema = materialize[illumina_1_5_schema]()
+        elif quality_format == "illumina_1.8":
+            schema = materialize[illumina_1_8_schema]()
+        elif quality_format == "generic":
+            schema = materialize[generic_schema]()
+        else:
+            print(
+                """Unknown quality schema please choose one of 'sanger', 'solexa',"
+                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
+                Parsing with generic schema."""
+            )
+            return materialize[generic_schema]()
+        return schema^
 
+    fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
+        """
+        Extract a batch of records in Structure-of-Arrays format for GPU operations.
 
-#     fn next_record_list(
-#         mut self, max_records: Int = 0
-#     ) raises -> List[FastqRecord[Self.check_quality]]:
-#         """
-#         Extract a batch of records in Array-of-Structures format for CPU parallelism.
+        Args:
+            max_records: Maximum number of records to extract (default: batch_size).
 
-#         Args:
-#             max_records: Maximum number of records to extract (default: batch_size).
+        Returns:
+            FastqBatch containing the extracted records in SoA format.
+        """
+        var actual_max = min(max_records, self._batch_size)
+        var batch = FastqBatch(batch_size=actual_max)
 
-#         Returns:
-#             List[FastqRecord[Self.check_quality]] containing the extracted records.
-#         """
-#         var actual_max = min(max_records, self._batch_size)
-#         var batch = List[FastqRecord[Self.check_quality]](capacity=actual_max)
-#         while len(batch) < actual_max and self.line_iter.has_more():
-#             batch.append(self._parse_record())
+        while len(batch) < actual_max and self.line_iter.has_more():
+            var record = self._parse_record()
+            batch.add(record^)
+        return batch^
 
-#         return batch^
-
-#     fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
-#         """
-#         Extract a batch of records in Structure-of-Arrays format for GPU operations.
-
-#         Args:
-#             max_records: Maximum number of records to extract (default: batch_size).
-
-#         Returns:
-#             FastqBatch containing the extracted records in SoA format.
-#         """
-#         var actual_max = min(max_records, self._batch_size)
-#         var batch = FastqBatch(batch_size=actual_max)
-
-#         while len(batch) < actual_max and self.line_iter.has_more():
-#             var record = self._parse_record()
-#             batch.add(record^)
-#         return batch^
-
-#     @always_inline
-#     fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
-#         """Parse a single FASTQ record (4 lines) from the stream."""
-#         var lines = _get_n_lines[Self.R, 4, Self.check_ascii](self.line_iter.buffer)
-#         var l1 = lines[0]
-#         var l2 = lines[1]
-#         var l3 = lines[2]
-#         var l4 = lines[3]
-#         schema = self.quality_schema.copy()
-#         return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
+    # TODO: Replace by a ref_based record parsing
+    @always_inline
+    fn _parse_record(mut self) raises -> FastqRecord:
+        """Parse a single FASTQ record (4 lines) from the stream."""
+        var line1 = ByteString(self.line_iter.next_line())
+        var line2 = ByteString(self.line_iter.next_line())
+        var line3 = ByteString(self.line_iter.next_line())
+        var line4 = ByteString(self.line_iter.next_line())
+        schema = self.quality_schema.copy()
+        return FastqRecord(line1^, line2^, line3^, line4^, schema)
 
 
 # struct CoordParser[R: Reader, config: ParserConfig = ParserConfig()]:

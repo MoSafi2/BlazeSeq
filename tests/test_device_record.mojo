@@ -98,6 +98,45 @@ fn test_device_batch_prefix_sum_on_gpu() raises:
         assert_equal(host_out[i], expected[i])
 
 
+fn test_fastq_batch_from_records_and_to_records() raises:
+    """Round-trip: List[FastqRecord] -> FastqBatch -> to_records() equals original list."""
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@a", "ACGT", "+", "!!!!"))
+    records.append(FastqRecord("@b", "TGCA", "+", "!!!!"))
+    records.append(FastqRecord("@c", "N", "+", "!"))
+    var batch = FastqBatch(records)
+    assert_equal(batch.num_records(), 3)
+    var back = batch.to_records()
+    assert_equal(len(back), 3)
+    for i in range(3):
+        assert_equal(back[i].SeqHeader.as_string_slice(), records[i].SeqHeader.as_string_slice())
+        assert_equal(back[i].SeqStr.as_string_slice(), records[i].SeqStr.as_string_slice())
+        assert_equal(back[i].QuStr.as_string_slice(), records[i].QuStr.as_string_slice())
+        assert_equal(back[i].quality_offset, records[i].quality_offset)
+
+
+fn test_fastq_batch_get_record_matches_to_records() raises:
+    """Get_record(i) returns the same record as to_records()[i]."""
+    var batch = FastqBatch()
+    batch.add(FastqRecord("@x", "AA", "+", "!!"))
+    batch.add(FastqRecord("@y", "TT", "+", "!!"))
+    var as_list = batch.to_records()
+    for i in range(batch.num_records()):
+        var from_get = batch.get_record(i)
+        assert_equal(from_get.SeqHeader.as_string_slice(), as_list[i].SeqHeader.as_string_slice())
+        assert_equal(from_get.SeqStr.as_string_slice(), as_list[i].SeqStr.as_string_slice())
+        assert_equal(from_get.QuStr.as_string_slice(), as_list[i].QuStr.as_string_slice())
+
+
+fn test_fastq_batch_empty_from_records() raises:
+    """FastqBatch from empty list has 0 records."""
+    var records = List[FastqRecord]()
+    var batch = FastqBatch(records)
+    assert_equal(batch.num_records(), 0)
+    var back = batch.to_records()
+    assert_equal(len(back), 0)
+
+
 fn test_subbatch_prefix_sum_multi_chunk() raises:
     """
     When a GPU is available: run prefix-sum in multiple subbatches using
