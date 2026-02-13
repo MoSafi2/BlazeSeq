@@ -10,7 +10,7 @@ BufferedReader.
 
 from memory import memset_zero, UnsafePointer, Span, memcpy
 from memory.legacy_unsafe_pointer import LegacyUnsafePointer
-import ffi
+from sys import ffi
 from sys.info import CompilationTarget
 from pathlib import Path
 

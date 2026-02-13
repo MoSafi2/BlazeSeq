@@ -19,17 +19,17 @@ backend = { name = "pixi-build-mojo", version = "0.*", channels = [
 ] }
 
 [package.host-dependencies]
-mojo-compiler = "*"
+mojo-compiler = "=0.26.1.0"
 
 [package.build-dependencies]
-mojo-compiler = "*"
+mojo-compiler = "=0.26.1.0"
 rattler-build = "*"
 
 [package.run-dependencies]
-mojo-compiler = "*"
+mojo-compiler = "=0.26.1.0"
 
 [dependencies]
-mojo = "*"
+mojo = "=0.26.1.0"
 
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"
