@@ -206,8 +206,8 @@ struct DeviceFastqBatch:
     """
 
     var num_records: Int
-    var seq_len: Optional[Int]
-    var quality_offset: Optional[UInt8]
+    var seq_len: Int
+    var quality_offset: UInt8
     var total_header_bytes: Optional[Int]
     var qual_buffer: Optional[DeviceBuffer[DType.uint8]]
     var sequence_buffer: Optional[DeviceBuffer[DType.uint8]]
@@ -222,18 +222,24 @@ struct DeviceFastqBatch:
         and metadata present). If header buffers are missing, synthesizes
         headers as "@0", "@1", ... per record.
         """
-        if not self.qual_buffer or not self.offsets_buffer or not self.sequence_buffer:
+        if (
+            self.qual_buffer is None
+            or not self.offsets_buffer
+            or not self.sequence_buffer
+        ):
             raise Error(
-                "copy_to_host requires qual_buffer, offsets_buffer, and sequence_buffer; "
-                + "batch must have been uploaded with QUALITY_AND_SEQUENCE or FULL payload"
+                "copy_to_host requires qual_buffer, offsets_buffer, and"
+                " sequence_buffer; "
+                + "batch must have been uploaded with QUALITY_AND_SEQUENCE or"
+                " FULL payload"
             )
         if not self.seq_len or not self.quality_offset:
             raise Error(
                 "copy_to_host requires seq_len and quality_offset to be set"
             )
         var n = self.num_records
-        var total_seq = self.seq_len.value()
-        var q_offset = self.quality_offset.value()
+        var total_seq = self.seq_len
+        var q_offset = self.quality_offset
         var has_header = (
             self.header_buffer is not None and self.header_ends is not None
         )
@@ -297,7 +303,9 @@ struct DeviceFastqBatch:
 
             var header_bs: ByteString
             if has_header:
-                var header_start = 0 if i == 0 else Int(host_header_ends.value()[i - 1])
+                var header_start = 0 if i == 0 else Int(
+                    host_header_ends.value()[i - 1]
+                )
                 var header_end = Int(host_header_ends.value()[i])
                 var header_len = header_end - header_start
                 header_bs = ByteString(capacity=header_len)
@@ -433,13 +441,15 @@ fn move_staged_to_device(
     )
 
     # 2. Enqueue DMA Transfers
-    ctx.enqueue_copy(staged.quality_data_host, quality_buffer)
-    ctx.enqueue_copy(staged.quality_ends_host, quality_ends_buffer)
+    ctx.enqueue_copy(src_buf=staged.quality_data_host, dst_buf=quality_buffer)
+    ctx.enqueue_copy(
+        src_buf=staged.quality_ends_host, dst_buf=quality_ends_buffer
+    )
 
     var sequence_buffer: Optional[DeviceBuffer[DType.uint8]] = None
     if staged.sequence_data_host:
         var db = ctx.enqueue_create_buffer[DType.uint8](staged.total_seq_bytes)
-        ctx.enqueue_copy(staged.sequence_data_host.value(), db)
+        ctx.enqueue_copy(src_buf=staged.sequence_data_host.value(), dst_buf=db)
         sequence_buffer = db
 
     var header_buffer: Optional[DeviceBuffer[DType.uint8]] = None
@@ -452,9 +462,13 @@ fn move_staged_to_device(
             staged.num_records
         )
 
-        ctx.enqueue_copy(staged.header_data_host.value(), header_buffer.value())
         ctx.enqueue_copy(
-            staged.header_ends_host.value(), header_ends_buffer.value()
+            src_buf=staged.header_data_host.value(),
+            dst_buf=header_buffer.value(),
+        )
+        ctx.enqueue_copy(
+            src_buf=staged.header_ends_host.value(),
+            dst_buf=header_ends_buffer.value(),
         )
 
     ctx.synchronize()

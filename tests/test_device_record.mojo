@@ -15,7 +15,13 @@ from blazeseq.device_record import (
 )
 from gpu.host import DeviceContext
 from sys import has_accelerator
-from testing import assert_equal, assert_true, assert_false, assert_raises, TestSuite
+from testing import (
+    assert_equal,
+    assert_true,
+    assert_false,
+    assert_raises,
+    TestSuite,
+)
 
 
 fn cpu_quality_prefix_sum(
@@ -263,10 +269,8 @@ fn test_move_staged_to_device() raises:
     var staged = stage_batch_to_host(batch, ctx, GPUPayload.QUALITY_ONLY)
     var d = move_staged_to_device(staged, ctx, batch.quality_offset())
     assert_equal(d.num_records, staged.num_records)
-    assert_true(d.seq_len is not None)
-    assert_equal(d.seq_len.value(), staged.total_seq_bytes)
-    assert_true(d.quality_offset is not None)
-    assert_equal(d.quality_offset.value(), batch.quality_offset())
+    assert_equal(d.seq_len, staged.total_seq_bytes)
+    assert_equal(d.quality_offset, batch.quality_offset())
     assert_true(d.qual_buffer is not None)
     assert_true(d.offsets_buffer is not None)
     assert_true(d.sequence_buffer is None)
@@ -286,9 +290,7 @@ fn test_upload_batch_to_device_quality_only() raises:
     var ctx = DeviceContext()
     var d = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
     assert_equal(d.num_records, 2)
-    assert_true(d.seq_len is not None)
-    assert_equal(d.seq_len.value(), batch.seq_len())
-    assert_true(d.quality_offset is not None)
+    assert_equal(d.seq_len, batch.seq_len())
     assert_true(d.qual_buffer is not None)
     assert_true(d.offsets_buffer is not None)
     assert_true(d.sequence_buffer is None)
@@ -308,8 +310,7 @@ fn test_upload_batch_to_device_quality_and_sequence() raises:
     var ctx = DeviceContext()
     var d = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_AND_SEQUENCE)
     assert_equal(d.num_records, 1)
-    assert_true(d.seq_len is not None)
-    assert_equal(d.seq_len.value(), 4)
+    assert_equal(d.seq_len, 4)
     assert_true(d.qual_buffer is not None)
     assert_true(d.offsets_buffer is not None)
     assert_true(d.sequence_buffer is not None)
@@ -361,7 +362,8 @@ fn test_upload_batch_to_device_full() raises:
 
 
 fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
-    """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original."""
+    """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original.
+    """
 
     @parameter
     if not has_accelerator():
@@ -393,7 +395,8 @@ fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
 
 
 fn test_device_fastq_batch_to_records_quality_and_sequence_synthesized_headers() raises:
-    """When GPU is available: QUALITY_AND_SEQUENCE round-trip yields correct sequence/quality and synthesized headers @0, @1, ..."""
+    """When GPU is available: QUALITY_AND_SEQUENCE round-trip yields correct sequence/quality and synthesized headers @0, @1, ...
+    """
 
     @parameter
     if not has_accelerator():
@@ -414,7 +417,8 @@ fn test_device_fastq_batch_to_records_quality_and_sequence_synthesized_headers()
 
 
 fn test_device_fastq_batch_copy_to_host_quality_only_raises() raises:
-    """When GPU is available: copy_to_host on QUALITY_ONLY batch raises (sequence_buffer missing)."""
+    """When GPU is available: copy_to_host on QUALITY_ONLY batch raises (sequence_buffer missing).
+    """
 
     @parameter
     if not has_accelerator():

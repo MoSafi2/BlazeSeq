@@ -226,14 +226,17 @@ struct BatchedParser[
             Self.config.buffer_growth_enabled,
             Self.config.buffer_max_capacity,
         )
-        self.quality_schema = self._parse_schema(
-            Self.config.quality_schema.value()
-        )
-        # Use config batch_size if provided, otherwise use compile-time parameter
+        if Self.config.quality_schema:
+            self.quality_schema = self._parse_schema(
+                Self.config.quality_schema.value()
+            )
+        else:
+            self.quality_schema = self._parse_schema(schema)
+        # Use config batch_size if provided, otherwise use default_batch_size
         if Self.config.batch_size:
             self._batch_size = Self.config.batch_size.value()
         else:
-            self._batch_size = 1000
+            self._batch_size = default_batch_size
 
     @staticmethod
     @always_inline
@@ -274,11 +277,9 @@ struct BatchedParser[
         """
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
-        print(actual_max)
 
         while len(batch) < actual_max and self.line_iter.has_more():
             var record = self._parse_record()
-            print(record)
             batch.add(record^)
         return batch^
 

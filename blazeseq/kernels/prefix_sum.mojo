@@ -148,7 +148,7 @@ fn enqueue_quality_prefix_sum(
     """
     Allocate output buffer and launch optimized kernel based on average record length.
     """
-    var seq_len_val = on_device.seq_len.value()
+    var seq_len_val = on_device.seq_len
     var out_buf = ctx.enqueue_create_buffer[DType.int32](seq_len_val)
 
     # Choose kernel based on average quality length
@@ -170,7 +170,7 @@ fn enqueue_quality_prefix_sum(
             on_device.offsets_buffer.value(),
             out_buf,
             on_device.num_records,
-            on_device.quality_offset.value(),
+            on_device.quality_offset,
             grid_dim=num_blocks,
             block_dim=BLOCK_SIZE,
         )
@@ -186,7 +186,7 @@ fn enqueue_quality_prefix_sum(
             on_device.offsets_buffer.value(),
             out_buf,
             on_device.num_records,
-            on_device.quality_offset.value(),
+            on_device.quality_offset,
             grid_dim=on_device.num_records,
             block_dim=BLOCK_SIZE,
         )

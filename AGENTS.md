@@ -12,6 +12,6 @@ Examples:
 
 - Run a script: `pixi run mojo run test_file.mojo`
 - Run an example: `pixi run mojo run examples/example_parser.mojo`
-- Run tests: `pixi run mojo run tests/test_record_parser.mojo`
+- Run tests: `pixi run mojo run tests/test_parser.mojo`
 
 Use this command every time you need to execute a `.mojo` file in this project; do not use a bare `mojo run` or `mojo test` unless the user explicitly asks otherwise.
