@@ -234,47 +234,25 @@ struct DeviceFastqBatch:
 
         batch._quality_bytes = List[UInt8](capacity=staged.total_seq_bytes)
         batch._qual_ends = List[Int32](capacity=staged.num_records)
+        batch._quality_bytes.extend(staged.quality_data_host.as_span())
+        batch._qual_ends.extend(staged.quality_ends_host.as_span())
+
+
 
         if has_seq:
             batch._sequence_bytes = List[UInt8](capacity=staged.total_seq_bytes)
+            batch._sequence_bytes.extend(staged.sequence_data_host.value().as_span())
 
         if has_header:
             batch._header_bytes = List[UInt8](
                 capacity=self.total_header_bytes.value()
             )
             batch._header_ends = List[Int32](capacity=self.num_records)
-
-        memcpy(
-            dest=batch._quality_bytes.unsafe_ptr(),
-            src=staged.quality_data_host.as_span().unsafe_ptr(),
-            count=staged.total_seq_bytes,
-        )
-
-        memcpy(
-            dest=batch._qual_ends.unsafe_ptr(),
-            src=staged.quality_ends_host.as_span().unsafe_ptr(),
-            count=staged.num_records,
-        )
-
-        if has_seq:
-            memcpy(
-                dest=batch._sequence_bytes.unsafe_ptr(),
-                src=staged.sequence_data_host.value().as_span().unsafe_ptr(),
-                count=staged.total_seq_bytes,
+            batch._header_bytes.extend(
+                staged.header_data_host.value().as_span()
             )
+            batch._header_ends.extend(staged.header_ends_host.value().as_span())
 
-        if has_header:
-            memcpy(
-                dest=batch._header_bytes.unsafe_ptr(),
-                src=staged.header_data_host.value().as_span().unsafe_ptr(),
-                count=self.total_header_bytes.value(),
-            )
-
-            memcpy(
-                dest=batch._header_ends.unsafe_ptr(),
-                src=staged.header_ends_host.value().as_span().unsafe_ptr(),
-                count=self.num_records,
-            )
 
         return batch^
 
