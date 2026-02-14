@@ -7,6 +7,13 @@ from blazeseq.CONSTS import *
 from blazeseq.utils import memchr
 
 
+@register_passable("trivial")
+@fieldwise_init
+struct EOFError(Writable):
+    fn write_to(self, mut writer: Some[Writer]):
+        writer.write(EOF)
+
+
 struct BufferedReader[R: Reader](ImplicitlyDestructible, Movable, Sized, Writable):
     var source: Self.R
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
@@ -121,7 +128,7 @@ struct BufferedReader[R: Reader](ImplicitlyDestructible, Movable, Sized, Writabl
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref[_] self) raises -> Span[Byte, MutExternalOrigin]:
+    fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head
@@ -262,7 +269,6 @@ struct BufferedReader[R: Reader](ImplicitlyDestructible, Movable, Sized, Writabl
     # fn __del__(deinit self):
     #     if self._ptr:
     #         self._ptr.free()
-        
 
 
 @always_inline
@@ -326,12 +332,12 @@ struct LineIterator[R: Reader](Iterable, Movable):
         while True:
             if self.buffer.available() == 0:
                 if self.buffer.is_eof():
-                    raise Error("EOF")
+                    raise EOFError()
 
                 self.buffer._compact_from(self.buffer.buffer_position())
             _ = self.buffer._fill_buffer()
             if self.buffer.available() == 0:
-                raise Error("EOF")
+                raise EOFError()
 
             var view = self.buffer.view()
             var newline_at = memchr(haystack=view, chr=new_line)
@@ -385,7 +391,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
             var span = view[0:end]
             _ = self.buffer.consume(len(view))
             return span
-        raise Error("EOF")
+        raise EOFError()
 
     fn __iter__(
         ref self,
@@ -426,5 +432,9 @@ struct _LineIteratorIter[R: Reader, origin: Origin](Iterator):
             if not opt:
                 raise StopIteration()
             return opt
-        except:
-            raise StopIteration()
+        except Error:
+            if String(Error) == String(EOFError()):
+                raise StopIteration()
+            else:
+                print(String(Error))
+                raise StopIteration()
