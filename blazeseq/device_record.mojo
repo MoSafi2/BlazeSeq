@@ -197,7 +197,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
 
 
 @fieldwise_init
-struct DeviceFastqBatch:
+struct DeviceFastqBatch(Movable, ImplicitlyDestructible):
     """
     Device-side buffers and metadata after upload. Holds device buffers and
     num_records / quality_offset for launching the prefix-sum kernel.

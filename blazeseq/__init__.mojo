@@ -7,4 +7,5 @@ from blazeseq.device_record import (
     upload_batch_to_device,
 )
 from blazeseq.kernels.prefix_sum import enqueue_quality_prefix_sum
+from blazeseq.kernels.qc import enqueue_batch_average_quality, BatchAverageQualityResult
 from blazeseq.iostream import BufferedReader, Reader, LineIterator

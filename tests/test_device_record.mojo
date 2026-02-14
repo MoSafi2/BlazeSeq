@@ -6,6 +6,7 @@ from blazeseq import (
     upload_batch_to_device,
     enqueue_quality_prefix_sum,
 )
+from blazeseq.kernels.qc import enqueue_batch_average_quality
 from blazeseq.device_record import (
     GPUPayload,
     DeviceFastqBatch,
@@ -493,6 +494,51 @@ fn test_device_fastq_batch_copy_to_host_quality_only_raises() raises:
     var d = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
     with assert_raises(contains="copy_to_host requires"):
         _ = d.copy_to_host(ctx)
+
+
+fn cpu_batch_average_quality(quality_bytes: List[UInt8], quality_offset: UInt8) -> Float64:
+    """Reference: batch average quality = sum(qual[i] - offset) / len(quality_bytes)."""
+    if len(quality_bytes) == 0:
+        return 0.0
+    var total: Int64 = 0
+    for i in range(len(quality_bytes)):
+        total += Int64(quality_bytes[i]) - Int64(quality_offset)
+    return Float64(total) / Float64(len(quality_bytes))
+
+
+fn test_qc_batch_average_quality_on_gpu() raises:
+    """
+    When GPU is available: enqueue_batch_average_quality and retrieve()
+    return the same average as CPU reference.
+    """
+    @parameter
+    if not has_accelerator():
+        return
+    var batch = FastqBatch()
+    # Quality "!!!!" -> 0,0,0,0 (offset 33); "#$%&" -> 2,3,4,5 -> avg 3.5
+    batch.add(FastqRecord("@a", "ACGT", "+", "!!!!"))
+    batch.add(FastqRecord("@b", "TGCA", "+", "#$%&"))
+    var expected = cpu_batch_average_quality(
+        batch._quality_bytes, batch.quality_offset()
+    )
+    var ctx = DeviceContext()
+    var dev = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
+    var result = enqueue_batch_average_quality(dev, ctx)
+    var avg = result.retrieve(ctx)
+    assert_equal(avg, expected)
+
+
+fn test_qc_batch_average_quality_empty_batch() raises:
+    """When GPU is available: empty batch (seq_len 0) returns 0.0 from retrieve()."""
+    @parameter
+    if not has_accelerator():
+        return
+    var batch = FastqBatch()
+    var ctx = DeviceContext()
+    var dev = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
+    var result = enqueue_batch_average_quality(dev, ctx)
+    var avg = result.retrieve(ctx)
+    assert_equal(avg, 0.0)
 
 
 fn main() raises:
