@@ -216,120 +216,66 @@ struct DeviceFastqBatch:
     var header_ends: Optional[DeviceBuffer[DType.int32]]
 
     fn copy_to_host(self, ctx: DeviceContext) raises -> FastqBatch:
-        """
-        Copy device buffers back to host and build a FastqBatch.
-        Requires QUALITY_AND_SEQUENCE or FULL payload (qual, offsets, sequence
-        and metadata present). If header buffers are missing, synthesizes
-        headers as "@0", "@1", ... per record.
-        """
+        """High-level orchestrator for downloading data."""
         if (
             self.qual_buffer is None
             or not self.offsets_buffer
             or not self.sequence_buffer
         ):
             raise Error(
-                "copy_to_host requires qual_buffer, offsets_buffer, and"
-                " sequence_buffer; "
-                + "batch must have been uploaded with QUALITY_AND_SEQUENCE or"
-                " FULL payload"
+                "copy_to_host requires QUALITY_AND_SEQUENCE payload buffers."
             )
-        var n = self.num_records
-        var q_offset = self.quality_offset
-        if n == 0:
-            return FastqBatch(quality_offset=q_offset)
-        if not self.seq_len:
-            raise Error(
-                "copy_to_host requires seq_len to be set when num_records > 0"
-            )
-        var total_seq = self.seq_len
-        var has_header = (
-            self.header_buffer is not None and self.header_ends is not None
-        )
 
-        var total_header_bytes: Int = 0
+        # Phase 1: DMA Transfer (Fast)
+        var staged = download_device_batch_to_staged(self, ctx)
+        var batch = FastqBatch(quality_offset=self.quality_offset, batch_size=0)
+        has_seq = self.sequence_buffer is not None
+        has_header = self.header_buffer is not None
+
+        batch._quality_bytes = List[UInt8](capacity=staged.total_seq_bytes)
+        batch._qual_ends = List[Int32](capacity=staged.num_records)
+
+        if has_seq:
+            batch._sequence_bytes = List[UInt8](capacity=staged.total_seq_bytes)
+
         if has_header:
-            if self.total_header_bytes is not None:
-                total_header_bytes = self.total_header_bytes.value()
-            elif n > 0:
-                # Backward compat: copy header_ends first to get total size
-                var tmp_ends = ctx.enqueue_create_host_buffer[DType.int32](n)
-                ctx.enqueue_copy(
-                    src_buf=self.header_ends.value(),
-                    dst_buf=tmp_ends,
-                )
-                ctx.synchronize()
-                total_header_bytes = Int(tmp_ends[n - 1])
+            batch._header_bytes = List[UInt8](
+                capacity=self.total_header_bytes.value()
+            )
+            batch._header_ends = List[Int32](capacity=self.num_records)
 
-        # Allocate host buffers (single phase)
-        var host_qual = ctx.enqueue_create_host_buffer[DType.uint8](total_seq)
-        var host_offsets = ctx.enqueue_create_host_buffer[DType.int32](n)
-        var host_seq = ctx.enqueue_create_host_buffer[DType.uint8](total_seq)
-        var host_header: Optional[HostBuffer[DType.uint8]] = None
-        var host_header_ends: Optional[HostBuffer[DType.int32]] = None
+        memcpy(
+            dest=batch._quality_bytes.unsafe_ptr(),
+            src=staged.quality_data_host.as_span().unsafe_ptr(),
+            count=staged.total_seq_bytes,
+        )
+
+        memcpy(
+            dest=batch._qual_ends.unsafe_ptr(),
+            src=staged.quality_ends_host.as_span().unsafe_ptr(),
+            count=staged.num_records,
+        )
+
+        if has_seq:
+            memcpy(
+                dest=batch._sequence_bytes.unsafe_ptr(),
+                src=staged.sequence_data_host.value().as_span().unsafe_ptr(),
+                count=staged.total_seq_bytes,
+            )
+
         if has_header:
-            host_header = ctx.enqueue_create_host_buffer[DType.uint8](
-                total_header_bytes
+            memcpy(
+                dest=batch._header_bytes.unsafe_ptr(),
+                src=staged.header_data_host.value().as_span().unsafe_ptr(),
+                count=self.total_header_bytes.value(),
             )
-            host_header_ends = ctx.enqueue_create_host_buffer[DType.int32](n)
 
-        # Device -> host copies (all in one batch, then single sync)
-        ctx.enqueue_copy(
-            src_buf=self.qual_buffer.value(),
-            dst_buf=host_qual,
-        )
-        ctx.enqueue_copy(
-            src_buf=self.offsets_buffer.value(),
-            dst_buf=host_offsets,
-        )
-        ctx.enqueue_copy(
-            src_buf=self.sequence_buffer.value(),
-            dst_buf=host_seq,
-        )
-        if has_header:
-            ctx.enqueue_copy(
-                src_buf=self.header_buffer.value(),
-                dst_buf=host_header.value(),
+            memcpy(
+                dest=batch._header_ends.unsafe_ptr(),
+                src=staged.header_ends_host.value().as_span().unsafe_ptr(),
+                count=self.num_records,
             )
-            ctx.enqueue_copy(
-                src_buf=self.header_ends.value(),
-                dst_buf=host_header_ends.value(),
-            )
-        ctx.synchronize()
 
-        var batch = FastqBatch(quality_offset=q_offset)
-        for i in range(n):
-            var qu_header_bs = ByteString("+")
-            var qual_start = 0 if i == 0 else Int(host_offsets[i - 1])
-            var qual_end = Int(host_offsets[i])
-            var seg_len = qual_end - qual_start
-
-            var header_bs: ByteString
-            if has_header:
-                var header_start = 0 if i == 0 else Int(
-                    host_header_ends.value()[i - 1]
-                )
-                var header_end = Int(host_header_ends.value()[i])
-                var header_len = header_end - header_start
-                header_bs = ByteString(capacity=header_len)
-                for j in range(header_len):
-                    header_bs[j] = host_header.value()[header_start + j]
-            else:
-                header_bs = ByteString("@" + String(i))
-
-            var seq_bs = ByteString(capacity=seg_len)
-            var qual_bs = ByteString(capacity=seg_len)
-            for j in range(seg_len):
-                seq_bs[j] = host_seq[qual_start + j]
-                qual_bs[j] = host_qual[qual_start + j]
-            batch.add(
-                FastqRecord(
-                    header_bs^,
-                    seq_bs^,
-                    qu_header_bs^,
-                    qual_bs^,
-                    Int8(q_offset),
-                )
-            )
         return batch^
 
     fn to_records(self, ctx: DeviceContext) raises -> List[FastqRecord]:
@@ -338,6 +284,62 @@ struct DeviceFastqBatch:
         Same precondition as copy_to_host (QUALITY_AND_SEQUENCE or FULL).
         """
         return self.copy_to_host(ctx).to_records()
+
+
+fn download_device_batch_to_staged(
+    device_batch: DeviceFastqBatch, ctx: DeviceContext
+) raises -> StagedFastqBatch:
+    """Vectorized DMA move from Device to Host Staging."""
+    var n = device_batch.num_records
+    var total_seq = device_batch.seq_len
+
+    # Pre-calculate header size if possible
+    var total_hdr: Int = 0
+    if device_batch.total_header_bytes is not None:
+        total_hdr = device_batch.total_header_bytes.value()
+
+    # 1. Allocate all host staging buffers
+    var quality_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
+        total_seq
+    )
+    var quality_ends_host = ctx.enqueue_create_host_buffer[DType.int32](n)
+    var sequence_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
+        total_seq
+    )
+
+    var header_data_host: Optional[HostBuffer[DType.uint8]] = None
+    var header_ends_host: Optional[HostBuffer[DType.int32]] = None
+
+    if device_batch.header_buffer is not None:
+        header_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
+            total_hdr
+        )
+        header_ends_host = ctx.enqueue_create_host_buffer[DType.int32](n)
+
+    # 2. Enqueue all async copies
+    ctx.enqueue_copy(device_batch.qual_buffer.value(), quality_data_host)
+    ctx.enqueue_copy(device_batch.offsets_buffer.value(), quality_ends_host)
+    ctx.enqueue_copy(device_batch.sequence_buffer.value(), sequence_data_host)
+
+    if header_data_host:
+        ctx.enqueue_copy(
+            device_batch.header_buffer.value(), header_data_host.value()
+        )
+        ctx.enqueue_copy(
+            device_batch.header_ends.value(), header_ends_host.value()
+        )
+
+    ctx.synchronize()
+
+    return StagedFastqBatch(
+        num_records=n,
+        total_seq_bytes=total_seq,
+        quality_data_host=quality_data_host,
+        quality_ends_host=quality_ends_host,
+        sequence_data_host=sequence_data_host,
+        header_data_host=header_data_host,
+        header_ends_host=header_ends_host,
+    )
 
 
 @fieldwise_init
