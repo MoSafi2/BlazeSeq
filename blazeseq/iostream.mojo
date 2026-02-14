@@ -1,5 +1,4 @@
 from memory import memcpy, UnsafePointer, Span, alloc
-from blazeseq.utils import _check_ascii
 from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
@@ -15,9 +14,7 @@ struct EOFError(Writable):
         writer.write(EOF)
 
 
-struct BufferedReader[R: Reader, check_ascii: Bool = False](
-    ImplicitlyDestructible, Movable, Sized, Writable
-):
+struct BufferedReader[R: Reader](ImplicitlyDestructible, Movable, Sized, Writable):
     var source: Self.R
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
     var _len: Int  # Buffer capacity
@@ -193,10 +190,6 @@ struct BufferedReader[R: Reader, check_ascii: Bool = False](
         if amt == 0:
             self._is_eof = True
 
-        @parameter
-        if Self.check_ascii:
-            var s = self.view()
-            _check_ascii(s)
         return amt
 
     @always_inline
@@ -289,7 +282,7 @@ fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     return end
 
 
-struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
+struct LineIterator[R: Reader](Iterable, Movable):
     """
     Iterates over newline-separated lines from a BufferedReader.
     Owns the buffer; parsers hold LineIterator and use next_line/next_n_lines.
@@ -301,9 +294,9 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
 
     comptime IteratorType[
         mut: Bool, origin: Origin[mut=mut]
-    ] = _LineIteratorIter[Self.R, Self.check_ascii, origin]
+    ] = _LineIteratorIter[Self.R, origin]
 
-    var buffer: BufferedReader[Self.R, check_ascii = Self.check_ascii]
+    var buffer: BufferedReader[Self.R]
     var _growth_enabled: Bool
     var _max_capacity: Int
 
@@ -314,9 +307,7 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
         growth_enabled: Bool = False,
         max_capacity: Int = MAX_CAPACITY,
     ) raises:
-        self.buffer = BufferedReader[check_ascii = Self.check_ascii](
-            reader^, capacity
-        )
+        self.buffer = BufferedReader(reader^, capacity)
         self._growth_enabled = growth_enabled
         self._max_capacity = max_capacity
 
@@ -404,9 +395,9 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
 
     fn __iter__(
         ref self,
-    ) -> _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)]:
+    ) -> _LineIteratorIter[Self.R, origin_of(self)]:
         """Return an iterator for use in ``for line in self``."""
-        return _LineIteratorIter[Self.R, Self.check_ascii, origin_of(self)](
+        return _LineIteratorIter[Self.R, origin_of(self)](
             Pointer(to=self)
         )
 
@@ -416,18 +407,16 @@ struct LineIterator[R: Reader, check_ascii: Bool = False](Iterable, Movable):
 # ---------------------------------------------------------------------------
 
 
-struct _LineIteratorIter[R: Reader, check_ascii: Bool, origin: Origin](
-    Iterator
-):
+struct _LineIteratorIter[R: Reader, origin: Origin](Iterator):
     """Iterator over lines; yields Span[Byte, MutExternalOrigin] per line."""
 
     comptime Element = Span[Byte, MutExternalOrigin]
 
-    var _src: Pointer[LineIterator[Self.R, Self.check_ascii], Self.origin]
+    var _src: Pointer[LineIterator[Self.R], Self.origin]
 
     fn __init__(
         out self,
-        src: Pointer[LineIterator[Self.R, Self.check_ascii], Self.origin],
+        src: Pointer[LineIterator[Self.R], Self.origin],
     ):
         self._src = src
 
@@ -435,9 +424,9 @@ struct _LineIteratorIter[R: Reader, check_ascii: Bool, origin: Origin](
         return self._src[].has_more()
 
     fn __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[
-            Pointer[LineIterator[Self.R, Self.check_ascii], MutExternalOrigin]
-        ](self._src)
+        var mut_ptr = rebind[Pointer[LineIterator[Self.R], MutExternalOrigin]](
+            self._src
+        )
         try:
             var opt = mut_ptr[].next_line()
             if not opt:

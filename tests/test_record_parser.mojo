@@ -8,9 +8,9 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 from blazeseq.parser import RecordParser
 from blazeseq.readers import FileReader, MemoryReader
 from blazeseq.parser import ParserConfig
-from blazeseq.record import FastqRecord, Validator
+from blazeseq.record import FastqRecord
 from blazeseq.CONSTS import EOF
-from testing import assert_equal, assert_raises, TestSuite
+from testing import assert_equal, assert_raises, assert_true, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 
@@ -47,6 +47,25 @@ fn valid_file_test_fun(file: String, schema: String = "generic") raises:
         else:
             print(err_msg)
             raise
+
+
+fn create_non_ascii_fastq_data() -> List[Byte]:
+    var data = List[Byte]()
+    data.append(ord("@"))
+    data.append(ord("r"))
+    data.append(ord("1"))
+    data.append(ord("\n"))
+    data.append(ord("A"))
+    data.append(Byte(200))
+    data.append(ord("C"))
+    data.append(ord("\n"))
+    data.append(ord("+"))
+    data.append(ord("\n"))
+    data.append(ord("!"))
+    data.append(ord("!"))
+    data.append(ord("!"))
+    data.append(ord("\n"))
+    return data^
 
 
 fn test_valid() raises:
@@ -172,6 +191,35 @@ fn test_record_parser_for_loop_stop_iteration() raises:
     for record in parser:
         count_after += 1
     assert_equal(count_after, 0, "Should not iterate after EOF")
+
+
+fn test_record_parser_ascii_validation_enabled() raises:
+    """Non-ASCII bytes should fail when ParserConfig(check_ascii=True)."""
+    var content = create_non_ascii_fastq_data()
+    var reader = MemoryReader(content^)
+
+    with assert_raises(contains="Non ASCII letters found"):
+        var parser = RecordParser[
+            MemoryReader,
+            ParserConfig(check_ascii=True, check_quality=False),
+        ](reader^)
+        _ = parser._next()
+
+
+fn test_record_parser_ascii_validation_disabled() raises:
+    """Non-ASCII bytes should parse when ParserConfig(check_ascii=False)."""
+    var content = create_non_ascii_fastq_data()
+    var reader = MemoryReader(content^)
+
+    var parser = RecordParser[
+        MemoryReader,
+        ParserConfig(check_ascii=False, check_quality=False),
+    ](reader^)
+    var record = parser._next()
+    assert_true(
+        record is not None,
+        "Parser should yield record when ASCII validation is disabled",
+    )
 
 
 fn main() raises:
