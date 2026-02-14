@@ -5,8 +5,9 @@ from blazeseq.byte_string import ByteString
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
-from memory import UnsafePointer
+from memory import UnsafePointer, memcpy
 from collections.string import String
+
 
 # ---------------------------------------------------------------------------
 # GPU batch payload: what gets uploaded to device
@@ -118,13 +119,12 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """
         if len(self._qual_ends) == 0:
             self._quality_offset = UInt8(record.quality_offset)
-        
+
         self._quality_bytes.extend(record.QuStr.as_span())
         self._sequence_bytes.extend(record.SeqStr.as_span())
         self._qual_ends.append(Int32(len(self._quality_bytes)))
         self._header_bytes.extend(record.SeqHeader.as_span())
         self._header_ends.append(Int32(len(self._header_bytes)))
-
 
     fn upload_to_device(
         self, ctx: DeviceContext, payload: GPUPayload = GPUPayload.QUALITY_ONLY
@@ -132,7 +132,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """Upload this batch to the device with the given payload (GpuMovableBatch).
         """
         return upload_batch_to_device(self, ctx, payload)
-    
+
     fn num_records(self) -> Int:
         return len(self._qual_ends)
 
@@ -206,7 +206,7 @@ struct DeviceFastqBatch:
     """
 
     var num_records: Int
-    var seq_len: Int
+    var seq_len: Optional[Int]
     var quality_offset: Optional[UInt8]
     var qual_buffer: Optional[DeviceBuffer[DType.uint8]]
     var sequence_buffer: Optional[DeviceBuffer[DType.uint8]]
@@ -215,75 +215,168 @@ struct DeviceFastqBatch:
     var header_ends: Optional[DeviceBuffer[DType.int32]]
 
 
+@fieldwise_init
+struct StagedFastqBatch:
+    """Intermediary host-side storage in pinned memory."""
+
+    var num_records: Int
+    var total_seq_bytes: Int
+
+    # Semantic naming: [component]_[type]_[location]
+    var quality_data_host: HostBuffer[DType.uint8]
+    var quality_ends_host: HostBuffer[DType.int32]
+    var sequence_data_host: Optional[HostBuffer[DType.uint8]]
+    var header_data_host: Optional[HostBuffer[DType.uint8]]
+    var header_ends_host: Optional[HostBuffer[DType.int32]]
+
+
+fn stage_batch_to_host(
+    batch: FastqBatch, ctx: DeviceContext, payload: GPUPayload
+) raises -> StagedFastqBatch:
+    var n = batch.num_records()
+    var total_bytes = batch.seq_len()
+
+    var include_sequence = payload >= GPUPayload.QUALITY_AND_SEQUENCE
+    var include_full = payload >= GPUPayload.FULL and n > 0
+    var total_header_bytes = Int(
+        batch._header_ends[n - 1]
+    ) if include_full else 0
+
+    # Allocation phase
+    var quality_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
+        total_bytes
+    )
+    var quality_ends_host = ctx.enqueue_create_host_buffer[DType.int32](n)
+
+    var sequence_data_host: Optional[HostBuffer[DType.uint8]] = None
+    if include_sequence:
+        sequence_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
+            total_bytes
+        )
+
+    var header_data_host: Optional[HostBuffer[DType.uint8]] = None
+    var header_ends_host: Optional[HostBuffer[DType.int32]] = None
+    if include_full:
+        header_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
+            total_header_bytes
+        )
+        header_ends_host = ctx.enqueue_create_host_buffer[DType.int32](n)
+
+    ctx.synchronize()
+
+    # High-speed memory copy phase
+    memcpy(
+        dest=quality_data_host.as_span().unsafe_ptr(),
+        src=batch._quality_bytes.unsafe_ptr(),
+        count=total_bytes,
+    )
+    memcpy(
+        dest=quality_ends_host.as_span().unsafe_ptr(),
+        src=batch._qual_ends.unsafe_ptr(),
+        count=n,
+    )
+
+    if include_sequence:
+        memcpy(
+            dest=sequence_data_host.value().as_span().unsafe_ptr(),
+            src=batch._sequence_bytes.unsafe_ptr(),
+            count=total_bytes,
+        )
+
+    if include_full:
+        memcpy(
+            dest=header_data_host.value().as_span().unsafe_ptr(),
+            src=batch._header_bytes.unsafe_ptr(),
+            count=total_header_bytes,
+        )
+        memcpy(
+            dest=header_ends_host.value().as_span().unsafe_ptr(),
+            src=batch._header_ends.unsafe_ptr(),
+            count=n,
+        )
+
+    return StagedFastqBatch(
+        num_records=n,
+        total_seq_bytes=total_bytes,
+        quality_data_host=quality_data_host,
+        quality_ends_host=quality_ends_host,
+        sequence_data_host=sequence_data_host,
+        header_data_host=header_data_host,
+        header_ends_host=header_ends_host,
+    )
+
+
+fn move_staged_to_device(
+    staged: StagedFastqBatch, ctx: DeviceContext, quality_offset: UInt8
+) raises -> DeviceFastqBatch:
+    # 1. Create Device Buffers
+    var quality_buffer = ctx.enqueue_create_buffer[DType.uint8](
+        staged.total_seq_bytes
+    )
+    var quality_ends_buffer = ctx.enqueue_create_buffer[DType.int32](
+        staged.num_records
+    )
+
+    # 2. Enqueue DMA Transfers
+    ctx.enqueue_copy(staged.quality_data_host, quality_buffer)
+    ctx.enqueue_copy(staged.quality_ends_host, quality_ends_buffer)
+
+    var sequence_buffer: Optional[DeviceBuffer[DType.uint8]] = None
+    if staged.sequence_data_host:
+        var db = ctx.enqueue_create_buffer[DType.uint8](staged.total_seq_bytes)
+        ctx.enqueue_copy(staged.sequence_data_host.value(), db)
+        sequence_buffer = db
+
+    var header_buffer: Optional[DeviceBuffer[DType.uint8]] = None
+    var header_ends_buffer: Optional[DeviceBuffer[DType.int32]] = None
+    if staged.header_data_host and staged.header_ends_host:
+        header_buffer = ctx.enqueue_create_buffer[DType.uint8](
+            len(staged.header_data_host.value())
+        )
+        header_ends_buffer = ctx.enqueue_create_buffer[DType.int32](
+            staged.num_records
+        )
+
+        ctx.enqueue_copy(staged.header_data_host.value(), header_buffer.value())
+        ctx.enqueue_copy(
+            staged.header_ends_host.value(), header_ends_buffer.value()
+        )
+
+    ctx.synchronize()
+
+    return DeviceFastqBatch(
+        num_records=staged.num_records,
+        seq_len=staged.total_seq_bytes,
+        quality_offset=quality_offset,
+        qual_buffer=quality_buffer,
+        sequence_buffer=sequence_buffer,
+        offsets_buffer=quality_ends_buffer,
+        header_buffer=header_buffer,
+        header_ends=header_ends_buffer,
+    )
+
+
 fn upload_batch_to_device(
     batch: FastqBatch,
     ctx: DeviceContext,
     payload: GPUPayload = GPUPayload.QUALITY_ONLY,
 ) raises -> DeviceFastqBatch:
     """
-    Allocate device buffers and copy batch data to the given DeviceContext.
-    `payload` controls what is uploaded:
-    - GpuBatchPayload_quality_only (0): quality bytes + offsets only (default).
-    - GpuBatchPayload_quality_and_sequence (1): quality + sequence (same offsets).
-    - GpuBatchPayload_full (2): quality + sequence + header + header_ends.
-    Returns a handle holding device buffers and metadata for kernel launch.
+    Allocates device buffers and moves batch data to the GPU by staging through host memory.
+
+    This implementation splits the work into two distinct phases:
+    1. Staging: CPU-driven memcpy from standard List memory to DMA-accessible HostBuffers.
+    2. Dispatching: Enqueueing asynchronous DMA transfers from Host to Device.
     """
-    var total_qual = batch.seq_len()
-    var n = batch.num_records()
-    var qual_buf = ctx.enqueue_create_buffer[DType.uint8](total_qual)
-    var offsets_buf = ctx.enqueue_create_buffer[DType.int32](n + 1)
 
-    var host_qual = ctx.enqueue_create_host_buffer[DType.uint8](total_qual)
-    var host_offs = ctx.enqueue_create_host_buffer[DType.int32](n + 1)
-    ctx.synchronize()
+    # Phase 1: Prepare data in pinned host memory
+    # Uses modular semantic staging to clear out 'Death by a Thousand Loops'
+    var staged = stage_batch_to_host(batch, ctx, payload)
 
-    for i in range(total_qual):
-        host_qual[i] = batch._quality_bytes[i]
-
-    host_offs[0] = 0
-    for i in range(n):
-        host_offs[i + 1] = batch._qual_ends[i]
-    ctx.enqueue_copy(src_buf=host_qual, dst_buf=qual_buf)
-    ctx.enqueue_copy(src_buf=host_offs, dst_buf=offsets_buf)
-
-    var seq_buf: Optional[DeviceBuffer[DType.uint8]] = None
-    var hdr_buf: Optional[DeviceBuffer[DType.uint8]] = None
-    var hdr_ends_buf: Optional[DeviceBuffer[DType.int32]] = None
-
-    if payload >= GPUPayload.QUALITY_AND_SEQUENCE:
-        var host_seq = ctx.enqueue_create_host_buffer[DType.uint8](total_qual)
-        ctx.synchronize()
-        for i in range(total_qual):
-            host_seq[i] = batch._sequence_bytes[i]
-        var sb = ctx.enqueue_create_buffer[DType.uint8](total_qual)
-        ctx.enqueue_copy(src_buf=host_seq, dst_buf=sb)
-        seq_buf = sb
-
-    if payload >= GPUPayload.FULL and n > 0:
-        var total_hdr = Int(batch._header_ends[n - 1])
-        var host_hdr = ctx.enqueue_create_host_buffer[DType.uint8](total_hdr)
-        var host_hdr_ends = ctx.enqueue_create_host_buffer[DType.int32](n)
-        ctx.synchronize()
-        for i in range(total_hdr):
-            host_hdr[i] = batch._header_bytes[i]
-        for i in range(n):
-            host_hdr_ends[i] = batch._header_ends[i]
-        var hb = ctx.enqueue_create_buffer[DType.uint8](total_hdr)
-        var heb = ctx.enqueue_create_buffer[DType.int32](n)
-        ctx.enqueue_copy(src_buf=host_hdr, dst_buf=hb)
-        ctx.enqueue_copy(src_buf=host_hdr_ends, dst_buf=heb)
-        hdr_buf = hb
-        hdr_ends_buf = heb
-
-    return DeviceFastqBatch(
-        qual_buffer=qual_buf,
-        offsets_buffer=offsets_buf,
-        num_records=n,
-        seq_len=total_qual,
-        quality_offset=batch.quality_offset(),
-        sequence_buffer=seq_buf,
-        header_buffer=hdr_buf,
-        header_ends=hdr_ends_buf,
+    # Phase 2: Move from staged host buffers to actual GPU device memory
+    # quality_offset is passed separately as it is a metadata scalar, not a buffer
+    return move_staged_to_device(
+        staged, ctx, quality_offset=batch.quality_offset()
     )
 
 
@@ -299,65 +392,6 @@ fn upload_batch_to_device(
 # upload is a single enqueue_copy from host buffer to device. See
 # examples/example_device.mojo for a full pattern.
 # ---------------------------------------------------------------------------
-
-
-fn fill_subbatch_host_buffers(
-    batch: FastqBatch,
-    start_rec: Int,
-    end_rec: Int,
-    host_qual: HostBuffer[DType.uint8],
-    host_offs: HostBuffer[DType.int32],
-) raises -> None:
-    """
-    Fill pre-allocated host buffers with the quality bytes and offsets for
-    the record range [start_rec, end_rec). Offsets are 0-based relative to
-    the slice. Caller must ensure host_qual has size >= total_qual and
-    host_offs has size >= (end_rec - start_rec) + 1.
-    """
-    var qual_start = 0 if start_rec == 0 else Int(
-        batch._qual_ends[start_rec - 1]
-    )
-    var qual_end = Int(batch._qual_ends[end_rec - 1])
-    var total_qual = qual_end - qual_start
-    var n = end_rec - start_rec
-
-    for i in range(total_qual):
-        host_qual[i] = batch._quality_bytes[qual_start + i]
-
-    host_offs[0] = 0
-    for i in range(n):
-        host_offs[i + 1] = batch._qual_ends[start_rec + i] - Int32(qual_start)
-
-
-fn upload_subbatch_from_host_buffers(
-    host_qual: HostBuffer[DType.uint8],
-    host_offs: HostBuffer[DType.int32],
-    n: Int,
-    total_qual: Int,
-    quality_offset: UInt8,
-    ctx: DeviceContext,
-) raises -> DeviceFastqBatch:
-    """
-    Allocate device buffers and enqueue copy from the given host buffers.
-    Does not synchronize; caller may overlap with other work.
-    """
-    var qual_buf = ctx.enqueue_create_buffer[DType.uint8](total_qual)
-    var offsets_buf = ctx.enqueue_create_buffer[DType.int32](n + 1)
-    ctx.enqueue_copy(src_buf=host_qual, dst_buf=qual_buf)
-    ctx.enqueue_copy(src_buf=host_offs, dst_buf=offsets_buf)
-    var no_seq: Optional[DeviceBuffer[DType.uint8]] = None
-    var no_hdr: Optional[DeviceBuffer[DType.uint8]] = None
-    var no_hdr_ends: Optional[DeviceBuffer[DType.int32]] = None
-    return DeviceFastqBatch(
-        qual_buffer=qual_buf,
-        offsets_buffer=offsets_buf,
-        num_records=n,
-        seq_len=total_qual,
-        quality_offset=quality_offset,
-        sequence_buffer=no_seq,
-        header_buffer=no_hdr,
-        header_ends=no_hdr_ends,
-    )
 
 
 fn main() raises:
