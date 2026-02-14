@@ -216,25 +216,6 @@ struct BatchedParser[
     fn __init__(
         out self,
         var reader: Self.R,
-    ) raises:
-        """Initialize BatchedParser with optional ParserConfig."""
-        self.line_iter = LineIterator(
-            reader^,
-            Self.config.buffer_capacity,
-            Self.config.buffer_growth_enabled,
-            Self.config.buffer_max_capacity,
-        )
-        self.quality_schema = self._parse_schema(
-            Self.config.quality_schema.value()
-        )
-        if self.config.batch_size:
-            self._batch_size = self.config.batch_size.value()
-        else:
-            self._batch_size = 1000
-
-    fn __init__(
-        out self,
-        var reader: Self.R,
         schema: String = "generic",
         default_batch_size: Int = 1024,
     ) raises:
@@ -293,9 +274,11 @@ struct BatchedParser[
         """
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
+        print(actual_max)
 
         while len(batch) < actual_max and self.line_iter.has_more():
             var record = self._parse_record()
+            print(record)
             batch.add(record^)
         return batch^
 

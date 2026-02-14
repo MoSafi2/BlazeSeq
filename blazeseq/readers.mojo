@@ -33,11 +33,11 @@ comptime c_uint = UInt32
 comptime c_int = Int32
 
 # Define function signatures for zlib functions
-comptime gzopen_fn_type = fn(
+comptime gzopen_fn_type = fn (
     filename: c_char_ptr, mode: c_char_ptr
 ) -> c_void_ptr
-comptime gzclose_fn_type = fn(file: c_void_ptr) -> c_int
-comptime gzread_fn_type = fn(
+comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
+comptime gzread_fn_type = fn (
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
 
@@ -114,6 +114,10 @@ struct MemoryReader(Movable, Reader):
         self.data = List[Byte](capacity=len(data))
         for i in range(len(data)):
             self.data.append(data[i])
+        self.position = 0
+
+    fn __init__(out self, var content: String) raises:
+        self.data = List(content.as_bytes())
         self.position = 0
 
     @always_inline

@@ -490,7 +490,6 @@ fn upload_batch_to_device(
     """
 
     var staged = stage_batch_to_host(batch, ctx, payload)
-
     return move_staged_to_device(
         staged, ctx, quality_offset=batch.quality_offset()
     )
