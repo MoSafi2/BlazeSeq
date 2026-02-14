@@ -369,12 +369,8 @@ fn upload_batch_to_device(
     2. Dispatching: Enqueueing asynchronous DMA transfers from Host to Device.
     """
 
-    # Phase 1: Prepare data in pinned host memory
-    # Uses modular semantic staging to clear out 'Death by a Thousand Loops'
     var staged = stage_batch_to_host(batch, ctx, payload)
 
-    # Phase 2: Move from staged host buffers to actual GPU device memory
-    # quality_offset is passed separately as it is a metadata scalar, not a buffer
     return move_staged_to_device(
         staged, ctx, quality_offset=batch.quality_offset()
     )
