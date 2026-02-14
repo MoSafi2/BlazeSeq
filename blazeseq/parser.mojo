@@ -1,6 +1,6 @@
 from blazeseq.record import FastqRecord, RecordCoord, Validator
 from blazeseq.CONSTS import *
-from blazeseq.iostream import BufferedReader, Reader, LineIterator
+from blazeseq.iostream import BufferedReader, Reader, LineIterator, EOFError
 from blazeseq.readers import Reader
 from blazeseq.device_record import FastqBatch
 from std.iter import Iterable, Iterator
@@ -109,7 +109,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
     fn parse_all(mut self) raises:
         # Check if file is empty - if so, raise EOF error
         if not self.line_iter.has_more():
-            raise Error("EOF")
+            raise Error(EOF)
 
         while True:
             if not self.line_iter.has_more():
@@ -121,7 +121,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
     @always_inline
     fn _next(
         mut self,
-    ) raises -> Optional[FastqRecord]:
+    ) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
         if self.line_iter.has_more():
             var record: FastqRecord
@@ -129,7 +129,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
             self.validator.validate(record)
             return record^
         else:
-            return None
+            raise EOFError()
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -184,11 +184,12 @@ struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
             Pointer[RecordParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            var opt = mut_ptr[]._next()
-            if not opt:
+            return mut_ptr[]._next()
+        except Error:
+            if String(Error) == EOF:
                 raise StopIteration()
-            return opt.take()
-        except:
+            else:
+                print(String(Error))
             raise StopIteration()
 
 

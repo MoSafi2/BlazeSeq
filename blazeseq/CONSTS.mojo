@@ -12,6 +12,9 @@ comptime quality_header: UInt8 = 43
 comptime new_line: UInt8 = 10
 comptime carriage_return: UInt8 = 13
 
+# Sentinel error message for end-of-stream; used by parser/iostream iterators to stop iteration.
+comptime EOF = "EOF"
+
 comptime simd_width: Int = simd_width_of[UInt8]()
 
 comptime DEFAULT_CAPACITY = 4 * 1024

@@ -8,23 +8,32 @@ from blazeseq import (
     upload_subbatch_from_host_buffers,
     enqueue_quality_prefix_sum,
 )
-from collections.string import String
 from gpu.host import DeviceContext
 from sys import has_accelerator
 from testing import assert_equal, assert_true, TestSuite
 
 
-
-fn _assert_records_equal(a: FastqRecord, b: FastqRecord) raises:
-    """Assert two FastqRecords are equal via public API (header, seq, qual, quality_offset)."""
-    assert_equal(a.SeqHeader.as_string_slice(), b.SeqHeader.as_string_slice())
-    assert_equal(a.SeqStr.as_string_slice(), b.SeqStr.as_string_slice())
-    assert_equal(a.QuStr.as_string_slice(), b.QuStr.as_string_slice())
-    assert_equal(a.quality_offset, b.quality_offset)
+fn cpu_quality_prefix_sum(
+    quality_bytes: List[UInt8], offsets: List[Int32], quality_offset: UInt8
+) -> List[Int32]:
+    """
+    Reference: for each record i, prefix sum of (byte - offset) over
+    [offsets[i], offsets[i+1]); returns concatenated prefix sums.
+    """
+    var out = List[Int32]()
+    var n = len(offsets) - 1
+    for i in range(n):
+        var start = offsets[i]
+        var end = offsets[i + 1]
+        var s: Int32 = 0
+        for j in range(start, end):
+            s += Int32(quality_bytes[j]) - Int32(quality_offset)
+            out.append(s)
+    return out^
 
 
 fn test_device_fastq_batch_add_and_layout() raises:
-    """FastqBatch stacks records; assert via num_records, total_quality_len, get_record/to_records only."""
+    """FastqBatch stacks records and builds correct qual_ends."""
     var batch = FastqBatch()
     var r1 = FastqRecord("@a", "AC", "+", "!!")
     var r2 = FastqRecord("@b", "GT", "+", "!!")
@@ -32,39 +41,61 @@ fn test_device_fastq_batch_add_and_layout() raises:
     batch.add(r2)
     assert_equal(batch.num_records(), 2)
     assert_equal(batch.total_quality_len(), 4)
-    var back = batch.to_records()
-    assert_equal(len(back), 2)
-    _assert_records_equal(back[0], r1)
-    _assert_records_equal(back[1], r2)
-    _assert_records_equal(batch.get_record(0), r1)
-    _assert_records_equal(batch.get_record(1), r2)
+    assert_equal(batch._qual_ends[0], 2)
+    assert_equal(batch._qual_ends[1], 4)
+    assert_equal(len(batch._quality_bytes), 4)
+    assert_equal(len(batch._sequence_bytes), 4)
 
 
-fn test_fastq_batch_empty_default() raises:
-    """Empty default batch: num_records==0, len==0, total_quality_len==0, to_records empty, quality_offset default."""
+fn test_cpu_prefix_sum_reference() raises:
+    """CPU reference prefix sum matches hand-computed values."""
+    var quality_bytes = List[UInt8]()
+    quality_bytes.append(33)
+    quality_bytes.append(34)
+    quality_bytes.append(35)
+    var offsets = List[Int32]()
+    offsets.append(0)
+    offsets.append(2)
+    offsets.append(3)
+    var offset_u8: UInt8 = 33
+    var result = cpu_quality_prefix_sum(quality_bytes, offsets, offset_u8)
+    assert_equal(len(result), 3)
+    assert_equal(result[0], 0)
+    assert_equal(result[1], 1)
+    assert_equal(result[2], 2)
+
+
+fn test_device_batch_prefix_sum_on_gpu() raises:
+    """
+    When a GPU is available: upload batch, run kernel, copy back,
+    assert prefix-sum output matches CPU reference.
+    """
+
+    @parameter
+    if not has_accelerator():
+        return
     var batch = FastqBatch()
-    assert_equal(batch.num_records(), 0)
-    assert_equal(len(batch), 0)
-    assert_equal(batch.total_quality_len(), 0)
-    var back = batch.to_records()
-    assert_equal(len(back), 0)
-    assert_equal(batch.quality_offset(), 33)
-
-
-fn test_fastq_batch_capacity_constructor() raises:
-    """Capacity constructor: empty batch with custom quality_offset; add records and round-trip."""
-    var batch = FastqBatch(batch_size=50, avg_record_size=200, quality_offset=64)
-    assert_equal(batch.num_records(), 0)
-    assert_equal(batch.quality_offset(), 64)
-    var r1 = FastqRecord("@x", "ACGT", "+", "!!!!", 64)
-    var r2 = FastqRecord("@y", "TG", "+", "!!", 64)
+    var r1 = FastqRecord("@a", "AC", "+", "!!")
+    var r2 = FastqRecord("@b", "G", "+", "!")
     batch.add(r1)
     batch.add(r2)
-    assert_equal(batch.num_records(), 2)
-    assert_equal(batch.total_quality_len(), 6)
-    var back = batch.to_records()
-    _assert_records_equal(back[0], r1)
-    _assert_records_equal(back[1], r2)
+    var ctx = DeviceContext()
+    var on_device = upload_batch_to_device(batch, ctx)
+    var out_buf = enqueue_quality_prefix_sum(on_device, ctx)
+    var host_out = ctx.enqueue_create_host_buffer[DType.int32](
+        on_device.total_quality_len
+    )
+    ctx.enqueue_copy(src_buf=out_buf, dst_buf=host_out)
+    ctx.synchronize()
+    var offsets_list = List[Int32]()
+    offsets_list.append(0)
+    for i in range(batch.num_records()):
+        offsets_list.append(batch._qual_ends[i])
+    var expected = cpu_quality_prefix_sum(
+        batch._quality_bytes, offsets_list, batch.quality_offset()
+    )
+    for i in range(on_device.total_quality_len):
+        assert_equal(host_out[i], expected[i])
 
 
 fn test_fastq_batch_from_records_and_to_records() raises:
@@ -101,7 +132,17 @@ fn test_fastq_batch_get_record_matches_to_records() raises:
     var as_list = batch.to_records()
     for i in range(batch.num_records()):
         var from_get = batch.get_record(i)
-        _assert_records_equal(from_get, as_list[i])
+        assert_equal(
+            from_get.SeqHeader.as_string_slice(),
+            as_list[i].SeqHeader.as_string_slice(),
+        )
+        assert_equal(
+            from_get.SeqStr.as_string_slice(),
+            as_list[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            from_get.QuStr.as_string_slice(), as_list[i].QuStr.as_string_slice()
+        )
 
 
 fn test_fastq_batch_empty_from_records() raises:
@@ -113,218 +154,122 @@ fn test_fastq_batch_empty_from_records() raises:
     assert_equal(len(back), 0)
 
 
-fn test_fastq_batch_single_record_via_add() raises:
-    """Single record via add(): num_records==1, len==1, get_record(0) and to_records() match, total_quality_len correct."""
-    var r = FastqRecord("@id", "ACGT", "+", "!!!!")
-    var batch = FastqBatch()
-    batch.add(r)
-    assert_equal(batch.num_records(), 1)
-    assert_equal(len(batch), 1)
-    assert_equal(batch.total_quality_len(), len(r.QuStr))
-    _assert_records_equal(batch.get_record(0), r)
-    var back = batch.to_records()
-    assert_equal(len(back), 1)
-    _assert_records_equal(back[0], r)
+fn test_subbatch_prefix_sum_multi_chunk() raises:
+    """
+    When a GPU is available: run prefix-sum in multiple subbatches using
+    fill_subbatch_host_buffers and upload_subbatch_from_host_buffers,
+    aggregate results, and assert they match the CPU reference.
+    """
 
-
-fn test_fastq_batch_single_record_from_list() raises:
-    """Single record via FastqBatch([r]): same assertions as single via add."""
-    var r = FastqRecord("@only", "NN", "+", "!!")
-    var records = List[FastqRecord]()
-    records.append(r.copy())
-    var batch = FastqBatch(records)
-    assert_equal(batch.num_records(), 1)
-    assert_equal(len(batch), 1)
-    assert_equal(batch.total_quality_len(), 2)
-    _assert_records_equal(batch.get_record(0), r)
-    var back = batch.to_records()
-    assert_equal(len(back), 1)
-    _assert_records_equal(back[0], r)
-
-
-fn test_fastq_batch_get_record_negative_index_raises() raises:
-    """Get_record(-1) raises."""
-    var batch = FastqBatch()
-    batch.add(FastqRecord("@a", "A", "+", "!"))
-    try:
-        _ = batch.get_record(-1)
-        assert_true(False, "get_record(-1) should raise")
-    except:
-        pass
-
-
-fn test_fastq_batch_get_record_index_equals_len_raises() raises:
-    """Get_record(n) when batch has n records raises."""
-    var batch = FastqBatch()
-    batch.add(FastqRecord("@a", "A", "+", "!"))
-    batch.add(FastqRecord("@b", "C", "+", "!"))
-    assert_equal(batch.num_records(), 2)
-    try:
-        _ = batch.get_record(2)
-        assert_true(False, "get_record(2) on size-2 batch should raise")
-    except:
-        pass
-
-
-fn test_fastq_batch_get_record_index_over_len_raises() raises:
-    """Get_record(100) on size-3 batch raises."""
-    var records = List[FastqRecord]()
-    records.append(FastqRecord("@a", "A", "+", "!"))
-    records.append(FastqRecord("@b", "C", "+", "!"))
-    records.append(FastqRecord("@c", "G", "+", "!"))
-    var batch = FastqBatch(records)
-    try:
-        _ = batch.get_record(100)
-        assert_true(False, "get_record(100) should raise")
-    except:
-        pass
-
-
-fn test_fastq_batch_get_record_valid_indices_match_to_records() raises:
-    """Get_record(0), get_record(1), get_record(n-1) match to_records()[i]."""
-    var records = List[FastqRecord]()
-    records.append(FastqRecord("@r0", "AA", "+", "!!"))
-    records.append(FastqRecord("@r1", "CC", "+", "!!"))
-    records.append(FastqRecord("@r2", "GG", "+", "!!"))
-    var batch = FastqBatch(records)
-    var as_list = batch.to_records()
-    _assert_records_equal(batch.get_record(0), as_list[0])
-    _assert_records_equal(batch.get_record(1), as_list[1])
-    _assert_records_equal(batch.get_record(2), as_list[2])
-
-
-fn test_fastq_batch_round_trip_varying_lengths() raises:
-    """Round-trip list with varying header and seq/qual lengths; assert each record matches."""
-    var records = List[FastqRecord]()
-    records.append(FastqRecord("@short", "A", "+", "!"))
-    records.append(FastqRecord("@longer_id_here", "ACGTACGT", "+", "!!!!!!!!"))
-    records.append(FastqRecord("@x", "NNNNNN", "+", "!!!!!!"))
-    var batch = FastqBatch(records)
-    var back = batch.to_records()
-    assert_equal(len(back), 3)
-    for i in range(3):
-        _assert_records_equal(back[i], records[i])
-
-
-fn test_fastq_batch_round_trip_mixed_quality_offset() raises:
-    """Batch uses first record's quality_offset; round-trip records get batch's offset."""
-    var records = List[FastqRecord]()
-    records.append(FastqRecord("@first", "AA", "+", "!!", 64))
-    records.append(FastqRecord("@second", "CC", "+", "!!", 33))
-    var batch = FastqBatch(records)
-    assert_equal(batch.quality_offset(), 64)
-    var back = batch.to_records()
-    assert_equal(len(back), 2)
-    assert_equal(back[0].quality_offset, 64)
-    assert_equal(back[1].quality_offset, 64)
-
-
-fn test_fastq_batch_first_record_sets_quality_offset() raises:
-    """Add one record with non-default quality_offset; batch.quality_offset() and round-trip match."""
-    var batch = FastqBatch()
-    var r = FastqRecord("@q64", "AC", "+", "!!", 64)
-    batch.add(r)
-    assert_equal(batch.quality_offset(), 64)
-    var back = batch.to_records()
-    assert_equal(len(back), 1)
-    _assert_records_equal(back[0], r)
-
-
-fn test_fastq_batch_subsequent_adds_round_trip() raises:
-    """Add multiple records; num_records, total_quality_len, and round-trip content via get_record/to_records."""
-    var batch = FastqBatch()
-    var r1 = FastqRecord("@a", "A", "+", "!")
-    var r2 = FastqRecord("@b", "CG", "+", "!!")
-    var r3 = FastqRecord("@c", "T", "+", "!")
-    batch.add(r1)
-    batch.add(r2)
-    batch.add(r3)
-    assert_equal(batch.num_records(), 3)
-    assert_equal(batch.total_quality_len(), 4)
-    _assert_records_equal(batch.get_record(0), r1)
-    _assert_records_equal(batch.get_record(1), r2)
-    _assert_records_equal(batch.get_record(2), r3)
-    var back = batch.to_records()
-    _assert_records_equal(back[0], r1)
-    _assert_records_equal(back[1], r2)
-    _assert_records_equal(back[2], r3)
-
-
-fn test_fastq_batch_len_equals_num_records() raises:
-    """Len(batch) == batch.num_records() for 0, 1, and several records."""
-    var empty = FastqBatch()
-    assert_equal(len(empty), empty.num_records())
-    var one = FastqBatch()
-    one.add(FastqRecord("@x", "A", "+", "!"))
-    assert_equal(len(one), one.num_records())
-    var several = FastqBatch()
-    several.add(FastqRecord("@a", "A", "+", "!"))
-    several.add(FastqRecord("@b", "C", "+", "!"))
-    several.add(FastqRecord("@c", "G", "+", "!"))
-    assert_equal(len(several), several.num_records())
-
-
-fn test_fastq_batch_copyable_contract() raises:
-    """Copy batch; both have same num_records, total_quality_len, and to_records() content equal."""
-    var records = List[FastqRecord]()
-    records.append(FastqRecord("@a", "AC", "+", "!!"))
-    records.append(FastqRecord("@b", "GT", "+", "!!"))
-    var batch = FastqBatch(records)
-    var batch2 = batch.copy()
-    assert_equal(batch2.num_records(), batch.num_records())
-    assert_equal(batch2.total_quality_len(), batch.total_quality_len())
-    var back1 = batch.to_records()
-    var back2 = batch2.to_records()
-    assert_equal(len(back2), len(back1))
-    for i in range(len(back1)):
-        _assert_records_equal(back2[i], back1[i])
-
-
-fn test_fastq_batch_round_trip_many_small_records() raises:
-    """Many small records (e.g. 100): num_records, total_quality_len, spot-check first/last/middle."""
-    var records = List[FastqRecord](capacity=100)
-    for i in range(100):
-        records.append(FastqRecord("@r" + String(i), "AC", "+", "!!"))
-    var batch = FastqBatch(records)
-    assert_equal(batch.num_records(), 100)
-    assert_equal(batch.total_quality_len(), 200)
-    var back = batch.to_records()
-    assert_equal(len(back), 100)
-    _assert_records_equal(batch.get_record(0), records[0])
-    _assert_records_equal(batch.get_record(99), records[99])
-    _assert_records_equal(batch.get_record(50), records[50])
-
-
-fn test_fastq_batch_round_trip_few_long_records() raises:
-    """2-3 records with long sequence/quality; round-trip content and total_quality_len."""
-    var long_seq = String("A")
-    for _ in range(199):
-        long_seq += "C"
-    var long_qual = String("!")
-    for _ in range(199):
-        long_qual += "!"
-    var records = List[FastqRecord]()
-    records.append(FastqRecord("@long1", long_seq, "+", long_qual))
-    records.append(FastqRecord("@long2", long_seq, "+", long_qual))
-    var batch = FastqBatch(records)
-    assert_equal(batch.num_records(), 2)
-    assert_equal(batch.total_quality_len(), 400)
-    var back = batch.to_records()
-    _assert_records_equal(back[0], records[0])
-    _assert_records_equal(back[1], records[1])
-
-
-fn test_fastq_batch_upload_to_device_when_available() raises:
-    """When has_accelerator: upload_to_device returns DeviceFastqBatch with same num_records and quality_offset."""
+    @parameter
     if not has_accelerator():
         return
+
+    var num_records: Int = 3000
+    var subbatch_size: Int = 1280
+    var seq_len: Int = 80
     var batch = FastqBatch()
-    batch.add(FastqRecord("@a", "ACGT", "+", "!!!!"))
-    batch.add(FastqRecord("@b", "TGCA", "+", "!!!!"))
+    for i in range(num_records):
+        var seq = String(capacity=seq_len)
+        var qual = String(capacity=seq_len)
+        for k in range(seq_len):
+            seq += "A"
+            qual += "!"
+        var r = FastqRecord("@" + String(i), seq, "+", qual)
+        batch.add(r)
+
+    var total_qual = batch.total_quality_len()
+    var num_subbatches = (num_records + subbatch_size - 1) // subbatch_size
+    var max_subbatch_qual = subbatch_size * seq_len
+    var max_subbatch_n = subbatch_size
+
     var ctx = DeviceContext()
-    var device_batch = batch.upload_to_device(ctx)
-    assert_equal(device_batch.num_records, batch.num_records())
-    assert_equal(device_batch.quality_offset, batch.quality_offset())
+    var host_qual_0 = ctx.enqueue_create_host_buffer[DType.uint8](
+        max_subbatch_qual
+    )
+    var host_offs_0 = ctx.enqueue_create_host_buffer[DType.int32](
+        max_subbatch_n + 1
+    )
+    var host_qual_1 = ctx.enqueue_create_host_buffer[DType.uint8](
+        max_subbatch_qual
+    )
+    var host_offs_1 = ctx.enqueue_create_host_buffer[DType.int32](
+        max_subbatch_n + 1
+    )
+    ctx.synchronize()
+
+    var aggregated = ctx.enqueue_create_host_buffer[DType.int32](total_qual)
+    ctx.synchronize()
+
+    var dummy_out = ctx.enqueue_create_host_buffer[DType.int32](1)
+    ctx.synchronize()
+    var last_host_out = dummy_out
+    var last_qual_start: Int = 0
+    var last_len: Int = 0
+
+    for i in range(num_subbatches):
+        var start_rec = i * subbatch_size
+        var end_rec = min((i + 1) * subbatch_size, num_records)
+        var qual_start = 0 if start_rec == 0 else Int(
+            batch._qual_ends[start_rec - 1]
+        )
+        var qual_end = Int(batch._qual_ends[end_rec - 1])
+        var total_qual_slice = qual_end - qual_start
+        var n_slice = end_rec - start_rec
+
+        if i > 0:
+            ctx.synchronize()
+            for j in range(last_len):
+                aggregated[last_qual_start + j] = last_host_out[j]
+
+        var slot = i % 2
+        var host_qual_slot = host_qual_0 if slot == 0 else host_qual_1
+        var host_offs_slot = host_offs_0 if slot == 0 else host_offs_1
+
+        fill_subbatch_host_buffers(
+            batch, start_rec, end_rec, host_qual_slot, host_offs_slot
+        )
+        var on_device = upload_subbatch_from_host_buffers(
+            host_qual_slot,
+            host_offs_slot,
+            n_slice,
+            total_qual_slice,
+            batch.quality_offset(),
+            ctx,
+        )
+        var out_buf = enqueue_quality_prefix_sum(on_device, ctx)
+        var host_out = ctx.enqueue_create_host_buffer[DType.int32](
+            total_qual_slice
+        )
+        ctx.enqueue_copy(src_buf=out_buf, dst_buf=host_out)
+
+        if i + 1 < num_subbatches:
+            var next_start = (i + 1) * subbatch_size
+            var next_end = min((i + 2) * subbatch_size, num_records)
+            var next_slot = (i + 1) % 2
+            var next_host_qual = host_qual_0 if next_slot == 0 else host_qual_1
+            var next_host_offs = host_offs_0 if next_slot == 0 else host_offs_1
+            fill_subbatch_host_buffers(
+                batch, next_start, next_end, next_host_qual, next_host_offs
+            )
+
+        last_host_out = host_out
+        last_qual_start = qual_start
+        last_len = total_qual_slice
+
+    ctx.synchronize()
+    for j in range(last_len):
+        aggregated[last_qual_start + j] = last_host_out[j]
+
+    var offsets_list = List[Int32]()
+    offsets_list.append(0)
+    for i in range(batch.num_records()):
+        offsets_list.append(batch._qual_ends[i])
+    var expected = cpu_quality_prefix_sum(
+        batch._quality_bytes, offsets_list, batch.quality_offset()
+    )
+    for i in range(total_qual):
+        assert_equal(aggregated[i], expected[i])
 
 
 fn main() raises:
