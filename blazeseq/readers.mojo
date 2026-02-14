@@ -13,6 +13,7 @@ from memory.legacy_unsafe_pointer import LegacyUnsafePointer
 from sys import ffi
 from sys.info import CompilationTarget
 from pathlib import Path
+from collections.string import String, chr
 
 
 # Constants for zlib return codes
@@ -167,6 +168,85 @@ struct MemoryReader(Movable, Reader):
         """Move constructor for Movable trait compliance."""
         self.data = other.data^
         self.position = other.position
+
+
+struct SyntheticFastqReader(Movable, Reader):
+    """
+    Reader that generates synthetic FASTQ data on demand.
+    Takes num_reads and read_len; each read has sequence ACGT-repeated and
+    quality scores in Sanger range (33–73). Use with BatchedParser to get
+    FastqBatch iterators that can be processed on CPU or uploaded for GPU.
+    """
+
+    var num_reads: Int
+    var read_len: Int
+    var current_read: Int
+    var _pending: List[Byte]
+
+    fn __init__(out self, num_reads: Int, read_len: Int = 100):
+        """Initialize with number of reads to generate and length per read."""
+        self.num_reads = num_reads
+        self.read_len = read_len
+        self.current_read = 0
+        self._pending = List[Byte]()
+
+    fn _generate_one_record(mut self) raises:
+        """Append one FASTQ record (4 lines) to _pending."""
+        if self.current_read >= self.num_reads:
+            return
+        var r = self.current_read
+        self.current_read += 1
+        var bases = ["A", "C", "G", "T"]
+        var header = "@read_" + String(r) + "\n"
+        var seq = String(capacity=self.read_len)
+        var qual = String(capacity=self.read_len)
+        for p in range(self.read_len):
+            seq += bases[r % 4]
+            var q_ascii = 33 + (r + p) % 41
+            qual += chr(q_ascii)
+        var record_str = header + seq + "\n+\n" + qual
+        var record_bytes = record_str.as_bytes()
+        for i in range(len(record_bytes)):
+            self._pending.append(record_bytes[i])
+
+    fn read_to_buffer(
+        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+    ) raises -> UInt64:
+        """Read generated FASTQ bytes into the buffer. Returns 0 when all reads consumed."""
+        if pos > len(buf):
+            raise Error("Position is outside the buffer")
+        var s = Span[Byte, MutExternalOrigin](
+            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        )
+        if amt > len(s):
+            raise Error(
+                "Number of elements to read is bigger than the available space"
+                " in the buffer"
+            )
+        if amt < 0:
+            raise Error("The amount to be read should be positive")
+
+        var written: Int = 0
+        while written < amt and (len(self._pending) > 0 or self.current_read < self.num_reads):
+            if len(self._pending) == 0:
+                self._generate_one_record()
+            if len(self._pending) == 0:
+                break
+            var to_copy = min(amt - written, len(self._pending))
+            for i in range(to_copy):
+                s[written + i] = self._pending[i]
+            written += to_copy
+            var new_pending = List[Byte](capacity=len(self._pending) - to_copy)
+            for i in range(to_copy, len(self._pending)):
+                new_pending.append(self._pending[i])
+            self._pending = new_pending^
+        return UInt64(written)
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.num_reads = other.num_reads
+        self.read_len = other.read_len
+        self.current_read = other.current_read
+        self._pending = other._pending^
 
 
 @fieldwise_init

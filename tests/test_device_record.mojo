@@ -6,7 +6,11 @@ from blazeseq import (
     upload_batch_to_device,
     enqueue_quality_prefix_sum,
 )
-from blazeseq.kernels.qc import enqueue_batch_average_quality
+from blazeseq.kernels.qc import (
+    enqueue_batch_average_quality,
+    enqueue_quality_distribution,
+    QualityDistributionHostResult,
+)
 from blazeseq.device_record import (
     GPUPayload,
     DeviceFastqBatch,
@@ -523,9 +527,131 @@ fn test_qc_batch_average_quality_on_gpu() raises:
     )
     var ctx = DeviceContext()
     var dev = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
-    var result = enqueue_batch_average_quality(dev, ctx)
+    var result = enqueue_batch_average_quality(dev^, ctx)
     var avg = result.retrieve(ctx)
     assert_equal(avg, expected)
+
+
+fn cpu_quality_distribution(
+    quality_bytes: List[UInt8],
+    offsets: List[Int32],
+    quality_offset: UInt8,
+) -> QualityDistributionHostResult:
+    """
+    Reference: 2D histogram (position x quality), 1D histogram (per-read average),
+    max_length, min_qu, max_qu. Matches the logic of the GPU kernel.
+    """
+    var num_records = len(offsets) - 1
+    if num_records <= 0:
+        var empty_seq = List[Int64](capacity=256)
+        for _ in range(256):
+            empty_seq.append(0)
+        return QualityDistributionHostResult(
+            List[Int64](),
+            empty_seq^,
+            0,
+            255,
+            0,
+        )
+
+    var max_length: Int = 0
+    for i in range(num_records):
+        var L = Int(offsets[i + 1]) - Int(offsets[i])
+        if L > max_length:
+            max_length = L
+
+    var min_qu: UInt8 = 255
+    var max_qu: UInt8 = 0
+    for i in range(len(quality_bytes)):
+        if quality_bytes[i] < min_qu:
+            min_qu = quality_bytes[i]
+        if quality_bytes[i] > max_qu:
+            max_qu = quality_bytes[i]
+
+    # qu_dist: max_length * 128, row-major
+    var qu_dist = List[Int64](capacity=max_length * 128)
+    for i in range(max_length * 128):
+        qu_dist.append(0)
+
+    # qu_dist_seq: 256 bins
+    var qu_dist_seq = List[Int64](capacity=256)
+    for i in range(256):
+        qu_dist_seq.append(0)
+
+    for r in range(num_records):
+        var start = Int(offsets[r])
+        var end = Int(offsets[r + 1])
+        var length = end - start
+        var qu_sum: Int64 = 0
+        for p in range(length):
+            var q = quality_bytes[start + p]
+            qu_dist[p * 128 + Int(q)] = qu_dist[p * 128 + Int(q)] + 1
+            qu_sum += Int64(q)
+        var average = Int(qu_sum / length)
+        if average >= 256:
+            average = 255
+        if average < 0:
+            average = 0
+        qu_dist_seq[average] = qu_dist_seq[average] + 1
+
+    return QualityDistributionHostResult(
+        qu_dist^,
+        qu_dist_seq^,
+        max_length,
+        min_qu,
+        max_qu,
+    )
+
+
+fn test_quality_distribution_on_gpu() raises:
+    """
+    When GPU is available: enqueue_quality_distribution and retrieve()
+    match the CPU reference (qu_dist, qu_dist_seq, max_length, min_qu, max_qu).
+    """
+    @parameter
+    if not has_accelerator():
+        return
+    var batch = FastqBatch()
+    batch.add(FastqRecord("@a", "ACGT", "+", "!!!!"))
+    batch.add(FastqRecord("@b", "TGCA", "+", "#$%&"))
+    # Build offsets: [0, end0, end1, ...] so record r has [offsets[r], offsets[r+1])
+    var offsets = List[Int32]()
+    offsets.append(0)
+    for i in range(len(batch._qual_ends)):
+        offsets.append(batch._qual_ends[i])
+    var expected = cpu_quality_distribution(
+        batch._quality_bytes,
+        offsets,
+        batch.quality_offset(),
+    )
+    var ctx = DeviceContext()
+    var dev = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
+    var result = enqueue_quality_distribution(dev^, ctx)
+    var host_result = result.retrieve(ctx)
+    assert_equal(host_result.max_length, expected.max_length)
+    assert_equal(host_result.min_qu, expected.min_qu)
+    assert_equal(host_result.max_qu, expected.max_qu)
+    assert_equal(len(host_result.qu_dist), len(expected.qu_dist))
+    assert_equal(len(host_result.qu_dist_seq), len(expected.qu_dist_seq))
+    for i in range(len(host_result.qu_dist)):
+        assert_equal(host_result.qu_dist[i], expected.qu_dist[i])
+    for i in range(len(host_result.qu_dist_seq)):
+        assert_equal(host_result.qu_dist_seq[i], expected.qu_dist_seq[i])
+
+
+fn test_quality_distribution_empty_batch() raises:
+    """When GPU is available: empty batch returns max_length=0, empty/zero histograms."""
+    @parameter
+    if not has_accelerator():
+        return
+    var batch = FastqBatch()
+    var ctx = DeviceContext()
+    var dev = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
+    var result = enqueue_quality_distribution(dev^, ctx)
+    var host_result = result.retrieve(ctx)
+    assert_equal(host_result.max_length, 0)
+    assert_equal(len(host_result.qu_dist), 0)
+    assert_equal(len(host_result.qu_dist_seq), 256)
 
 
 fn test_qc_batch_average_quality_empty_batch() raises:
@@ -536,7 +662,7 @@ fn test_qc_batch_average_quality_empty_batch() raises:
     var batch = FastqBatch()
     var ctx = DeviceContext()
     var dev = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
-    var result = enqueue_batch_average_quality(dev, ctx)
+    var result = enqueue_batch_average_quality(dev^, ctx)
     var avg = result.retrieve(ctx)
     assert_equal(avg, 0.0)
 
