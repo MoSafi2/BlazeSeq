@@ -4,6 +4,7 @@ from blazeseq.quality_schema import (
     generic_schema,
 )
 from blazeseq.byte_string import ByteString
+from blazeseq.utils import _check_ascii
 
 comptime read_header = ord("@")
 comptime quality_header = ord("+")
@@ -175,16 +176,23 @@ struct FastqRecord(
 
 struct Validator(Copyable):
     """
-    Validator for FASTQ record structure and optional quality-schema checks.
-    Instantiate with check_quality and quality_schema (e.g. from ParserConfig)
+    Validator for FASTQ record structure and optional ASCII/quality checks.
+    Instantiate with validation flags and quality schema (e.g. from ParserConfig)
     and attach to a parser, or use for one-off validation of FastqRecords.
     """
 
+    var check_ascii: Bool
     var check_quality: Bool
     var quality_schema: QualitySchema
 
-    fn __init__(out self, check_quality: Bool, quality_schema: QualitySchema):
-        """Initialize Validator with quality-check flag and schema for bounds."""
+    fn __init__(
+        out self,
+        check_ascii: Bool,
+        check_quality: Bool,
+        quality_schema: QualitySchema,
+    ):
+        """Initialize Validator with ASCII/quality flags and quality schema."""
+        self.check_ascii = check_ascii
         self.check_quality = check_quality
         self.quality_schema = quality_schema.copy()
 
@@ -230,8 +238,18 @@ struct Validator(Copyable):
                 )
 
     @always_inline
+    fn validate_ascii(self, record: FastqRecord) raises:
+        """Validate all record lines contain only ASCII bytes."""
+        _check_ascii(record.SeqHeader.as_span())
+        _check_ascii(record.SeqStr.as_span())
+        _check_ascii(record.QuHeader.as_span())
+        _check_ascii(record.QuStr.as_span())
+
+    @always_inline
     fn validate(self, record: FastqRecord) raises:
-        """Run structure validation and, if check_quality, quality-schema validation."""
+        """Run configured validations for a parsed FASTQ record."""
+        if self.check_ascii:
+            self.validate_ascii(record)
         self.validate_record(record)
         if self.check_quality:
             self.validate_quality_schema(record)

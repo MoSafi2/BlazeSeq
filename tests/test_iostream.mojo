@@ -633,13 +633,13 @@ fn test_buffered_reader_write_to_after_consume() raises:
 
 
 fn test_buffered_reader_ascii_validation() raises:
-    """Test ASCII validation with valid ASCII content."""
+    """BufferedReader should accept regular ASCII content."""
     var test_content = "Valid ASCII content\nLine 2\nLine 3\n"
     var test_file = Path("test_ascii_valid.txt")
     test_file = create_test_file(test_file, test_content)
 
     var reader = FileReader(test_file)
-    var buf_reader = BufferedReader[check_ascii=True](reader^)
+    var buf_reader = BufferedReader(reader^)
 
     # Should initialize without errors
     assert_true(buf_reader.available() > 0, "Should have available bytes")
@@ -648,7 +648,7 @@ fn test_buffered_reader_ascii_validation() raises:
 
 
 fn test_buffered_reader_ascii_validation_invalid() raises:
-    """Test ASCII validation raises error on non-ASCII bytes."""
+    """BufferedReader should not enforce ASCII on raw bytes."""
     var test_file = Path("test_ascii_invalid.txt")
     new_path = Path("tests/test_data") / test_file
 
@@ -663,16 +663,10 @@ fn test_buffered_reader_ascii_validation_invalid() raises:
         f.write_bytes(non_ascii_bytes)
 
     var reader = FileReader(new_path)
-
-    # Should raise error when check_ascii=True
-    with assert_raises(contains="Non ASCII letters found"):
-        var buf_reader = BufferedReader[check_ascii=True](reader^)
-        _ = buf_reader
-
-    # Should work fine when check_ascii=False
-    var reader2 = FileReader(new_path)
-    var buf_reader2 = BufferedReader[check_ascii=False](reader2^)
-    assert_true(buf_reader2.available() > 0, "Should work without ASCII check")
+    var buf_reader = BufferedReader(reader^)
+    assert_true(
+        buf_reader.available() > 0, "BufferedReader should read non-ASCII bytes"
+    )
 
     print("✓ test_buffered_reader_ascii_validation_invalid passed")
 
@@ -1010,13 +1004,13 @@ fn test_file_reader_alignment_large() raises:
 
 
 fn test_file_reader_alignment_ascii() raises:
-    """Verify FileReader ASCII validation works correctly."""
+    """Verify FileReader + BufferedReader handles plain text input."""
     var content = "Valid ASCII content\n"
     var test_file = Path("test_alignment_ascii.txt")
     test_file = create_test_file(test_file, content)
 
     var reader = FileReader(test_file)
-    var buf_reader = BufferedReader[check_ascii=True](reader^)
+    var buf_reader = BufferedReader(reader^)
 
     assert_true(buf_reader.available() > 0, "Should have available bytes")
 

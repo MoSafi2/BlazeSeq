@@ -60,7 +60,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
         mut: Bool, origin: Origin[mut=mut]
     ] = _RecordParserIter[Self.R, Self.config, origin]
 
-    var line_iter: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
+    var line_iter: LineIterator[Self.R]
     var quality_schema: QualitySchema
     var validator: Validator
 
@@ -69,7 +69,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
         var reader: Self.R,
     ) raises:
         """Initialize RecordParser with optional ParserConfig."""
-        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+        self.line_iter = LineIterator(
             reader^,
             self.config.buffer_capacity,
             self.config.buffer_growth_enabled,
@@ -84,6 +84,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
             self.quality_schema = materialize[generic_schema]()
 
         self.validator = Validator(
+            self.config.check_ascii,
             self.config.check_quality,
             self.quality_schema.copy(),
         )
@@ -94,7 +95,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
         quality_schema: String,
     ) raises:
         """Initialize RecordParser with optional ParserConfig."""
-        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+        self.line_iter = LineIterator(
             reader^,
             self.config.buffer_capacity,
             self.config.buffer_growth_enabled,
@@ -102,6 +103,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
         )
         self.quality_schema = _parse_schema(quality_schema)
         self.validator = Validator(
+            self.config.check_ascii,
             self.config.check_quality,
             self.quality_schema.copy(),
         )
@@ -206,7 +208,7 @@ struct BatchedParser[
         mut: Bool, origin: Origin[mut=mut]
     ] = _BatchedParserIter[Self.R, Self.config, origin]
 
-    var line_iter: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
+    var line_iter: LineIterator[Self.R]
     var quality_schema: QualitySchema
     var _batch_size: Int
 
@@ -215,7 +217,7 @@ struct BatchedParser[
         var reader: Self.R,
     ) raises:
         """Initialize BatchedParser with optional ParserConfig."""
-        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+        self.line_iter = LineIterator(
             reader^,
             Self.config.buffer_capacity,
             Self.config.buffer_growth_enabled,
@@ -236,7 +238,7 @@ struct BatchedParser[
         default_batch_size: Int = 1024,
     ) raises:
         """Legacy constructor for backward compatibility."""
-        self.line_iter = LineIterator[check_ascii = Self.config.check_ascii](
+        self.line_iter = LineIterator(
             reader^,
             Self.config.buffer_capacity,
             Self.config.buffer_growth_enabled,
