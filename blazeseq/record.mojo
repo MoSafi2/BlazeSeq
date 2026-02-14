@@ -12,6 +12,7 @@ comptime new_line = ord("\n")
 comptime carriage_return = ord("\r")
 
 
+# Add minimal internal validation, header start and length of quality and sequence.
 struct FastqRecord(
     Copyable,
     Hashable,
@@ -29,7 +30,14 @@ struct FastqRecord(
     var quality_offset: Int8
 
     @always_inline
-    fn __init__(out self, seq_header: String, seq_str: String, qu_header: String, qu_str: String, quality_offset: Int8 = 33) raises:
+    fn __init__(
+        out self,
+        seq_header: String,
+        seq_str: String,
+        qu_header: String,
+        qu_str: String,
+        quality_offset: Int8 = 33,
+    ) raises:
         self.SeqHeader = ByteString(seq_header)
         self.SeqStr = ByteString(seq_str)
         self.QuHeader = ByteString(qu_header)
@@ -37,7 +45,14 @@ struct FastqRecord(
         self.quality_offset = quality_offset
 
     @always_inline
-    fn __init__(out self, seq_header: String, seq_str: String, qu_header: String, qu_str: String, quality_schema: String) raises:
+    fn __init__(
+        out self,
+        seq_header: String,
+        seq_str: String,
+        qu_header: String,
+        qu_str: String,
+        quality_schema: String,
+    ) raises:
         self.SeqHeader = ByteString(seq_header)
         self.SeqStr = ByteString(seq_str)
         self.QuHeader = ByteString(qu_header)
@@ -85,14 +100,28 @@ struct FastqRecord(
         self.QuStr = ByteString(String(seqs[3].strip()))
         self.quality_offset = 33
 
-    fn __init__(out self, var seq_header: ByteString, var seq_str: ByteString, var qu_header: ByteString, var qu_str: ByteString, quality_offset: Int8):
+    fn __init__(
+        out self,
+        var seq_header: ByteString,
+        var seq_str: ByteString,
+        var qu_header: ByteString,
+        var qu_str: ByteString,
+        quality_offset: Int8,
+    ):
         self.SeqHeader = seq_header^
         self.SeqStr = seq_str^
         self.QuHeader = qu_header^
         self.QuStr = qu_str^
         self.quality_offset = quality_offset
 
-    fn __init__(out self, var seq_header: ByteString, var seq_str: ByteString, var qu_header: ByteString, var qu_str: ByteString, quality_schema: QualitySchema):
+    fn __init__(
+        out self,
+        var seq_header: ByteString,
+        var seq_str: ByteString,
+        var qu_header: ByteString,
+        var qu_str: ByteString,
+        quality_schema: QualitySchema,
+    ):
         self.SeqHeader = seq_header^
         self.SeqStr = seq_str^
         self.QuHeader = qu_header^
@@ -198,7 +227,8 @@ struct Validator(Copyable):
 
     @always_inline
     fn validate_record(self, record: FastqRecord) raises:
-        """Validate record structure: @ header, + header, seq/qual length, optional header match."""
+        """Validate record structure: @ header, + header, seq/qual length, optional header match.
+        """
         if record.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
 
@@ -257,23 +287,30 @@ struct Validator(Copyable):
 
 @always_inline
 fn _schema_string_to_offset(quality_format: String) -> Int8:
-    """Map schema name to Phred offset (33 or 64). Used by record/coord constructors."""
-    if quality_format == "sanger" or quality_format == "generic" or quality_format == "illumina_1.8":
+    """Map schema name to Phred offset (33 or 64). Used by record/coord constructors.
+    """
+    if (
+        quality_format == "sanger"
+        or quality_format == "generic"
+        or quality_format == "illumina_1.8"
+    ):
         return 33
-    if quality_format == "solexa" or quality_format == "illumina_1.3" or quality_format == "illumina_1.5":
+    if (
+        quality_format == "solexa"
+        or quality_format == "illumina_1.3"
+        or quality_format == "illumina_1.5"
+    ):
         return 64
     print(
-        "Unknown quality schema; use one of 'sanger', 'solexa',"
-        " 'illumina_1.3', 'illumina_1.5', 'illumina_1.8', or 'generic'. Using 33."
+        "Unknown quality schema; use one of 'sanger', 'solexa', 'illumina_1.3',"
+        " 'illumina_1.5', 'illumina_1.8', or 'generic'. Using 33."
     )
     return 33
 
 
-
 struct RecordCoord[
-    validate_quality: Bool = False,
-    origin: Origin[mut=True] = MutExternalOrigin
-](Sized, Writable, Movable, Copyable):
+    validate_quality: Bool = False, origin: Origin[mut=True] = MutExternalOrigin
+](Copyable, Movable, Sized, Writable):
     """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
     """
 
@@ -321,7 +358,9 @@ struct RecordCoord[
 
     @always_inline
     fn get_header(self) -> StringSlice[origin = Self.origin]:
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.SeqHeader)
+        return StringSlice[origin = Self.origin](
+            unsafe_from_utf8=self.SeqHeader
+        )
 
     @always_inline
     fn __len__(self) -> Int:
@@ -366,7 +405,6 @@ struct RecordCoord[
             output[i] = self.QuStr[i] - offset
         return output^
 
-
     @always_inline
     fn validate_record(self) raises:
         if self.SeqHeader[0] != UInt8(read_header):
@@ -387,7 +425,6 @@ struct RecordCoord[
                 if self.QuHeader[i] != self.SeqHeader[i]:
                     raise Error("Non matching headers")
 
-
     @always_inline
     fn validate_quality_schema(self) raises:
         for i in range(self.len_quality()):
@@ -395,8 +432,6 @@ struct RecordCoord[
                 raise Error(
                     "Corrupt quality score according to provided schema"
                 )
-
-
 
     @always_inline
     fn seq_len(self) -> Int32:
@@ -414,7 +449,6 @@ struct RecordCoord[
     fn seq_header_len(self) -> Int32:
         return Int32(len(self.SeqHeader))
 
-
     fn write_to[w: Writer](self, mut writer: w):
         writer.write_string(StringSlice(unsafe_from_utf8=self.SeqHeader))
         writer.write("\n")
@@ -423,4 +457,3 @@ struct RecordCoord[
         writer.write_string(StringSlice(unsafe_from_utf8=self.QuHeader))
         writer.write("\n")
         writer.write_string(StringSlice(unsafe_from_utf8=self.QuStr))
-

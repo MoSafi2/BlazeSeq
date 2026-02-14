@@ -103,9 +103,9 @@ def cpu_quality_prefix_sum(
     For each record, computes prefix sum of (quality_byte - offset) over that
     record's quality string only; s is reset to 0 at the start of each record.
     No running prefix sum across reads. Returns a list of Int32 of length
-    total_quality_len (concatenated per-record prefix sums).
+    seq_len (concatenated per-record prefix sums).
     """
-    var total_qual = batch.total_quality_len()
+    var total_qual = batch.seq_len()
     var num_records = batch.num_records()
     var quality_offset = batch.quality_offset()
     var result = List[Int32](capacity=total_qual)
@@ -167,7 +167,7 @@ fn run_gpu_prefix_sum(
         ctx.enqueue_create_host_buffer[DType.int32](max_subbatch_n + 1),
     )
 
-    var total_qual = batch.total_quality_len()
+    var total_qual = batch.seq_len()
     var aggregated = ctx.enqueue_create_host_buffer[DType.int32](total_qual)
     var num_subbatches = (num_records + subbatch_size - 1) // subbatch_size
 
@@ -263,7 +263,7 @@ def run_cpu_prefix_sum(
     sink per batch), matching GPU's per-subbatch prefix sums. Returns
     concatenated prefix sums and elapsed time.
     """
-    var total_qual = batch.total_quality_len()
+    var total_qual = batch.seq_len()
     var num_records = len(records)
     var num_cpu_batches = (num_records + subbatch_size - 1) // subbatch_size
     var cpu_start = now()
@@ -322,7 +322,7 @@ fn main() raises:
     for i in range(len(records)):
         batch.add(records[i])
     print("  Total records:        " + String(batch.num_records()))
-    print("  Total quality length: " + String(batch.total_quality_len()))
+    print("  Total quality length: " + String(batch.seq_len()))
     print("  Quality offset:       " + String(batch.quality_offset()))
     print()
 

@@ -40,7 +40,7 @@ fn test_device_fastq_batch_add_and_layout() raises:
     batch.add(r1)
     batch.add(r2)
     assert_equal(batch.num_records(), 2)
-    assert_equal(batch.total_quality_len(), 4)
+    assert_equal(batch.seq_len(), 4)
     assert_equal(batch._qual_ends[0], 2)
     assert_equal(batch._qual_ends[1], 4)
     assert_equal(len(batch._quality_bytes), 4)
@@ -83,7 +83,7 @@ fn test_device_batch_prefix_sum_on_gpu() raises:
     var on_device = upload_batch_to_device(batch, ctx)
     var out_buf = enqueue_quality_prefix_sum(on_device, ctx)
     var host_out = ctx.enqueue_create_host_buffer[DType.int32](
-        on_device.total_quality_len
+        on_device.seq_len
     )
     ctx.enqueue_copy(src_buf=out_buf, dst_buf=host_out)
     ctx.synchronize()
@@ -94,7 +94,7 @@ fn test_device_batch_prefix_sum_on_gpu() raises:
     var expected = cpu_quality_prefix_sum(
         batch._quality_bytes, offsets_list, batch.quality_offset()
     )
-    for i in range(on_device.total_quality_len):
+    for i in range(on_device.seq_len):
         assert_equal(host_out[i], expected[i])
 
 
@@ -178,7 +178,7 @@ fn test_subbatch_prefix_sum_multi_chunk() raises:
         var r = FastqRecord("@" + String(i), seq, "+", qual)
         batch.add(r)
 
-    var total_qual = batch.total_quality_len()
+    var total_qual = batch.seq_len()
     var num_subbatches = (num_records + subbatch_size - 1) // subbatch_size
     var max_subbatch_qual = subbatch_size * seq_len
     var max_subbatch_n = subbatch_size

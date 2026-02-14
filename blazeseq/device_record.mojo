@@ -57,7 +57,6 @@ trait GpuMovableBatch:
 # ---------------------------------------------------------------------------
 
 
-# TODO: Test two-way trip between FastqBatch and List[FastqRecord]
 struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     """
     Structure-of-Arrays batch format: host-side container that stacks multiple FastqRecords
@@ -79,12 +78,12 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         quality_offset: UInt8 = 33,
     ):
         self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
-        self._header_ends = List[Int32](capacity=batch_size * 2)
+        self._header_ends = List[Int32](capacity=batch_size + 1)
         self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
         self._sequence_bytes = List[UInt8](
             capacity=avg_record_size * batch_size
         )
-        self._qual_ends = List[Int32](capacity=batch_size * 2)
+        self._qual_ends = List[Int32](capacity=batch_size + 1)
         self._quality_offset = quality_offset
 
     fn __init__(
@@ -100,16 +99,17 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var n = len(records)
         var batch_size = max(1, n)
         self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
-        self._header_ends = List[Int32](capacity=batch_size * 2)
+        self._header_ends = List[Int32](capacity=batch_size + 1)
         self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
         self._sequence_bytes = List[UInt8](
             capacity=avg_record_size * batch_size
         )
-        self._qual_ends = List[Int32](capacity=batch_size * 2)
+        self._qual_ends = List[Int32](capacity=batch_size + 1)
         self._quality_offset = quality_offset
         for i in range(n):
             self.add(records[i])
 
+    # TODO: Make this more performanant.
     fn add(mut self, record: FastqRecord):
         """
         Append one FastqRecord: copy its QuStr and SeqStr bytes into the
@@ -118,18 +118,13 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """
         if len(self._qual_ends) == 0:
             self._quality_offset = UInt8(record.quality_offset)
-        for i in range(len(record.QuStr)):
-            self._quality_bytes.append(record.QuStr[i])
-        for i in range(len(record.SeqStr)):
-            self._sequence_bytes.append(record.SeqStr[i])
+        
+        self._quality_bytes.extend(record.QuStr.as_span())
+        self._sequence_bytes.extend(record.SeqStr.as_span())
         self._qual_ends.append(Int32(len(self._quality_bytes)))
-
-        for i in range(len(record.SeqHeader)):
-            self._header_bytes.append(record.SeqHeader[i])
+        self._header_bytes.extend(record.SeqHeader.as_span())
         self._header_ends.append(Int32(len(self._header_bytes)))
 
-    fn num_records(self) -> Int:
-        return len(self._qual_ends)
 
     fn upload_to_device(
         self, ctx: DeviceContext, payload: GPUPayload = GPUPayload.QUALITY_ONLY
@@ -137,9 +132,12 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """Upload this batch to the device with the given payload (GpuMovableBatch).
         """
         return upload_batch_to_device(self, ctx, payload)
+    
+    fn num_records(self) -> Int:
+        return len(self._qual_ends)
 
-    fn total_quality_len(self) -> Int:
-        return len(self._quality_bytes)
+    fn seq_len(self) -> Int:
+        return len(self._sequence_bytes)
 
     fn quality_offset(self) -> UInt8:
         return self._quality_offset
@@ -207,12 +205,12 @@ struct DeviceFastqBatch:
     optional and set when upload uses quality_and_sequence or full payload.
     """
 
-    var qual_buffer: DeviceBuffer[DType.uint8]
-    var offsets_buffer: DeviceBuffer[DType.int32]
     var num_records: Int
-    var total_quality_len: Int
-    var quality_offset: UInt8
+    var seq_len: Int
+    var quality_offset: Optional[UInt8]
+    var qual_buffer: Optional[DeviceBuffer[DType.uint8]]
     var sequence_buffer: Optional[DeviceBuffer[DType.uint8]]
+    var offsets_buffer: Optional[DeviceBuffer[DType.int32]]
     var header_buffer: Optional[DeviceBuffer[DType.uint8]]
     var header_ends: Optional[DeviceBuffer[DType.int32]]
 
@@ -230,7 +228,7 @@ fn upload_batch_to_device(
     - GpuBatchPayload_full (2): quality + sequence + header + header_ends.
     Returns a handle holding device buffers and metadata for kernel launch.
     """
-    var total_qual = batch.total_quality_len()
+    var total_qual = batch.seq_len()
     var n = batch.num_records()
     var qual_buf = ctx.enqueue_create_buffer[DType.uint8](total_qual)
     var offsets_buf = ctx.enqueue_create_buffer[DType.int32](n + 1)
@@ -281,7 +279,7 @@ fn upload_batch_to_device(
         qual_buffer=qual_buf,
         offsets_buffer=offsets_buf,
         num_records=n,
-        total_quality_len=total_qual,
+        seq_len=total_qual,
         quality_offset=batch.quality_offset(),
         sequence_buffer=seq_buf,
         header_buffer=hdr_buf,
@@ -354,7 +352,7 @@ fn upload_subbatch_from_host_buffers(
         qual_buffer=qual_buf,
         offsets_buffer=offsets_buf,
         num_records=n,
-        total_quality_len=total_qual,
+        seq_len=total_qual,
         quality_offset=quality_offset,
         sequence_buffer=no_seq,
         header_buffer=no_hdr,
