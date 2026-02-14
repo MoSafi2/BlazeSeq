@@ -15,7 +15,7 @@ from blazeseq.device_record import (
 )
 from gpu.host import DeviceContext
 from sys import has_accelerator
-from testing import assert_equal, assert_true, assert_false, TestSuite
+from testing import assert_equal, assert_true, assert_false, assert_raises, TestSuite
 
 
 fn cpu_quality_prefix_sum(
@@ -358,6 +358,73 @@ fn test_upload_batch_to_device_full() raises:
 #     ctx.synchronize()
 #     for i in range(batch.seq_len()):
 #         assert_equal(host_qual[i], batch._quality_bytes[i])
+
+
+fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
+    """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original."""
+
+    @parameter
+    if not has_accelerator():
+        return
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
+    records.append(FastqRecord("@h2", "TGCA", "+", "!!!!"))
+    records.append(FastqRecord("@h3", "N", "+", "!"))
+    var batch = FastqBatch(records)
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx, GPUPayload.FULL)
+    var back_batch = d.copy_to_host(ctx)
+    var back_list = back_batch.to_records()
+    assert_equal(len(back_list), len(records))
+    for i in range(len(records)):
+        assert_equal(
+            back_list[i].SeqHeader.as_string_slice(),
+            records[i].SeqHeader.as_string_slice(),
+        )
+        assert_equal(
+            back_list[i].SeqStr.as_string_slice(),
+            records[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            back_list[i].QuStr.as_string_slice(),
+            records[i].QuStr.as_string_slice(),
+        )
+        assert_equal(back_list[i].quality_offset, records[i].quality_offset)
+
+
+fn test_device_fastq_batch_to_records_quality_and_sequence_synthesized_headers() raises:
+    """When GPU is available: QUALITY_AND_SEQUENCE round-trip yields correct sequence/quality and synthesized headers @0, @1, ..."""
+
+    @parameter
+    if not has_accelerator():
+        return
+    var batch = FastqBatch()
+    batch.add(FastqRecord("@ignored", "ACGT", "+", "!!!!"))
+    batch.add(FastqRecord("@also_ignored", "TG", "+", "!!"))
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_AND_SEQUENCE)
+    var back_list = d.to_records(ctx)
+    assert_equal(len(back_list), 2)
+    assert_equal(back_list[0].SeqHeader.as_string_slice(), String("@0"))
+    assert_equal(back_list[1].SeqHeader.as_string_slice(), String("@1"))
+    assert_equal(back_list[0].SeqStr.as_string_slice(), String("ACGT"))
+    assert_equal(back_list[1].SeqStr.as_string_slice(), String("TG"))
+    assert_equal(back_list[0].QuStr.as_string_slice(), String("!!!!"))
+    assert_equal(back_list[1].QuStr.as_string_slice(), String("!!"))
+
+
+fn test_device_fastq_batch_copy_to_host_quality_only_raises() raises:
+    """When GPU is available: copy_to_host on QUALITY_ONLY batch raises (sequence_buffer missing)."""
+
+    @parameter
+    if not has_accelerator():
+        return
+    var batch = FastqBatch()
+    batch.add(FastqRecord("@a", "AC", "+", "!!"))
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_ONLY)
+    with assert_raises(contains="copy_to_host requires"):
+        _ = d.copy_to_host(ctx)
 
 
 fn main() raises:
