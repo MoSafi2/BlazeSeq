@@ -416,6 +416,69 @@ fn test_device_fastq_batch_to_records_quality_and_sequence_synthesized_headers()
     assert_equal(back_list[1].QuStr.as_string_slice(), String("!!"))
 
 
+fn test_device_fastq_batch_empty_roundtrip() raises:
+    """When GPU is available: empty FastqBatch upload (FULL) -> copy_to_host -> to_records yields empty list.
+    """
+
+    @parameter
+    if not has_accelerator():
+        return
+    var records = List[FastqRecord]()
+    var batch = FastqBatch(records)
+    assert_equal(batch.num_records(), 0)
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx, GPUPayload.FULL)
+    var back_batch = d.copy_to_host(ctx)
+    var back_list = back_batch.to_records()
+    assert_equal(len(back_list), 0)
+
+
+fn test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
+    """When GPU is available: round-trip with quality_offset 0 is accepted (no false rejection).
+    """
+
+    @parameter
+    if not has_accelerator():
+        return
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@r", "A", "+", "!", 0))
+    var batch = FastqBatch(records)
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx, GPUPayload.FULL)
+    var back_batch = d.copy_to_host(ctx)
+    var back_list = back_batch.to_records()
+    assert_equal(len(back_list), 1)
+    assert_equal(back_list[0].quality_offset, 0)
+    assert_equal(back_list[0].SeqStr.as_string_slice(), String("A"))
+
+
+fn test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() raises:
+    """When GPU is available: QUALITY_AND_SEQUENCE round-trip preserves sequence and quality vs original records.
+    """
+
+    @parameter
+    if not has_accelerator():
+        return
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
+    records.append(FastqRecord("@h2", "TG", "+", "!!"))
+    var batch = FastqBatch(records)
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx, GPUPayload.QUALITY_AND_SEQUENCE)
+    var back_list = d.to_records(ctx)
+    assert_equal(len(back_list), len(records))
+    for i in range(len(records)):
+        assert_equal(
+            back_list[i].SeqStr.as_string_slice(),
+            records[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            back_list[i].QuStr.as_string_slice(),
+            records[i].QuStr.as_string_slice(),
+        )
+        assert_equal(back_list[i].quality_offset, records[i].quality_offset)
+
+
 fn test_device_fastq_batch_copy_to_host_quality_only_raises() raises:
     """When GPU is available: copy_to_host on QUALITY_ONLY batch raises (sequence_buffer missing).
     """

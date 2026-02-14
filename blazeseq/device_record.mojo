@@ -233,13 +233,15 @@ struct DeviceFastqBatch:
                 + "batch must have been uploaded with QUALITY_AND_SEQUENCE or"
                 " FULL payload"
             )
-        if not self.seq_len or not self.quality_offset:
-            raise Error(
-                "copy_to_host requires seq_len and quality_offset to be set"
-            )
         var n = self.num_records
-        var total_seq = self.seq_len
         var q_offset = self.quality_offset
+        if n == 0:
+            return FastqBatch(quality_offset=q_offset)
+        if not self.seq_len:
+            raise Error(
+                "copy_to_host requires seq_len to be set when num_records > 0"
+            )
+        var total_seq = self.seq_len
         var has_header = (
             self.header_buffer is not None and self.header_ends is not None
         )
@@ -248,7 +250,7 @@ struct DeviceFastqBatch:
         if has_header:
             if self.total_header_bytes is not None:
                 total_header_bytes = self.total_header_bytes.value()
-            else:
+            elif n > 0:
                 # Backward compat: copy header_ends first to get total size
                 var tmp_ends = ctx.enqueue_create_host_buffer[DType.int32](n)
                 ctx.enqueue_copy(
