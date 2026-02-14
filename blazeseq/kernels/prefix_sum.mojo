@@ -148,10 +148,11 @@ fn enqueue_quality_prefix_sum(
     """
     Allocate output buffer and launch optimized kernel based on average record length.
     """
-    var out_buf = ctx.enqueue_create_buffer[DType.int32](on_device.seq_len)
+    var seq_len_val = on_device.seq_len.value()
+    var out_buf = ctx.enqueue_create_buffer[DType.int32](seq_len_val)
 
     # Choose kernel based on average quality length
-    var avg_qual_len = on_device.seq_len // on_device.num_records
+    var avg_qual_len = seq_len_val // on_device.num_records
 
     if avg_qual_len <= 32:
         # Use small-record kernel: multiple records per block
@@ -165,11 +166,11 @@ fn enqueue_quality_prefix_sum(
 
         ctx.enqueue_function(
             kernel,
-            on_device.qual_buffer,
-            on_device.offsets_buffer,
+            on_device.qual_buffer.value(),
+            on_device.offsets_buffer.value(),
             out_buf,
             on_device.num_records,
-            on_device.quality_offset,
+            on_device.quality_offset.value(),
             grid_dim=num_blocks,
             block_dim=BLOCK_SIZE,
         )
@@ -181,11 +182,11 @@ fn enqueue_quality_prefix_sum(
 
         ctx.enqueue_function(
             kernel,
-            on_device.qual_buffer,
-            on_device.offsets_buffer,
+            on_device.qual_buffer.value(),
+            on_device.offsets_buffer.value(),
             out_buf,
             on_device.num_records,
-            on_device.quality_offset,
+            on_device.quality_offset.value(),
             grid_dim=on_device.num_records,
             block_dim=BLOCK_SIZE,
         )
