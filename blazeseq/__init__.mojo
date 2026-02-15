@@ -16,4 +16,5 @@ from blazeseq.kernels.qc import (
     cpu_quality_distribution,
 )
 from blazeseq.iostream import BufferedReader, Reader, LineIterator
-from blazeseq.readers import SyntheticFastqReader
+from blazeseq.readers import FileReader, MemoryReader
+from blazeseq.utils import generate_synthetic_fastq_buffer

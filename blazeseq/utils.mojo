@@ -170,3 +170,93 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
         )
         return materialize[generic_schema]()
     return schema^
+
+
+fn generate_synthetic_fastq_buffer(
+    num_reads: Int,
+    min_length: Int,
+    max_length: Int,
+    min_phred: Int,
+    max_phred: Int,
+    quality_schema: String,
+) raises -> List[Byte]:
+    """Generate a contiguous in-memory FASTQ buffer with configurable read length and quality distribution.
+
+    Read lengths are chosen deterministically in [min_length, max_length] (inclusive).
+    Per-base Phred scores are chosen deterministically in [min_phred, max_phred], then converted
+    to ASCII using the given quality schema and clamped to the schema's valid range.
+
+    Args:
+        num_reads: Number of FASTQ records to generate.
+        min_length: Minimum sequence length per read (inclusive).
+        max_length: Maximum sequence length per read (inclusive).
+        min_phred: Minimum Phred score per base (inclusive).
+        max_phred: Maximum Phred score per base (inclusive).
+        quality_schema: Schema name (e.g. "sanger", "solexa", "illumina_1.8", "generic").
+
+    Returns:
+        List[Byte] containing valid 4-line FASTQ data; pass to MemoryReader for parsing.
+
+    Raises:
+        Error: If num_reads < 0, min_length > max_length, or min_phred > max_phred.
+    """
+    if num_reads <= 0:
+        return List[Byte]()
+    if min_length > max_length:
+        raise Error("generate_synthetic_fastq_buffer: min_length must be <= max_length")
+    if min_phred > max_phred:
+        raise Error("generate_synthetic_fastq_buffer: min_phred must be <= max_phred")
+
+    var schema = _parse_schema(quality_schema)
+    var offset_int = Int(schema.OFFSET)
+    var lower_int = Int(schema.LOWER)
+    var upper_int = Int(schema.UPPER)
+
+    var capacity_estimate = num_reads * (max_length + 50)
+    if capacity_estimate < 0:
+        capacity_estimate = 4096
+    var out = List[Byte](capacity=capacity_estimate)
+
+    var bases = [Byte(ord("A")), Byte(ord("C")), Byte(ord("G")), Byte(ord("T"))]
+    var newline = Byte(ord("\n"))
+    var plus = Byte(ord("+"))
+
+    for i in range(num_reads):
+        # Deterministic read length in [min_length, max_length]
+        var read_len: Int
+        if max_length == min_length:
+            read_len = min_length
+        else:
+            read_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
+
+        # Header: @read_<i>\n
+        var header_str = "@read_" + String(i) + "\n"
+        var header_bytes = header_str.as_bytes()
+        out.extend(header_bytes)
+
+        # Sequence line (same base per read: ACGT pattern by read index)
+        for p in range(read_len):
+            out.append(bases[i % 4])
+        out.append(newline)
+
+        # +\n
+        out.append(plus)
+        out.append(newline)
+
+        # Quality line: Phred in [min_phred, max_phred], then ASCII = OFFSET + phred clamped to [LOWER, UPPER]
+        var phred_range = max_phred - min_phred + 1
+        for p in range(read_len):
+            var phred: Int
+            if phred_range == 1:
+                phred = min_phred
+            else:
+                phred = min_phred + ((i + p) * 31 + 7) % phred_range
+            var ascii_int = offset_int + phred
+            if ascii_int < lower_int:
+                ascii_int = lower_int
+            elif ascii_int > upper_int:
+                ascii_int = upper_int
+            out.append(Byte(ascii_int))
+        out.append(newline)
+
+    return out^

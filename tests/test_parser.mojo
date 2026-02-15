@@ -8,6 +8,7 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 from blazeseq.parser import RecordParser, BatchedParser
 from blazeseq.readers import FileReader, MemoryReader
 from blazeseq.parser import ParserConfig
+from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.record import FastqRecord
 from blazeseq.device_record import FastqBatch
 from blazeseq.CONSTS import EOF
@@ -307,6 +308,32 @@ fn test_batched_parser_schema() raises:
     assert_equal(len(batch), 1, "One record")
     var rec = batch.get_record(0)
     assert_equal(rec.SeqStr.to_string(), "ACGT", "Sequence unchanged by schema")
+
+
+fn test_generate_synthetic_fastq_buffer() raises:
+    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + BatchedParser yield expected counts and lengths."""
+    var num_reads = 20
+    var min_len = 5
+    var max_len = 12
+    var min_phred = 2
+    var max_phred = 25
+    var buf = generate_synthetic_fastq_buffer(
+        num_reads, min_len, max_len, min_phred, max_phred, "generic"
+    )
+    assert_true(len(buf) > 0, "Buffer non-empty")
+    var reader = MemoryReader(buf^)
+    var parser = BatchedParser[MemoryReader](reader^, "generic", 8)
+    var total = 0
+    for batch in parser:
+        total += len(batch)
+        for i in range(len(batch)):
+            var rec = batch.get_record(i)
+            var seq_len = len(rec.SeqStr)
+            assert_true(
+                seq_len >= min_len and seq_len <= max_len,
+                "Record sequence length in [min_length, max_length]",
+            )
+    assert_equal(total, num_reads, "Total records equals num_reads")
 
 
 fn main() raises:
