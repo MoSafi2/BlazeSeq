@@ -166,8 +166,8 @@ fn enqueue_quality_prefix_sum(
 
         ctx.enqueue_function(
             kernel,
-            on_device.qual_buffer.value(),
-            on_device.offsets_buffer.value(),
+            on_device.qual_buffer,
+            on_device.offsets_buffer,
             out_buf,
             on_device.num_records,
             on_device.quality_offset,
@@ -182,8 +182,8 @@ fn enqueue_quality_prefix_sum(
 
         ctx.enqueue_function(
             kernel,
-            on_device.qual_buffer.value(),
-            on_device.offsets_buffer.value(),
+            on_device.qual_buffer,
+            on_device.offsets_buffer,
             out_buf,
             on_device.num_records,
             on_device.quality_offset,

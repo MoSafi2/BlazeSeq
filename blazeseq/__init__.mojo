@@ -13,6 +13,7 @@ from blazeseq.kernels.qc import (
     enqueue_quality_distribution,
     QualityDistributionResult,
     QualityDistributionHostResult,
+    QualityDistributionBatchedAccumulator,
     cpu_quality_distribution,
 )
 from blazeseq.iostream import BufferedReader, Reader, LineIterator

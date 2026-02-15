@@ -121,9 +121,6 @@ fn enqueue_batch_average_quality(
     DeviceFastqBatch and a result handle. Use .retrieve(ctx) to get the
     batch average quality (Float64).
     """
-    if device_batch.qual_buffer is None:
-        raise Error("enqueue_batch_average_quality requires qual_buffer")
-
     var seq_len_val = device_batch.seq_len
     if seq_len_val == 0:
         var empty_buf = ctx.enqueue_create_buffer[DType.int64](0)
@@ -144,7 +141,7 @@ fn enqueue_batch_average_quality(
 
     ctx.enqueue_function(
         kernel,
-        device_batch.qual_buffer.value(),
+        device_batch.qual_buffer,
         device_batch.quality_offset,
         seq_len_val,
         partial_sums_buf,
