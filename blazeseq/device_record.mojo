@@ -10,12 +10,6 @@ from collections.string import String
 
 
 # ---------------------------------------------------------------------------
-# GPU batch payload: what gets uploaded to device
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
 # Trait for host-side batches that can be uploaded to the device
 # ---------------------------------------------------------------------------
 
@@ -44,10 +38,10 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     """
 
     var _header_bytes: List[UInt8]
-    var _header_ends: List[Int32]
     var _quality_bytes: List[UInt8]
     var _sequence_bytes: List[UInt8]
-    var _qual_ends: List[Int32]
+    var _header_ends: List[Int]
+    var _qual_ends: List[Int]
     var _quality_offset: UInt8
 
     fn __init__(
@@ -57,12 +51,12 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         quality_offset: UInt8 = 33,
     ):
         self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
-        self._header_ends = List[Int32](capacity=batch_size + 1)
+        self._header_ends = List[Int](capacity=batch_size)
         self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
         self._sequence_bytes = List[UInt8](
             capacity=avg_record_size * batch_size
         )
-        self._qual_ends = List[Int32](capacity=batch_size + 1)
+        self._qual_ends = List[Int](capacity=batch_size)
         self._quality_offset = quality_offset
 
     fn __init__(
@@ -70,39 +64,57 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         records: List[FastqRecord],
         avg_record_size: Int = 100,
         quality_offset: UInt8 = 33,
-    ):
+    ) raises:
         """
         Build a FastqBatch from a list of FastqRecords in one shot.
         Uses the first record's quality_offset for the batch; empty list yields an empty batch.
         """
-        var n = len(records)
-        var batch_size = max(1, n)
+
+        if len(records) == 0:
+            raise Error("FastqBatch cannot be empty")
+
+        var batch_size = len(records)
         self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
-        self._header_ends = List[Int32](capacity=batch_size + 1)
+        self._header_ends = List[Int](capacity=batch_size)
         self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
         self._sequence_bytes = List[UInt8](
             capacity=avg_record_size * batch_size
         )
-        self._qual_ends = List[Int32](capacity=batch_size + 1)
+        self._qual_ends = List[Int](capacity=batch_size)
         self._quality_offset = quality_offset
-        for i in range(n):
+        for i in range(batch_size):
             self.add(records[i])
 
     # TODO: Make this more performanant.
+    # Potential Bug: Quality ends and Header ends are not running sums but just the length of the current record.
     fn add(mut self, record: FastqRecord):
         """
         Append one FastqRecord: copy its QuStr and SeqStr bytes into the
         packed buffers and record the cumulative quality length for offsets.
         Uses the record's quality_schema.OFFSET for the first record only.
         """
-        if len(self._qual_ends) == 0:
-            self._quality_offset = UInt8(record.quality_offset)
 
+        current_loaded = self.num_records()
         self._quality_bytes.extend(record.QuStr.as_span())
         self._sequence_bytes.extend(record.SeqStr.as_span())
-        self._qual_ends.append(Int32(len(self._quality_bytes)))
         self._header_bytes.extend(record.SeqHeader.as_span())
-        self._header_ends.append(Int32(len(self._header_bytes)))
+
+        if current_loaded == 0:
+            self._header_ends.append(Int(len(self._header_bytes)))
+            self._qual_ends.append(Int(len(self._quality_bytes)))
+        else:
+            self._header_ends.append(
+                Int(
+                    len(self._header_bytes)
+                    + self._header_ends[current_loaded - 1]
+                )
+            )
+            self._qual_ends.append(
+                Int(
+                    len(self._quality_bytes)
+                    + self._qual_ends[current_loaded - 1]
+                )
+            )
 
     fn upload_to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         """Upload this batch to the device (header, sequence, and quality together).
@@ -193,9 +205,9 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
     var total_header_bytes: Int
     var qual_buffer: DeviceBuffer[DType.uint8]
     var sequence_buffer: DeviceBuffer[DType.uint8]
-    var offsets_buffer: DeviceBuffer[DType.int32]
+    var offsets_buffer: DeviceBuffer[DType.int]
     var header_buffer: DeviceBuffer[DType.uint8]
-    var header_ends: DeviceBuffer[DType.int32]
+    var header_ends: DeviceBuffer[DType.int]
 
     fn copy_to_host(self, ctx: DeviceContext) raises -> FastqBatch:
         """Copy device buffers to host and return a FastqBatch."""
@@ -204,7 +216,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
         var batch = FastqBatch(quality_offset=self.quality_offset, batch_size=0)
 
         batch._quality_bytes = List[UInt8](capacity=staged.total_seq_bytes)
-        batch._qual_ends = List[Int32](capacity=staged.num_records)
+        batch._qual_ends = List[Int](capacity=staged.num_records)
         batch._quality_bytes.extend(staged.quality_data_host.as_span())
         batch._qual_ends.extend(staged.quality_ends_host.as_span())
 
@@ -212,7 +224,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
         batch._sequence_bytes.extend(staged.sequence_data_host.as_span())
 
         batch._header_bytes = List[UInt8](capacity=self.total_header_bytes)
-        batch._header_ends = List[Int32](capacity=self.num_records)
+        batch._header_ends = List[Int](capacity=self.num_records)
         batch._header_bytes.extend(staged.header_data_host.as_span())
         batch._header_ends.extend(staged.header_ends_host.as_span())
 
@@ -233,10 +245,10 @@ struct StagedFastqBatch:
 
     # Semantic naming: [component]_[type]_[location]
     var quality_data_host: HostBuffer[DType.uint8]
-    var quality_ends_host: HostBuffer[DType.int32]
+    var quality_ends_host: HostBuffer[DType.int]
     var sequence_data_host: HostBuffer[DType.uint8]
     var header_data_host: HostBuffer[DType.uint8]
-    var header_ends_host: HostBuffer[DType.int32]
+    var header_ends_host: HostBuffer[DType.int]
 
 
 fn download_device_batch_to_staged(
