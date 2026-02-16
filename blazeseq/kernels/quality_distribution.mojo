@@ -820,7 +820,7 @@ fn enqueue_quality_distribution(
     ctx.enqueue_function(
         qd_kernel,
         device_batch.qual_buffer,
-        device_batch.offsets_buffer,
+        device_batch.qual_ends,
         qu_dist_buf,
         num_records,
         max_length,

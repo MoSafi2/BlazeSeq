@@ -5,11 +5,6 @@ from blazeseq import (
     FastqBatch,
     upload_batch_to_device,
 )
-from blazeseq.kernels.qc import (
-    enqueue_batch_average_quality,
-    enqueue_quality_distribution,
-    QualityDistributionHostResult,
-)
 from blazeseq.device_record import (
     DeviceFastqBatch,
     StagedFastqBatch,
@@ -141,10 +136,10 @@ fn test_stage_batch_to_host_always_full() raises:
     var staged = stage_batch_to_host(batch, ctx)
     assert_equal(staged.num_records, 2)
     assert_equal(staged.total_seq_bytes, batch.seq_len())
-    assert_equal(len(staged.sequence_data_host), batch.seq_len())
-    var total_header_bytes = Int(batch._header_ends[1])
-    assert_equal(len(staged.header_data_host), total_header_bytes)
-    assert_equal(len(staged.header_ends_host), 2)
+    assert_equal(len(staged.sequence_data), batch.seq_len())
+    var total_header_bytes = len(batch._header_bytes)
+    assert_equal(len(staged.header_data), total_header_bytes)
+    assert_equal(len(staged.header_ends), 2)
 
 
 fn test_stage_batch_to_host_full_content() raises:
@@ -161,10 +156,10 @@ fn test_stage_batch_to_host_full_content() raises:
     var staged = stage_batch_to_host(batch, ctx)
     assert_equal(staged.num_records, 2)
     assert_equal(staged.total_seq_bytes, batch.seq_len())
-    assert_equal(len(staged.sequence_data_host), batch.seq_len())
-    var total_header_bytes = Int(batch._header_ends[1])
-    assert_equal(len(staged.header_data_host), total_header_bytes)
-    assert_equal(len(staged.header_ends_host), 2)
+    assert_equal(len(staged.sequence_data), batch.seq_len())
+    var total_header_bytes = len(batch._header_bytes)
+    assert_equal(len(staged.header_data), total_header_bytes)
+    assert_equal(len(staged.header_ends), 2)
 
 
 fn test_move_staged_to_device() raises:
@@ -183,11 +178,11 @@ fn test_move_staged_to_device() raises:
     assert_equal(d.num_records, staged.num_records)
     assert_equal(d.seq_len, staged.total_seq_bytes)
     assert_equal(d.quality_offset, batch.quality_offset())
-    assert_equal(len(d.qual_buffer), d.seq_len)
-    assert_equal(len(d.offsets_buffer), d.num_records)
-    assert_equal(len(d.sequence_buffer), d.seq_len)
+    assert_equal(len(d.qual_buffer), Int(d.seq_len))
+    assert_equal(len(d.qual_ends), d.num_records)
+    assert_equal(len(d.sequence_buffer), Int(d.seq_len))
     assert_equal(d.total_header_bytes, Int(batch._header_ends[1]))
-    assert_equal(len(d.header_buffer), d.total_header_bytes)
+    assert_equal(len(d.header_buffer), Int(d.total_header_bytes))
     assert_equal(len(d.header_ends), d.num_records)
 
 
@@ -205,10 +200,10 @@ fn test_upload_batch_to_device_always_full() raises:
     var d = upload_batch_to_device(batch, ctx)
     assert_equal(d.num_records, 2)
     assert_equal(d.seq_len, batch.seq_len())
-    assert_equal(len(d.qual_buffer), d.seq_len)
-    assert_equal(len(d.offsets_buffer), d.num_records)
-    assert_equal(len(d.sequence_buffer), d.seq_len)
-    var total_header_bytes = Int(batch._header_ends[1])
+    assert_equal(len(d.qual_buffer), Int(d.seq_len))
+    assert_equal(len(d.qual_ends), d.num_records)
+    assert_equal(len(d.sequence_buffer), Int(d.seq_len))
+    var total_header_bytes = len(batch._header_bytes)
     assert_equal(d.total_header_bytes, total_header_bytes)
     assert_equal(len(d.header_buffer), total_header_bytes)
     assert_equal(len(d.header_ends), 2)
@@ -227,7 +222,7 @@ fn test_upload_batch_to_device_single_record() raises:
     assert_equal(d.num_records, 1)
     assert_equal(d.seq_len, 4)
     assert_equal(len(d.qual_buffer), 4)
-    assert_equal(len(d.offsets_buffer), 1)
+    assert_equal(len(d.qual_ends), 1)
     assert_equal(len(d.sequence_buffer), 4)
 
 
@@ -245,7 +240,7 @@ fn test_device_fastq_batch_shape_after_upload() raises:
     var d = upload_batch_to_device(batch, ctx)
     assert_equal(d.num_records, batch.num_records())
     assert_equal(d.seq_len, batch.seq_len())
-    var host_qual = ctx.enqueue_create_host_buffer[DType.uint8](d.seq_len)
+    var host_qual = ctx.enqueue_create_host_buffer[DType.uint8](Int(d.seq_len))
     ctx.enqueue_copy(d.qual_buffer, host_qual)
     ctx.synchronize()
     for i in range(batch.seq_len()):
@@ -341,7 +336,9 @@ fn test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
     var back_list = back_batch.to_records()
     print(back_list[0])
     assert_equal(len(back_list), 1)
+    assert_equal(back_list[0].SeqHeader.as_string_slice(), String("@r"))
     assert_equal(back_list[0].SeqStr.as_string_slice(), String("AB"))
+    _ = back_list
 
 
 # Results in Error
@@ -389,5 +386,5 @@ fn test_device_fastq_batch_copy_to_host_succeeds() raises:
 
 
 fn main() raises:
-    # TestSuite.discover_tests[__functions_in_module()]().run()
-    test_device_fastq_batch_roundtrip_quality_offset_zero()
+    TestSuite.discover_tests[__functions_in_module()]().run()
+    #test_device_fastq_batch_roundtrip_quality_offset_zero()

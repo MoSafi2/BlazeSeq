@@ -106,8 +106,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             )
 
             self._qual_ends.append(
-                Int64(len(record.QuStr))
-                + self._qual_ends[current_loaded - 1]
+                Int64(len(record.QuStr)) + self._qual_ends[current_loaded - 1]
             )
 
     fn upload_to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
@@ -135,34 +134,48 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var n = self.num_records()
         if index < 0 or index >= n:
             raise Error("FastqBatch.get_record index out of range")
-        var start = Int64(0) if index == 0 else self._qual_ends[index - 1]
-        var end = self._qual_ends[index]
-        var seg_len = end - start
 
-        var header_start = (
-            Int64(0) if index == 0 else self._header_ends[index - 1]
+        fn get_offsets(ends: List[Int64], idx: Int) -> Tuple[Int, Int]:
+            var start = Int(0) if idx == 0 else Int(ends[idx - 1])
+            var end = Int(ends[idx])
+            return start, end
+
+        fn unsafe_span_to_byte_string[
+            origin: Origin
+        ](bs: Span[Byte, origin]) -> ByteString:
+            var len_bs = len(bs)
+            var new_ptr = (
+                bs.unsafe_ptr()
+                .unsafe_mut_cast[True]()
+                .unsafe_origin_cast[MutExternalOrigin]()
+            )
+            var span = Span[Byte, MutExternalOrigin](ptr=new_ptr, length=len_bs)
+            return ByteString(span)
+
+        var header_range = get_offsets(self._header_ends, index)
+        print(
+            "header range: ", String(header_range[0]), String(header_range[1])
         )
-        header_start = Int(header_start)
-        var header_end = Int(self._header_ends[index])
-        var header_bs = ByteString(capacity=Int(header_end - header_start))
-        for i in range(header_end - header_start):
-            header_bs[i] = self._header_bytes[header_start + i]
+        var header_bs = self._header_bytes[header_range[0] : header_range[1]]
+        print("header bytes: ", String(unsafe_from_utf8=self._header_bytes))
+        print("header_ends: ", self._header_ends)
 
-        var seq_bs = ByteString(capacity=Int(seg_len))
-        for j in range(seg_len):
-            seq_bs[j] = self._sequence_bytes[start + j]
+        var range = get_offsets(self._qual_ends, index)
+        var seq_bs = self._sequence_bytes[range[0] : range[1]]
+        var qual_bs = self._quality_bytes[range[0] : range[1]]
 
-        var qu_header_bs = ByteString("+")
+        var header = unsafe_span_to_byte_string(header_bs)
+        var seq = unsafe_span_to_byte_string(seq_bs)
+        var qual = unsafe_span_to_byte_string(qual_bs)
 
-        var qual_bs = ByteString(capacity=Int(seg_len))
-        for j in range(seg_len):
-            qual_bs[j] = self._quality_bytes[start + j]
-
+        print("header: ", header)
+        print("seq: ", seq)
+        print("qual: ", qual)
         return FastqRecord(
-            header_bs^,
-            seq_bs^,
-            qu_header_bs^,
-            qual_bs^,
+            header^,
+            seq^,
+            ByteString("+"),
+            qual^,
             Int8(self._quality_offset),
         )
 
@@ -187,12 +200,12 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
     """
 
     var num_records: Int
-    var seq_len: Int
+    var seq_len: Int64
     var quality_offset: UInt8
-    var total_header_bytes: Int
+    var total_header_bytes: Int64
     var qual_buffer: DeviceBuffer[DType.uint8]
     var sequence_buffer: DeviceBuffer[DType.uint8]
-    var offsets_buffer: DeviceBuffer[DType.int64]
+    var qual_ends: DeviceBuffer[DType.int64]
     var header_buffer: DeviceBuffer[DType.uint8]
     var header_ends: DeviceBuffer[DType.int64]
 
@@ -202,18 +215,20 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
         var staged = download_device_batch_to_staged(self, ctx)
         var batch = FastqBatch(quality_offset=self.quality_offset, batch_size=0)
 
-        batch._quality_bytes = List[UInt8](capacity=staged.total_seq_bytes)
+        batch._quality_bytes = List[UInt8](capacity=Int(staged.total_seq_bytes))
         batch._qual_ends = List[Int64](capacity=staged.num_records)
-        batch._quality_bytes.extend(staged.quality_data_host.as_span())
-        batch._qual_ends.extend(staged.quality_ends_host.as_span())
+        batch._quality_bytes.extend(staged.quality_data.as_span())
+        batch._qual_ends.extend(staged.quality_ends.as_span())
 
-        batch._sequence_bytes = List[UInt8](capacity=staged.total_seq_bytes)
-        batch._sequence_bytes.extend(staged.sequence_data_host.as_span())
+        batch._sequence_bytes = List[UInt8](
+            capacity=Int(staged.total_seq_bytes)
+        )
+        batch._sequence_bytes.extend(staged.sequence_data.as_span())
 
-        batch._header_bytes = List[UInt8](capacity=self.total_header_bytes)
+        batch._header_bytes = List[UInt8](capacity=Int(self.total_header_bytes))
         batch._header_ends = List[Int64](capacity=self.num_records)
-        batch._header_bytes.extend(staged.header_data_host.as_span())
-        batch._header_ends.extend(staged.header_ends_host.as_span())
+        batch._header_bytes.extend(staged.header_data.as_span())
+        batch._header_ends.extend(staged.header_ends.as_span())
 
         return batch^
 
@@ -226,16 +241,19 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
 struct StagedFastqBatch:
     """Intermediary host-side storage in pinned memory. Header, sequence, and quality are always present.
     """
-
+    # Metadata
     var num_records: Int
-    var total_seq_bytes: Int
+    var total_seq_bytes: Int64
+    var total_header_bytes: Int64
 
-    # Semantic naming: [component]_[type]_[location]
-    var quality_data_host: HostBuffer[DType.uint8]
-    var sequence_data_host: HostBuffer[DType.uint8]
-    var header_data_host: HostBuffer[DType.uint8]
-    var quality_ends_host: HostBuffer[DType.int64]
-    var header_ends_host: HostBuffer[DType.int64]
+    # Data buffers
+    var quality_data: HostBuffer[DType.uint8]
+    var sequence_data: HostBuffer[DType.uint8]
+    var header_data: HostBuffer[DType.uint8]
+
+    # End offsets buffers
+    var quality_ends: HostBuffer[DType.int64]
+    var header_ends: HostBuffer[DType.int64]
 
 
 fn download_device_batch_to_staged(
@@ -246,34 +264,35 @@ fn download_device_batch_to_staged(
     var total_seq = device_batch.seq_len
     var total_hdr = device_batch.total_header_bytes
 
-    var quality_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
-        total_seq
+    var quality_data = ctx.enqueue_create_host_buffer[DType.uint8](
+        Int(total_seq)
     )
-    var quality_ends_host = ctx.enqueue_create_host_buffer[DType.int64](n)
-    var sequence_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
-        total_seq
+    var quality_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
+    var sequence_data = ctx.enqueue_create_host_buffer[DType.uint8](
+        Int(total_seq)
     )
-    var header_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
-        total_hdr
+    var header_data = ctx.enqueue_create_host_buffer[DType.uint8](
+        Int(total_hdr)
     )
-    var header_ends_host = ctx.enqueue_create_host_buffer[DType.int64](n)
+    var header_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
 
-    ctx.enqueue_copy(device_batch.qual_buffer, quality_data_host)
-    ctx.enqueue_copy(device_batch.offsets_buffer, quality_ends_host)
-    ctx.enqueue_copy(device_batch.sequence_buffer, sequence_data_host)
-    ctx.enqueue_copy(device_batch.header_buffer, header_data_host)
-    ctx.enqueue_copy(device_batch.header_ends, header_ends_host)
+    ctx.enqueue_copy(device_batch.qual_buffer, quality_data)
+    ctx.enqueue_copy(device_batch.qual_ends, quality_ends)
+    ctx.enqueue_copy(device_batch.sequence_buffer, sequence_data)
+    ctx.enqueue_copy(device_batch.header_buffer, header_data)
+    ctx.enqueue_copy(device_batch.header_ends, header_ends)
 
     ctx.synchronize()
 
     return StagedFastqBatch(
         num_records=n,
         total_seq_bytes=total_seq,
-        quality_data_host=quality_data_host,
-        quality_ends_host=quality_ends_host,
-        sequence_data_host=sequence_data_host,
-        header_data_host=header_data_host,
-        header_ends_host=header_ends_host,
+        total_header_bytes=total_hdr,
+        quality_data=quality_data,
+        quality_ends=quality_ends,
+        sequence_data=sequence_data,
+        header_data=header_data,
+        header_ends=header_ends,
     )
 
 
@@ -284,44 +303,39 @@ fn stage_batch_to_host(
     """
     var n = batch.num_records()
     var total_bytes = batch.seq_len()
-    var total_header_bytes = Int(batch._header_ends[n - 1]) if n > 0 else 0
+    var total_header_bytes = len(batch._header_bytes)
 
-    var quality_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
-        total_bytes
-    )
-    var quality_ends_host = ctx.enqueue_create_host_buffer[DType.int64](n)
-    var sequence_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
-        total_bytes
-    )
-    var header_data_host = ctx.enqueue_create_host_buffer[DType.uint8](
-        total_header_bytes
-    )
-    var header_ends_host = ctx.enqueue_create_host_buffer[DType.int64](n)
+    var quality_data = ctx.enqueue_create_host_buffer[DType.uint8](total_bytes)
+    var sequence_data = ctx.enqueue_create_host_buffer[DType.uint8](total_bytes)
+    var header_data = ctx.enqueue_create_host_buffer[DType.uint8](total_header_bytes)
+
+    var quality_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
+    var header_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
 
     ctx.synchronize()
 
     memcpy(
-        dest=quality_data_host.as_span().unsafe_ptr(),
+        dest=quality_data.as_span().unsafe_ptr(),
         src=batch._quality_bytes.unsafe_ptr(),
         count=total_bytes,
     )
     memcpy(
-        dest=quality_ends_host.as_span().unsafe_ptr(),
+        dest=quality_ends.as_span().unsafe_ptr(),
         src=batch._qual_ends.unsafe_ptr(),
         count=n,
     )
     memcpy(
-        dest=sequence_data_host.as_span().unsafe_ptr(),
+        dest=sequence_data.as_span().unsafe_ptr(),
         src=batch._sequence_bytes.unsafe_ptr(),
         count=total_bytes,
     )
     memcpy(
-        dest=header_data_host.as_span().unsafe_ptr(),
+        dest=header_data.as_span().unsafe_ptr(),
         src=batch._header_bytes.unsafe_ptr(),
         count=total_header_bytes,
     )
     memcpy(
-        dest=header_ends_host.as_span().unsafe_ptr(),
+        dest=header_ends.as_span().unsafe_ptr(),
         src=batch._header_ends.unsafe_ptr(),
         count=n,
     )
@@ -329,11 +343,12 @@ fn stage_batch_to_host(
     return StagedFastqBatch(
         num_records=n,
         total_seq_bytes=total_bytes,
-        quality_data_host=quality_data_host,
-        quality_ends_host=quality_ends_host,
-        sequence_data_host=sequence_data_host,
-        header_data_host=header_data_host,
-        header_ends_host=header_ends_host,
+        total_header_bytes=total_header_bytes,
+        quality_data=quality_data,
+        quality_ends=quality_ends,
+        sequence_data=sequence_data,
+        header_data=header_data,
+        header_ends=header_ends,
     )
 
 
@@ -341,30 +356,26 @@ fn move_staged_to_device(
     staged: StagedFastqBatch, ctx: DeviceContext, quality_offset: UInt8
 ) raises -> DeviceFastqBatch:
     var quality_buffer = ctx.enqueue_create_buffer[DType.uint8](
-        staged.total_seq_bytes
+        Int(staged.total_seq_bytes)
     )
     var quality_ends_buffer = ctx.enqueue_create_buffer[DType.int64](
         staged.num_records
     )
     var sequence_buffer = ctx.enqueue_create_buffer[DType.uint8](
-        staged.total_seq_bytes
+        Int(staged.total_seq_bytes)
     )
     var header_buffer = ctx.enqueue_create_buffer[DType.uint8](
-        len(staged.header_data_host)
+        Int(staged.total_header_bytes)
     )
     var header_ends_buffer = ctx.enqueue_create_buffer[DType.int64](
         staged.num_records
     )
 
-    ctx.enqueue_copy(src_buf=staged.quality_data_host, dst_buf=quality_buffer)
-    ctx.enqueue_copy(
-        src_buf=staged.quality_ends_host, dst_buf=quality_ends_buffer
-    )
-    ctx.enqueue_copy(src_buf=staged.sequence_data_host, dst_buf=sequence_buffer)
-    ctx.enqueue_copy(src_buf=staged.header_data_host, dst_buf=header_buffer)
-    ctx.enqueue_copy(
-        src_buf=staged.header_ends_host, dst_buf=header_ends_buffer
-    )
+    ctx.enqueue_copy(src_buf=staged.quality_data, dst_buf=quality_buffer)
+    ctx.enqueue_copy(src_buf=staged.quality_ends, dst_buf=quality_ends_buffer)
+    ctx.enqueue_copy(src_buf=staged.sequence_data, dst_buf=sequence_buffer)
+    ctx.enqueue_copy(src_buf=staged.header_data, dst_buf=header_buffer)
+    ctx.enqueue_copy(src_buf=staged.header_ends, dst_buf=header_ends_buffer)
 
     ctx.synchronize()
 
@@ -372,10 +383,10 @@ fn move_staged_to_device(
         num_records=staged.num_records,
         seq_len=staged.total_seq_bytes,
         quality_offset=quality_offset,
-        total_header_bytes=len(staged.header_data_host),
+        total_header_bytes=staged.total_header_bytes,
         qual_buffer=quality_buffer,
         sequence_buffer=sequence_buffer,
-        offsets_buffer=quality_ends_buffer,
+        qual_ends=quality_ends_buffer,
         header_buffer=header_buffer,
         header_ends=header_ends_buffer,
     )
