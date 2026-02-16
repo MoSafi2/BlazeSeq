@@ -12,3 +12,4 @@ scatch_file.mojo
 .pixi/
 .pytest_cache/
 .cursor/
+data/
