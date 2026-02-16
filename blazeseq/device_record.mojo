@@ -89,7 +89,6 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """
         Append one FastqRecord: copy its QuStr and SeqStr bytes into the
         packed buffers and record the cumulative quality length for offsets.
-        Uses the record's quality_schema.OFFSET for the first record only.
         """
 
         current_loaded = self.num_records()
