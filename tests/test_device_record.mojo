@@ -4,7 +4,6 @@ from blazeseq import (
     FastqRecord,
     FastqBatch,
     upload_batch_to_device,
-    enqueue_quality_prefix_sum,
 )
 from blazeseq.kernels.qc import (
     enqueue_batch_average_quality,
@@ -28,7 +27,6 @@ from testing import (
 )
 
 
-
 fn test_device_fastq_batch_add_and_layout() raises:
     """FastqBatch stacks records and builds correct qual_ends."""
     var batch = FastqBatch()
@@ -42,7 +40,6 @@ fn test_device_fastq_batch_add_and_layout() raises:
     assert_equal(batch._qual_ends[1], 4)
     assert_equal(len(batch._quality_bytes), 4)
     assert_equal(len(batch._sequence_bytes), 4)
-
 
 
 fn test_fastq_batch_from_records_and_to_records() raises:
@@ -72,69 +69,70 @@ fn test_fastq_batch_from_records_and_to_records() raises:
 
 
 # TODO: Re-enable this test when you know what is going on.
-# fn test_fastq_batch_get_record_matches_to_records() raises:
-#     """Get_record(i) returns the same record as to_records()[i]; compare to original added records.
-#     """
-#     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@x", "AA", "+", "!!"))
-#     records.append(FastqRecord("@y", "TT", "+", "!!"))
-#     # Sanity: input quality strings are as expected (33 = '!')
-#     assert_equal(records[0].QuStr.as_string_slice(), String("!!"))
-#     assert_equal(records[1].QuStr.as_string_slice(), String("!!"))
-#     var batch = FastqBatch()
-#     for i in range(len(records)):
-#         batch.add(records[i])
-#     # Batch should contain quality bytes 33, 33, 33, 33
-#     assert_equal(len(batch._quality_bytes), 4)
-#     assert_equal(batch._quality_bytes[0], 33)
-#     assert_equal(batch._quality_bytes[1], 33)
-#     assert_equal(batch._quality_bytes[2], 33)
-#     assert_equal(batch._quality_bytes[3], 33)
-#     var as_list = batch.to_records()
-#     for i in range(batch.num_records()):
-#         var from_get = batch.get_record(i)
-#         # Compare to original record we added (stable expected value)
-#         assert_equal(
-#             from_get.SeqHeader.as_string_slice(),
-#             records[i].SeqHeader.as_string_slice(),
-#         )
-#         assert_equal(
-#             from_get.SeqStr.as_string_slice(),
-#             records[i].SeqStr.as_string_slice(),
-#         )
-#         assert_equal(
-#             from_get.QuStr.as_string_slice(),
-#             records[i].QuStr.as_string_slice(),
-#         )
-#         # Also assert get_record(i) matches to_records()[i]
-#         assert_equal(
-#             from_get.SeqHeader.as_string_slice(),
-#             as_list[i].SeqHeader.as_string_slice(),
-#         )
-#         assert_equal(
-#             from_get.SeqStr.as_string_slice(),
-#             as_list[i].SeqStr.as_string_slice(),
-#         )
-#         assert_equal(
-#             from_get.QuStr.as_string_slice(),
-#             as_list[i].QuStr.as_string_slice(),
-#         )
+fn test_fastq_batch_get_record_matches_to_records() raises:
+    """Get_record(i) returns the same record as to_records()[i]; compare to original added records.
+    """
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@x", "AA", "+", "!!"))
+    records.append(FastqRecord("@y", "TT", "+", "!!"))
+    # Sanity: input quality strings are as expected (33 = '!')
+    assert_equal(records[0].QuStr.as_string_slice(), String("!!"))
+    assert_equal(records[1].QuStr.as_string_slice(), String("!!"))
+    var batch = FastqBatch()
+    for i in range(len(records)):
+        batch.add(records[i])
+    # Batch should contain quality bytes 33, 33, 33, 33
+    assert_equal(len(batch._quality_bytes), 4)
+    assert_equal(batch._quality_bytes[0], ord("!"))
+    assert_equal(batch._quality_bytes[1], ord("!"))
+    assert_equal(batch._quality_bytes[2], ord("!"))
+    assert_equal(batch._quality_bytes[3], ord("!"))
+    var as_list = batch.to_records()
+    for i in range(batch.num_records()):
+        var from_get = batch.get_record(i)
+        # Compare to original record we added (stable expected value)
+        assert_equal(
+            from_get.SeqHeader.as_string_slice(),
+            records[i].SeqHeader.as_string_slice(),
+        )
+        assert_equal(
+            from_get.SeqStr.as_string_slice(),
+            records[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            from_get.QuStr.as_string_slice(),
+            records[i].QuStr.as_string_slice(),
+        )
+        # Also assert get_record(i) matches to_records()[i]
+        assert_equal(
+            from_get.SeqHeader.as_string_slice(),
+            as_list[i].SeqHeader.as_string_slice(),
+        )
+        assert_equal(
+            from_get.SeqStr.as_string_slice(),
+            as_list[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            from_get.QuStr.as_string_slice(),
+            as_list[i].QuStr.as_string_slice(),
+        )
+        _ = from_get
 
 
 fn test_fastq_batch_empty_from_records() raises:
     """FastqBatch from empty list has 0 records."""
     var records = List[FastqRecord]()
-    var batch = FastqBatch(records)
-    assert_equal(batch.num_records(), 0)
-    var back = batch.to_records()
-    assert_equal(len(back), 0)
+    with assert_raises(contains="FastqBatch cannot be empty"):
+        var batch = FastqBatch(records)
 
 
 fn test_stage_batch_to_host_always_full() raises:
-    """When GPU is available: stage_batch_to_host always has quality, sequence, and header host buffers."""
+    """When GPU is available: stage_batch_to_host always has quality, sequence, and header host buffers.
+    """
 
     @parameter
     if not has_accelerator():
+        print("No GPU available")
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@a", "AC", "+", "!!"))
@@ -150,7 +148,8 @@ fn test_stage_batch_to_host_always_full() raises:
 
 
 fn test_stage_batch_to_host_full_content() raises:
-    """When GPU is available: stage_batch_to_host with multiple records has correct header/sequence lengths."""
+    """When GPU is available: stage_batch_to_host with multiple records has correct header/sequence lengths.
+    """
 
     @parameter
     if not has_accelerator():
@@ -169,7 +168,8 @@ fn test_stage_batch_to_host_full_content() raises:
 
 
 fn test_move_staged_to_device() raises:
-    """When GPU is available: move_staged_to_device produces DeviceFastqBatch with all buffers set."""
+    """When GPU is available: move_staged_to_device produces DeviceFastqBatch with all buffers set.
+    """
 
     @parameter
     if not has_accelerator():
@@ -192,7 +192,8 @@ fn test_move_staged_to_device() raises:
 
 
 fn test_upload_batch_to_device_always_full() raises:
-    """When GPU is available: upload always has qual, sequence, and header buffers."""
+    """When GPU is available: upload always has qual, sequence, and header buffers.
+    """
 
     @parameter
     if not has_accelerator():
@@ -231,7 +232,8 @@ fn test_upload_batch_to_device_single_record() raises:
 
 
 fn test_device_fastq_batch_shape_after_upload() raises:
-    """When GPU is available: DeviceFastqBatch after upload matches batch shape; copy-back sanity check."""
+    """When GPU is available: DeviceFastqBatch after upload matches batch shape; copy-back sanity check.
+    """
 
     @parameter
     if not has_accelerator():
@@ -250,6 +252,7 @@ fn test_device_fastq_batch_shape_after_upload() raises:
         assert_equal(host_qual[i], batch._quality_bytes[i])
 
 
+# Results in Error
 # fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
 #     """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original.
 #     """
@@ -315,13 +318,8 @@ fn test_device_fastq_batch_empty_roundtrip() raises:
     if not has_accelerator():
         return
     var records = List[FastqRecord]()
-    var batch = FastqBatch(records)
-    assert_equal(batch.num_records(), 0)
-    var ctx = DeviceContext()
-    var d = upload_batch_to_device(batch, ctx)
-    var back_batch = d.copy_to_host(ctx)
-    var back_list = back_batch.to_records()
-    assert_equal(len(back_list), 0)
+    with assert_raises(contains="FastqBatch cannot be empty"):
+        var batch = FastqBatch(records)
 
 
 # Failing test
@@ -345,7 +343,7 @@ fn test_device_fastq_batch_empty_roundtrip() raises:
 #     assert_equal(back_list[0].SeqStr.as_string_slice(), String("AB"))
 
 
-# Results in in infinite loop
+# Results in Error
 # fn test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() raises:
 #     """When GPU is available: QUALITY_AND_SEQUENCE round-trip preserves sequence and quality vs original records.
 #     """
@@ -374,7 +372,8 @@ fn test_device_fastq_batch_empty_roundtrip() raises:
 
 
 fn test_device_fastq_batch_copy_to_host_succeeds() raises:
-    """When GPU is available: copy_to_host after upload returns FastqBatch with same shape."""
+    """When GPU is available: copy_to_host after upload returns FastqBatch with same shape.
+    """
 
     @parameter
     if not has_accelerator():
@@ -388,8 +387,6 @@ fn test_device_fastq_batch_copy_to_host_succeeds() raises:
     assert_equal(back.seq_len(), batch.seq_len())
 
 
-
-
-
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+    #test_fastq_batch_get_record_matches_to_records()
