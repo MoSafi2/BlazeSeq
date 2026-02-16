@@ -1,4 +1,4 @@
-from blazeseq.record import QualitySchema
+from blazeseq.quality_schema import QualitySchema
 from sys.info import simd_width_of
 
 comptime KB = 1024
@@ -7,10 +7,13 @@ comptime GB = 1024 * MB
 
 
 comptime USE_SIMD = True
-comptime read_header = 64
-comptime quality_header = 43
-comptime new_line = 10
-comptime carriage_return = 13
+comptime read_header: UInt8 = 64
+comptime quality_header: UInt8 = 43
+comptime new_line: UInt8 = 10
+comptime carriage_return: UInt8 = 13
+
+# Sentinel error message for end-of-stream; used by parser/iostream iterators to stop iteration.
+comptime EOF = "EOF"
 
 comptime simd_width: Int = simd_width_of[UInt8]()
 

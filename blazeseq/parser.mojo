@@ -1,67 +1,247 @@
-from blazeseq.record import FastqRecord, RecordCoord
+from blazeseq.record import FastqRecord, RecordCoord, Validator
 from blazeseq.CONSTS import *
-from blazeseq.iostream import BufferedReader, FileReader, Reader
+from blazeseq.iostream import BufferedReader, Reader, LineIterator, EOFError
+from blazeseq.readers import Reader
+from blazeseq.device_record import FastqBatch
+from std.iter import Iterable, Iterator
 import time
+from blazeseq.byte_string import ByteString
+from blazeseq.utils import _parse_schema
 
 
-struct RecordParser[
-    R: Reader, check_ascii: Bool = True, check_quality: Bool = True
-]:
-    var stream: BufferedReader[Self.R, check_ascii = Self.check_ascii]
-    var quality_schema: QualitySchema
+# ---------------------------------------------------------------------------
+# ParserConfig: Configuration struct for parser options
+# ---------------------------------------------------------------------------
+
+
+struct ParserConfig(Copyable):
+    """
+    Configuration struct for FASTQ parser options.
+    Centralizes buffer capacity, growth policy, validation flags, and quality schema settings.
+    """
+
+    var buffer_capacity: Int
+    var buffer_max_capacity: Int
+    var buffer_growth_enabled: Bool
+    var check_ascii: Bool
+    var check_quality: Bool
+    var quality_schema: Optional[String]
+    var batch_size: Optional[Int]
 
     fn __init__(
-        out self, var reader: Self.R, schema: String = "generic"
+        out self,
+        buffer_capacity: Int = DEFAULT_CAPACITY,
+        buffer_max_capacity: Int = MAX_CAPACITY,
+        buffer_growth_enabled: Bool = False,
+        check_ascii: Bool = False,
+        check_quality: Bool = False,
+        quality_schema: Optional[String] = None,
+        batch_size: Optional[Int] = None,
+    ):
+        """Initialize ParserConfig with default or custom values."""
+        self.buffer_capacity = buffer_capacity
+        self.buffer_max_capacity = buffer_max_capacity
+        self.buffer_growth_enabled = buffer_growth_enabled
+        self.check_ascii = check_ascii
+        self.check_quality = check_quality
+        self.quality_schema = quality_schema
+        self.batch_size = batch_size
+
+
+struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
+    Iterable, Movable
+):
+    """
+    FASTQ record parser over a Reader. Supports ``for record in parser``;
+    each element is a FastqRecord.
+    """
+
+    comptime IteratorType[
+        mut: Bool, origin: Origin[mut=mut]
+    ] = _RecordParserIter[Self.R, Self.config, origin]
+
+    var line_iter: LineIterator[Self.R]
+    var quality_schema: QualitySchema
+    var validator: Validator
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
     ) raises:
-        self.stream = BufferedReader[check_ascii = Self.check_ascii](
-            reader^, DEFAULT_CAPACITY
+        """Initialize RecordParser with optional ParserConfig."""
+        self.line_iter = LineIterator(
+            reader^,
+            self.config.buffer_capacity,
+            self.config.buffer_growth_enabled,
+            self.config.buffer_max_capacity,
         )
-        self.quality_schema = self._parse_schema(schema)
+
+        if self.config.quality_schema:
+            self.quality_schema = _parse_schema(
+                self.config.quality_schema.value()
+            )
+        else:
+            self.quality_schema = materialize[generic_schema]()
+
+        self.validator = Validator(
+            self.config.check_ascii,
+            self.config.check_quality,
+            self.quality_schema.copy(),
+        )
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
+        quality_schema: String,
+    ) raises:
+        """Initialize RecordParser with optional ParserConfig."""
+        self.line_iter = LineIterator(
+            reader^,
+            self.config.buffer_capacity,
+            self.config.buffer_growth_enabled,
+            self.config.buffer_max_capacity,
+        )
+        self.quality_schema = _parse_schema(quality_schema)
+        self.validator = Validator(
+            self.config.check_ascii,
+            self.config.check_quality,
+            self.quality_schema.copy(),
+        )
 
     fn parse_all(mut self) raises:
-        while True:
-            if not self.stream.has_more_lines():
-                break
-            var record: FastqRecord[self.check_quality]
-            record = self._parse_record()
-            record.validate_record()
+        # Check if file is empty - if so, raise EOF error
+        if not self.line_iter.has_more():
+            raise Error(EOF)
 
-            # ASCII validation is carried out in the reader
-            @parameter
-            if Self.check_quality:
-                record.validate_quality_schema()
+        while True:
+            if not self.line_iter.has_more():
+                break
+            var record: FastqRecord
+            record = self._parse_record()
+            self.validator.validate(record)
 
     @always_inline
-    fn next(mut self) raises -> Optional[FastqRecord[val = self.check_quality]]:
+    fn _next(
+        mut self,
+    ) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
-        if self.stream.has_more_lines():
-            var record: FastqRecord[self.check_quality]
+        if self.line_iter.has_more():
+            var record: FastqRecord
             record = self._parse_record()
-            record.validate_record()
-
-            # ASCII validation is carried out in the reader
-            @parameter
-            if Self.check_quality:
-                record.validate_quality_schema()
+            self.validator.validate(record)
             return record^
         else:
-            return None
+            raise EOFError()
 
     @always_inline
-    fn _parse_record(mut self) raises -> FastqRecord[self.check_quality]:
-        l1 = self.stream.get_next_line()
-        l2 = self.stream.get_next_line()
-        l3 = self.stream.get_next_line()
-        l4 = self.stream.get_next_line()
-        schema = self.quality_schema.copy()
+    fn has_more(self) -> Bool:
+        """True if there may be more records (more input in the buffer or stream).
+        """
+        return self.line_iter.has_more()
+
+    fn __iter__(
+        ref self,
+    ) -> _RecordParserIter[Self.R, Self.config, origin_of(self)]:
+        """Return an iterator for use in ``for record in self``."""
+        return _RecordParserIter[Self.R, Self.config, origin_of(self)](
+            Pointer(to=self)
+        )
+
+    @always_inline
+    fn _parse_record(
+        mut self,
+    ) raises -> FastqRecord:
+        var line1 = ByteString(self.line_iter.next_line())
+        var line2 = ByteString(self.line_iter.next_line())
+        var line3 = ByteString(self.line_iter.next_line())
+        var line4 = ByteString(self.line_iter.next_line())
+        return FastqRecord(line1^, line2^, line3^, line4^, self.quality_schema)
+
+
+# ---------------------------------------------------------------------------
+# Iterator adapter for RecordParser so that ``for record in parser`` works.
+# ---------------------------------------------------------------------------
+
+
+struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
+    Iterator
+):
+    """Iterator over FASTQ records; yields FastqRecord per record."""
+
+    comptime Element = FastqRecord
+
+    var _src: Pointer[RecordParser[Self.R, Self.config], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[RecordParser[Self.R, Self.config], Self.origin],
+    ):
+        self._src = src
+
+    fn __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[
+            Pointer[RecordParser[Self.R, Self.config], MutExternalOrigin]
+        ](self._src)
         try:
-            return FastqRecord[val = self.check_quality](l1, l2, l3, l4, schema)
+            return mut_ptr[]._next()
         except Error:
-            raise
+            if String(Error) == EOF:
+                raise StopIteration()
+            else:
+                print(String(Error))
+            raise StopIteration()
+
+
+struct BatchedParser[
+    R: Reader,
+    config: ParserConfig = ParserConfig(),
+](Iterable, Movable):
+    """
+    Parser that extracts batches of FASTQ records in either Array-of-Structures (AoS)
+    format for CPU parallelism or Structure-of-Arrays (SoA) format for GPU operations.
+    Supports ``for batch in parser``; each element is a FastqBatch.
+    """
+
+    comptime IteratorType[
+        mut: Bool, origin: Origin[mut=mut]
+    ] = _BatchedParserIter[Self.R, Self.config, origin]
+
+    var line_iter: LineIterator[Self.R]
+    var quality_schema: QualitySchema
+    var _batch_size: Int
+
+    fn __init__(
+        out self,
+        var reader: Self.R,
+        schema: String = "generic",
+        default_batch_size: Int = 1024,
+    ) raises:
+        """Legacy constructor for backward compatibility."""
+        self.line_iter = LineIterator(
+            reader^,
+            Self.config.buffer_capacity,
+            Self.config.buffer_growth_enabled,
+            Self.config.buffer_max_capacity,
+        )
+        if Self.config.quality_schema:
+            self.quality_schema = self._parse_schema(
+                Self.config.quality_schema.value()
+            )
+        else:
+            self.quality_schema = self._parse_schema(schema)
+        # Use config batch_size if provided, otherwise use default_batch_size
+        if Self.config.batch_size:
+            self._batch_size = Self.config.batch_size.value()
+        else:
+            self._batch_size = default_batch_size
 
     @staticmethod
     @always_inline
     fn _parse_schema(quality_format: String) -> QualitySchema:
+        """Parse quality schema string into QualitySchema."""
         var schema: QualitySchema
 
         if quality_format == "sanger":
@@ -78,61 +258,152 @@ struct RecordParser[
             schema = materialize[generic_schema]()
         else:
             print(
-                """Uknown quality schema please choose one of 'sanger', 'solexa',"
+                """Unknown quality schema please choose one of 'sanger', 'solexa',"
                 " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
                 Parsing with generic schema."""
             )
             return materialize[generic_schema]()
         return schema^
 
+    fn _next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
+        """
+        Extract a batch of records in Structure-of-Arrays format for GPU operations.
 
-# struct CoordParser[
-#     R: Reader, check_ascii: Bool = True, check_quality: Bool = True
-# ]:
-#     var stream: BufferedLineIterator[R, check_ascii=check_ascii]
+        Args:
+            max_records: Maximum number of records to extract (default: batch_size).
 
-#     fn __init__(out self, var reader: Self.R) raises:
-#         self.stream = BufferedReader[check_ascii=check_ascii](
-#             reader^, DEFAULT_CAPACITY
+        Returns:
+            FastqBatch containing the extracted records in SoA format.
+        """
+        var actual_max = min(max_records, self._batch_size)
+        var batch = FastqBatch(batch_size=actual_max)
+
+        while len(batch) < actual_max and self.line_iter.has_more():
+            var record = self._parse_record()
+            batch.add(record^)
+        return batch^
+
+    @always_inline
+    fn _has_more(self) -> Bool:
+        """True if there may be more input (more lines in the buffer or stream).
+        """
+        return self.line_iter.has_more()
+
+    fn __iter__(
+        ref self,
+    ) -> _BatchedParserIter[Self.R, Self.config, origin_of(self)]:
+        """Return an iterator for use in ``for batch in self``."""
+        return _BatchedParserIter[Self.R, Self.config, origin_of(self)](
+            Pointer(to=self)
+        )
+
+    # TODO: Replace by a ref_based record parsing
+    @always_inline
+    fn _parse_record(mut self) raises -> FastqRecord:
+        """Parse a single FASTQ record (4 lines) from the stream."""
+        var line1 = ByteString(self.line_iter.next_line())
+        var line2 = ByteString(self.line_iter.next_line())
+        var line3 = ByteString(self.line_iter.next_line())
+        var line4 = ByteString(self.line_iter.next_line())
+        schema = self.quality_schema.copy()
+        return FastqRecord(line1^, line2^, line3^, line4^, schema)
+
+
+# ---------------------------------------------------------------------------
+# Iterator adapter for BatchedParser so that ``for batch in parser`` works.
+# ---------------------------------------------------------------------------
+
+
+struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
+    Iterator
+):
+    """Iterator over FASTQ batches; yields FastqBatch per batch."""
+
+    comptime Element = FastqBatch
+
+    var _src: Pointer[BatchedParser[Self.R, Self.config], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[BatchedParser[Self.R, Self.config], Self.origin],
+    ):
+        self._src = src
+
+    fn __has_next__(self) -> Bool:
+        return self._src[]._has_more()
+
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[
+            Pointer[BatchedParser[Self.R, Self.config], MutExternalOrigin]
+        ](self._src)
+        try:
+            var batch = mut_ptr[]._next_batch()
+            if len(batch) == 0:
+                raise StopIteration()
+            return batch^
+        except:
+            raise StopIteration()
+
+
+# struct CoordParser[R: Reader, config: ParserConfig = ParserConfig()]:
+#     var stream: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
+#     var quality_schema: QualitySchema
+#     var validator: Validator
+
+#     fn __init__(
+#         out self,
+#         var reader: Self.R,
+#     ) raises:
+#         self.stream = LineIterator[check_ascii = Self.config.check_ascii](
+#             reader^,
+#             Self.config.buffer_capacity,
+#             Self.config.buffer_growth_enabled,
+#             Self.config.buffer_max_capacity,
+#         )
+#         if Self.config.quality_schema:
+#             self.quality_schema = _parse_schema(
+#                 Self.config.quality_schema.value()
+#             )
+#         else:
+#             self.quality_schema = materialize[generic_schema]()
+#         self.validator = Validator(
+#             Self.config.check_quality,
+#             self.quality_schema.copy(),
 #         )
 
 #     @always_inline
 #     fn parse_all(mut self) raises:
+#         if not self.stream.has_more():
+#             raise Error("EOF")
 #         while True:
+#             if not self.stream.has_more():
+#                 break
 #             record = self._parse_record()
-#             record.validate()
+#             record.validate_record()
 
 #             @parameter
-#             if Self.check_quality:
+#             if Self.config.check_quality:
 #                 record.validate_quality_schema()
 
 #     @always_inline
 #     fn next(
 #         mut self,
-#     ) raises -> RecordCoord[mut=False, o = origin_of(self.stream.buf)]:
+#     ) raises -> RecordCoord[validate_quality = Self.config.check_quality]:
 #         read = self._parse_record()
-#         read.validate()
+#         read.validate_record()
 
 #         @parameter
-#         if check_quality:
+#         if Self.config.check_quality:
 #             read.validate_quality_schema()
-#         return read
+#         return read^
 
 #     @always_inline
 #     fn _parse_record(
 #         mut self,
-#     ) raises -> RecordCoord[
-#         mut=False, o = origin_of(origin_of(self.stream.buf))
-#     ]:
-#         var line1 = self.stream.get_next_line_span()
+#     ) raises -> RecordCoord[validate_quality = Self.config.check_quality]:
+#         lines = self.stream.get_n_lines[4]()
+#         l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
 
-#         var line2 = self.stream.get_next_line_span()
-#         var line3 = self.stream.get_next_line_span()
-#         var line4 = self.stream.get_next_line_span()
-
-#         return RecordCoord(
-#             line1.get_immutable(),
-#             line2.get_immutable(),
-#             line3.get_immutable(),
-#             line4.get_immutable(),
-#         )
+#         return RecordCoord[
+#             validate_quality = self.config.__del__is_trivialcheck_quality
+#         ](l1, l2, l3, l4)

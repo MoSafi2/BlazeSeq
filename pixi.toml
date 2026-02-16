@@ -1,0 +1,40 @@
+[workspace]
+name = "blazeseq"
+version = "0.1.0"
+description = "Primitives for FASTQ parsing and GPU-accelerated sequencing utilities in Mojo."
+authors = []
+channels = ["conda-forge", "https://conda.modular.com/max-nightly"]
+platforms = ["linux-64", "osx-arm64"]
+license = "Apache-2.0"
+preview = ["pixi-build"]
+
+[package]
+name = "blazeseq"
+version = "0.1.1"
+
+[package.build]
+backend = { name = "pixi-build-mojo", version = "0.*", channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+] }
+
+[package.host-dependencies]
+mojo-compiler = "=0.26.1.0"
+
+[package.build-dependencies]
+mojo-compiler = "=0.26.1.0"
+rattler-build = "*"
+
+[package.run-dependencies]
+mojo-compiler = "=0.26.1.0"
+
+[dependencies]
+mojo = "=0.26.1.0"
+
+[tasks]
+build = "mojo package blazeseq -o BlazeSeq.mojopkg"
+test = { cmd = "sh -c 'find ./tests -name test_*.mojo | xargs -I % pixi run mojo run -I . -D ASSERT=all %'" } # test
+rbuild = "pixi build"
+rtest = { cmd = "sh -c 'PKG=$(ls ./blazeseq*.conda 2>/dev/null || find .pixi/build -name \"blazeseq*.conda\" -type f 2>/dev/null | head -1); test -n \"$PKG\" && rattler-build test -c conda-forge -c https://conda.modular.com/max --package-file \"$PKG\"'", depends-on = [
+    "rbuild",
+] }
