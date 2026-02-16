@@ -30,7 +30,7 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
         parser = RecordParser[FileReader, config_](FileReader(test_dir + file))
         try:
             while True:
-                var record = parser._next()
+                var record = parser.next()
                 parser.validator.validate(record)
         except e:
             var err_msg = String(e)
@@ -206,7 +206,7 @@ fn test_record_parser_ascii_validation_enabled() raises:
             MemoryReader,
             ParserConfig(check_ascii=True, check_quality=False),
         ](reader^)
-        _ = parser._next()
+        _ = parser.next()
 
 
 fn test_record_parser_ascii_validation_disabled() raises:
@@ -218,7 +218,7 @@ fn test_record_parser_ascii_validation_disabled() raises:
         MemoryReader,
         ParserConfig(check_ascii=False, check_quality=False),
     ](reader^)
-    var record = parser._next()
+    var record = parser.next()
     assert_equal(
         record.SeqHeader.to_string(),
         "@r1",
@@ -257,9 +257,9 @@ fn test_batched_parser_batch_size_respected() raises:
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "generic", 2)
 
-    var batch1 = parser._next_batch(2)
-    var batch2 = parser._next_batch(2)
-    var batch3 = parser._next_batch(2)
+    var batch1 = parser.next_batch(2)
+    var batch2 = parser.next_batch(2)
+    var batch3 = parser.next_batch(2)
 
     assert_equal(len(batch1), 2, "First batch size 2")
     assert_equal(len(batch2), 2, "Second batch size 2")
@@ -276,7 +276,7 @@ fn test_batched_parser_single_batch_content() raises:
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
 
-    var batch = parser._next_batch(4)
+    var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record in batch")
     var rec = batch.get_record(0)
     assert_equal(rec.SeqHeader.to_string(), "@seq1", "Header should match")
@@ -304,7 +304,7 @@ fn test_batched_parser_has_more() raises:
     var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
 
     assert_true(parser._has_more(), "Should have more before _next_batch")
-    _ = parser._next_batch(4)
+    _ = parser.next_batch(4)
     assert_true(
         not parser._has_more(),
         "Should have no more after consuming single record",
@@ -318,7 +318,7 @@ fn test_batched_parser_schema() raises:
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "sanger", 4)
 
-    var batch = parser._next_batch(4)
+    var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record")
     var rec = batch.get_record(0)
     assert_equal(rec.SeqStr.to_string(), "ACGT", "Sequence unchanged by schema")

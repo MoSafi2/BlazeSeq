@@ -121,7 +121,7 @@ struct RecordParser[R: Reader, config: ParserConfig = ParserConfig()](
             self.validator.validate(record)
 
     @always_inline
-    fn _next(
+    fn next(
         mut self,
     ) raises -> FastqRecord:
         """Method that lazily returns the Next record in the file."""
@@ -186,7 +186,7 @@ struct _RecordParserIter[R: Reader, config: ParserConfig, origin: Origin](
             Pointer[RecordParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            return mut_ptr[]._next()
+            return mut_ptr[].next()
         except Error:
             if String(Error) == EOF:
                 raise StopIteration()
@@ -265,7 +265,7 @@ struct BatchedParser[
             return materialize[generic_schema]()
         return schema^
 
-    fn _next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
+    fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
         """
         Extract a batch of records in Structure-of-Arrays format for GPU operations.
 
@@ -337,7 +337,7 @@ struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
             Pointer[BatchedParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            var batch = mut_ptr[]._next_batch()
+            var batch = mut_ptr[].next_batch()
             if len(batch) == 0:
                 raise StopIteration()
             return batch^
