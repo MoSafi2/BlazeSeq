@@ -278,9 +278,9 @@ struct Validator(Copyable):
     @always_inline
     fn validate(self, record: FastqRecord) raises:
         """Run configured validations for a parsed FASTQ record."""
+        self.validate_record(record)
         if self.check_ascii:
             self.validate_ascii(record)
-        self.validate_record(record)
         if self.check_quality:
             self.validate_quality_schema(record)
 
