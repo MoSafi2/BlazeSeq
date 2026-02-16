@@ -276,8 +276,7 @@ struct BatchedParser[
             FastqBatch containing the extracted records in SoA format.
         """
         var actual_max = min(max_records, self._batch_size)
-        var batch = Fastq
-        Batch(batch_size=actual_max)
+        var batch = FastqBatch(batch_size=actual_max)
 
         while len(batch) < actual_max and self.line_iter.has_more():
             var record = self._parse_record()

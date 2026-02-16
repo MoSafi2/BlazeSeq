@@ -85,7 +85,6 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         for i in range(batch_size):
             self.add(records[i])
 
-    # TODO: Make this more performanant.
     fn add(mut self, record: FastqRecord):
         """
         Append one FastqRecord: copy its QuStr and SeqStr bytes into the
@@ -99,16 +98,16 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         self._header_bytes.extend(record.SeqHeader.as_span())
 
         if current_loaded == 0:
-            self._header_ends.append(Int64(len(self._header_bytes)))
-            self._qual_ends.append(Int64(len(self._quality_bytes)))
+            self._header_ends.append(Int64(len(record.SeqHeader)))
+            self._qual_ends.append(Int64(len(record.QuStr)))
         else:
             self._header_ends.append(
-                Int64(len(self._header_bytes))
+                Int64(len(record.SeqHeader))
                 + self._header_ends[current_loaded - 1]
             )
 
             self._qual_ends.append(
-                Int64(len(self._quality_bytes))
+                Int64(len(record.QuStr))
                 + self._qual_ends[current_loaded - 1]
             )
 
@@ -133,8 +132,6 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """
         Return the record at the given index as a FastqRecord.
         Bounds-checked; raises if index < 0 or index >= num_records().
-        When header data is not present (e.g. batch from copy_to_host with
-        QUALITY_AND_SEQUENCE), synthesizes a header "@0", "@1", ... per record.
         """
         var n = self.num_records()
         if index < 0 or index >= n:

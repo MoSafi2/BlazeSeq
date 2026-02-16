@@ -29,10 +29,11 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
     with assert_raises(contains=msg):
         parser = RecordParser[FileReader, config_](FileReader(test_dir + file))
         try:
-            for record in parser:
+            while True:
+                var record = parser._next()
                 parser.validator.validate(record)
-        except Error:
-            var err_msg = String(Error)
+        except e:
+            var err_msg = String(e)
             print(err_msg)
             raise
 
@@ -112,42 +113,42 @@ fn test_valid() raises:
 
 
 # TODO: The iterator is not working with other errors than StopIteration
-# fn test_invalid() raises:
-# invalid_file_test_fun("empty.fastq", EOF)
-# invalid_file_test_fun("error_diff_ids.fastq", non_mat_hed)
-# invalid_file_test_fun("error_long_qual.fastq", cor_len)
-# invalid_file_test_fun("error_no_qual.fastq", cor_len)
-# invalid_file_test_fun("error_trunc_in_plus.fastq", cor_len)
-# invalid_file_test_fun("error_trunc_at_qual.fastq", cor_len)
-# invalid_file_test_fun("error_double_qual.fastq", cor_seq_hed)
-# invalid_file_test_fun("error_trunc_at_seq.fastq", cor_qu_hed)
-# invalid_file_test_fun("error_trunc_in_seq.fastq", cor_qu_hed)
-# invalid_file_test_fun("error_trunc_in_title.fastq", cor_qu_hed)
-# invalid_file_test_fun("error_double_seq.fastq", cor_qu_hed)
-# invalid_file_test_fun("error_trunc_at_plus.fastq", cor_qu_hed)
-# invalid_file_test_fun("error_qual_null.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_qual_space.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_spaces.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_qual_vtab.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_tabs.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_qual_tab.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_qual_del.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
-# invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
-# invalid_file_test_fun(
-#     "solexa-invalid-repeat-description.fastq", len_mismatch
-# )
-# invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
-# invalid_file_test_fun(
-#     "sanger-invalid-repeat-description.fastq", len_mismatch
-# )
-# invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
-# invalid_file_test_fun(
-#     "illumina-invalid-repeat-description.fastq", len_mismatch
-# )
-# invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
-# invalid_file_test_fun("error_short_qual.fastq", cor_len)
-# invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
+fn test_invalid() raises:
+    invalid_file_test_fun("empty.fastq", EOF)
+    invalid_file_test_fun("error_diff_ids.fastq", non_mat_hed)
+    invalid_file_test_fun("error_long_qual.fastq", cor_len)
+    invalid_file_test_fun("error_no_qual.fastq", cor_len)
+    invalid_file_test_fun("error_trunc_in_plus.fastq", cor_len)
+    invalid_file_test_fun("error_trunc_at_qual.fastq", cor_len)
+    invalid_file_test_fun("error_double_qual.fastq", cor_seq_hed)
+    invalid_file_test_fun("error_trunc_at_seq.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_trunc_in_seq.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_trunc_in_title.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_double_seq.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_trunc_at_plus.fastq", cor_qu_hed)
+    invalid_file_test_fun("error_qual_null.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_space.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_spaces.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_vtab.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_tabs.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_tab.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_del.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
+    invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun(
+        "solexa-invalid-repeat-description.fastq", len_mismatch
+    )
+    invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun(
+        "sanger-invalid-repeat-description.fastq", len_mismatch
+    )
+    invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun(
+        "illumina-invalid-repeat-description.fastq", len_mismatch
+    )
+    invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
+    invalid_file_test_fun("error_short_qual.fastq", cor_len)
+    invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
 
 
 fn test_record_parser_for_loop() raises:
@@ -231,7 +232,8 @@ fn test_record_parser_ascii_validation_disabled() raises:
 
 
 fn test_batched_parser_for_loop() raises:
-    """BatchedParser supports ``for batch in parser`` and yields FastqBatch with correct record count."""
+    """BatchedParser supports ``for batch in parser`` and yields FastqBatch with correct record count.
+    """
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n@r3\nNNNN\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "generic", 2)
@@ -240,14 +242,18 @@ fn test_batched_parser_for_loop() raises:
     for batch in parser:
         batches.append(batch^)
 
-    assert_equal(len(batches), 2, "Should yield 2 batches (batch_size=2, 3 records)")
+    assert_equal(
+        len(batches), 2, "Should yield 2 batches (batch_size=2, 3 records)"
+    )
     assert_equal(len(batches[0]), 2, "First batch should have 2 records")
     assert_equal(len(batches[1]), 1, "Second batch should have 1 record")
 
 
 fn test_batched_parser_batch_size_respected() raises:
     """Custom default_batch_size limits records per batch."""
-    var content = "@a\nA\n+\n!\n@b\nB\n+\n!\n@c\nC\n+\n!\n@d\nD\n+\n!\n@e\nE\n+\n!\n"
+    var content = (
+        "@a\nA\n+\n!\n@b\nB\n+\n!\n@c\nC\n+\n!\n@d\nD\n+\n!\n@e\nE\n+\n!\n"
+    )
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "generic", 2)
 
@@ -258,11 +264,14 @@ fn test_batched_parser_batch_size_respected() raises:
     assert_equal(len(batch1), 2, "First batch size 2")
     assert_equal(len(batch2), 2, "Second batch size 2")
     assert_equal(len(batch3), 1, "Third batch size 1 (remaining)")
-    assert_true(not parser._has_more(), "No more input after consuming 5 records")
+    assert_true(
+        not parser._has_more(), "No more input after consuming 5 records"
+    )
 
 
 fn test_batched_parser_single_batch_content() raises:
-    """Batch content matches parsed records (get_record / header and sequence)."""
+    """Batch content matches parsed records (get_record / header and sequence).
+    """
     var content = "@seq1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
@@ -288,18 +297,23 @@ fn test_batched_parser_empty_input() raises:
 
 
 fn test_batched_parser_has_more() raises:
-    """_has_more() is True before consumption and False after all records consumed."""
+    """_has_more() is True before consumption and False after all records consumed.
+    """
     var content = "@r1\nA\n+\n!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
 
     assert_true(parser._has_more(), "Should have more before _next_batch")
     _ = parser._next_batch(4)
-    assert_true(not parser._has_more(), "Should have no more after consuming single record")
+    assert_true(
+        not parser._has_more(),
+        "Should have no more after consuming single record",
+    )
 
 
 fn test_batched_parser_schema() raises:
-    """BatchedParser accepts quality schema string (e.g. sanger) and parses correctly."""
+    """BatchedParser accepts quality schema string (e.g. sanger) and parses correctly.
+    """
     var content = "@id\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = BatchedParser[MemoryReader](reader^, "sanger", 4)
@@ -311,7 +325,8 @@ fn test_batched_parser_schema() raises:
 
 
 fn test_generate_synthetic_fastq_buffer() raises:
-    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + BatchedParser yield expected counts and lengths."""
+    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + BatchedParser yield expected counts and lengths.
+    """
     var num_reads = 20
     var min_len = 5
     var max_len = 12
@@ -321,6 +336,7 @@ fn test_generate_synthetic_fastq_buffer() raises:
         num_reads, min_len, max_len, min_phred, max_phred, "generic"
     )
     assert_true(len(buf) > 0, "Buffer non-empty")
+
     var reader = MemoryReader(buf^)
     var parser = BatchedParser[MemoryReader](reader^, "generic", 8)
     var total = 0
@@ -338,4 +354,3 @@ fn test_generate_synthetic_fastq_buffer() raises:
 
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
-    # test_invalid()
