@@ -63,7 +63,6 @@ fn test_fastq_batch_from_records_and_to_records() raises:
         assert_equal(back[i].quality_offset, records[i].quality_offset)
 
 
-# TODO: Re-enable this test when you know what is going on.
 fn test_fastq_batch_get_record_matches_to_records() raises:
     """Get_record(i) returns the same record as to_records()[i]; compare to original added records.
     """
@@ -247,61 +246,38 @@ fn test_device_fastq_batch_shape_after_upload() raises:
         assert_equal(host_qual[i], batch._quality_bytes[i])
 
 
-# Results in Error
-# fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
-#     """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original.
-#     """
+fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
+    """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original.
+    """
 
-#     @parameter
-#     if not has_accelerator():
-#         return
-#     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
-#     records.append(FastqRecord("@h2", "TGCA", "+", "!!!!"))
-#     records.append(FastqRecord("@h3", "N", "+", "!"))
-#     var batch = FastqBatch(records)
-#     var ctx = DeviceContext()
-#     var d = upload_batch_to_device(batch, ctx)
-#     var back_batch = d.copy_to_host(ctx)
-#     var back_list = back_batch.to_records()
-#     assert_equal(len(back_list), len(records))
-#     for i in range(len(records)):
-#         assert_equal(
-#             back_list[i].SeqHeader.as_string_slice(),
-#             records[i].SeqHeader.as_string_slice(),
-#         )
-#         assert_equal(
-#             back_list[i].SeqStr.as_string_slice(),
-#             records[i].SeqStr.as_string_slice(),
-#         )
-#         assert_equal(
-#             back_list[i].QuStr.as_string_slice(),
-#             records[i].QuStr.as_string_slice(),
-#         )
-#         assert_equal(back_list[i].quality_offset, records[i].quality_offset)
+    @parameter
+    if not has_accelerator():
+        return
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
+    records.append(FastqRecord("@h2", "TGCA", "+", "!!!!"))
+    records.append(FastqRecord("@h3", "N", "+", "!"))
+    var batch = FastqBatch(records)
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx)
+    var back_batch = d.copy_to_host(ctx)
+    var back_list = back_batch.to_records()
+    assert_equal(len(back_list), len(records))
+    for i in range(len(records)):
+        assert_equal(
+            back_list[i].SeqHeader.as_string_slice(),
+            records[i].SeqHeader.as_string_slice(),
+        )
+        assert_equal(
+            back_list[i].SeqStr.as_string_slice(),
+            records[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            back_list[i].QuStr.as_string_slice(),
+            records[i].QuStr.as_string_slice(),
+        )
+        assert_equal(back_list[i].quality_offset, records[i].quality_offset)
 
-
-# Bug: Results in Error
-# fn test_device_fastq_batch_to_records_quality_and_sequence_synthesized_headers() raises:
-#     """When GPU is available: QUALITY_AND_SEQUENCE round-trip yields correct sequence/quality and synthesized headers @0, @1, ...
-#     """
-
-#     @parameter
-#     if not has_accelerator():
-#         return
-#     var batch = FastqBatch()
-#     batch.add(FastqRecord("@ignored", "ACGT", "+", "!!!!"))
-#     batch.add(FastqRecord("@also_ignored", "TG", "+", "!!"))
-#     var ctx = DeviceContext()
-#     var d = upload_batch_to_device(batch, ctx)
-#     var back_list = d.to_records(ctx)
-#     assert_equal(len(back_list), 2)
-#     assert_equal(back_list[0].SeqHeader.as_string_slice(), String("@0"))
-#     assert_equal(back_list[1].SeqHeader.as_string_slice(), String("@1"))
-#     assert_equal(back_list[0].SeqStr.as_string_slice(), String("ACGT"))
-#     assert_equal(back_list[1].SeqStr.as_string_slice(), String("TG"))
-#     assert_equal(back_list[0].QuStr.as_string_slice(), String("!!!!"))
-#     assert_equal(back_list[1].QuStr.as_string_slice(), String("!!"))
 
 
 fn test_device_fastq_batch_empty_roundtrip() raises:
@@ -316,7 +292,6 @@ fn test_device_fastq_batch_empty_roundtrip() raises:
         var batch = FastqBatch(records)
 
 
-# Failing test
 fn test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
     """When GPU is available: round-trip with quality_offset 0 is accepted (no false rejection).
     Uses a 2-byte sequence to avoid single-byte buffer edge cases in staging/copy.
@@ -338,32 +313,31 @@ fn test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
     _ = back_list
 
 
-# Results in Error
-# fn test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() raises:
-#     """When GPU is available: QUALITY_AND_SEQUENCE round-trip preserves sequence and quality vs original records.
-#     """
+fn test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() raises:
+    """When GPU is available: QUALITY_AND_SEQUENCE round-trip preserves sequence and quality vs original records.
+    """
 
-#     @parameter
-#     if not has_accelerator():
-#         return
-#     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
-#     records.append(FastqRecord("@h2", "TG", "+", "!!"))
-#     var batch = FastqBatch(records)
-#     var ctx = DeviceContext()
-#     var d = upload_batch_to_device(batch, ctx)
-#     var back_list = d.to_records(ctx)
-#     assert_equal(len(back_list), len(records))
-#     for i in range(len(records)):
-#         assert_equal(
-#             back_list[i].SeqStr.as_string_slice(),
-#             records[i].SeqStr.as_string_slice(),
-#         )
-#         assert_equal(
-#             back_list[i].QuStr.as_string_slice(),
-#             records[i].QuStr.as_string_slice(),
-#         )
-#         assert_equal(back_list[i].quality_offset, records[i].quality_offset)
+    @parameter
+    if not has_accelerator():
+        return
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
+    records.append(FastqRecord("@h2", "TG", "+", "!!"))
+    var batch = FastqBatch(records)
+    var ctx = DeviceContext()
+    var d = upload_batch_to_device(batch, ctx)
+    var back_list = d.to_records(ctx)
+    assert_equal(len(back_list), len(records))
+    for i in range(len(records)):
+        assert_equal(
+            back_list[i].SeqStr.as_string_slice(),
+            records[i].SeqStr.as_string_slice(),
+        )
+        assert_equal(
+            back_list[i].QuStr.as_string_slice(),
+            records[i].QuStr.as_string_slice(),
+        )
+        assert_equal(back_list[i].quality_offset, records[i].quality_offset)
 
 
 fn test_device_fastq_batch_copy_to_host_succeeds() raises:
@@ -384,4 +358,3 @@ fn test_device_fastq_batch_copy_to_host_succeeds() raises:
 
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
-    #test_device_fastq_batch_roundtrip_quality_offset_zero()
