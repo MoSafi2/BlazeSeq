@@ -153,12 +153,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             return ByteString(span)
 
         var header_range = get_offsets(self._header_ends, index)
-        print(
-            "header range: ", String(header_range[0]), String(header_range[1])
-        )
         var header_bs = self._header_bytes[header_range[0] : header_range[1]]
-        print("header bytes: ", String(unsafe_from_utf8=self._header_bytes))
-        print("header_ends: ", self._header_ends)
 
         var range = get_offsets(self._qual_ends, index)
         var seq_bs = self._sequence_bytes[range[0] : range[1]]
@@ -168,9 +163,6 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var seq = unsafe_span_to_byte_string(seq_bs)
         var qual = unsafe_span_to_byte_string(qual_bs)
 
-        print("header: ", header)
-        print("seq: ", seq)
-        print("qual: ", qual)
         return FastqRecord(
             header^,
             seq^,
@@ -275,12 +267,13 @@ fn download_device_batch_to_staged(
         Int(total_hdr)
     )
     var header_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
-
-    ctx.enqueue_copy(device_batch.qual_buffer, quality_data)
-    ctx.enqueue_copy(device_batch.qual_ends, quality_ends)
-    ctx.enqueue_copy(device_batch.sequence_buffer, sequence_data)
-    ctx.enqueue_copy(device_batch.header_buffer, header_data)
-    ctx.enqueue_copy(device_batch.header_ends, header_ends)
+    ctx.synchronize()
+    
+    ctx.enqueue_copy(src_buf=device_batch.qual_buffer, dst_buf=quality_data)
+    ctx.enqueue_copy(src_buf=device_batch.qual_ends, dst_buf=quality_ends)
+    ctx.enqueue_copy(src_buf=device_batch.sequence_buffer, dst_buf=sequence_data)
+    ctx.enqueue_copy(src_buf=device_batch.header_buffer, dst_buf=header_data)
+    ctx.enqueue_copy(src_buf=device_batch.header_ends, dst_buf=header_ends)
 
     ctx.synchronize()
 
@@ -370,6 +363,7 @@ fn move_staged_to_device(
     var header_ends_buffer = ctx.enqueue_create_buffer[DType.int64](
         staged.num_records
     )
+    ctx.synchronize()
 
     ctx.enqueue_copy(src_buf=staged.quality_data, dst_buf=quality_buffer)
     ctx.enqueue_copy(src_buf=staged.quality_ends, dst_buf=quality_ends_buffer)
