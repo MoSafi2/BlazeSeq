@@ -763,6 +763,60 @@ fn test_next_line_position_after_boundary_cross() raises:
 
 
 # ============================================================================
+# next_complete_line() Tests
+# ============================================================================
+
+
+fn test_next_complete_line_returns_line_when_newline_in_buffer() raises:
+    """next_complete_line returns the line and consumes when newline is in buffer."""
+    var content = "Hello\n"
+    var reader = create_memory_reader(content)
+    var line_iter = LineIterator(reader^, capacity=64)
+
+    var line = line_iter.next_complete_line()
+    assert_equal(
+        span_to_string(line), "Hello", "Complete line content should match"
+    )
+
+    with assert_raises(contains="EOF"):
+        _ = line_iter.next_complete_line()
+
+    print("✓ test_next_complete_line_returns_line_when_newline_in_buffer passed")
+
+
+fn test_next_complete_line_raises_incomplete_when_no_newline() raises:
+    """next_complete_line raises INCOMPLETE_LINE when no newline in buffer, does not consume."""
+    var content = "incomplete"
+    var reader = create_memory_reader(content)
+    var line_iter = LineIterator(reader^)
+
+    with assert_raises(contains="INCOMPLETE_LINE"):
+        _ = line_iter.next_complete_line()
+
+    var line = line_iter.next_line()
+    assert_equal(
+        span_to_string(line), "incomplete", "next_line should still return full content after fallback"
+    )
+
+    with assert_raises(contains="EOF"):
+        _ = line_iter.next_line()
+
+    print("✓ test_next_complete_line_raises_incomplete_when_no_newline passed")
+
+
+fn test_next_complete_line_raises_eof_when_empty_buffer_at_eof() raises:
+    """next_complete_line raises EOF when buffer is empty and at EOF."""
+    var content = ""
+    var reader = create_memory_reader(content)
+    var line_iter = LineIterator(reader^)
+
+    with assert_raises(contains="EOF"):
+        _ = line_iter.next_complete_line()
+
+    print("✓ test_next_complete_line_raises_eof_when_empty_buffer_at_eof passed")
+
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 

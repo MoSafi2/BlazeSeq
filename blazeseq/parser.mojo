@@ -1,4 +1,4 @@
-from blazeseq.record import FastqRecord, RecordCoord, Validator
+from blazeseq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
 from blazeseq.iostream import BufferedReader, Reader, LineIterator, EOFError
 from blazeseq.readers import Reader
@@ -345,65 +345,112 @@ struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
             raise StopIteration()
 
 
-# struct CoordParser[R: Reader, config: ParserConfig = ParserConfig()]:
-#     var stream: LineIterator[Self.R, check_ascii = Self.config.check_ascii]
-#     var quality_schema: QualitySchema
-#     var validator: Validator
+struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
+    var stream: LineIterator[Self.R]
+    var quality_schema: QualitySchema
+    var validator: Validator
+    var _staging: List[ByteString]
 
-#     fn __init__(
-#         out self,
-#         var reader: Self.R,
-#     ) raises:
-#         self.stream = LineIterator[check_ascii = Self.config.check_ascii](
-#             reader^,
-#             Self.config.buffer_capacity,
-#             Self.config.buffer_growth_enabled,
-#             Self.config.buffer_max_capacity,
-#         )
-#         if Self.config.quality_schema:
-#             self.quality_schema = _parse_schema(
-#                 Self.config.quality_schema.value()
-#             )
-#         else:
-#             self.quality_schema = materialize[generic_schema]()
-#         self.validator = Validator(
-#             Self.config.check_quality,
-#             self.quality_schema.copy(),
-#         )
+    fn __init__(
+        out self,
+        var reader: Self.R,
+    ) raises:
+        self.stream = LineIterator(
+            reader^,
+            Self.config.buffer_capacity,
+            Self.config.buffer_growth_enabled,
+            Self.config.buffer_max_capacity,
+        )
+        if Self.config.quality_schema:
+            self.quality_schema = _parse_schema(
+                Self.config.quality_schema.value()
+            )
+        else:
+            self.quality_schema = materialize[generic_schema]()
+        self.validator = Validator(
+            Self.config.check_ascii,
+            Self.config.check_quality,
+            self.quality_schema.copy(),
+        )
+        self._staging = List[ByteString](capacity=4)
 
-#     @always_inline
-#     fn parse_all(mut self) raises:
-#         if not self.stream.has_more():
-#             raise Error("EOF")
-#         while True:
-#             if not self.stream.has_more():
-#                 break
-#             record = self._parse_record()
-#             record.validate_record()
+    @always_inline
+    fn parse_all(mut self) raises:
+        if not self.stream.has_more():
+            raise Error("EOF")
+        while True:
+            if not self.stream.has_more():
+                break
+            record = self._parse_record()
 
-#             @parameter
-#             if Self.config.check_quality:
-#                 record.validate_quality_schema()
+    @always_inline
+    fn next(
+        mut self,
+    ) raises -> RefRecord[origin = MutExternalOrigin]:
+        return self._parse_record()
 
-#     @always_inline
-#     fn next(
-#         mut self,
-#     ) raises -> RecordCoord[validate_quality = Self.config.check_quality]:
-#         read = self._parse_record()
-#         read.validate_record()
-
-#         @parameter
-#         if Self.config.check_quality:
-#             read.validate_quality_schema()
-#         return read^
-
-#     @always_inline
-#     fn _parse_record(
-#         mut self,
-#     ) raises -> RecordCoord[validate_quality = Self.config.check_quality]:
-#         lines = self.stream.get_n_lines[4]()
-#         l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
-
-#         return RecordCoord[
-#             validate_quality = self.config.__del__is_trivialcheck_quality
-#         ](l1, l2, l3, l4)
+    fn _parse_record(
+        mut self,
+    ) raises -> RefRecord[origin = MutExternalOrigin]:
+        var header1: Span[Byte, MutExternalOrigin]
+        var seq: Span[Byte, MutExternalOrigin]
+        var header2: Span[Byte, MutExternalOrigin]
+        var qual: Span[Byte, MutExternalOrigin]
+        var got: Int = 0
+        var schema = self.quality_schema.copy()
+        try:
+            header1 = self.stream.next_complete_line()
+            got = 1
+            seq = self.stream.next_complete_line()
+            got = 2
+            header2 = self.stream.next_complete_line()
+            got = 3
+            qual = self.stream.next_complete_line()
+            return RefRecord(header1, seq, header2, qual, Int8(schema.OFFSET))
+        except Error:
+            if String(Error) != "INCOMPLETE_LINE":
+                raise
+            if got == 0:
+                header1 = self.stream.next_line()
+                seq = self.stream.next_line()
+                header2 = self.stream.next_line()
+                qual = self.stream.next_line()
+                return RefRecord(header1, seq, header2, qual, Int8(schema.OFFSET))
+            if got == 1:
+                self._staging.clear()
+                self._staging.append(ByteString(header1))
+                seq = self.stream.next_line()
+                header2 = self.stream.next_line()
+                qual = self.stream.next_line()
+                return RefRecord(
+                    self._staging[0].as_span(),
+                    seq,
+                    header2,
+                    qual,
+                    Int8(schema.OFFSET),
+                )
+            if got == 2:
+                self._staging.clear()
+                self._staging.append(ByteString(header1))
+                self._staging.append(ByteString(seq))
+                header2 = self.stream.next_line()
+                qual = self.stream.next_line()
+                return RefRecord(
+                    self._staging[0].as_span(),
+                    self._staging[1].as_span(),
+                    header2,
+                    qual,
+                    Int8(schema.OFFSET),
+                )
+            self._staging.clear()
+            self._staging.append(ByteString(header1))
+            self._staging.append(ByteString(seq))
+            self._staging.append(ByteString(header2))
+            qual = self.stream.next_line()
+            return RefRecord(
+                self._staging[0].as_span(),
+                self._staging[1].as_span(),
+                self._staging[2].as_span(),
+                qual,
+                Int8(schema.OFFSET),
+            )

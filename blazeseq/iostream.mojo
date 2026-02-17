@@ -357,6 +357,30 @@ struct LineIterator[R: Reader](Iterable, Movable):
             self.buffer._compact_from(self.buffer.buffer_position())
 
     @always_inline
+    fn next_complete_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
+        """
+        Return the next line only if a complete line (ending with newline) is in
+        the current buffer. Does not refill or compact. If no newline is found,
+        raise Error("INCOMPLETE_LINE") and do not consume; caller can fall back
+        to next_line() to refill. Invalidated by next next_line/next_complete_line
+        or any buffer mutation.
+        """
+        if self.buffer.available() == 0:
+            if self.buffer.is_eof():
+                raise EOFError()
+            raise Error("INCOMPLETE_LINE")
+
+        var view = self.buffer.view()
+        var newline_at = memchr(haystack=view, chr=new_line)
+        if newline_at >= 0:
+            var end = _trim_trailing_cr(view, newline_at)
+            var span = view[0:end]
+            _ = self.buffer.consume(newline_at + 1)
+            return span
+
+        raise Error("INCOMPLETE_LINE")
+
+    @always_inline
     fn _handle_line_exceeds_capacity(mut self) raises:
         """
         Line does not fit in current buffer. Either raise (no growth or at max)

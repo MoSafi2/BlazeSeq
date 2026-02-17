@@ -5,7 +5,7 @@ Truncated files were padded with 1, 2, or 3, extra line terminators to prevent `
 Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ.
 """
 
-from blazeseq.parser import RecordParser, BatchedParser
+from blazeseq.parser import RecordParser, BatchedParser, RefParser
 from blazeseq.readers import FileReader, MemoryReader
 from blazeseq.parser import ParserConfig
 from blazeseq.utils import generate_synthetic_fastq_buffer
@@ -350,6 +350,53 @@ fn test_generate_synthetic_fastq_buffer() raises:
                 "Record sequence length in [min_length, max_length]",
             )
     assert_equal(total, num_reads, "Total records equals num_reads")
+
+
+comptime ref_parser_large_config = ParserConfig(buffer_capacity=256)
+
+
+fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
+    """RefParser parses records when all four lines fit in buffer (fast path)."""
+    var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n!!!!\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+
+    var r1 = parser.next()
+    assert_equal(String(r1.get_header()), "r1", "First record header")
+    assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
+    assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
+    var r2 = parser.next()
+    assert_equal(String(r2.get_header()), "r2", "Second record header")
+    assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
+    with assert_raises(contains="EOF"):
+        _ = parser.next()
+
+    print("✓ test_ref_parser_fast_path_all_lines_in_buffer passed")
+
+
+comptime ref_parser_small_config = ParserConfig(buffer_capacity=8)
+
+
+fn test_ref_parser_fallback_record_span_chunks() raises:
+    """RefParser parses correctly when record spans two chunks (fallback path)."""
+    var content = "@r1\nACGT\n+\n!!!!\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = RefParser[MemoryReader, ref_parser_small_config](reader^)
+
+    var r = parser.next()
+    assert_equal(
+        String(r.get_header()), "r1", "Header should match"
+    )
+    assert_equal(
+        String(r.get_seq()), "ACGT", "Sequence should match"
+    )
+    assert_equal(
+        String(r.get_quality()), "!!!!", "Quality should match"
+    )
+    with assert_raises(contains="EOF"):
+        _ = parser.next()
+
+    print("✓ test_ref_parser_fallback_record_span_chunks passed")
 
 
 fn main() raises:

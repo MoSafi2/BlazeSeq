@@ -308,10 +308,10 @@ fn _schema_string_to_offset(quality_format: String) -> Int8:
     return 33
 
 
-struct RecordCoord[
-    validate_quality: Bool = False, origin: Origin[mut=True] = MutExternalOrigin
-](Copyable, Movable, Sized, Writable):
-    """Struct that represent coordinates of a FastqRecord in a chunk. Provides minimal validation of the record. Mainly used for fast parsing.
+struct RefRecord[origin: Origin[mut=True] = MutExternalOrigin
+](ImplicitlyDestructible, Movable, Sized, Writable):
+    """Struct that represent reference to a FastqRecord. Provides minimal validation of the record. Not thread safe and can't be stored in collections. 
+    Use only for fast parsing.
     """
 
     var SeqHeader: Span[Byte, Self.origin]
@@ -404,34 +404,6 @@ struct RecordCoord[
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - offset
         return output^
-
-    @always_inline
-    fn validate_record(self) raises:
-        if self.SeqHeader[0] != UInt8(read_header):
-            raise Error("Sequence Header is corrupt")
-
-        if self.QuHeader[0] != UInt8(quality_header):
-            raise Error("Quality Header is corrupt")
-
-        if self.len_record() != self.len_quality():
-            raise Error("Corrput Lengths")
-
-        if self.len_qu_header() > 1:
-            if self.len_qu_header() != self.len_seq_header():
-                raise Error("Quality Header is corrupt")
-
-        if self.len_qu_header() > 1:
-            for i in range(1, self.len_qu_header()):
-                if self.QuHeader[i] != self.SeqHeader[i]:
-                    raise Error("Non matching headers")
-
-    @always_inline
-    fn validate_quality_schema(self) raises:
-        for i in range(self.len_quality()):
-            if self.QuStr[i] > 126 or self.QuStr[i] < 33:
-                raise Error(
-                    "Corrupt quality score according to provided schema"
-                )
 
     @always_inline
     fn seq_len(self) -> Int32:
