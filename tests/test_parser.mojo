@@ -363,11 +363,11 @@ fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
     var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r1 = parser.next()
-    assert_equal(String(r1.get_header()), "r1", "First record header")
+    assert_equal(String(r1.get_header()), "@r1", "First record header")
     assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
     assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
     var r2 = parser.next()
-    assert_equal(String(r2.get_header()), "r2", "Second record header")
+    assert_equal(String(r2.get_header()), "@r2", "Second record header")
     assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
     with assert_raises(contains="EOF"):
         _ = parser.next()
@@ -414,11 +414,11 @@ fn test_ref_parser_multiple_records_next_loop() raises:
     var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r1 = parser.next()
-    assert_equal(String(r1.get_header()), "r1", "First record header")
+    assert_equal(String(r1.get_header()), "@r1", "First record header")
     assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
     assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
     var r2 = parser.next()
-    assert_equal(String(r2.get_header()), "r2", "Second record header")
+    assert_equal(String(r2.get_header()), "@r2", "Second record header")
     assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
     assert_equal(String(r2.get_quality()), "####", "Second record quality")
     with assert_raises(contains="EOF"):
