@@ -351,6 +351,7 @@ struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
             raise StopIteration()
 
 
+# Parsing Algorithm adopted from Needletaile and Seq-IO with modifications.
 @register_passable("trivial")
 @fieldwise_init
 struct SearchState(Copyable, ImplicitlyDestructible, Movable):
@@ -379,8 +380,9 @@ struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
     var seq_end: Int
     var qual_header_end: Int
     var qual_end: Int
+    var step: Int
 
-    comptime DEFAULT = Self(-1, -1, -1, -1, -1)
+    comptime DEFAULT = Self(-1, -1, -1, -1, -1, 1)
 
     @always_inline
     fn is_set(self) -> Bool:
@@ -392,6 +394,7 @@ struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
             and not self.qual_end == -1
         )
 
+    # How this work with line breaks \n or \r\n?
     @always_inline
     fn as_span(
         self, ptr: UnsafePointer[Byte, MutExternalOrigin]
@@ -401,18 +404,20 @@ struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
 
         return InlineArray[Span[Byte, MutExternalOrigin], 4](
             Span[Byte, MutExternalOrigin](
-                ptr=ptr + self.start, length=self.header_end - self.start
+                ptr=ptr + self.start,
+                length=self.header_end - self.start - self.step,
             ),
             Span[Byte, MutExternalOrigin](
-                ptr=ptr + self.header_end, length=self.seq_end - self.header_end
+                ptr=ptr + self.header_end,
+                length=self.seq_end - self.header_end - self.step,
             ),
             Span[Byte, MutExternalOrigin](
                 ptr=ptr + self.seq_end,
-                length=self.qual_header_end - self.seq_end,
+                length=self.qual_header_end - self.seq_end - self.step,
             ),
             Span[Byte, MutExternalOrigin](
                 ptr=ptr + self.qual_header_end,
-                length=self.qual_end - self.qual_header_end,
+                length=self.qual_end - self.qual_header_end - self.step,
             ),
         )
 
@@ -427,6 +432,7 @@ struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
             self._add_if_set(self.seq_end, amt),
             self._add_if_set(self.qual_header_end, amt),
             self._add_if_set(self.qual_end, amt),
+            self.step,
         )
 
     fn __sub__(self, amt: Int) -> Self:
@@ -436,6 +442,7 @@ struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
             self._add_if_set(self.seq_end, -amt),
             self._add_if_set(self.qual_header_end, -amt),
             self._add_if_set(self.qual_end, -amt),
+            self.step,
         )
 
     fn __getitem__(self, index: Int) -> Int:
@@ -542,7 +549,10 @@ fn _handle_incomplete_line[
     for i in range(1, lines_left):
         try:
             var line = stream.next_complete_line()
-            interim[i] = stream.buffer.buffer_position()
+            pos = stream.buffer.buffer_position()
+            interim[i] = pos
+            # Get the step needed 1 or 2 if \n or \r\n respectively
+            interim.step = pos - interim[i - 1] - len(line)
             state = state + 1
         except e:
             if e == LineIteratorError.EOF:
@@ -566,10 +576,13 @@ fn _parse_record_fast_path[
     for i in range(1, 5):
         try:
             var line = stream.next_complete_line()
+            pos = stream.buffer.buffer_position()
+            interim[i] = pos
+            # Get the step needed 1 or 2 if \n or \r\n respectively
+            interim.step = pos - interim[i - 1] - len(line)
+            state = state + 1
         except e:
             raise e
-        interim[i] = stream.buffer.buffer_position()
-        state = state + 1
 
     try:
         return _construct_ref_record(
