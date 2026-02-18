@@ -549,7 +549,6 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
                 self.stream, interim, state, self.quality_schema
             )
         except e:
-            print("Error: ", String(e))
             if e == LineIteratorError.EOF:
                 raise EOFError()
             if e == LineIteratorError.INCOMPLETE_LINE:
@@ -572,7 +571,6 @@ fn _handle_incomplete_line[
     if not stream.has_more():
         raise EOFError()
 
-    print("Handling incomplete line invoked")
     stream.buffer._compact_from(interim.start)
     _ = stream.buffer._fill_buffer()
     interim = interim - interim.start
@@ -580,9 +578,7 @@ fn _handle_incomplete_line[
 
     for i in range(lines_left):
         try:
-            print("Trying to get line ", i)
             var line = stream.next_complete_line()
-            print("line: ", StringSlice(unsafe_from_utf8=line))
             interim[i] = line
             state = state + 1
         except e:
@@ -612,13 +608,11 @@ fn _parse_record_fast_path[
     mut state: SearchState,
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
-    print("Fast path invoked")
 
     interim.start = stream.buffer.buffer_position()
     for i in range(4):
         try:
             interim[i] = stream.next_complete_line()
-            print("line: ", StringSlice(unsafe_from_utf8=interim[i]))
             state = state + 1
         except e:
             raise e
