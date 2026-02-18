@@ -409,6 +409,16 @@ struct SearchResults(
             + ")",
         )
 
+    fn all_set(self) -> Bool:
+        return (
+            self.start != -1
+            and self.end != -1
+            and len(self.header) > 0
+            and len(self.seq) > 0
+            and len(self.qual_header) > 0
+            and len(self.qual) > 0
+        )
+
     fn __add__(self, amt: Int) -> Self:
         new_header = Span[Byte, MutExternalOrigin](
             ptr=self.header.unsafe_ptr() + amt,
@@ -539,6 +549,7 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
                 self.stream, interim, state, self.quality_schema
             )
         except e:
+            print("Error: ", String(e))
             if e == LineIteratorError.EOF:
                 raise EOFError()
             if e == LineIteratorError.INCOMPLETE_LINE:
@@ -558,18 +569,31 @@ fn _handle_incomplete_line[
     mut state: SearchState,
     quality_schema: QualitySchema,
 ) raises -> RefRecord[origin=MutExternalOrigin]:
-    print("Handling incomplete line")
+    if not stream.has_more():
+        raise EOFError()
+
+    print("Handling incomplete line invoked")
     stream.buffer._compact_from(interim.start)
+    _ = stream.buffer._fill_buffer()
     interim = interim - interim.start
     lines_left: Int = Int(4 - state.state)
 
     for i in range(lines_left):
         try:
+            print("Trying to get line ", i)
             var line = stream.next_complete_line()
+            print("line: ", StringSlice(unsafe_from_utf8=line))
             interim[i] = line
             state = state + 1
         except e:
+            if e == LineIteratorError.EOF:
+                raise EOFError()
             raise e
+    interim.end = stream.buffer.buffer_position()
+
+    if not interim.all_set():
+        raise LineIteratorError.OTHER
+
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
@@ -588,16 +612,20 @@ fn _parse_record_fast_path[
     mut state: SearchState,
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
-    print("Fast path")
+    print("Fast path invoked")
 
     interim.start = stream.buffer.buffer_position()
     for i in range(4):
         try:
             interim[i] = stream.next_complete_line()
+            print("line: ", StringSlice(unsafe_from_utf8=interim[i]))
             state = state + 1
         except e:
             raise e
     interim.end = stream.buffer.buffer_position()
+
+    if not interim.all_set():
+        raise LineIteratorError.OTHER
 
     return RefRecord[origin=MutExternalOrigin](
         interim[0],

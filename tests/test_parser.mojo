@@ -587,4 +587,3 @@ fn test_ref_parser_valid_file_parity() raises:
 
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
-    # test_ref_parser_fast_path_all_lines_in_buffer()
