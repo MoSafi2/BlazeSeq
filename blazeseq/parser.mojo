@@ -374,104 +374,119 @@ struct SearchState(Copyable, ImplicitlyDestructible, Movable):
 
 @register_passable("trivial")
 @fieldwise_init
-struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
+struct SearchResults(
+    Copyable, ImplicitlyDestructible, Movable, Sized, Writable
+):
     var start: Int
-    var header_end: Int
-    var seq_end: Int
-    var qual_header_end: Int
-    var qual_end: Int
-    var step: Int
+    var end: Int
+    var header: Span[Byte, MutExternalOrigin]
+    var seq: Span[Byte, MutExternalOrigin]
+    var qual_header: Span[Byte, MutExternalOrigin]
+    var qual: Span[Byte, MutExternalOrigin]
 
-    comptime DEFAULT = Self(-1, -1, -1, -1, -1, 1)
+    comptime DEFAULT = Self(
+        -1,
+        -1,
+        Span[Byte, MutExternalOrigin](),
+        Span[Byte, MutExternalOrigin](),
+        Span[Byte, MutExternalOrigin](),
+        Span[Byte, MutExternalOrigin](),
+    )
 
-    @always_inline
-    fn is_set(self) -> Bool:
-        return (
-            not self.start == -1
-            and not self.header_end == -1
-            and not self.seq_end == -1
-            and not self.qual_header_end == -1
-            and not self.qual_end == -1
+    fn write_to[w: Writer](self, mut writer: w) -> None:
+        writer.write(
+            String("SearchResults(start=") + String(self.start),
+            ", end=",
+            String(self.end)
+            + ", header="
+            + String(StringSlice(unsafe_from_utf8=self.header))
+            + ", seq="
+            + String(StringSlice(unsafe_from_utf8=self.seq))
+            + ", qual_header="
+            + String(StringSlice(unsafe_from_utf8=self.qual_header))
+            + ", qual="
+            + String(StringSlice(unsafe_from_utf8=self.qual))
+            + ")",
         )
-
-    # How this work with line breaks \n or \r\n?
-    @always_inline
-    fn as_spans(
-        self, ptr: UnsafePointer[Byte, MutExternalOrigin]
-    ) raises -> InlineArray[Span[Byte, MutExternalOrigin], 4]:
-        if not self.is_set():
-            raise Error("SearchResults is not set")
-
-        return InlineArray[Span[Byte, MutExternalOrigin], 4](
-            Span[Byte, MutExternalOrigin](
-                ptr=ptr + self.start,
-                length=self.header_end - self.start - self.step,
-            ),
-            Span[Byte, MutExternalOrigin](
-                ptr=ptr + self.header_end,
-                length=self.seq_end - self.header_end - self.step,
-            ),
-            Span[Byte, MutExternalOrigin](
-                ptr=ptr + self.seq_end,
-                length=self.qual_header_end - self.seq_end - self.step,
-            ),
-            Span[Byte, MutExternalOrigin](
-                ptr=ptr + self.qual_header_end,
-                length=self.qual_end - self.qual_header_end - self.step,
-            ),
-        )
-
-    @always_inline
-    fn _add_if_set(self, val: Int, amt: Int) -> Int:
-        return val + amt if val != -1 else val
 
     fn __add__(self, amt: Int) -> Self:
+        new_header = Span[Byte, MutExternalOrigin](
+            ptr=self.header.unsafe_ptr() + amt,
+            length=len(self.header),
+        )
+        new_seq = Span[Byte, MutExternalOrigin](
+            ptr=self.seq.unsafe_ptr() + amt,
+            length=len(self.seq),
+        )
+        new_qual_header = Span[Byte, MutExternalOrigin](
+            ptr=self.qual_header.unsafe_ptr() + amt,
+            length=len(self.qual_header),
+        )
+        new_qual = Span[Byte, MutExternalOrigin](
+            ptr=self.qual.unsafe_ptr() + amt,
+            length=len(self.qual),
+        )
         return Self(
-            self._add_if_set(self.start, amt),
-            self._add_if_set(self.header_end, amt),
-            self._add_if_set(self.seq_end, amt),
-            self._add_if_set(self.qual_header_end, amt),
-            self._add_if_set(self.qual_end, amt),
-            self.step,
+            self.start + amt,
+            self.end + amt,
+            new_header,
+            new_seq,
+            new_qual_header,
+            new_qual,
         )
 
     fn __sub__(self, amt: Int) -> Self:
+        new_header = Span[Byte, MutExternalOrigin](
+            ptr=self.header.unsafe_ptr() - amt,
+            length=len(self.header),
+        )
+        new_seq = Span[Byte, MutExternalOrigin](
+            ptr=self.seq.unsafe_ptr() - amt,
+            length=len(self.seq),
+        )
+        new_qual_header = Span[Byte, MutExternalOrigin](
+            ptr=self.qual_header.unsafe_ptr() - amt,
+            length=len(self.qual_header),
+        )
+        new_qual = Span[Byte, MutExternalOrigin](
+            ptr=self.qual.unsafe_ptr() - amt,
+            length=len(self.qual),
+        )
         return Self(
-            self._add_if_set(self.start, -amt),
-            self._add_if_set(self.header_end, -amt),
-            self._add_if_set(self.seq_end, -amt),
-            self._add_if_set(self.qual_header_end, -amt),
-            self._add_if_set(self.qual_end, -amt),
-            self.step,
+            self.start - amt,
+            self.end - amt,
+            new_header,
+            new_seq,
+            new_qual_header,
+            new_qual,
         )
 
-    fn __getitem__(self, index: Int) -> Int:
+    fn __getitem__(self, index: Int) -> Span[Byte, MutExternalOrigin]:
         if index == 0:
-            return self.start
+            return self.header
         elif index == 1:
-            return self.header_end
+            return self.seq
         elif index == 2:
-            return self.seq_end
+            return self.qual_header
         elif index == 3:
-            return self.qual_header_end
-        elif index == 4:
-            return self.qual_end
+            return self.qual
         else:
-            return -1
+            return Span[Byte, MutExternalOrigin]()
 
-    fn __setitem__(mut self, index: Int, value: Int):
+    fn __setitem__(mut self, index: Int, value: Span[Byte, MutExternalOrigin]):
         if index == 0:
-            self.start = value
+            self.header = value
         elif index == 1:
-            self.header_end = value
+            self.seq = value
         elif index == 2:
-            self.seq_end = value
+            self.qual_header = value
         elif index == 3:
-            self.qual_header_end = value
+            self.qual = value
         elif index == 4:
-            self.qual_end = value
-        else:
             pass
+
+    fn __len__(self) -> Int:
+        return self.end - self.start
 
 
 struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
@@ -543,23 +558,18 @@ fn _handle_incomplete_line[
     mut state: SearchState,
     quality_schema: QualitySchema,
 ) raises -> RefRecord[origin=MutExternalOrigin]:
+    print("Handling incomplete line")
     stream.buffer._compact_from(interim.start)
     interim = interim - interim.start
+    lines_left: Int = Int(4 - state.state)
 
-    lines_left = 5 - state.state
-    for i in range(1, lines_left):
+    for i in range(lines_left):
         try:
             var line = stream.next_complete_line()
-            pos = stream.buffer.buffer_position()
-            interim[i] = pos
-            # Get the step needed 1 or 2 if \n or \r\n respectively
-            interim.step = pos - interim[i - 1] - len(line)
+            interim[i] = line
             state = state + 1
         except e:
-            if e == LineIteratorError.EOF:
-                raise EOFError()
-            else:
-                raise e
+            raise e
     return _construct_ref_record(
         stream.buffer.view().unsafe_ptr(), interim, quality_schema
     )
@@ -574,22 +584,22 @@ fn _parse_record_fast_path[
     mut state: SearchState,
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
-    interim[0] = stream.buffer.buffer_position()
-    for i in range(1, 5):
+    print("Fast path")
+
+    interim.start = stream.buffer.buffer_position()
+    for i in range(4):
         try:
-            var line = stream.next_complete_line()
-            pos = stream.buffer.buffer_position()
-            interim[i] = pos
-            # Get the step needed 1 or 2 if \n or \r\n respectively
-            interim.step = pos - interim[i - 1] - len(line)
+            interim[i] = stream.next_complete_line()
             state = state + 1
         except e:
             raise e
+    interim.end = stream.buffer.buffer_position()
 
     try:
-        return _construct_ref_record(
-            stream.buffer.view().unsafe_ptr(), interim, quality_schema
-        )
+        ptr = stream.buffer.view().unsafe_ptr() - len(interim)
+        ref_record = _construct_ref_record(ptr, interim, quality_schema)
+        print("ref_record:", ref_record)
+        return ref_record^
     except Error:
         raise LineIteratorError.OTHER
 
@@ -600,11 +610,12 @@ fn _construct_ref_record(
     interim: SearchResults,
     quality_schema: QualitySchema,
 ) raises -> RefRecord[origin=MutExternalOrigin]:
-    var spans = interim.as_spans(ptr)
+    print("Constructing ref record")
+    print("interim: ", interim)
     return RefRecord[origin=MutExternalOrigin](
-        spans[0],
-        spans[1],
-        spans[2],
-        spans[3],
+        interim[0],
+        interim[1],
+        interim[2],
+        interim[3],
         Int8(quality_schema.OFFSET),
     )
