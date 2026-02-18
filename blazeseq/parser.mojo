@@ -534,6 +534,7 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
                 raise e
 
 
+@always_inline
 fn _handle_incomplete_line[
     R: Reader
 ](
@@ -564,6 +565,7 @@ fn _handle_incomplete_line[
     )
 
 
+@always_inline
 fn _parse_record_fast_path[
     R: Reader
 ](
@@ -592,6 +594,7 @@ fn _parse_record_fast_path[
         raise LineIteratorError.OTHER
 
 
+@always_inline
 fn _construct_ref_record(
     ptr: UnsafePointer[Byte, MutExternalOrigin],
     interim: SearchResults,
