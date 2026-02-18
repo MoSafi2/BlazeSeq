@@ -396,7 +396,7 @@ struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
 
     # How this work with line breaks \n or \r\n?
     @always_inline
-    fn as_span(
+    fn as_spans(
         self, ptr: UnsafePointer[Byte, MutExternalOrigin]
     ) raises -> InlineArray[Span[Byte, MutExternalOrigin], 4]:
         if not self.is_set():
@@ -600,7 +600,7 @@ fn _construct_ref_record(
     interim: SearchResults,
     quality_schema: QualitySchema,
 ) raises -> RefRecord[origin=MutExternalOrigin]:
-    var spans = interim.as_span(ptr)
+    var spans = interim.as_spans(ptr)
     return RefRecord[origin=MutExternalOrigin](
         spans[0],
         spans[1],
