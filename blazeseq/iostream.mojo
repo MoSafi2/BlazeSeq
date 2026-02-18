@@ -14,7 +14,9 @@ struct EOFError(Writable):
         writer.write(EOF)
 
 
-struct BufferedReader[R: Reader](ImplicitlyDestructible, Movable, Sized, Writable):
+struct BufferedReader[R: Reader](
+    ImplicitlyDestructible, Movable, Sized, Writable
+):
     var source: Self.R
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
     var _len: Int  # Buffer capacity
@@ -56,6 +58,15 @@ struct BufferedReader[R: Reader](ImplicitlyDestructible, Movable, Sized, Writabl
         var cons_size = min(size, self.available())
         self._head += cons_size
         return cons_size
+
+    @always_inline
+    fn unconsume(mut self, size: Int) raises:
+        """
+        Unconsume `size` bytes. Must not exceed available().
+        """
+        if size > self._head:
+            raise Error("Cannot unconsume more than available")
+        self._head -= size
 
     @always_inline
     fn read_exact(mut self, size: Int) raises -> List[Byte]:
@@ -380,6 +391,12 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
         raise Error("INCOMPLETE_LINE")
 
+    fn peek(self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
+        """
+        Peek at the next `amt` bytes in the buffer without consuming them.
+        """
+        return self.buffer.peek(amt)
+
     @always_inline
     fn _handle_line_exceeds_capacity(mut self) raises:
         """
@@ -421,9 +438,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         ref self,
     ) -> _LineIteratorIter[Self.R, origin_of(self)]:
         """Return an iterator for use in ``for line in self``."""
-        return _LineIteratorIter[Self.R, origin_of(self)](
-            Pointer(to=self)
-        )
+        return _LineIteratorIter[Self.R, origin_of(self)](Pointer(to=self))
 
 
 # ---------------------------------------------------------------------------

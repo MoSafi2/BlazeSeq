@@ -375,82 +375,56 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
         self._staging = List[ByteString](capacity=4)
 
     @always_inline
-    fn parse_all(mut self) raises:
-        if not self.stream.has_more():
-            raise Error("EOF")
-        while True:
-            if not self.stream.has_more():
-                break
-            record = self._parse_record()
-
-    @always_inline
     fn next(
         mut self,
-    ) raises -> RefRecord[origin = MutExternalOrigin]:
-        return self._parse_record()
+    ) raises -> RefRecord[origin=MutExternalOrigin]:
+        ref_record = self._parse_record()
+        self.validator.validate(ref_record)
+        return ref_record^
 
+    @always_inline
     fn _parse_record(
         mut self,
-    ) raises -> RefRecord[origin = MutExternalOrigin]:
-        var header1: Span[Byte, MutExternalOrigin]
-        var seq: Span[Byte, MutExternalOrigin]
-        var header2: Span[Byte, MutExternalOrigin]
-        var qual: Span[Byte, MutExternalOrigin]
-        var got: Int = 0
-        var schema = self.quality_schema.copy()
+    ) raises -> RefRecord[origin=MutExternalOrigin]:
+        # lines = self.stream.get_n_lines[4]()
+        # l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
+
+        pos0 = self.stream.buffer.buffer_position()
+
+        if self.stream.peek(1)[0] != ord("@"):
+            raise Error("Invalid record header")
+
         try:
-            header1 = self.stream.next_complete_line()
-            got = 1
-            seq = self.stream.next_complete_line()
-            got = 2
-            header2 = self.stream.next_complete_line()
-            got = 3
-            qual = self.stream.next_complete_line()
-            return RefRecord(header1, seq, header2, qual, Int8(schema.OFFSET))
+            s1 = self.stream.next_complete_line()
         except Error:
-            if String(Error) != "INCOMPLETE_LINE":
-                raise
-            if got == 0:
-                header1 = self.stream.next_line()
-                seq = self.stream.next_line()
-                header2 = self.stream.next_line()
-                qual = self.stream.next_line()
-                return RefRecord(header1, seq, header2, qual, Int8(schema.OFFSET))
-            if got == 1:
-                self._staging.clear()
-                self._staging.append(ByteString(header1))
-                seq = self.stream.next_line()
-                header2 = self.stream.next_line()
-                qual = self.stream.next_line()
-                return RefRecord(
-                    self._staging[0].as_span(),
-                    seq,
-                    header2,
-                    qual,
-                    Int8(schema.OFFSET),
-                )
-            if got == 2:
-                self._staging.clear()
-                self._staging.append(ByteString(header1))
-                self._staging.append(ByteString(seq))
-                header2 = self.stream.next_line()
-                qual = self.stream.next_line()
-                return RefRecord(
-                    self._staging[0].as_span(),
-                    self._staging[1].as_span(),
-                    header2,
-                    qual,
-                    Int8(schema.OFFSET),
-                )
-            self._staging.clear()
-            self._staging.append(ByteString(header1))
-            self._staging.append(ByteString(seq))
-            self._staging.append(ByteString(header2))
-            qual = self.stream.next_line()
-            return RefRecord(
-                self._staging[0].as_span(),
-                self._staging[1].as_span(),
-                self._staging[2].as_span(),
-                qual,
-                Int8(schema.OFFSET),
+            s1 = self.stream.next_line()
+
+        try:
+            s2 = self.stream.next_complete_line()
+        except Error:
+            self.stream.buffer.unconsume(
+                self.stream.buffer.buffer_position() - pos0
             )
+            return self._parse_record()
+
+        try:
+            s3 = self.stream.next_complete_line()
+            if s3[0] != ord("+"):
+                raise Error("Invalid record header")
+        except Error:
+            self.stream.buffer.unconsume(
+                self.stream.buffer.buffer_position() - pos0
+            )
+            return self._parse_record()
+
+        try:
+            s4 = self.stream.next_complete_line()
+        except Error:
+            self.stream.buffer.unconsume(
+                self.stream.buffer.buffer_position() - pos0
+            )
+            return self._parse_record()
+
+        return RefRecord[origin=MutExternalOrigin](
+            s1, s2, s3, s4, Int8(self.quality_schema.OFFSET)
+        )

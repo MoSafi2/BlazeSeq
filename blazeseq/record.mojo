@@ -254,6 +254,59 @@ struct Validator(Copyable):
                     "Quality Header is not the same as the Sequencing Header"
                 )
 
+    @always_inline
+    fn validate_record(self, record: RefRecord) raises:
+        """Validate record structure: @ header, + header, seq/qual length, optional header match.
+        """
+        if record.SeqHeader[0] != UInt8(read_header):
+            raise Error("Sequence header does not start with '@'")
+
+        if record.QuHeader[0] != UInt8(quality_header):
+            raise Error("Quality header does not start with '+'")
+
+        if len(record.SeqStr) != len(record.QuStr):
+            raise Error(
+                "Quality and Sequencing string does not match in lengths"
+            )
+
+        if len(record.QuHeader) > 1:
+            if len(record.QuHeader) != len(record.SeqHeader):
+                raise Error(
+                    "Quality Header is not the same length as the Sequencing"
+                    " header"
+                )
+
+            var qu_header_slice = StringSlice(unsafe_from_utf8=record.QuHeader)[
+                1:
+            ]
+            var seq_header_slice = StringSlice(
+                unsafe_from_utf8=record.SeqHeader
+            )[1:]
+            if qu_header_slice != seq_header_slice:
+                raise Error(
+                    "Quality Header is not the same as the Sequencing Header"
+                )
+
+    @always_inline
+    fn validate_quality_schema(self, record: RefRecord) raises:
+        """Validate each quality byte is within schema LOWER..UPPER."""
+        for i in range(len(record.QuStr)):
+            if (
+                record.QuStr[i] > self.quality_schema.UPPER
+                or record.QuStr[i] < self.quality_schema.LOWER
+            ):
+                raise Error(
+                    "Corrupt quality score according to provided schema"
+                )
+
+    @always_inline
+    fn validate_ascii(self, record: RefRecord) raises:
+        """Validate all record lines contain only ASCII bytes."""
+        _check_ascii(record.SeqHeader)
+        _check_ascii(record.SeqStr)
+        _check_ascii(record.QuHeader)
+        _check_ascii(record.QuStr)
+
     # TODO: Convert to SIMD accelerated version
     @always_inline
     fn validate_quality_schema(self, record: FastqRecord) raises:
@@ -277,6 +330,15 @@ struct Validator(Copyable):
 
     @always_inline
     fn validate(self, record: FastqRecord) raises:
+        """Run configured validations for a parsed FASTQ record."""
+        self.validate_record(record)
+        if self.check_ascii:
+            self.validate_ascii(record)
+        if self.check_quality:
+            self.validate_quality_schema(record)
+
+    @always_inline
+    fn validate(self, record: RefRecord) raises:
         """Run configured validations for a parsed FASTQ record."""
         self.validate_record(record)
         if self.check_ascii:
@@ -308,9 +370,10 @@ fn _schema_string_to_offset(quality_format: String) -> Int8:
     return 33
 
 
-struct RefRecord[origin: Origin[mut=True] = MutExternalOrigin
-](ImplicitlyDestructible, Movable, Sized, Writable):
-    """Struct that represent reference to a FastqRecord. Provides minimal validation of the record. Not thread safe and can't be stored in collections. 
+struct RefRecord[origin: Origin[mut=True] = MutExternalOrigin](
+    ImplicitlyDestructible, Movable, Sized, Writable
+):
+    """Struct that represent reference to a FastqRecord. Provides minimal validation of the record. Not thread safe and can't be stored in collections.
     Use only for fast parsing.
     """
 
