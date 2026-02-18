@@ -570,8 +570,12 @@ fn _handle_incomplete_line[
             state = state + 1
         except e:
             raise e
-    return _construct_ref_record(
-        stream.buffer.view().unsafe_ptr(), interim, quality_schema
+    return RefRecord[origin=MutExternalOrigin](
+        interim[0],
+        interim[1],
+        interim[2],
+        interim[3],
+        Int8(quality_schema.OFFSET),
     )
 
 
@@ -595,23 +599,6 @@ fn _parse_record_fast_path[
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    try:
-        ptr = stream.buffer.view().unsafe_ptr() - len(interim)
-        ref_record = _construct_ref_record(ptr, interim, quality_schema)
-        print("ref_record:", ref_record)
-        return ref_record^
-    except Error:
-        raise LineIteratorError.OTHER
-
-
-@always_inline
-fn _construct_ref_record(
-    ptr: UnsafePointer[Byte, MutExternalOrigin],
-    interim: SearchResults,
-    quality_schema: QualitySchema,
-) raises -> RefRecord[origin=MutExternalOrigin]:
-    print("Constructing ref record")
-    print("interim: ", interim)
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
