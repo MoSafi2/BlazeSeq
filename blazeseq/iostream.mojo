@@ -348,7 +348,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
                 self.buffer._compact_from(self.buffer.buffer_position())
             _ = self.buffer._fill_buffer()
             if self.buffer.available() == 0:
-                raise EOFError()
+                raise EOFError() 
 
             var view = self.buffer.view()
             var newline_at = memchr(haystack=view, chr=new_line)
