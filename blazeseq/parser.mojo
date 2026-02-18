@@ -1,6 +1,12 @@
 from blazeseq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
-from blazeseq.iostream import BufferedReader, Reader, LineIterator, EOFError
+from blazeseq.iostream import (
+    BufferedReader,
+    Reader,
+    LineIterator,
+    EOFError,
+    LineIteratorError,
+)
 from blazeseq.readers import Reader
 from blazeseq.device_record import FastqBatch
 from std.iter import Iterable, Iterator
@@ -345,6 +351,122 @@ struct _BatchedParserIter[R: Reader, config: ParserConfig, origin: Origin](
             raise StopIteration()
 
 
+@register_passable("trivial")
+@fieldwise_init
+struct SearchState(Copyable, ImplicitlyDestructible, Movable):
+    var state: Int8
+    comptime START = Self(0)
+    comptime HEADER_FOUND = Self(1)
+    comptime SEQ_FOUND = Self(2)
+    comptime QUAL_HEADER_FOUND = Self(3)
+    comptime QUAL_FOUND = Self(4)
+
+    fn __eq__(self, other: Self) -> Bool:
+        return self.state == other.state
+
+    fn __add__(self, other: Int8) -> Self:
+        return Self(self.state + other)
+
+    fn __sub__(self, other: Int8) -> Self:
+        return Self(self.state - other)
+
+
+@register_passable("trivial")
+@fieldwise_init
+struct SearchResults(Copyable, ImplicitlyDestructible, Movable):
+    var start: Int
+    var header_end: Int
+    var seq_end: Int
+    var qual_header_end: Int
+    var qual_end: Int
+
+    comptime DEFAULT = Self(-1, -1, -1, -1, -1)
+
+    @always_inline
+    fn is_set(self) -> Bool:
+        return (
+            not self.start == -1
+            and not self.header_end == -1
+            and not self.seq_end == -1
+            and not self.qual_header_end == -1
+            and not self.qual_end == -1
+        )
+
+    @always_inline
+    fn as_span(
+        self, ptr: UnsafePointer[Byte, MutExternalOrigin]
+    ) raises -> InlineArray[Span[Byte, MutExternalOrigin], 4]:
+        if not self.is_set():
+            raise Error("SearchResults is not set")
+
+        return InlineArray[Span[Byte, MutExternalOrigin], 4](
+            Span[Byte, MutExternalOrigin](
+                ptr=ptr + self.start, length=self.header_end - self.start
+            ),
+            Span[Byte, MutExternalOrigin](
+                ptr=ptr + self.header_end, length=self.seq_end - self.header_end
+            ),
+            Span[Byte, MutExternalOrigin](
+                ptr=ptr + self.seq_end,
+                length=self.qual_header_end - self.seq_end,
+            ),
+            Span[Byte, MutExternalOrigin](
+                ptr=ptr + self.qual_header_end,
+                length=self.qual_end - self.qual_header_end,
+            ),
+        )
+
+    @always_inline
+    fn _add_if_set(self, val: Int, amt: Int) -> Int:
+        return val + amt if val != -1 else val
+
+    fn __add__(self, amt: Int) -> Self:
+        return Self(
+            self._add_if_set(self.start, amt),
+            self._add_if_set(self.header_end, amt),
+            self._add_if_set(self.seq_end, amt),
+            self._add_if_set(self.qual_header_end, amt),
+            self._add_if_set(self.qual_end, amt),
+        )
+
+    fn __sub__(self, amt: Int) -> Self:
+        return Self(
+            self._add_if_set(self.start, -amt),
+            self._add_if_set(self.header_end, -amt),
+            self._add_if_set(self.seq_end, -amt),
+            self._add_if_set(self.qual_header_end, -amt),
+            self._add_if_set(self.qual_end, -amt),
+        )
+
+    fn __getitem__(self, index: Int) -> Int:
+        if index == 0:
+            return self.start
+        elif index == 1:
+            return self.header_end
+        elif index == 2:
+            return self.seq_end
+        elif index == 3:
+            return self.qual_header_end
+        elif index == 4:
+            return self.qual_end
+        else:
+            return -1
+
+    fn __setitem__(mut self, index: Int, value: Int):
+        if index == 0:
+            self.start = value
+        elif index == 1:
+            self.header_end = value
+        elif index == 2:
+            self.seq_end = value
+        elif index == 3:
+            self.qual_header_end = value
+        elif index == 4:
+            self.qual_end = value
+        else:
+            pass
+
+
 struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
     var stream: LineIterator[Self.R]
     var quality_schema: QualitySchema
@@ -385,45 +507,88 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
     fn _parse_record(
         mut self,
     ) raises -> RefRecord[origin=MutExternalOrigin]:
-        # lines = self.stream.get_n_lines[4]()
-        # l1, l2, l3, l4 = lines[0], lines[1], lines[2], lines[3]
+        if not self.stream.has_more():
+            raise EOFError()
 
-        pos0 = self.stream.buffer.buffer_position()
-
-        if self.stream.peek(1)[0] != ord("@"):
-            raise Error("Invalid record header")
-
+        var state = SearchState.START
+        var interim = SearchResults.DEFAULT
         try:
-            s1 = self.stream.next_complete_line()
-        except Error:
-            s1 = self.stream.next_line()
-
-        try:
-            s2 = self.stream.next_complete_line()
-        except Error:
-            self.stream.buffer.unconsume(
-                self.stream.buffer.buffer_position() - pos0
+            return _parse_record_fast_path(
+                self.stream, interim, state, self.quality_schema
             )
-            return self._parse_record()
+        except e:
+            if e == LineIteratorError.EOF:
+                raise EOFError()
+            if e == LineIteratorError.INCOMPLETE_LINE:
+                return _handle_incomplete_line(
+                    self.stream, interim, state, self.quality_schema
+                )
+            else:
+                raise e
 
+
+fn _handle_incomplete_line[
+    R: Reader
+](
+    mut stream: LineIterator[R],
+    mut interim: SearchResults,
+    mut state: SearchState,
+    quality_schema: QualitySchema,
+) raises -> RefRecord[origin=MutExternalOrigin]:
+    stream.buffer._compact_from(interim.start)
+    interim = interim - interim.start
+
+    lines_left = 5 - state.state
+    for i in range(1, lines_left):
         try:
-            s3 = self.stream.next_complete_line()
-            if s3[0] != ord("+"):
-                raise Error("Invalid record header")
-        except Error:
-            self.stream.buffer.unconsume(
-                self.stream.buffer.buffer_position() - pos0
-            )
-            return self._parse_record()
+            var line = stream.next_complete_line()
+            interim[i] = stream.buffer.buffer_position()
+            state = state + 1
+        except e:
+            if e == LineIteratorError.EOF:
+                raise EOFError()
+            else:
+                raise e
+    return _construct_ref_record(
+        stream.buffer.view().unsafe_ptr(), interim, quality_schema
+    )
 
+
+fn _parse_record_fast_path[
+    R: Reader
+](
+    mut stream: LineIterator[R],
+    mut interim: SearchResults,
+    mut state: SearchState,
+    quality_schema: QualitySchema,
+) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
+    interim[0] = stream.buffer.buffer_position()
+    for i in range(1, 5):
         try:
-            s4 = self.stream.next_complete_line()
-        except Error:
-            self.stream.buffer.unconsume(
-                self.stream.buffer.buffer_position() - pos0
-            )
-            return self._parse_record()
+            var line = stream.next_complete_line()
+        except e:
+            raise e
+        interim[i] = stream.buffer.buffer_position()
+        state = state + 1
 
-        return RefRecord[origin=MutExternalOrigin](
-            s1, s2, s3, s4, Int8(self.quality_schema.OFFSET)
+    try:
+        return _construct_ref_record(
+            stream.buffer.view().unsafe_ptr(), interim, quality_schema
         )
+    except Error:
+        raise LineIteratorError.OTHER
+
+
+fn _construct_ref_record(
+    ptr: UnsafePointer[Byte, MutExternalOrigin],
+    interim: SearchResults,
+    quality_schema: QualitySchema,
+) raises -> RefRecord[origin=MutExternalOrigin]:
+    var spans = interim.as_span(ptr)
+    return RefRecord[origin=MutExternalOrigin](
+        spans[0],
+        spans[1],
+        spans[2],
+        spans[3],
+        Int8(quality_schema.OFFSET),
+    )

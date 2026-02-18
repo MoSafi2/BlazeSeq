@@ -9,6 +9,24 @@ from blazeseq.utils import memchr
 
 @register_passable("trivial")
 @fieldwise_init
+struct LineIteratorError(
+    Copyable, Equatable, ImplicitlyDestructible, Movable, Writable
+):
+    var value: Int8
+    comptime EOF = Self(0)
+    comptime INCOMPLETE_LINE = Self(1)
+    comptime BUFFER_TOO_SMALL = Self(2)
+    comptime OTHER = Self(3)
+
+    fn __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    fn write_to(self, mut writer: Some[Writer]):
+        writer.write(String("LineIteratorError: ") + String(self.value))
+
+
+@register_passable("trivial")
+@fieldwise_init
 struct EOFError(Writable):
     fn write_to(self, mut writer: Some[Writer]):
         writer.write(EOF)
@@ -348,7 +366,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
                 self.buffer._compact_from(self.buffer.buffer_position())
             _ = self.buffer._fill_buffer()
             if self.buffer.available() == 0:
-                raise EOFError() 
+                raise EOFError()
 
             var view = self.buffer.view()
             var newline_at = memchr(haystack=view, chr=new_line)
@@ -368,7 +386,9 @@ struct LineIterator[R: Reader](Iterable, Movable):
             self.buffer._compact_from(self.buffer.buffer_position())
 
     @always_inline
-    fn next_complete_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
+    fn next_complete_line(
+        mut self,
+    ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
         Return the next line only if a complete line (ending with newline) is in
         the current buffer. Does not refill or compact. If no newline is found,
@@ -378,18 +398,24 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         if self.buffer.available() == 0:
             if self.buffer.is_eof():
-                raise EOFError()
-            raise Error("INCOMPLETE_LINE")
+                raise LineIteratorError.EOF
+            else:
+                raise LineIteratorError.INCOMPLETE_LINE
 
-        var view = self.buffer.view()
+        var view: Span[Byte, MutExternalOrigin]
+        try:
+            view = self.buffer.view()
+        except Error:
+            raise LineIteratorError.OTHER
+
         var newline_at = memchr(haystack=view, chr=new_line)
-        if newline_at >= 0:
-            var end = _trim_trailing_cr(view, newline_at)
-            var span = view[0:end]
-            _ = self.buffer.consume(newline_at + 1)
-            return span
+        if newline_at == -1:
+            raise LineIteratorError.INCOMPLETE_LINE
 
-        raise Error("INCOMPLETE_LINE")
+        var end = _trim_trailing_cr(view, newline_at)
+        var span = view[0:end]
+        _ = self.buffer.consume(newline_at + 1)
+        return span
 
     fn peek(self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
         """
