@@ -421,6 +421,26 @@ fn test_ref_parser_multiple_records_next_loop() raises:
         _ = parser.next()
 
 
+fn test_ref_parser_for_loop_iteration() raises:
+    """RefParser: for ref_record in parser yields records; count and content match."""
+    var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+
+    var count: Int = 0
+    var first_header: String = ""
+    var last_seq: String = ""
+    for ref_record in parser:
+        if count == 0:
+            first_header = String(ref_record.get_header())
+        last_seq = String(ref_record.get_seq())
+        count += 1
+
+    assert_equal(count, 2, "Should yield two records")
+    assert_equal(first_header, "@r1", "First record header")
+    assert_equal(last_seq, "TGCA", "Last record sequence")
+
+
 fn test_ref_parser_eof_after_one_record() raises:
     """RefParser: single record, second next() raises EOF."""
     var content = "@r1\nACGT\n+\n!!!!\n"

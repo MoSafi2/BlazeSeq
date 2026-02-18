@@ -492,14 +492,26 @@ struct SearchResults(
             self.qual_header = value
         elif index == 3:
             self.qual = value
-        elif index == 4:
+        else:
+            print("Index out of bounds: ", index)
             pass
 
     fn __len__(self) -> Int:
         return self.end - self.start
 
 
-struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
+struct RefParser[R: Reader, config: ParserConfig = ParserConfig()](
+    Iterable, Movable
+):
+    """
+    FASTQ reference parser over a Reader. Supports ``for ref_record in parser``;
+    each element is a RefRecord.
+    """
+
+    comptime IteratorType[mut: Bool, origin: Origin[mut=mut]] = _RefParserIter[
+        Self.R, Self.config, origin
+    ]
+
     var stream: LineIterator[Self.R]
     var quality_schema: QualitySchema
     var validator: Validator
@@ -527,6 +539,20 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
             self.quality_schema.copy(),
         )
         self._staging = List[ByteString](capacity=4)
+
+    @always_inline
+    fn has_more(self) -> Bool:
+        """True if there may be more records (more input in the buffer or stream).
+        """
+        return self.stream.has_more()
+
+    fn __iter__(
+        ref self,
+    ) -> _RefParserIter[Self.R, Self.config, origin_of(self)]:
+        """Return an iterator for use in ``for ref_record in self``."""
+        return _RefParserIter[Self.R, Self.config, origin_of(self)](
+            Pointer(to=self)
+        )
 
     @always_inline
     fn next(
@@ -559,6 +585,43 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()]:
                 raise e
 
 
+# ---------------------------------------------------------------------------
+# Iterator adapter for RefParser so that ``for ref_record in parser`` works.
+# ---------------------------------------------------------------------------
+
+
+struct _RefParserIter[R: Reader, config: ParserConfig, origin: Origin](
+    Iterator
+):
+    """Iterator over FASTQ reference records; yields RefRecord per record."""
+
+    comptime Element = RefRecord[origin=MutExternalOrigin]
+
+    var _src: Pointer[RefParser[Self.R, Self.config], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[RefParser[Self.R, Self.config], Self.origin],
+    ):
+        self._src = src
+
+    fn __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[
+            Pointer[RefParser[Self.R, Self.config], MutExternalOrigin]
+        ](self._src)
+        try:
+            return mut_ptr[].next()
+        except Error:
+            if String(Error) == EOF:
+                raise StopIteration()
+            else:
+                print(String(Error))
+            raise StopIteration()
+
+
 @always_inline
 fn _handle_incomplete_line[
     R: Reader
@@ -574,9 +637,7 @@ fn _handle_incomplete_line[
     stream.buffer._compact_from(interim.start)
     _ = stream.buffer._fill_buffer()
     interim = interim - interim.start
-    lines_left: Int = Int(4 - state.state)
-
-    for i in range(lines_left):
+    for i in range(state.state, 4):
         try:
             var line = stream.next_complete_line()
             interim[i] = line
@@ -608,7 +669,6 @@ fn _parse_record_fast_path[
     mut state: SearchState,
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
-
     interim.start = stream.buffer.buffer_position()
     for i in range(4):
         try:
