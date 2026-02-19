@@ -582,15 +582,19 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()](
             
             if e != LineIteratorError.INCOMPLETE_LINE:
                 raise e
-            
-            @parameter 
+
+            @parameter
             if self.config.buffer_growth_enabled:
                 return _handle_incomplete_line_with_buffer_growth(
                     self.stream, interim, state, self.quality_schema, Self.config.buffer_max_capacity
                 )
             else:
                 return _handle_incomplete_line(
-                    self.stream, interim, state, self.quality_schema
+                    self.stream,
+                    interim,
+                    state,
+                    self.quality_schema,
+                    self.config.buffer_capacity,
                 )
 
 
@@ -680,6 +684,7 @@ fn _handle_incomplete_line[
     mut interim: SearchResults,
     mut state: SearchState,
     quality_schema: QualitySchema,
+    buffer_capacity: Int,
 ) raises -> RefRecord[origin=MutExternalOrigin]:
     if not stream.has_more():
         raise EOFError()
@@ -695,6 +700,12 @@ fn _handle_incomplete_line[
         except e:
             if e == LineIteratorError.EOF:
                 raise EOFError()
+            if e == LineIteratorError.INCOMPLETE_LINE:
+                raise Error(
+                    "Line exceeds buffer capacity of "
+                    + String(buffer_capacity)
+                    + " bytes. Enable buffer_growth or use a larger buffer_capacity."
+                )
             raise e
     interim.end = stream.buffer.buffer_position()
 
