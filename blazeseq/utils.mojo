@@ -172,6 +172,47 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
     return schema^
 
 
+fn compute_num_reads_for_size(
+    target_size_bytes: Int,
+    min_length: Int,
+    max_length: Int,
+) -> Int:
+    """Compute the number of FASTQ reads needed to approximate a target size.
+
+    Estimates bytes per record based on:
+    - Header: @read_<padded_i>\\n (constant size: 6 + num_digits + 1 bytes)
+    - Sequence line: read_len + 1 (newline)
+    - Plus line: +\\n (2 bytes)
+    - Quality line: read_len + 1 (newline)
+
+    Uses average read length and constant header size (indices are zero-padded in generate_synthetic_fastq_buffer).
+
+    Args:
+        target_size_bytes: Target total size in bytes.
+        min_length: Minimum read length per record.
+        max_length: Maximum read length per record.
+
+    Returns:
+        Estimated number of reads needed to reach target_size_bytes.
+    """
+    if target_size_bytes <= 0:
+        return 0
+    var avg_read_length = (min_length + max_length) // 2
+    # Initial header size estimate (e.g. 15 bytes for up to 100M reads)
+    var header_est: Int = 15
+    var bytes_per_record_est = header_est + 2 * avg_read_length + 4
+    var num_reads_est = target_size_bytes // bytes_per_record_est
+    if num_reads_est <= 0:
+        return 0
+    # Refine header size from estimated num_reads (zero-padded width)
+    var num_digits: Int = 1
+    if num_reads_est > 1:
+        num_digits = len(String(num_reads_est - 1))
+    var header_size = 6 + num_digits + 1
+    var bytes_per_record = header_size + 2 * avg_read_length + 4
+    return target_size_bytes // bytes_per_record
+
+
 fn generate_synthetic_fastq_buffer(
     num_reads: Int,
     min_length: Int,
@@ -221,6 +262,11 @@ fn generate_synthetic_fastq_buffer(
     var newline = Byte(ord("\n"))
     var plus = Byte(ord("+"))
 
+    # Constant header size: @read_<zero_padded_i>\n
+    var num_digits: Int = 1
+    if num_reads > 1:
+        num_digits = len(String(num_reads - 1))
+
     for i in range(num_reads):
         # Deterministic read length in [min_length, max_length]
         var read_len: Int
@@ -229,8 +275,11 @@ fn generate_synthetic_fastq_buffer(
         else:
             read_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
 
-        # Header: @read_<i>\n
-        var header_str = "@read_" + String(i) + "\n"
+        # Header: @read_<zero_padded_i>\n (constant size per record)
+        var index_str = String(i)
+        while len(index_str) < num_digits:
+            index_str = "0" + index_str
+        var header_str = "@read_" + index_str + "\n"
         var header_bytes = header_str.as_bytes()
         out.extend(header_bytes)
 

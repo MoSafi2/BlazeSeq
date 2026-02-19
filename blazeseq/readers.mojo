@@ -164,6 +164,13 @@ struct MemoryReader(Movable, Reader):
 
         return UInt64(bytes_to_read)
 
+    fn reset(mut self):
+        """Reset the reader position to the beginning of the buffer.
+
+        Allows re-reading the same buffer multiple times, useful for benchmarking.
+        """
+        self.position = 0
+
     fn __moveinit__(out self, deinit other: Self):
         """Move constructor for Movable trait compliance."""
         self.data = other.data^
