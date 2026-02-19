@@ -561,7 +561,9 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()](
         ref_record = self._parse_record()
         self.validator.validate(ref_record)
         return ref_record^
-
+    
+    
+    @always_inline
     fn _parse_record(
         mut self,
     ) raises -> RefRecord[origin=MutExternalOrigin]:
