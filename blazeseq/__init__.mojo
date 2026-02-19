@@ -7,5 +7,5 @@ from blazeseq.device_record import (
     upload_batch_to_device,
 )
 from blazeseq.iostream import BufferedReader, Reader, LineIterator
-from blazeseq.readers import FileReader, MemoryReader
+from blazeseq.readers import FileReader, MemoryReader, GZFile
 from blazeseq.utils import generate_synthetic_fastq_buffer

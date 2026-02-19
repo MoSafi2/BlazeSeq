@@ -1,5 +1,5 @@
 context:
-  version: "0.1.0"
+  version: "0.2.0"
   mojo_version: "=0.26.1"
 
 package:
@@ -34,14 +34,13 @@ tests:
       recipe:
         - tests/test_device_record.mojo
         - tests/test_iostream.mojo
-        - tests/__init__.mojo
 
 about:
-  homepage: https://github.com/BlazeSeq/BlazeSeq
+  homepage: https://github.com/MoSafi2/BlazeSeq
   license: MIT
   license_file: LICENSE
   summary: Fast FASTQ parsing and GPU-accelerated sequencing utilities in Mojo.
-  repository: https://github.com/BlazeSeq/BlazeSeq
+  repository: https://github.com/MoSafi2/BlazeSeq
 
 extra:
   maintainers: []

@@ -19,13 +19,21 @@ BlazeSeq is a performant FASTQ parser for [Mojo](https://docs.modular.com/mojo/)
 
 ## Installation
 
-### Conda (rattler-build package)
+Add BlazeSeq as a dependency in your project's `pixi.toml` (e.g. under `[dependencies]`):
 
-add the following to your `pixi.toml` file
 ```toml
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
-and then run `pixi install`
+
+Then run `pixi install`. The project also provides a conda/rattler-build package; use the same dependency line when installing via pixi.
+
+## Using in your project
+
+- **With pixi**: In your project's `pixi.toml`, add `blazeseq` as above. After `pixi install`, run scripts with `pixi run mojo run -I . path/to/script.mojo` so that `from blazeseq import ...` resolves.
+- **Clone and use**: Clone this repo and run from the repo root: `mojo run -I . path/to/your_script.mojo`. The `-I .` lets Mojo find the `blazeseq` package in the current directory.
+- **Pre-built package**: Run `mojo package blazeseq -o BlazeSeq.mojopkg` in this repo, then in another project use `mojo run -I /path/to/BlazeSeq.mojopkg your_script.mojo`.
+
+For gzip-compressed FASTQ, use `GZFile` from the readers module: `from blazeseq import GZFile` or `from blazeseq.readers import GZFile`. It implements the same `Reader` interface as `FileReader` and auto-detects compression.
 
 ## Getting started
 

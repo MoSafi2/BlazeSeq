@@ -1,16 +1,16 @@
 [workspace]
 name = "blazeseq"
-version = "0.1.0"
+version = "0.2.0"
 description = "Primitives for FASTQ parsing and GPU-accelerated sequencing utilities in Mojo."
 authors = []
 channels = ["conda-forge", "https://conda.modular.com/max-nightly"]
 platforms = ["linux-64", "osx-arm64"]
-license = "Apache-2.0"
+license = "MIT"
 preview = ["pixi-build"]
 
 [package]
 name = "blazeseq"
-version = "0.1.1"
+version = "0.2.0"
 
 [package.build]
 backend = { name = "pixi-build-mojo", version = "0.*", channels = [

@@ -12,23 +12,12 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
-    - name: Install modular
-      run: |
-        curl -s https://get.modular.com | sh -
-        modular auth examples
+    - name: Install pixi
+      uses: prefix-dev/setup-pixi@v0.9.4
+      with:
+        cache: true
 
-    - name: Install Mojo
-      run: modular install nightly/mojo
-
-    - name: Add to PATH
-      run: echo "/home/runner/.modular/pkg/packages.modular.com_nightly_mojo/bin/" >> $GITHUB_PATH
-
-    - name: Log everything
-      run:
-        pwd
-        ls
-        
     - name: Run tests
-      run: mojo run test/tests.mojo
+      run: pixi run test
