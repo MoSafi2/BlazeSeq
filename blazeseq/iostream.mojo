@@ -135,6 +135,18 @@ struct BufferedReader[R: Reader](
         return self._head
 
     @always_inline
+    fn buffer_base(ref self) -> UnsafePointer[Byte, MutExternalOrigin]:
+        """Base pointer of the buffer. Used by parser to rebase spans after resize."""
+        return self._ptr
+
+    @always_inline
+    fn span_at(ref self, offset: Int, length: Int) -> Span[Byte, MutExternalOrigin]:
+        """Span over buffer at given offset from buffer base and length. Used after resize+compact to rebase SearchResults."""
+        return Span[Byte, MutExternalOrigin](
+            ptr=self._ptr + offset, length=length
+        )
+
+    @always_inline
     fn is_eof(self) -> Bool:
         """True when underlying read returned no more data."""
         return self._is_eof
