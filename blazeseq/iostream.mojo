@@ -157,6 +157,17 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
+    fn  resize_buffer(mut self, additional: Int, max_capacity: Int) raises:
+        """
+        Resize buffer by `additional` bytes, not exceeding max_capacity.
+        Does nott compact the buffer before resizing.
+        """
+        if self.capacity() >= max_capacity:
+            raise Error("Buffer already at max capacity")
+        var new_capacity = min(self.capacity() + additional, max_capacity)
+        _ = self._resize_internal(new_capacity)
+
+    @always_inline
     fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](

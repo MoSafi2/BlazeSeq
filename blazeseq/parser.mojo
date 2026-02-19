@@ -499,7 +499,7 @@ struct SearchResults(
     fn __len__(self) -> Int:
         return self.end - self.start
 
-
+# TODO: There is a bug here with buffer growth, records are not parsed correctly.
 struct RefParser[R: Reader, config: ParserConfig = ParserConfig()](
     Iterable, Movable
 ):
@@ -635,7 +635,7 @@ struct _RefParserIter[R: Reader, config: ParserConfig, origin: Origin](
             raise StopIteration()
 
 
-
+# TODO: There is a bug here when the buffer is grown, but 
 @always_inline
 fn _handle_incomplete_line_with_buffer_growth[
     R: Reader
@@ -646,19 +646,26 @@ fn _handle_incomplete_line_with_buffer_growth[
     quality_schema: QualitySchema,
     max_capacity: Int,
 ) raises -> RefRecord[origin=MutExternalOrigin]:
+    print(interim)
     while True:
         if not stream.has_more():
             raise EOFError()
         if interim.start == 0:
-            stream.buffer.grow_buffer(stream.buffer.capacity(), max_capacity)
+            stream.buffer.resize_buffer(stream.buffer.capacity(), max_capacity)
+        print(interim)
         stream.buffer._compact_from(interim.start)
+        print(interim)
         _ = stream.buffer._fill_buffer()
+        print(interim)
         interim = interim - interim.start
+        print(interim)
         try:
             for i in range(state.state, 4):
                 var line = stream.next_complete_line()
                 interim[i] = line
                 state = state + 1
+                print(state.state)
+                print(interim)
         except e:
             if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
                 continue
