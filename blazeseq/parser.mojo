@@ -577,12 +577,19 @@ struct RefParser[R: Reader, config: ParserConfig = ParserConfig()](
         except e:
             if e == LineIteratorError.EOF:
                 raise EOFError()
-            if e == LineIteratorError.INCOMPLETE_LINE:
+            
+            if e != LineIteratorError.INCOMPLETE_LINE:
+                raise e
+            
+            @parameter 
+            if self.config.buffer_growth_enabled:
+                return _handle_incomplete_line_with_buffer_growth(
+                    self.stream, interim, state, self.quality_schema, Self.config.buffer_max_capacity
+                )
+            else:
                 return _handle_incomplete_line(
                     self.stream, interim, state, self.quality_schema
                 )
-            else:
-                raise e
 
 
 # ---------------------------------------------------------------------------
@@ -620,6 +627,47 @@ struct _RefParserIter[R: Reader, config: ParserConfig, origin: Origin](
             else:
                 print(String(Error))
             raise StopIteration()
+
+
+
+@always_inline
+fn _handle_incomplete_line_with_buffer_growth[
+    R: Reader
+](
+    mut stream: LineIterator[R],
+    mut interim: SearchResults,
+    mut state: SearchState,
+    quality_schema: QualitySchema,
+    max_capacity: Int,
+) raises -> RefRecord[origin=MutExternalOrigin]:
+    while True:
+        if not stream.has_more():
+            raise EOFError()
+        if interim.start == 0:
+            stream.buffer.grow_buffer(stream.buffer.capacity(), max_capacity)
+        stream.buffer._compact_from(interim.start)
+        _ = stream.buffer._fill_buffer()
+        interim = interim - interim.start
+        try:
+            for i in range(state.state, 4):
+                var line = stream.next_complete_line()
+                interim[i] = line
+                state = state + 1
+        except e:
+            if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
+                continue
+            else:
+                raise e
+        interim.end = stream.buffer.buffer_position()
+        if interim.all_set():
+            break
+    return RefRecord[origin=MutExternalOrigin](
+        interim[0],
+        interim[1],
+        interim[2],
+        interim[3],
+        Int8(quality_schema.OFFSET),
+    )
 
 
 @always_inline
