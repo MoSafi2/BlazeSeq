@@ -113,8 +113,7 @@ struct MemoryReader(Movable, Reader):
             data: The source data buffer (will be copied).
         """
         self.data = List[Byte](capacity=len(data))
-        for i in range(len(data)):
-            self.data.append(data[i])
+        self.data.extend(data)
         self.position = 0
 
     fn __init__(out self, var content: String) raises:
@@ -156,10 +155,13 @@ struct MemoryReader(Movable, Reader):
         var available = len(self.data) - self.position
         var bytes_to_read = min(amt, available)
 
-        # Copy bytes from data to destination buffer
+        # Copy bytes from data to destination buffer using memcpy
         if bytes_to_read > 0:
-            for i in range(bytes_to_read):
-                s[i] = self.data[self.position + i]
+            memcpy(
+                dest=s.unsafe_ptr(),
+                src=self.data.unsafe_ptr() + self.position,
+                count=bytes_to_read,
+            )
             self.position += bytes_to_read
 
         return UInt64(bytes_to_read)
