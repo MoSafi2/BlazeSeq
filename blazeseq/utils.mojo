@@ -5,6 +5,7 @@ import math
 from sys.info import simd_width_of
 import math
 from blazeseq.CONSTS import *
+from blazeseq.iostream import EOFError, LineIteratorError
 
 
 comptime NEW_LINE = 10
@@ -461,3 +462,122 @@ struct SearchResults(
     fn __len__(self) -> Int:
         return self.end - self.start
 
+
+
+
+# BUG: There is a bug here when the buffer is grown, but the record is not parsed correctly.
+@always_inline
+fn _handle_incomplete_line_with_buffer_growth[
+    R: Reader
+](
+    mut stream: LineIterator[R],
+    mut interim: SearchResults,
+    mut state: SearchState,
+    quality_schema: QualitySchema,
+    max_capacity: Int,
+) raises -> RefRecord[origin=MutExternalOrigin]:
+    while True:
+        if not stream.has_more():
+            raise EOFError()
+        if interim.start == 0:
+            stream.buffer.resize_buffer(stream.buffer.capacity(), max_capacity)
+        stream.buffer._compact_from(interim.start)
+        _ = stream.buffer._fill_buffer()
+        interim = SearchResults.DEFAULT
+        interim.start = 0
+        state = SearchState.START
+        try:
+            for i in range(4):
+                var line = stream.next_complete_line()
+                interim[i] = line
+                state = state + 1
+        except e:
+            if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
+                continue
+            else:
+                raise e
+        interim.end = stream.buffer.buffer_position()
+        if interim.all_set():
+            break
+    return RefRecord[origin=MutExternalOrigin](
+        interim[0],
+        interim[1],
+        interim[2],
+        interim[3],
+        Int8(quality_schema.OFFSET),
+    )
+
+
+@always_inline
+fn _handle_incomplete_line[
+    R: Reader
+](
+    mut stream: LineIterator[R],
+    mut interim: SearchResults,
+    mut state: SearchState,
+    quality_schema: QualitySchema,
+    buffer_capacity: Int,
+) raises -> RefRecord[origin=MutExternalOrigin]:
+    if not stream.has_more():
+        raise EOFError()
+
+    stream.buffer._compact_from(interim.start)
+    _ = stream.buffer._fill_buffer()
+    interim = interim - interim.start
+    for i in range(state.state, 4):
+        try:
+            var line = stream.next_complete_line()
+            interim[i] = line
+            state = state + 1
+        except e:
+            if e == LineIteratorError.EOF:
+                raise EOFError()
+            if e == LineIteratorError.INCOMPLETE_LINE:
+                raise Error(
+                    "Line exceeds buffer capacity of "
+                    + String(buffer_capacity)
+                    + " bytes. Enable buffer_growth or use a larger buffer_capacity."
+                )
+            raise e
+    interim.end = stream.buffer.buffer_position()
+
+    if not interim.all_set():
+        raise LineIteratorError.OTHER
+
+    return RefRecord[origin=MutExternalOrigin](
+        interim[0],
+        interim[1],
+        interim[2],
+        interim[3],
+        Int8(quality_schema.OFFSET),
+    )
+
+
+@always_inline
+fn _parse_record_fast_path[
+    R: Reader
+](
+    mut stream: LineIterator[R],
+    mut interim: SearchResults,
+    mut state: SearchState,
+    quality_schema: QualitySchema,
+) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
+    interim.start = stream.buffer.buffer_position()
+    for i in range(4):
+        try:
+            interim[i] = stream.next_complete_line()
+            state = state + 1
+        except e:
+            raise e
+    interim.end = stream.buffer.buffer_position()
+
+    if not interim.all_set():
+        raise LineIteratorError.OTHER
+
+    return RefRecord[origin=MutExternalOrigin](
+        interim[0],
+        interim[1],
+        interim[2],
+        interim[3],
+        Int8(quality_schema.OFFSET),
+    )
