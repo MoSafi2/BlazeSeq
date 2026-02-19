@@ -309,3 +309,155 @@ fn generate_synthetic_fastq_buffer(
         out.append(newline)
 
     return out^
+
+
+
+
+# Parsing Algorithm adopted from Needletaile and Seq-IO with modifications.
+@register_passable("trivial")
+@fieldwise_init
+struct SearchState(Copyable, ImplicitlyDestructible, Movable):
+    var state: Int8
+    comptime START = Self(0)
+    comptime HEADER_FOUND = Self(1)
+    comptime SEQ_FOUND = Self(2)
+    comptime QUAL_HEADER_FOUND = Self(3)
+    comptime QUAL_FOUND = Self(4)
+
+    fn __eq__(self, other: Self) -> Bool:
+        return self.state == other.state
+
+    fn __add__(self, other: Int8) -> Self:
+        return Self(self.state + other)
+
+    fn __sub__(self, other: Int8) -> Self:
+        return Self(self.state - other)
+
+
+@register_passable("trivial")
+@fieldwise_init
+struct SearchResults(
+    Copyable, ImplicitlyDestructible, Movable, Sized, Writable
+):
+    var start: Int
+    var end: Int
+    var header: Span[Byte, MutExternalOrigin]
+    var seq: Span[Byte, MutExternalOrigin]
+    var qual_header: Span[Byte, MutExternalOrigin]
+    var qual: Span[Byte, MutExternalOrigin]
+
+    comptime DEFAULT = Self(
+        -1,
+        -1,
+        Span[Byte, MutExternalOrigin](),
+        Span[Byte, MutExternalOrigin](),
+        Span[Byte, MutExternalOrigin](),
+        Span[Byte, MutExternalOrigin](),
+    )
+
+    fn write_to[w: Writer](self, mut writer: w) -> None:
+        writer.write(
+            String("SearchResults(start=") + String(self.start),
+            ", end=",
+            String(self.end)
+            + ", header="
+            + String(StringSlice(unsafe_from_utf8=self.header))
+            + ", seq="
+            + String(StringSlice(unsafe_from_utf8=self.seq))
+            + ", qual_header="
+            + String(StringSlice(unsafe_from_utf8=self.qual_header))
+            + ", qual="
+            + String(StringSlice(unsafe_from_utf8=self.qual))
+            + ")",
+        )
+
+    fn all_set(self) -> Bool:
+        return (
+            self.start != -1
+            and self.end != -1
+            and len(self.header) > 0
+            and len(self.seq) > 0
+            and len(self.qual_header) > 0
+            and len(self.qual) > 0
+        )
+
+    fn __add__(self, amt: Int) -> Self:
+        new_header = Span[Byte, MutExternalOrigin](
+            ptr=self.header.unsafe_ptr() + amt,
+            length=len(self.header),
+        )
+        new_seq = Span[Byte, MutExternalOrigin](
+            ptr=self.seq.unsafe_ptr() + amt,
+            length=len(self.seq),
+        )
+        new_qual_header = Span[Byte, MutExternalOrigin](
+            ptr=self.qual_header.unsafe_ptr() + amt,
+            length=len(self.qual_header),
+        )
+        new_qual = Span[Byte, MutExternalOrigin](
+            ptr=self.qual.unsafe_ptr() + amt,
+            length=len(self.qual),
+        )
+        return Self(
+            self.start + amt,
+            self.end + amt,
+            new_header,
+            new_seq,
+            new_qual_header,
+            new_qual,
+        )
+
+    fn __sub__(self, amt: Int) -> Self:
+        new_header = Span[Byte, MutExternalOrigin](
+            ptr=self.header.unsafe_ptr() - amt,
+            length=len(self.header),
+        )
+        new_seq = Span[Byte, MutExternalOrigin](
+            ptr=self.seq.unsafe_ptr() - amt,
+            length=len(self.seq),
+        )
+        new_qual_header = Span[Byte, MutExternalOrigin](
+            ptr=self.qual_header.unsafe_ptr() - amt,
+            length=len(self.qual_header),
+        )
+        new_qual = Span[Byte, MutExternalOrigin](
+            ptr=self.qual.unsafe_ptr() - amt,
+            length=len(self.qual),
+        )
+        return Self(
+            self.start - amt,
+            self.end - amt,
+            new_header,
+            new_seq,
+            new_qual_header,
+            new_qual,
+        )
+
+    fn __getitem__(self, index: Int) -> Span[Byte, MutExternalOrigin]:
+        if index == 0:
+            return self.header
+        elif index == 1:
+            return self.seq
+        elif index == 2:
+            return self.qual_header
+        elif index == 3:
+            return self.qual
+        else:
+            return Span[Byte, MutExternalOrigin]()
+
+    fn __setitem__(mut self, index: Int, value: Span[Byte, MutExternalOrigin]):
+        if index == 0:
+            self.header = value
+        elif index == 1:
+            self.seq = value
+        elif index == 2:
+            self.qual_header = value
+        elif index == 3:
+            self.qual = value
+        else:
+            print("Index out of bounds: ", index)
+            pass
+
+    fn __len__(self) -> Int:
+        return self.end - self.start
+
