@@ -1,6 +1,6 @@
 from sys import argv
 from blazeseq.readers import FileReader, GZFile
-from blazeseq.parser import RecordParser, ParserConfig, RefParser
+from blazeseq.parser import FastqParser, ParserConfig
 from pathlib import Path
 from utils import Variant
 
@@ -14,11 +14,11 @@ fn main() raises:
         buffer_growth_enabled=False,
     )
 
-    var parser = RefParser[FileReader, config](FileReader(Path(file_name)))
+    var parser = FastqParser[FileReader, config](FileReader(Path(file_name)))
     var total_reads = 0
     var total_base_pairs = 0
 
-    for record in parser:
+    for record in parser.ref_records():
         total_reads += 1
         total_base_pairs += len(record)
 

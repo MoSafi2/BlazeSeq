@@ -2,15 +2,15 @@
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 
-BlazeSeq is a performant FASTQ parser for [Mojo](https://docs.modular.com/mojo/) with configurable validation and optional GPU-oriented batch types. It can be used as a starting point to  supports quality control, k-mer generation, alignment, and similar workflows. The main `RecordParser` supports optional ASCII and quality-schema validation via `ParserConfig`; batching and device upload are available for GPU pipelines (e.g. quality prefix-sum).
+BlazeSeq is a performant FASTQ parser for [Mojo](https://docs.modular.com/mojo/) with configurable validation and optional GPU-oriented batch types. It can be used as a starting point to support quality control, k-mer generation, alignment, and similar workflows. The unified `FastqParser` supports optional ASCII and quality-schema validation via `ParserConfig` and exposes three parsing modes: `next_ref()` (zero-copy), `next_record()` (owned), and `next_batch()` (SoA); iteration via `ref_records()`, `records()`, or `batched()`. Device upload is available for GPU pipelines (e.g. quality prefix-sum).
 
 **Note:** BlazeSeq is a re-write of the earlier `MojoFastTrim`, which can still be accessed from [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim).
 
 ## Key features
 
-- **Configurable parsing:** `RecordParser[R, config]` with `ParserConfig` for buffer size, growth, and validation (ASCII and quality schema). Validation can be turned off for maximum throughput.
+- **Configurable parsing:** `FastqParser[R, config]` with `ParserConfig` for buffer size, growth, and validation (ASCII and quality schema). Validation can be turned off for maximum throughput.
 - **High throughput:** Parsing targets on the order of several GB/s from disk on modern hardware (see [Performance](#performance)).
-- **Batch parsing:** `BatchedParser` yields `FastqBatch` (Structure-of-Arrays) for GPU-friendly processing.
+- **Unified API:** One parser with `next_ref()` (zero-copy `RefRecord`), `next_record()` (owned `FastqRecord`), and `next_batch()` (`FastqBatch` SoA). Iteration: `ref_records()`, `records()`, or `batched()`.
 - **GPU support:** `FastqBatch` / `DeviceFastqBatch`, `upload_batch_to_device`, and device-side types. Optional quality prefix-sum kernel (see `examples/example_device.mojo`; may require additional kernel modules).
 
 ## Requirements
@@ -32,7 +32,7 @@ and then run `pixi install`
 ### Running examples
 
 ```bash
-# RecordParser with and without validation
+# FastqParser with and without validation
 pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 
 # GPU quality prefix-sum (requires GPU and optional kernel modules)
@@ -42,14 +42,14 @@ pixi run mojo run examples/example_device.mojo
 ### Using the library
 
 ```mojo
-from blazeseq import RecordParser, ParserConfig
+from blazeseq import FastqParser, ParserConfig
 from blazeseq.readers import FileReader
 from pathlib import Path
 
 fn main() raises:
     # Schema: "generic", "sanger", "solexa", "illumina_1.3", "illumina_1.5", "illumina_1.8"
-    var parser = RecordParser(FileReader(Path("path/to/your/file.fastq")), "sanger")
-    for record in parser:
+    var parser = FastqParser(FileReader(Path("path/to/your/file.fastq")), "sanger")
+    for record in parser.records():
         # record is a FastqRecord
         _ = record.get_header_string()
         _ = len(record)  # sequence length
@@ -60,41 +60,45 @@ With validation disabled for maximum speed:
 
 ```mojo
 var config = ParserConfig(check_ascii=False, check_quality=False)
-var parser = RecordParser[config](FileReader(Path("path/to/file.fastq")), "generic")
+var parser = FastqParser[config](FileReader(Path("path/to/file.fastq")), "generic")
 while parser.has_more():
-    var record = parser.next()
+    var record = parser.next_record()
     # use record
 ```
 
-(`parser.next()` raises `EOFError` when there is no more input; you can also iterate with `for record in parser` and rely on the iterator stopping.)
+(`next_record()` raises `EOFError` when there is no more input. Use `parser.records()` for iteration, `parser.ref_records()` for zero-copy refs, or `parser.batched()` for batches.)
 
 ### Count reads and base pairs
 
 ```mojo
-from blazeseq import RecordParser
+from blazeseq import FastqParser
 from blazeseq.readers import FileReader
 from pathlib import Path
 
 fn main() raises:
-    var parser = RecordParser[FileReader](FileReader(Path("path/to/file.fastq")), "generic")
+    var parser = FastqParser[FileReader](FileReader(Path("path/to/file.fastq")), "generic")
     var total_reads = 0
     var total_base_pairs = 0
-    for record in parser:
+    for record in parser.records():
         total_reads += 1
         total_base_pairs += len(record)
     print(total_reads, total_base_pairs)
 ```
 
-### Batched parsing (SoA for GPU)
+### Zero-copy and batched parsing
 
 ```mojo
-from blazeseq.parser import BatchedParser
+from blazeseq import FastqParser
 from blazeseq.readers import FileReader
 
-var parser = BatchedParser(FileReader(Path("data.fastq")), "generic", default_batch_size=1024)
-for batch in parser:
+var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", default_batch_size=1024)
+
+# Zero-copy refs: for ref in parser.ref_records()
+# Owned records: for rec in parser.records()
+# Batches (SoA): for batch in parser.batched()
+for batch in parser.batched():
     # batch is a FastqBatch (Structure-of-Arrays)
-    _ = batch.num_records()
+    _ = len(batch)
 ```
 
 ## Testing
@@ -125,7 +129,7 @@ Benchmarks were run on a machine with an Intel Core i7-13700K, 32 GB DDR5, 2 TB 
 
 ### FASTQ parsing
 
-| reads  | CoordParser     | RecordParser (no validation) | RecordParser (quality validation) | RecordParser (full validation) |
+| reads  | RefRectord (no validation)     | FastqParser (no validation) | FastqParser (quality validation) | FastqParser (full validation) |
 |--------|-----------------|------------------------------|-----------------------------------|--------------------------------|
 | 40k    | 13.7 ± 5.0 ms   | 18.2 ± 4.7 ms                | 26.0 ± 4.9 ms                     | 50.3 ± 6.3 ms                  |
 | 5.5M   | 244.8 ± 4.3 ms  | 696.9 ± 2.7 ms               | 935.8 ± 6.3 ms                    | 1.441 ± 0.024 s                |

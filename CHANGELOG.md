@@ -7,7 +7,7 @@ All notable changes to BlazeSeq are documented here.
 ### Breaking
 
 - **BufferedReader**: `as_span()` renamed to `view()`. Single view API; `peek(size)` removed—use `view()` and slice. `consume(size)` no longer auto-compacts; callers must call `compact_from(from_pos)` when a line or batch spans the buffer boundary. Buffer never compacts itself (including in `_fill_buffer()`).
-- **Parsers**: `RecordParser` and `BatchedParser` now use an internal `LineIterator`; public API (e.g. `next()`, `next_batch()`) unchanged.
+- **Parsers**: `RecordParser`, `BatchedParser`, and `RefParser` are removed. A single **`FastqParser`** replaces them. Use `next_ref()`, `next_record()`, or `next_batch()` for direct parsing, and `ref_records()`, `records()`, or `batched()` for iteration (e.g. `for ref in parser.ref_records()`, `for rec in parser.records()`, `for batch in parser.batched()`).
 
 ### Added
 

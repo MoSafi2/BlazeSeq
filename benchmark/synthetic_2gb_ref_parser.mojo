@@ -1,9 +1,9 @@
-"""Benchmark: generate ~2GB of synthetic FASTQ in memory, parse with RefParser, report time."""
+"""Benchmark: generate ~2GB of synthetic FASTQ in memory, parse with FastqParser (next_ref), report time."""
 
 from blazeseq.CONSTS import GB
 from blazeseq.utils import generate_synthetic_fastq_buffer, compute_num_reads_for_size
 from blazeseq.readers import MemoryReader
-from blazeseq.parser import RefParser, ParserConfig
+from blazeseq.parser import FastqParser, ParserConfig
 from time import perf_counter_ns
 
 # NOTE: The results of this benchmark does not make any sense, there is a lot of unexplained overhead compared to reading from disk.
@@ -24,13 +24,13 @@ fn main() raises:
     print("Buffer size: ", len(data), " bytes")
 
     var reader = MemoryReader(data^)
-    var parser = RefParser[MemoryReader, config](reader^)
+    var parser = FastqParser[MemoryReader, config](reader^)
 
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
 
     var start_ns = perf_counter_ns()
-    for record in parser:
+    for record in parser.ref_records():
         total_reads += 1
         total_base_pairs += len(record)
     var end_ns = perf_counter_ns()

@@ -1,7 +1,7 @@
 """BlazeSeq: fast FASTQ parsing and GPU batch types."""
 
 from blazeseq.record import FastqRecord, RefRecord, Validator
-from blazeseq.parser import RecordParser, ParserConfig, BatchedParser
+from blazeseq.parser import FastqParser, ParserConfig
 from blazeseq.device_record import (
     FastqBatch,
     upload_batch_to_device,

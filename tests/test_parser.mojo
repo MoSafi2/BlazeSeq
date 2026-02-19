@@ -5,9 +5,8 @@ Truncated files were padded with 1, 2, or 3, extra line terminators to prevent `
 Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ.
 """
 
-from blazeseq.parser import RecordParser, BatchedParser, RefParser
+from blazeseq.parser import FastqParser, ParserConfig
 from blazeseq.readers import FileReader, MemoryReader
-from blazeseq.parser import ParserConfig
 from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.record import FastqRecord
 from blazeseq.device_record import FastqBatch
@@ -27,11 +26,10 @@ comptime len_mismatch = "Quality Header is not the same length as the Sequencing
 fn invalid_file_test_fun(file: String, msg: String = "") raises:
     comptime config_ = ParserConfig(check_ascii=True, check_quality=True)
     with assert_raises(contains=msg):
-        parser = RecordParser[FileReader, config_](FileReader(test_dir + file))
+        var parser = FastqParser[FileReader, config_](FileReader(test_dir + file))
         try:
             while True:
-                var record = parser.next()
-                parser.validator.validate(record)
+                _ = parser.next_record()
         except e:
             var err_msg = String(e)
             print(err_msg)
@@ -39,10 +37,10 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
 
 
 fn valid_file_test_fun(file: String, schema: String = "generic") raises:
-    var parser = RecordParser[FileReader](FileReader(test_dir + file), schema)
+    var parser = FastqParser[FileReader](FileReader(test_dir + file), schema)
     try:
-        for record in parser:
-            parser.validator.validate(record)
+        for record in parser.records():
+            pass
     except Error:
         var err_msg = String(Error)
         if err_msg == EOF:
@@ -152,13 +150,13 @@ fn test_invalid() raises:
 
 
 fn test_record_parser_for_loop() raises:
-    """Basic ``for record in parser`` iteration."""
+    """Basic ``for record in parser.records()`` iteration."""
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RecordParser[MemoryReader](reader^, "generic")
+    var parser = FastqParser[MemoryReader](reader^, "generic")
 
     var records = List[FastqRecord]()
-    for record in parser:
+    for record in parser.records():
         records.append(record^)
 
     assert_equal(len(records), 2, "Should iterate over 2 records")
@@ -183,15 +181,15 @@ fn test_record_parser_for_loop_stop_iteration() raises:
     """Iterator raises StopIteration at EOF; second loop yields no records."""
     var content = "@r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RecordParser[MemoryReader](reader^, "generic")
+    var parser = FastqParser[MemoryReader](reader^, "generic")
 
     var count = 0
-    for record in parser:
+    for record in parser.records():
         count += 1
     assert_equal(count, 1, "Should iterate over 1 record")
 
     var count_after = 0
-    for record in parser:
+    for record in parser.records():
         count_after += 1
     assert_equal(count_after, 0, "Should not iterate after EOF")
 
@@ -202,11 +200,11 @@ fn test_record_parser_ascii_validation_enabled() raises:
     var reader = MemoryReader(content^)
 
     with assert_raises(contains="Non ASCII letters found"):
-        var parser = RecordParser[
+        var parser = FastqParser[
             MemoryReader,
             ParserConfig(check_ascii=True, check_quality=False),
         ](reader^)
-        _ = parser.next()
+        _ = parser.next_record()
 
 
 fn test_record_parser_ascii_validation_disabled() raises:
@@ -214,11 +212,11 @@ fn test_record_parser_ascii_validation_disabled() raises:
     var content = create_non_ascii_fastq_data()
     var reader = MemoryReader(content^)
 
-    var parser = RecordParser[
+    var parser = FastqParser[
         MemoryReader,
         ParserConfig(check_ascii=False, check_quality=False),
     ](reader^)
-    var record = parser.next()
+    var record = parser.next_record()
     assert_equal(
         record.SeqHeader.to_string(),
         "@r1",
@@ -227,19 +225,18 @@ fn test_record_parser_ascii_validation_disabled() raises:
 
 
 # ---------------------------------------------------------------------------
-# BatchedParser tests (non-GPU: iteration, batch size, content, empty input)
+# FastqParser batched() / next_batch() tests (non-GPU: iteration, batch size, content, empty input)
 # ---------------------------------------------------------------------------
 
 
 fn test_batched_parser_for_loop() raises:
-    """BatchedParser supports ``for batch in parser`` and yields FastqBatch with correct record count.
-    """
+    """FastqParser.batched() yields FastqBatch with correct record count."""
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n@r3\nNNNN\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = BatchedParser[MemoryReader](reader^, "generic", 2)
+    var parser = FastqParser[MemoryReader](reader^, schema="generic", default_batch_size=2)
 
     var batches = List[FastqBatch]()
-    for batch in parser:
+    for batch in parser.batched():
         batches.append(batch^)
 
     assert_equal(
@@ -255,7 +252,7 @@ fn test_batched_parser_batch_size_respected() raises:
         "@a\nA\n+\n!\n@b\nB\n+\n!\n@c\nC\n+\n!\n@d\nD\n+\n!\n@e\nE\n+\n!\n"
     )
     var reader = MemoryReader(content.as_bytes())
-    var parser = BatchedParser[MemoryReader](reader^, "generic", 2)
+    var parser = FastqParser[MemoryReader](reader^, schema="generic", default_batch_size=2)
 
     var batch1 = parser.next_batch(2)
     var batch2 = parser.next_batch(2)
@@ -265,7 +262,7 @@ fn test_batched_parser_batch_size_respected() raises:
     assert_equal(len(batch2), 2, "Second batch size 2")
     assert_equal(len(batch3), 1, "Third batch size 1 (remaining)")
     assert_true(
-        not parser._has_more(), "No more input after consuming 5 records"
+        not parser.has_more(), "No more input after consuming 5 records"
     )
 
 
@@ -274,7 +271,7 @@ fn test_batched_parser_single_batch_content() raises:
     """
     var content = "@seq1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
+    var parser = FastqParser[MemoryReader](reader^, schema="generic", default_batch_size=4)
 
     var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record in batch")
@@ -288,35 +285,35 @@ fn test_batched_parser_empty_input() raises:
     """Empty FASTQ input yields no batches (iterator produces nothing)."""
     var content = ""
     var reader = MemoryReader(content.as_bytes())
-    var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
+    var parser = FastqParser[MemoryReader](reader^, schema="generic", default_batch_size=4)
 
     var count = 0
-    for batch in parser:
+    for batch in parser.batched():
         count += 1
     assert_equal(count, 0, "No batches from empty input")
 
 
 fn test_batched_parser_has_more() raises:
-    """_has_more() is True before consumption and False after all records consumed.
+    """has_more() is True before consumption and False after all records consumed.
     """
     var content = "@r1\nA\n+\n!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = BatchedParser[MemoryReader](reader^, "generic", 4)
+    var parser = FastqParser[MemoryReader](reader^, schema="generic", default_batch_size=4)
 
-    assert_true(parser._has_more(), "Should have more before _next_batch")
+    assert_true(parser.has_more(), "Should have more before next_batch")
     _ = parser.next_batch(4)
     assert_true(
-        not parser._has_more(),
+        not parser.has_more(),
         "Should have no more after consuming single record",
     )
 
 
 fn test_batched_parser_schema() raises:
-    """BatchedParser accepts quality schema string (e.g. sanger) and parses correctly.
+    """FastqParser accepts quality schema string (e.g. sanger) and parses correctly.
     """
     var content = "@id\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = BatchedParser[MemoryReader](reader^, "sanger", 4)
+    var parser = FastqParser[MemoryReader](reader^, schema="sanger", default_batch_size=4)
 
     var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record")
@@ -325,7 +322,7 @@ fn test_batched_parser_schema() raises:
 
 
 fn test_generate_synthetic_fastq_buffer() raises:
-    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + BatchedParser yield expected counts and lengths.
+    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + FastqParser.batched() yield expected counts and lengths.
     """
     var num_reads = 20
     var min_len = 5
@@ -338,9 +335,9 @@ fn test_generate_synthetic_fastq_buffer() raises:
     assert_true(len(buf) > 0, "Buffer non-empty")
 
     var reader = MemoryReader(buf^)
-    var parser = BatchedParser[MemoryReader](reader^, "generic", 8)
+    var parser = FastqParser[MemoryReader](reader^, schema="generic", default_batch_size=8)
     var total = 0
-    for batch in parser:
+    for batch in parser.batched():
         total += len(batch)
         for i in range(len(batch)):
             var rec = batch.get_record(i)
@@ -356,21 +353,21 @@ comptime ref_parser_large_config = ParserConfig(buffer_capacity=256)
 
 
 fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
-    """RefParser parses records when all four lines fit in buffer (fast path).
+    """FastqParser.next_ref() parses records when all four lines fit in buffer (fast path).
     """
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
-    var r1 = parser._parse_record()
+    var r1 = parser.next_ref()
     assert_equal(String(r1.get_header()), "@r1", "First record header")
     assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
     assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
-    var r2 = parser._parse_record()
+    var r2 = parser.next_ref()
     assert_equal(String(r2.get_header()), "@r2", "Second record header")
     assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
     with assert_raises(contains="EOF"):
-        _ = parser._parse_record()
+        _ = parser.next_ref()
 
     print("✓ test_ref_parser_fast_path_all_lines_in_buffer passed")
 
@@ -386,51 +383,51 @@ comptime ref_parser_growth_config = ParserConfig(
 
 
 fn test_ref_parser_fallback_record_span_chunks() raises:
-    """RefParser parses correctly when record spans two chunks (fallback path).
+    """FastqParser.next_ref() parses correctly when record spans two chunks (fallback path).
     """
     var content = "@r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_small_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_small_config](reader^)
 
-    var r = parser.next()
+    var r = parser.next_ref()
     assert_equal(String(r.get_header()), "@r1", "Header should match")
     assert_equal(String(r.get_seq()), "ACGT", "Sequence should match")
     assert_equal(String(r.get_quality()), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
     print("✓ test_ref_parser_fallback_record_span_chunks passed")
 
 
 fn test_ref_parser_multiple_records_next_loop() raises:
-    """RefParser: two records via next(), then EOF (mirror RecordParser for-loop).
+    """FastqParser: two records via next_ref(), then EOF (mirror records() for-loop).
     """
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
-    var r1 = parser.next()
+    var r1 = parser.next_ref()
     assert_equal(String(r1.get_header()), "@r1", "First record header")
     assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
     assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
-    var r2 = parser.next()
+    var r2 = parser.next_ref()
     assert_equal(String(r2.get_header()), "@r2", "Second record header")
     assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
     assert_equal(String(r2.get_quality()), "####", "Second record quality")
     with assert_raises(contains="EOF"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_for_loop_iteration() raises:
-    """RefParser: for ref_record in parser yields records; count and content match."""
+    """FastqParser: for ref in parser.ref_records() yields records; count and content match."""
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var count: Int = 0
     var first_header: String = ""
     var last_seq: String = ""
-    for ref_record in parser:
+    for ref_record in parser.ref_records():
         if count == 0:
             first_header = String(ref_record.get_header())
         last_seq = String(ref_record.get_seq())
@@ -442,59 +439,59 @@ fn test_ref_parser_for_loop_iteration() raises:
 
 
 fn test_ref_parser_eof_after_one_record() raises:
-    """RefParser: single record, second next() raises EOF."""
+    """FastqParser: single record, second next_ref() raises EOF."""
     var content = "@r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
-    var r = parser.next()
+    var r = parser.next_ref()
     assert_equal(String(r.get_header()), "@r1", "Header should match")
     assert_equal(String(r.get_seq()), "ACGT", "Sequence should match")
     assert_equal(String(r.get_quality()), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_empty_input() raises:
-    """RefParser: empty input, first next() raises EOF."""
+    """FastqParser: empty input, first next_ref() raises EOF."""
     var content = ""
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     with assert_raises(contains="EOF"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_invalid_header() raises:
-    """RefParser: first line not starting with @ raises."""
+    """FastqParser: first line not starting with @ raises."""
     var content = "r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_large_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     with assert_raises(contains="Sequence header does not start with '@'"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_multiple_records_span_chunks() raises:
-    """RefParser: three records with small buffer so at least one spans chunks.
+    """FastqParser: three records with small buffer so at least one spans chunks.
     """
     var content = "@r1\nA\n+\n!\n@r2\nB\n+\n!\n@r3\nC\n+\n!\n"
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_small_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_small_config](reader^)
 
-    var r1 = parser.next()
+    var r1 = parser.next_ref()
     assert_equal(String(r1.get_header()), "@r1", "First record header")
     assert_equal(String(r1.get_seq()), "A", "First record seq")
     assert_equal(String(r1.get_quality()), "!", "First record quality")
-    var r2 = parser.next()
+    var r2 = parser.next_ref()
     assert_equal(String(r2.get_header()), "@r2", "Second record header")
     assert_equal(String(r2.get_seq()), "B", "Second record seq")
-    var r3 = parser.next()
+    var r3 = parser.next_ref()
     assert_equal(String(r3.get_header()), "@r3", "Third record header")
     assert_equal(String(r3.get_seq()), "C", "Third record seq")
     assert_equal(String(r3.get_quality()), "!", "Third record quality")
     with assert_raises(contains="EOF"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn _ref_parser_long_record_content() -> String:
@@ -510,13 +507,13 @@ fn _ref_parser_long_record_content() -> String:
 
 
 fn test_ref_parser_long_line_with_growth() raises:
-    """RefParser: one record with line longer than buffer, buffer_growth_enabled=True.
+    """FastqParser: one record with line longer than buffer, buffer_growth_enabled=True.
     """
     var content = _ref_parser_long_record_content()
     var reader = MemoryReader(content.as_bytes())
-    var parser = RefParser[MemoryReader, ref_parser_growth_config](reader^)
+    var parser = FastqParser[MemoryReader, ref_parser_growth_config](reader^)
 
-    var r = parser.next()
+    var r = parser.next_ref()
     assert_equal(String(r.get_header()), "@id", "Header should match")
     assert_equal(r.len_record(), 20, "Sequence length 20")
     assert_equal(r.len_quality(), 20, "Quality length 20")
@@ -527,11 +524,11 @@ fn test_ref_parser_long_line_with_growth() raises:
         String(r.get_quality()), "!!!!!!!!!!!!!!!!!!!!", "Quality content"
     )
     with assert_raises(contains="EOF"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_long_line_without_growth() raises:
-    """RefParser: line longer than buffer and buffer_growth_enabled=False raises.
+    """FastqParser: line longer than buffer and buffer_growth_enabled=False raises.
     """
     var content = _ref_parser_long_record_content()
     var reader = MemoryReader(content.as_bytes())
@@ -539,35 +536,35 @@ fn test_ref_parser_long_line_without_growth() raises:
         buffer_capacity=16,
         buffer_growth_enabled=False,
     )
-    var parser = RefParser[MemoryReader, no_growth_config](reader^)
+    var parser = FastqParser[MemoryReader, no_growth_config](reader^)
 
     with assert_raises(contains="Line exceeds buffer capacity"):
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_ascii_validation_enabled() raises:
-    """RefParser: non-ASCII bytes fail when ParserConfig(check_ascii=True)."""
+    """FastqParser: non-ASCII bytes fail when ParserConfig(check_ascii=True)."""
     var content = create_non_ascii_fastq_data()
     var reader = MemoryReader(content^)
 
     with assert_raises(contains="Non ASCII"):
-        var parser = RefParser[
+        var parser = FastqParser[
             MemoryReader,
             ParserConfig(check_ascii=True, check_quality=False),
         ](reader^)
-        _ = parser.next()
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_ascii_validation_disabled() raises:
-    """RefParser: non-ASCII bytes parse when ParserConfig(check_ascii=False)."""
+    """FastqParser: non-ASCII bytes parse when ParserConfig(check_ascii=False)."""
     var content = create_non_ascii_fastq_data()
     var reader = MemoryReader(content^)
 
-    var parser = RefParser[
+    var parser = FastqParser[
         MemoryReader,
         ParserConfig(check_ascii=False, check_quality=False),
     ](reader^)
-    var record = parser.next()
+    var record = parser.next_ref()
     assert_equal(
         String(record.get_header()),
         "@r1",
@@ -581,18 +578,18 @@ comptime ref_parser_file_config = ParserConfig(
 
 
 fn test_ref_parser_valid_file_parity() raises:
-    """RefParser: parse valid test_data file, count records and spot-check first.
+    """FastqParser: parse valid test_data file, count records and spot-check first.
     """
-    var parser = RefParser[FileReader, ref_parser_file_config](
+    var parser = FastqParser[FileReader, ref_parser_file_config](
         FileReader(test_dir + "example.fastq")
     )
-    var first = parser.next()
+    var first = parser.next_ref()
     assert_true(len(String(first.get_header())) > 0, "First record has header")
     assert_true(first.len_record() > 0, "First record has sequence")
     var count = 1
     while True:
         try:
-            _ = parser.next()
+            _ = parser.next_ref()
             count += 1
         except Error:
             var err_msg = String(Error)
