@@ -30,9 +30,18 @@ fn main() raises:
     var total_base_pairs: Int = 0
 
     var start_ns = perf_counter_ns()
-    for record in parser.ref_records():
+    # for batch in parser.batched():
+    #     total_reads += batch.num_records()
+    #     total_base_pairs += len(batch)
+
+    # for ref_ in parser.ref_records():
+    #     total_reads += 1
+    #     total_base_pairs += ref_.len_qu_header()
+
+    for record in parser.records():
         total_reads += 1
         total_base_pairs += len(record)
+
     var end_ns = perf_counter_ns()
 
     var elapsed_secs = Float64(end_ns - start_ns) / 1e9

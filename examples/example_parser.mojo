@@ -76,10 +76,65 @@ fn example_record_parser_no_validation(file_path: String) raises:
     ](FileReader(Path(file_path)), "generic")
 
     var record_count = 0
+    var total_base_pairs = 0
+
     for record in parser.records():
         record_count += 1
+        total_base_pairs += len(record)
 
-    print("Parsed " + String(record_count) + " records (no validation)")
+        # Print first 3 records as examples
+        if record_count <= 3:
+            print("Record " + String(record_count) + ":")
+            print("  Header: " + String(record.get_header_string()))
+            print("  Sequence length: " + String(len(record)))
+            print("  Quality length: " + String(len(record.QuStr)))
+            print()
+
+    print("Summary:")
+    print("  Total records: " + String(record_count))
+    print("  Total base pairs: " + String(total_base_pairs))
+    print()
+
+
+# ---------------------------------------------------------------------------
+# Example 3: FastqParser - Parsing in batches
+# ---------------------------------------------------------------------------
+
+fn example_batched_parser(file_path: String) raises:
+    """
+    Example using FastqParser for parsing in batches.
+    Use parser.batched() for FastqBatch (SoA) when you need batch processing.
+    """
+    print("=" * 60)
+    print("Example 3: FastqParser - Parsing in batches")
+    print("=" * 60)
+    print()
+
+    var parser = FastqParser[
+        FileReader, ParserConfig(check_ascii=True, check_quality=True)
+    ](FileReader(Path(file_path)), "generic")
+
+    var record_count = 0
+    var total_base_pairs = 0
+    var batch_no = 0
+
+    for batch in parser.batched():
+        if batch_no == 0:
+            for i in range(3):
+                var rec = batch.get_ref(i)
+                print("Record " + String(i + 1) + ":")
+                print("  Header: " + String(rec.get_header()))
+                print("  Sequence length: " + String(len(rec)))
+                print("  Quality length: " + String(rec.len_quality()))
+                print()
+            batch_no += 1
+        record_count += batch.num_records()
+        total_base_pairs += batch.seq_len()
+
+
+    print("Summary:")
+    print("  Total records: " + String(record_count))
+    print("  Total base pairs: " + String(total_base_pairs))
     print()
 
 
@@ -100,6 +155,7 @@ fn main() raises:
 
     example_record_parser(file_path)
     example_record_parser_no_validation(file_path)
+    example_batched_parser(file_path)
 
     print("=" * 60)
     print("All examples completed!")
