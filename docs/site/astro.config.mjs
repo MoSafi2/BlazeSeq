@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  site: 'https://mosafi2.github.io/BlazeSeq',
   integrations: [
     starlight({
       title: 'BlazeSeq',
