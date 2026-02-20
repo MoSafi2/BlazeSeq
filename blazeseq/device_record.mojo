@@ -242,9 +242,9 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var qu_header_ptr = alloc[UInt8](1)
         qu_header_ptr[0] = UInt8(ord("+"))
         var qu_header_span = Span[Byte, origin_of(self)](
-            ptr=qu_header_ptr.unsafe_mut_cast[False]().unsafe_origin_cast[
-                origin_of(self)
-            ](),
+            ptr=qu_header_ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=1,
         )
 
