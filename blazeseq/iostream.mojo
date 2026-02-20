@@ -3,7 +3,12 @@ from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
 from blazeseq.readers import Reader
-from blazeseq.writers import Writer as WriterTrait, FileWriter, MemoryWriter, GZWriter
+from blazeseq.writers import (
+    Writer as WriterTrait,
+    FileWriter,
+    MemoryWriter,
+    GZWriter,
+)
 from blazeseq.CONSTS import *
 from blazeseq.utils import memchr
 
@@ -148,12 +153,16 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     fn buffer_base(ref self) -> UnsafePointer[Byte, MutExternalOrigin]:
-        """Base pointer of the buffer. Used by parser to rebase spans after resize."""
+        """Base pointer of the buffer. Used by parser to rebase spans after resize.
+        """
         return self._ptr
 
     @always_inline
-    fn span_at(ref self, offset: Int, length: Int) -> Span[Byte, MutExternalOrigin]:
-        """Span over buffer at given offset from buffer base and length. Used after resize+compact to rebase SearchResults."""
+    fn span_at(
+        ref self, offset: Int, length: Int
+    ) -> Span[Byte, MutExternalOrigin]:
+        """Span over buffer at given offset from buffer base and length. Used after resize+compact to rebase SearchResults.
+        """
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + offset, length=length
         )
@@ -181,7 +190,7 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn  resize_buffer(mut self, additional: Int, max_capacity: Int) raises:
+    fn resize_buffer(mut self, additional: Int, max_capacity: Int) raises:
         """
         Resize buffer by `additional` bytes, not exceeding max_capacity.
         Does nott compact the buffer before resizing.
@@ -330,35 +339,33 @@ struct BufferedReader[R: Reader](
             ptr=self._ptr + start, length=end - start
         )
 
-    # fn __del__(deinit self):
-    #     if self._ptr:
-    #         self._ptr.free()
+    fn __del__(deinit self):
+        if self._ptr:
+            self._ptr.free()
 
 
 struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
     """Buffered writer for efficient byte writing.
-    
+
     Works with any Writer backend (FileWriter, MemoryWriter, GZWriter).
     Maintains an internal buffer and flushes automatically when full or on explicit flush() call.
     """
-    
+
     var writer: Self.W
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
     var _len: Int  # Buffer capacity
     var _pos: Int  # Current write position in buffer
     var _bytes_written: Int  # Total bytes written
-    
+
     fn __init__(
-        out self,
-        var writer: Self.W,
-        capacity: Int = DEFAULT_CAPACITY
+        out self, var writer: Self.W, capacity: Int = DEFAULT_CAPACITY
     ) raises:
         """Initialize BufferedWriter with a Writer backend.
-        
+
         Args:
             writer: Writer backend (FileWriter, MemoryWriter, or GZWriter).
             capacity: Size of the write buffer in bytes.
-        
+
         Raises:
             Error: If capacity is invalid.
         """
@@ -373,56 +380,56 @@ struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
         self._len = capacity
         self._pos = 0
         self._bytes_written = 0
-    
+
     @always_inline
     fn capacity(self) -> Int:
         """Return the buffer capacity."""
         return self._len
-    
+
     @always_inline
     fn available_space(self) -> Int:
         """Return available space in buffer."""
         return self._len - self._pos
-    
+
     @always_inline
     fn bytes_written(self) -> Int:
         """Return total bytes written to file."""
         return self._bytes_written
-    
+
     fn write_bytes(mut self, data: Span[Byte]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
-        
+
         Args:
             data: Span of bytes to write.
-        
+
         Raises:
             Error: If writing fails.
         """
         var remaining = len(data)
         var offset = 0
-        
+
         while remaining > 0:
             var space = self.available_space()
             if space == 0:
                 self._flush_buffer()
                 space = self.available_space()
-            
+
             var to_write = min(remaining, space)
             memcpy(
                 dest=self._ptr + self._pos,
                 src=data.unsafe_ptr() + offset,
-                count=to_write
+                count=to_write,
             )
             self._pos += to_write
             offset += to_write
             remaining -= to_write
-    
+
     fn write_bytes(mut self, data: List[Byte]) raises:
         """Write bytes from a List to the buffer, flushing if needed.
-        
+
         Args:
             data: List of bytes to write.
-        
+
         Raises:
             Error: If writing fails.
         """
@@ -430,14 +437,14 @@ struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
             return
         var span = Span[Byte](ptr=data.unsafe_ptr(), length=len(data))
         self.write_bytes(span)
-    
+
     fn flush(mut self) raises:
         """Flush the buffer to disk.
-        
+
         Ensures all buffered data is written to the file.
         """
         self._flush_buffer()
-    
+
     fn _flush_buffer(mut self) raises:
         """Internal method to flush buffer to writer backend."""
         if self._pos > 0:
@@ -447,8 +454,7 @@ struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
             var written = self.writer.write_from_buffer(span, self._pos, 0)
             self._bytes_written += Int(written)
             self._pos = 0
-    
-    
+
     fn __del__(deinit self):
         """Destructor: flush buffer."""
         try:
@@ -460,23 +466,21 @@ struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
 
 
 fn buffered_writer_for_file(
-    path: Path,
-    capacity: Int = DEFAULT_CAPACITY
+    path: Path, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[FileWriter]:
     """Create BufferedWriter for a file."""
     return BufferedWriter[FileWriter](FileWriter(path), capacity)
 
 
 fn buffered_writer_for_memory(
-    capacity: Int = DEFAULT_CAPACITY
+    capacity: Int = DEFAULT_CAPACITY,
 ) raises -> BufferedWriter[MemoryWriter]:
     """Create BufferedWriter for memory."""
     return BufferedWriter[MemoryWriter](MemoryWriter(), capacity)
 
 
 fn buffered_writer_for_gzip(
-    filename: String,
-    capacity: Int = DEFAULT_CAPACITY
+    filename: String, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[GZWriter]:
     """Create BufferedWriter for a gzipped file."""
     return BufferedWriter[GZWriter](GZWriter(filename), capacity)
@@ -511,7 +515,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     var _growth_enabled: Bool
     var _max_capacity: Int
     var _current_line_number: Int  # Track current line number (1-indexed)
-    var _file_position: Int64       # Track byte position in file
+    var _file_position: Int64  # Track byte position in file
 
     fn __init__(
         out self,
@@ -531,20 +535,20 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """Logical byte position of next line start (for errors and compaction).
         """
         return self.buffer.stream_position()
-    
+
     @always_inline
     fn get_line_number(self) -> Int:
         """Return the current line number (1-indexed).
-        
+
         Returns:
             The line number of the last line returned by next_line(), or 0 if no lines have been read yet.
         """
         return self._current_line_number
-    
+
     @always_inline
     fn get_file_position(self) -> Int64:
         """Return the current byte position in the file.
-        
+
         Returns:
             The byte position corresponding to the start of the current line, or 0 if unknown.
         """
@@ -564,7 +568,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         # Update file position before reading line
         self._file_position = Int64(self.buffer.stream_position())
-        
+
         while True:
             if self.buffer.available() == 0:
                 if self.buffer.is_eof():
@@ -604,8 +608,8 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         Return the next line only if a complete line (ending with newline) is in
         the current buffer. Does not refill or compact (except for initial empty buffer).
-        If no newline is found, raise Error("INCOMPLETE_LINE") and do not consume; 
-        caller can fall back to next_line() to refill. Invalidated by next 
+        If no newline is found, raise Error("INCOMPLETE_LINE") and do not consume;
+        caller can fall back to next_line() to refill. Invalidated by next
         next_line/next_complete_line or any buffer mutation.
         """
         if self.buffer.available() == 0:
