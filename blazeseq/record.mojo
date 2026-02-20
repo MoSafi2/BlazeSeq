@@ -5,6 +5,7 @@ from blazeseq.quality_schema import (
 )
 from blazeseq.byte_string import ByteString
 from blazeseq.utils import _check_ascii
+from blazeseq.errors import ValidationError
 
 comptime read_header = ord("@")
 comptime quality_header = ord("+")
@@ -226,8 +227,13 @@ struct Validator(Copyable):
         self.quality_schema = quality_schema.copy()
 
     @always_inline
-    fn validate_record(self, record: FastqRecord) raises:
+    fn validate_record(self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
+        
+        Args:
+            record: The FastqRecord to validate.
+            record_number: Optional 1-indexed record number for error context (0 if unknown).
+            line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
         if record.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
@@ -255,8 +261,13 @@ struct Validator(Copyable):
                 )
 
     @always_inline
-    fn validate_record(self, record: RefRecord) raises:
+    fn validate_record(self, record: RefRecord, record_number: Int = 0, line_number: Int = 0) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
+        
+        Args:
+            record: The RefRecord to validate.
+            record_number: Optional 1-indexed record number for error context (0 if unknown).
+            line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
         if record.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
@@ -286,6 +297,32 @@ struct Validator(Copyable):
                 raise Error(
                     "Quality Header is not the same as the Sequencing Header"
                 )
+    
+    fn _get_snippet(self, record: FastqRecord) -> String:
+        """Extract snippet from record for error messages."""
+        var snippet = String(capacity=100)
+        try:
+            var header_str = record.get_header_string()
+            if len(header_str) > 0:
+                snippet += String(header_str)
+                if len(snippet) > 100:
+                    snippet = snippet[:97] + "..."
+        except:
+            snippet = "<unable to extract snippet>"
+        return snippet
+    
+    fn _get_snippet_ref(self, record: RefRecord) -> String:
+        """Extract snippet from RefRecord for error messages."""
+        var snippet = String(capacity=100)
+        try:
+            var header_str = StringSlice(unsafe_from_utf8=record.SeqHeader)
+            if len(header_str) > 0:
+                snippet += String(header_str)
+                if len(snippet) > 100:
+                    snippet = snippet[:97] + "..."
+        except:
+            snippet = "<unable to extract snippet>"
+        return snippet
 
     @always_inline
     fn validate_quality_schema(self, record: RefRecord) raises:
@@ -329,22 +366,100 @@ struct Validator(Copyable):
         _check_ascii(record.QuStr.as_span())
 
     @always_inline
-    fn validate(self, record: FastqRecord) raises:
-        """Run configured validations for a parsed FASTQ record."""
-        self.validate_record(record)
+    fn validate(self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0) raises:
+        """Run configured validations for a parsed FASTQ record.
+        
+        Args:
+            record: The FastqRecord to validate.
+            record_number: Optional 1-indexed record number for error context (0 if unknown).
+            line_number: Optional 1-indexed line number for error context (0 if unknown).
+        """
+        try:
+            self.validate_record(record, record_number, line_number)
+        except e:
+            if record_number > 0:
+                var val_err = ValidationError(
+                    String(e),
+                    record_number=record_number,
+                    field="record",
+                    record_snippet=self._get_snippet(record),
+                )
+                raise Error(val_err.__str__())
+            raise
         if self.check_ascii:
-            self.validate_ascii(record)
+            try:
+                self.validate_ascii(record)
+            except e:
+                if record_number > 0:
+                    var val_err = ValidationError(
+                        String(e),
+                        record_number=record_number,
+                        field="ascii",
+                        record_snippet=self._get_snippet(record),
+                    )
+                    raise Error(val_err.__str__())
+                raise
         if self.check_quality:
-            self.validate_quality_schema(record)
+            try:
+                self.validate_quality_schema(record)
+            except e:
+                if record_number > 0:
+                    var val_err = ValidationError(
+                        String(e),
+                        record_number=record_number,
+                        field="quality",
+                        record_snippet=self._get_snippet(record),
+                    )
+                    raise Error(val_err.__str__())
+                raise
 
     @always_inline
-    fn validate(self, record: RefRecord) raises:
-        """Run configured validations for a parsed FASTQ record."""
-        self.validate_record(record)
+    fn validate(self, record: RefRecord, record_number: Int = 0, line_number: Int = 0) raises:
+        """Run configured validations for a parsed FASTQ record.
+        
+        Args:
+            record: The RefRecord to validate.
+            record_number: Optional 1-indexed record number for error context (0 if unknown).
+            line_number: Optional 1-indexed line number for error context (0 if unknown).
+        """
+        try:
+            self.validate_record(record, record_number, line_number)
+        except e:
+            if record_number > 0:
+                var val_err = ValidationError(
+                    String(e),
+                    record_number=record_number,
+                    field="record",
+                    record_snippet=self._get_snippet_ref(record),
+                )
+                raise Error(val_err.__str__())
+            raise
         if self.check_ascii:
-            self.validate_ascii(record)
+            try:
+                self.validate_ascii(record)
+            except e:
+                if record_number > 0:
+                    var val_err = ValidationError(
+                        String(e),
+                        record_number=record_number,
+                        field="ascii",
+                        record_snippet=self._get_snippet_ref(record),
+                    )
+                    raise Error(val_err.__str__())
+                raise
         if self.check_quality:
-            self.validate_quality_schema(record)
+            try:
+                self.validate_quality_schema(record)
+            except e:
+                if record_number > 0:
+                    var val_err = ValidationError(
+                        String(e),
+                        record_number=record_number,
+                        field="quality",
+                        record_snippet=self._get_snippet_ref(record),
+                    )
+                    raise Error(val_err.__str__())
+                raise
 
 
 @always_inline

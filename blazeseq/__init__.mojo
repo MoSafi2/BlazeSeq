@@ -9,3 +9,4 @@ from blazeseq.device_record import (
 from blazeseq.iostream import BufferedReader, Reader, LineIterator
 from blazeseq.readers import FileReader, MemoryReader, GZFile
 from blazeseq.utils import generate_synthetic_fastq_buffer
+from blazeseq.errors import ParseError, ValidationError

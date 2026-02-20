@@ -351,6 +351,8 @@ struct LineIterator[R: Reader](Iterable, Movable):
     var buffer: BufferedReader[Self.R]
     var _growth_enabled: Bool
     var _max_capacity: Int
+    var _current_line_number: Int  # Track current line number (1-indexed)
+    var _file_position: Int64       # Track byte position in file
 
     fn __init__(
         out self,
@@ -362,12 +364,32 @@ struct LineIterator[R: Reader](Iterable, Movable):
         self.buffer = BufferedReader(reader^, capacity)
         self._growth_enabled = growth_enabled
         self._max_capacity = max_capacity
+        self._current_line_number = 0
+        self._file_position = 0
 
     @always_inline
     fn position(self) -> Int:
         """Logical byte position of next line start (for errors and compaction).
         """
         return self.buffer.stream_position()
+    
+    @always_inline
+    fn get_line_number(self) -> Int:
+        """Return the current line number (1-indexed).
+        
+        Returns:
+            The line number of the last line returned by next_line(), or 0 if no lines have been read yet.
+        """
+        return self._current_line_number
+    
+    @always_inline
+    fn get_file_position(self) -> Int64:
+        """Return the current byte position in the file.
+        
+        Returns:
+            The byte position corresponding to the start of the current line, or 0 if unknown.
+        """
+        return self._file_position
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -381,6 +403,9 @@ struct LineIterator[R: Reader](Iterable, Movable):
         Next line as span excluding newline (and trimming trailing \\r). None at EOF.
         Invalidated by next next_line() or any buffer mutation.
         """
+        # Update file position before reading line
+        self._file_position = Int64(self.buffer.stream_position())
+        
         while True:
             if self.buffer.available() == 0:
                 if self.buffer.is_eof():
@@ -397,10 +422,15 @@ struct LineIterator[R: Reader](Iterable, Movable):
                 var end = _trim_trailing_cr(view, newline_at)
                 var span = view[0:end]
                 _ = self.buffer.consume(newline_at + 1)
+                # Increment line number after successfully reading a line
+                self._current_line_number += 1
                 return span
 
             if self.buffer.is_eof():
-                return self._handle_eof_line(view)
+                var result = self._handle_eof_line(view)
+                # Increment line number for EOF line
+                self._current_line_number += 1
+                return result
 
             if len(view) >= self.buffer.capacity():
                 self._handle_line_exceeds_capacity()

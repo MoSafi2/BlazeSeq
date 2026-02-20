@@ -9,6 +9,7 @@ from blazeseq.iostream import (
 )
 from blazeseq.readers import Reader
 from blazeseq.device_record import FastqBatch
+from blazeseq.errors import ParseError, ValidationError
 from std.iter import Iterator
 from blazeseq.byte_string import ByteString
 from blazeseq.utils import (
@@ -78,6 +79,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     var quality_schema: QualitySchema
     var validator: Validator
     var _batch_size: Int
+    var _record_number: Int  # Track current record number (1-indexed)
 
     fn __init__(
         out self,
@@ -105,6 +107,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self._batch_size = self.config.batch_size.value()
         else:
             self._batch_size = 1024
+        self._record_number = 0
 
     fn __init__(
         out self,
@@ -128,6 +131,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self._batch_size = self.config.batch_size.value()
         else:
             self._batch_size = 1024
+        self._record_number = 0
 
     fn __init__(
         out self,
@@ -157,6 +161,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self._batch_size = self.config.batch_size.value()
         else:
             self._batch_size = default_batch_size
+        self._record_number = 0
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -171,8 +176,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         Unsafe parsing mode, not thread-safe, can't be added to collections as List.
         should be promptly consumer by caller.
         """
+        self._record_number += 1
         var ref_record = self._parse_record_ref()
-        self.validator.validate(ref_record)
+        try:
+            self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
+        except e:
+            # Wrap error with context
+            var parse_err = ParseError(
+                String(e),
+                record_number=self._record_number,
+                line_number=self.line_iter.get_line_number(),
+                file_position=self.line_iter.get_file_position(),
+                record_snippet=self._get_record_snippet(ref_record),
+            )
+            raise Error(parse_err.__str__())
         return ref_record^
 
     @always_inline
@@ -180,8 +197,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """Return the next record as an owned FastqRecord."""
         if not self.line_iter.has_more():
             raise EOFError()
+        self._record_number += 1
         var record = self._parse_record_line()
-        self.validator.validate(record)
+        try:
+            self.validator.validate(record, self._record_number, self.line_iter.get_line_number())
+        except e:
+            # Wrap error with context
+            var parse_err = ParseError(
+                String(e),
+                record_number=self._record_number,
+                line_number=self.line_iter.get_line_number(),
+                file_position=self.line_iter.get_file_position(),
+                record_snippet=self._get_record_snippet_from_fastq(record),
+            )
+            raise Error(parse_err.__str__())
         return record^
 
     fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
@@ -192,14 +221,27 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
         while len(batch) < actual_max and self.line_iter.has_more():
+            self._record_number += 1
+            var snippet = String("")
             try:
                 var ref_record = self._parse_record_ref()
-                self.validator.validate(ref_record)
+                # Try to extract snippet before validation (in case validation fails)
+                snippet = self._get_record_snippet(ref_record)
+                self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
                 batch.add(ref_record)
             except e:
                 if String(e) == EOF:
                     break
-                raise
+                # Wrap error with context before re-raising
+                # snippet may be empty if parsing failed before we could extract it
+                var parse_err = ParseError(
+                    String(e),
+                    record_number=self._record_number,
+                    line_number=self.line_iter.get_line_number(),
+                    file_position=self.line_iter.get_file_position(),
+                    record_snippet=snippet,
+                )
+                raise Error(parse_err.__str__())
         return batch^
 
     fn ref_records(
@@ -272,6 +314,44 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     self.quality_schema,
                     self.config.buffer_capacity,
                 )
+    
+    fn _get_record_snippet(self, record: RefRecord) -> String:
+        """Get first 200 characters of record for error context."""
+        var snippet = String(capacity=200)
+        try:
+            var header_str = StringSlice(unsafe_from_utf8=record.SeqHeader)
+            if len(header_str) > 0:
+                snippet += String(header_str)
+                if len(snippet) < 200:
+                    snippet += "\n"
+            if len(snippet) < 200 and len(record.SeqStr) > 0:
+                var seq_str = StringSlice(unsafe_from_utf8=record.SeqStr)
+                var seq_len = min(len(seq_str), 200 - len(snippet))
+                snippet += String(seq_str[:seq_len])
+            if len(snippet) > 200:
+                snippet = snippet[:197] + "..."
+        except:
+            snippet = "<unable to extract snippet>"
+        return snippet
+    
+    fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
+        """Get first 200 characters of FastqRecord for error context."""
+        var snippet = String(capacity=200)
+        try:
+            var header_str = record.get_header_string()
+            if len(header_str) > 0:
+                snippet += String(header_str)
+                if len(snippet) < 200:
+                    snippet += "\n"
+            if len(snippet) < 200:
+                var seq_str = record.get_seq()
+                var seq_len = min(len(seq_str), 200 - len(snippet))
+                snippet += String(seq_str[:seq_len])
+            if len(snippet) > 200:
+                snippet = snippet[:197] + "..."
+        except:
+            snippet = "<unable to extract snippet>"
+        return snippet
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +387,17 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
         try:
             return mut_ptr[].next_ref()
         except Error:
-            if String(Error) == EOF:
+            var err_str = String(Error)
+            # Check if it's a ParseError or ValidationError by checking the message format
+            # ParseError and ValidationError will have "Record number:" in their string representation
+            if "Record number:" in err_str:
+                # Print error with context
+                print(err_str)
+            elif err_str == EOF:
                 raise StopIteration()
             else:
-                print(String(Error))
+                # Print generic error (may not have context)
+                print(err_str)
             raise StopIteration()
 
 
@@ -342,10 +429,17 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
         try:
             return mut_ptr[].next_record()
         except Error:
-            if String(Error) == EOF:
+            var err_str = String(Error)
+            # Check if it's a ParseError or ValidationError by checking the message format
+            # ParseError and ValidationError will have "Record number:" in their string representation
+            if "Record number:" in err_str:
+                # Print error with context
+                print(err_str)
+            elif err_str == EOF:
                 raise StopIteration()
             else:
-                print(String(Error))
+                # Print generic error (may not have context)
+                print(err_str)
             raise StopIteration()
 
 
@@ -379,5 +473,11 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
             if len(batch) == 0:
                 raise StopIteration()
             return batch^
-        except:
+        except Error:
+            var err_str = String(Error)
+            # Check if it's a ParseError or ValidationError by checking the message format
+            # ParseError and ValidationError will have "Record number:" in their string representation
+            if "Record number:" in err_str:
+                # Print error with context
+                print(err_str)
             raise StopIteration()
