@@ -1,4 +1,4 @@
-# BlazeSeq
+# BlazeSeq 
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml) 
 
