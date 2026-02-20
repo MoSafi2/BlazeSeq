@@ -127,10 +127,10 @@ To build and serve the docs locally:
 
 ```bash
 pixi run docs          # generate API docs and build the site
-pixi run docs-serve    # build and serve at http://localhost:1313
+pixi run docs-serve    # generate API docs and serve (Astro dev server)
 ```
 
-The site is generated with [Modo](https://mlange-42.github.io/modo/) from `mojo doc` output and [Hugo](https://gohugo.io/).
+The site is generated with [Modo](https://mlange-42.github.io/modo/) (plain markdown from `mojo doc` output) and [Astro Starlight](https://starlight.astro.build/).
 
 ## Performance
 

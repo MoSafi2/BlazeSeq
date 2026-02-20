@@ -10,6 +10,7 @@ data/
 !.gitignore
 .* 
 
-# Modo-generated docs (content) and Hugo output (public)
-docs/site/content/
-docs/site/public/
+# Modo-generated API docs (plain markdown)
+docs/site/src/content/docs/api/
+# Astro build output
+docs/site/*

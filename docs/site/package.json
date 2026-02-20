@@ -1,0 +1,14 @@
+{
+  "name": "blazeseq-docs",
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.35.0",
+    "astro": "^5.0.0"
+  }
+}
