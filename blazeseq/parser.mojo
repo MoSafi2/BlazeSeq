@@ -179,8 +179,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
         while len(batch) < actual_max and self.line_iter.has_more():
-            var record = self._parse_record_line()
-            batch.add(record^)
+            var ref_record = self._parse_record_ref()
+            self.validator.validate(ref_record)
+            batch.add(ref_record)
         return batch^
 
     fn ref_records(

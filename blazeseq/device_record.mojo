@@ -1,11 +1,11 @@
 """Device-compatible Fastq record descriptor and batch for GPU kernels."""
 
-from blazeseq.record import FastqRecord
+from blazeseq.record import FastqRecord, RefRecord
 from blazeseq.byte_string import ByteString
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
-from memory import UnsafePointer, memcpy
+from memory import UnsafePointer, memcpy, Span, alloc
 from collections.string import String
 
 
@@ -109,6 +109,31 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
                 Int64(len(record.QuStr)) + self._qual_ends[current_loaded - 1]
             )
 
+    fn add[origin: Origin](mut self, record: RefRecord[origin]):
+        """
+        Append one RefRecord: copy its QuStr and SeqStr bytes into the
+        packed buffers and record the cumulative quality length for offsets.
+        Zero-copy path that avoids intermediate FastqRecord allocation.
+        """
+
+        current_loaded = self.num_records()
+        self._quality_bytes.extend(record.QuStr)
+        self._sequence_bytes.extend(record.SeqStr)
+        self._header_bytes.extend(record.SeqHeader)
+
+        if current_loaded == 0:
+            self._header_ends.append(Int64(len(record.SeqHeader)))
+            self._qual_ends.append(Int64(len(record.QuStr)))
+        else:
+            self._header_ends.append(
+                Int64(len(record.SeqHeader))
+                + self._header_ends[current_loaded - 1]
+            )
+
+            self._qual_ends.append(
+                Int64(len(record.QuStr)) + self._qual_ends[current_loaded - 1]
+            )
+
     fn upload_to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         """Upload this batch to the device (header, sequence, and quality together).
         """
@@ -169,6 +194,56 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             ByteString("+"),
             qual^,
             Int8(self._quality_offset),
+        )
+
+    # Probably not safe, check how make the RefRecord safer
+    fn get_ref(self, index: Int) raises -> RefRecord[origin=MutExternalOrigin]:
+        """
+        Return the record at the given index as a zero-copy RefRecord.
+        Bounds-checked; raises if index < 0 or index >= num_records().
+        The returned RefRecord references the batch's internal buffers.
+        """
+        var n = self.num_records()
+        if index < 0 or index >= n:
+            raise Error("FastqBatch.get_ref index out of range")
+
+        fn get_offsets(ends: List[Int64], idx: Int) -> Tuple[Int, Int]:
+            var start = Int(0) if idx == 0 else Int(ends[idx - 1])
+            var end = Int(ends[idx])
+            return start, end
+
+        var header_range = get_offsets(self._header_ends, index)
+        var range = get_offsets(self._qual_ends, index)
+
+        # Create spans directly from list data
+        var header_span = Span[Byte, MutExternalOrigin](
+            ptr=self._header_bytes.unsafe_ptr() + header_range[0],
+            length=header_range[1] - header_range[0]
+        )
+        var seq_span = Span[Byte, MutExternalOrigin](
+            ptr=self._sequence_bytes.unsafe_ptr() + range[0],
+            length=range[1] - range[0]
+        )
+        var qual_span = Span[Byte, MutExternalOrigin](
+            ptr=self._quality_bytes.unsafe_ptr() + range[0],
+            length=range[1] - range[0]
+        )
+
+        # TODO: check for away to eliminate this
+        # QuHeader is always "+" in FASTQ format
+        var qu_header_ptr = alloc[UInt8](1)
+        qu_header_ptr[0] = UInt8(ord("+"))
+        var qu_header_span = Span[Byte, MutExternalOrigin](
+            ptr=qu_header_ptr.unsafe_mut_cast[Byte](),
+            length=1
+        )
+
+        return RefRecord[origin=MutExternalOrigin](
+            SeqHeader=header_span,
+            SeqStr=seq_span,
+            QuHeader=qu_header_span,
+            QuStr=qual_span,
+            quality_offset=Int8(self._quality_offset),
         )
 
     fn to_records(self) raises -> List[FastqRecord]:
