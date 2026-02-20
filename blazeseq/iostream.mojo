@@ -3,6 +3,7 @@ from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
 from blazeseq.readers import Reader
+from blazeseq.writers import Writer as WriterTrait, FileWriter, MemoryWriter, GZWriter
 from blazeseq.CONSTS import *
 from blazeseq.utils import memchr
 
@@ -334,32 +335,32 @@ struct BufferedReader[R: Reader](
     #         self._ptr.free()
 
 
-struct BufferedWriter(ImplicitlyDestructible, Movable):
-    """Buffered writer for efficient byte writing to files.
+struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
+    """Buffered writer for efficient byte writing.
     
-    Similar to BufferedReader but for writing. Maintains an internal buffer
-    and flushes automatically when full or on explicit flush() call.
+    Works with any Writer backend (FileWriter, MemoryWriter, GZWriter).
+    Maintains an internal buffer and flushes automatically when full or on explicit flush() call.
     """
     
-    var file_handle: FileHandle
+    var writer: Self.W
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
     var _len: Int  # Buffer capacity
     var _pos: Int  # Current write position in buffer
-    var _bytes_written: Int  # Total bytes written to file
+    var _bytes_written: Int  # Total bytes written
     
     fn __init__(
         out self,
-        path: Path,
+        var writer: Self.W,
         capacity: Int = DEFAULT_CAPACITY
     ) raises:
-        """Initialize BufferedWriter with a file path.
+        """Initialize BufferedWriter with a Writer backend.
         
         Args:
-            path: Path to the output file.
+            writer: Writer backend (FileWriter, MemoryWriter, or GZWriter).
             capacity: Size of the write buffer in bytes.
         
         Raises:
-            Error: If the file cannot be opened for writing.
+            Error: If capacity is invalid.
         """
         if capacity <= 0:
             raise Error(
@@ -367,7 +368,7 @@ struct BufferedWriter(ImplicitlyDestructible, Movable):
                 capacity,
                 " Bytes",
             )
-        self.file_handle = open(path, "w")
+        self.writer = writer^
         self._ptr = alloc[Byte](capacity)
         self._len = capacity
         self._pos = 0
@@ -438,24 +439,47 @@ struct BufferedWriter(ImplicitlyDestructible, Movable):
         self._flush_buffer()
     
     fn _flush_buffer(mut self) raises:
-        """Internal method to flush buffer to file."""
+        """Internal method to flush buffer to writer backend."""
         if self._pos > 0:
             var span = Span[Byte, MutExternalOrigin](
                 ptr=self._ptr, length=self._pos
             )
-            self.file_handle.write_bytes(span)
-            self._bytes_written += self._pos
+            var written = self.writer.write_from_buffer(span, self._pos, 0)
+            self._bytes_written += Int(written)
             self._pos = 0
     
+    
     fn __del__(deinit self):
-        """Destructor: flush buffer and close file."""
+        """Destructor: flush buffer."""
         try:
             self._flush_buffer()
-            self.file_handle.close()
         except:
             pass
         if self._ptr:
             self._ptr.free()
+
+
+fn buffered_writer_for_file(
+    path: Path,
+    capacity: Int = DEFAULT_CAPACITY
+) raises -> BufferedWriter[FileWriter]:
+    """Create BufferedWriter for a file."""
+    return BufferedWriter[FileWriter](FileWriter(path), capacity)
+
+
+fn buffered_writer_for_memory(
+    capacity: Int = DEFAULT_CAPACITY
+) raises -> BufferedWriter[MemoryWriter]:
+    """Create BufferedWriter for memory."""
+    return BufferedWriter[MemoryWriter](MemoryWriter(), capacity)
+
+
+fn buffered_writer_for_gzip(
+    filename: String,
+    capacity: Int = DEFAULT_CAPACITY
+) raises -> BufferedWriter[GZWriter]:
+    """Create BufferedWriter for a gzipped file."""
+    return BufferedWriter[GZWriter](GZWriter(filename), capacity)
 
 
 @always_inline

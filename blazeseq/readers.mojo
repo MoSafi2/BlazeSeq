@@ -41,6 +41,9 @@ comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
 comptime gzread_fn_type = fn (
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
+comptime gzwrite_fn_type = fn (
+    file: c_void_ptr, buf: c_void_ptr, len: c_uint
+) -> c_int
 
 
 trait Reader(ImplicitlyDestructible):
@@ -222,6 +225,13 @@ struct ZLib(Movable):
     ) -> c_int:
         """Read from a gzip file."""
         var func = self.lib_handle.get_function[gzread_fn_type]("gzread")
+        return func(file, buffer, length)
+
+    fn gzwrite(
+        self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
+    ) -> c_int:
+        """Write to a gzip file."""
+        var func = self.lib_handle.get_function[gzwrite_fn_type]("gzwrite")
         return func(file, buffer, length)
 
 
