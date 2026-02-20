@@ -14,7 +14,7 @@ from testing import assert_equal, TestSuite
 from blazeseq.record import FastqRecord
 from blazeseq.parser import FastqParser
 from blazeseq.readers import FileReader, GZFile
-from blazeseq.writers import Writer
+from blazeseq.writers import WriterBackend
 from blazeseq.iostream import (
     BufferedWriter,
     buffered_writer_for_file,
@@ -75,7 +75,7 @@ fn assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") 
 # ---------------------------------------------------------------------------
 
 
-fn write_fastq_records[W: Writer](
+fn write_fastq_records[W: WriterBackend](
     mut writer: BufferedWriter[W], records: List[FastqRecord]
 ) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""

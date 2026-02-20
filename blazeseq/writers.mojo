@@ -10,7 +10,7 @@ from collections.string import String
 from blazeseq.readers import ZLib, c_void_ptr, c_uint
 
 
-trait Writer(ImplicitlyDestructible):
+trait WriterBackend(ImplicitlyDestructible):
     """Trait for writing bytes to various backends.
 
     Similar to Reader trait but for writing operations.
@@ -41,8 +41,20 @@ trait Writer(ImplicitlyDestructible):
         ...
 
 
-struct FileWriter(Movable, Writer):
-    """Writer that writes to plain files."""
+struct FileWriter(Movable, WriterBackend):
+    """Writer that writes to plain files.
+
+    Example:
+        ```mojo
+        from blazeseq.iostream import buffered_writer_for_file
+        from pathlib import Path
+        from collections.string import String
+        var writer = buffered_writer_for_file(Path("out.fastq"))
+        var data = List(String("@read1\nACGT\n+\nIIII\n").as_bytes())
+        writer.write_bytes(data)
+        writer.flush()
+        ```
+    """
 
     var handle: FileHandle
 
@@ -88,7 +100,7 @@ struct FileWriter(Movable, Writer):
         self.handle = other.handle^
 
 
-struct MemoryWriter(Movable, Writer):
+struct MemoryWriter(Movable, WriterBackend):
     """Writer that writes to an in-memory buffer.
 
     Useful for testing, string building, or when you need to
@@ -144,7 +156,7 @@ struct MemoryWriter(Movable, Writer):
         self.data = other.data^
 
 
-struct GZWriter(Movable, Writer):
+struct GZWriter(Movable, WriterBackend):
     """Writer for gzip-compressed files."""
 
     var handle: c_void_ptr

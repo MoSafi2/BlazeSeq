@@ -37,6 +37,18 @@ fn test_device_fastq_batch_add_and_layout() raises:
     assert_equal(len(batch._sequence_bytes), 4)
 
 
+fn test_fastq_batch_write_to() raises:
+    """FastqBatch.write_to writes each record in FASTQ format (4 lines per record)."""
+    var records = List[FastqRecord]()
+    records.append(FastqRecord("@r1", "ACGT", "+", "!!!!"))
+    records.append(FastqRecord("@r2", "TGCA", "+", "####"))
+    var batch = FastqBatch(records)
+    var out = String()
+    batch.write_to(out)
+    var expected = String("@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n")
+    assert_equal(String(out), expected, "write_to output should match expected FASTQ text")
+
+
 fn test_fastq_batch_from_records_and_to_records() raises:
     """Round-trip: List[FastqRecord] -> FastqBatch -> to_records() equals original list.
     """

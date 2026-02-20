@@ -2,9 +2,10 @@ from memory import memcpy, UnsafePointer, Span, alloc
 from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
+from collections.string import StringSlice, String
 from blazeseq.readers import Reader
 from blazeseq.writers import (
-    Writer as WriterTrait,
+    WriterBackend,
     FileWriter,
     MemoryWriter,
     GZWriter,
@@ -18,6 +19,12 @@ from blazeseq.utils import memchr
 struct LineIteratorError(
     Copyable, Equatable, ImplicitlyDestructible, Movable, Writable
 ):
+    """Error type used by LineIterator.next_complete_line() to signal conditions without raising.
+    
+    Values: EOF (no more input), INCOMPLETE_LINE (no newline in buffer yet),
+    BUFFER_TOO_SMALL (line exceeds buffer), OTHER. Parser uses these to decide
+    whether to refill buffer or grow before retrying.
+    """
     var value: Int8
     comptime EOF = Self(0)
     comptime INCOMPLETE_LINE = Self(1)
@@ -45,6 +52,12 @@ struct LineIteratorError(
 @register_passable("trivial")
 @fieldwise_init
 struct EOFError(Writable):
+    """Raised when no more input is available (end of file or stream).
+    
+    FastqParser and LineIterator raise EOFError when next_ref()/next_record()
+    or next_line() is called and there is no more data. Iterators catch it
+    and raise StopIteration instead.
+    """
     fn write_to(self, mut writer: Some[Writer]):
         writer.write(EOF)
 
@@ -52,6 +65,13 @@ struct EOFError(Writable):
 struct BufferedReader[R: Reader](
     ImplicitlyDestructible, Movable, Sized, Writable
 ):
+    """
+    Buffered reader over a Reader. Fills an internal buffer and exposes
+    view(), consume(), stream_position(), etc. Used by LineIterator and
+    thus by FastqParser. Supports buffer growth for long lines when
+    enabled in LineIterator.
+    """
+
     var source: Self.R
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
     var _len: Int  # Buffer capacity
@@ -63,6 +83,7 @@ struct BufferedReader[R: Reader](
     fn __init__(
         out self, var reader: Self.R, capacity: Int = DEFAULT_CAPACITY
     ) raises:
+        """Wrap a Reader with a buffer of given capacity. Reads once to fill buffer."""
         if capacity <= 0:
             raise Error(
                 "Can't have BufferedReader with the follwing capacity: ",
@@ -174,6 +195,7 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     fn capacity(self) -> Int:
+        """Return the buffer capacity in bytes."""
         return self._len
 
     @always_inline
@@ -344,7 +366,7 @@ struct BufferedReader[R: Reader](
             self._ptr.free()
 
 
-struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
+struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer):
     """Buffered writer for efficient byte writing.
 
     Works with any Writer backend (FileWriter, MemoryWriter, GZWriter).
@@ -438,6 +460,25 @@ struct BufferedWriter[W: WriterTrait](ImplicitlyDestructible, Movable):
         var span = Span[Byte](ptr=data.unsafe_ptr(), length=len(data))
         self.write_bytes(span)
 
+    fn write_string(mut self, string: StringSlice):
+        """Write a StringSlice to this Writer. Required by the builtin Writer trait."""
+        try:
+            var bytes_span = string.as_bytes()
+            var lst = List[Byte](capacity=len(bytes_span))
+            lst.extend(bytes_span)
+            self.write_bytes(lst)
+        except:
+            pass  # Writer trait does not allow raises; use write_bytes() to handle errors
+
+    fn write[*Ts: Writable](mut self, *args: *Ts):
+        """Write a sequence of Writable arguments. Required by the builtin Writer trait."""
+        try:
+            @parameter
+            for i in range(args.__len__()):
+                args[i].write_to(self)
+        except:
+            pass  # Writer trait does not allow raises; use write_bytes() to handle errors
+
     fn flush(mut self) raises:
         """Flush the buffer to disk.
 
@@ -524,6 +565,14 @@ struct LineIterator[R: Reader](Iterable, Movable):
         growth_enabled: Bool = False,
         max_capacity: Int = MAX_CAPACITY,
     ) raises:
+        """Build a line iterator over a Reader. Optionally allow buffer growth for long lines.
+        
+        Args:
+            reader: Source (e.g. FileReader, MemoryReader).
+            capacity: Initial buffer size in bytes.
+            growth_enabled: If True, buffer can grow up to max_capacity for long lines.
+            max_capacity: Maximum buffer size when growth is enabled.
+        """
         self.buffer = BufferedReader(reader^, capacity)
         self._growth_enabled = growth_enabled
         self._max_capacity = max_capacity

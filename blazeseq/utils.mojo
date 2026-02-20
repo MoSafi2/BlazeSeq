@@ -1,3 +1,13 @@
+"""Internal parsing utilities and public helpers for BlazeSeq.
+
+Public helpers:
+- generate_synthetic_fastq_buffer: Build in-memory FASTQ for tests/benchmarks.
+- compute_num_reads_for_size: Estimate read count for a target byte size.
+
+Most other symbols (SearchState, SearchResults, _parse_schema, _parse_record_fast_path,
+_handle_incomplete_line, etc.) are used by the parser and are internal.
+"""
+
 from memory import pack_bits
 from blazeseq.CONSTS import simd_width
 from bit import count_trailing_zeros

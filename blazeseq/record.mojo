@@ -22,7 +22,27 @@ struct FastqRecord(
     Sized,
     Writable,
 ):
-    """Struct that represent a single FastaQ record."""
+    """A single FASTQ record (four lines: @id, sequence, +, quality).
+
+    Owned representation; safe to store in collections and reuse. Use RefRecord
+    for zero-copy parsing when consuming immediately. quality_offset is the
+    Phred offset (33 or 64) used to decode quality scores.
+
+    Attributes:
+        SeqHeader: Line starting with '@' (read identifier).
+        SeqStr: Sequence line.
+        QuHeader: Line starting with '+' (optional repeat of id).
+        QuStr: Quality line (same length as SeqStr).
+        quality_offset: Phred offset for get_quality_scores() (e.g. 33 for Sanger).
+
+    Example:
+        ```mojo
+        from blazeseq import FastqRecord
+        var rec = FastqRecord("@read1", "ACGT", "+", "IIII", "sanger")
+        print(rec.get_header_string())
+        var scores = rec.get_quality_scores()
+        ```
+    """
 
     var SeqHeader: ByteString
     var SeqStr: ByteString
@@ -39,6 +59,7 @@ struct FastqRecord(
         qu_str: String,
         quality_offset: Int8 = 33,
     ) raises:
+        """Build from four string lines and Phred offset (default 33)."""
         self.SeqHeader = ByteString(seq_header)
         self.SeqStr = ByteString(seq_str)
         self.QuHeader = ByteString(qu_header)
@@ -54,6 +75,8 @@ struct FastqRecord(
         qu_str: String,
         quality_schema: String,
     ) raises:
+        """Build from four string lines; offset from schema name (e.g. "sanger", "illumina_1.8").
+        """
         self.SeqHeader = ByteString(seq_header)
         self.SeqStr = ByteString(seq_str)
         self.QuHeader = ByteString(qu_header)
@@ -91,6 +114,8 @@ struct FastqRecord(
         self.quality_offset = _schema_string_to_offset(quality_schema)
 
     fn __init__(out self, sequence: String) raises:
+        """Build from a single string containing four newline-separated lines.
+        """
         var seqs = sequence.strip().split("\n")
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
@@ -131,14 +156,18 @@ struct FastqRecord(
 
     @always_inline
     fn get_seq(self) -> StringSlice[MutExternalOrigin]:
+        """Return the sequence line as a string slice."""
         return self.SeqStr.as_string_slice()
 
     @always_inline
     fn get_quality_string(self) -> StringSlice[MutExternalOrigin]:
+        """Return the quality line (raw ASCII bytes) as a string slice."""
         return self.QuStr.as_string_slice()
 
     @always_inline
     fn get_quality_scores(self) -> List[UInt8]:
+        """Return Phred quality scores using the record's quality_offset (e.g. 33).
+        """
         output = List[UInt8](length=len(self.QuStr), fill=0)
         for i in range(len(self.QuStr)):
             output[i] = self.QuStr[i] - UInt8(self.quality_offset)
@@ -146,6 +175,8 @@ struct FastqRecord(
 
     @always_inline
     fn get_quality_scores(self, offset: UInt8) -> List[UInt8]:
+        """Return Phred quality scores using the given offset (e.g. 33 or 64).
+        """
         output = List[UInt8](length=len(self.QuStr), fill=0)
         for i in range(len(self.QuStr)):
             output[i] = self.QuStr[i] - offset
@@ -153,10 +184,13 @@ struct FastqRecord(
 
     @always_inline
     fn get_header_string(self) -> StringSlice[MutExternalOrigin]:
+        """Return the @-line (read identifier) as a string slice."""
         return self.SeqHeader.as_string_slice()
 
     @always_inline
     fn total_length(self) -> Int:
+        """Return total byte length of all four lines (headers + sequence + quality).
+        """
         return (
             len(self.QuHeader)
             + len(self.QuStr)
@@ -169,6 +203,7 @@ struct FastqRecord(
         return String.write(self)
 
     fn write_to[w: Writer](self, mut writer: w):
+        """Write the record in standard four-line FASTQ format to writer."""
         writer.write(
             self.SeqHeader.to_string(),
             "\n",
@@ -182,6 +217,7 @@ struct FastqRecord(
 
     @always_inline
     fn __len__(self) -> Int:
+        """Return the sequence length (number of bases)."""
         return len(self.SeqStr)
 
     @always_inline
@@ -207,8 +243,15 @@ struct FastqRecord(
 struct Validator(Copyable):
     """
     Validator for FASTQ record structure and optional ASCII/quality checks.
-    Instantiate with validation flags and quality schema (e.g. from ParserConfig)
-    and attach to a parser, or use for one-off validation of FastqRecords.
+
+    Used by FastqParser when check_ascii/check_quality are True. Can also be
+    used standalone to validate FastqRecord or RefRecord. validate() runs
+    structure checks plus optional ASCII and quality-schema checks.
+
+    Attributes:
+        check_ascii: If True, validate_record and validate() also require ASCII bytes.
+        check_quality: If True, validate() also checks quality bytes against quality_schema.
+        quality_schema: Bounds (LOWER, UPPER) and OFFSET for quality validation.
     """
 
     var check_ascii: Bool
@@ -221,15 +264,23 @@ struct Validator(Copyable):
         check_quality: Bool,
         quality_schema: QualitySchema,
     ):
-        """Initialize Validator with ASCII/quality flags and quality schema."""
+        """Initialize Validator with ASCII/quality flags and quality schema.
+
+        Args:
+            check_ascii: If True, validate() will reject non-ASCII bytes in records.
+            check_quality: If True, validate() will check quality bytes against schema.
+            quality_schema: Schema used for quality validation (e.g. from _parse_schema).
+        """
         self.check_ascii = check_ascii
         self.check_quality = check_quality
         self.quality_schema = quality_schema.copy()
 
     @always_inline
-    fn validate_record(self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0) raises:
+    fn validate_record(
+        self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
+    ) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
-        
+
         Args:
             record: The FastqRecord to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
@@ -261,9 +312,11 @@ struct Validator(Copyable):
                 )
 
     @always_inline
-    fn validate_record(self, record: RefRecord, record_number: Int = 0, line_number: Int = 0) raises:
+    fn validate_record(
+        self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
+    ) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
-        
+
         Args:
             record: The RefRecord to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
@@ -297,7 +350,7 @@ struct Validator(Copyable):
                 raise Error(
                     "Quality Header is not the same as the Sequencing Header"
                 )
-    
+
     fn _get_snippet(self, record: FastqRecord) -> String:
         """Extract snippet from record for error messages."""
         var snippet = String(capacity=100)
@@ -310,7 +363,7 @@ struct Validator(Copyable):
         except:
             snippet = "<unable to extract snippet>"
         return snippet
-    
+
     fn _get_snippet_ref(self, record: RefRecord) -> String:
         """Extract snippet from RefRecord for error messages."""
         var snippet = String(capacity=100)
@@ -326,7 +379,11 @@ struct Validator(Copyable):
 
     @always_inline
     fn validate_quality_schema(self, record: RefRecord) raises:
-        """Validate each quality byte is within schema LOWER..UPPER."""
+        """Validate each quality byte is within schema LOWER..UPPER.
+
+        Raises:
+            Error: If any quality byte is outside the schema range.
+        """
         for i in range(len(record.QuStr)):
             if (
                 record.QuStr[i] > self.quality_schema.UPPER
@@ -338,7 +395,11 @@ struct Validator(Copyable):
 
     @always_inline
     fn validate_ascii(self, record: RefRecord) raises:
-        """Validate all record lines contain only ASCII bytes."""
+        """Validate all record lines contain only ASCII bytes (0x20-0x7E).
+
+        Raises:
+            Error: If any non-ASCII byte is found.
+        """
         _check_ascii(record.SeqHeader)
         _check_ascii(record.SeqStr)
         _check_ascii(record.QuHeader)
@@ -347,7 +408,11 @@ struct Validator(Copyable):
     # TODO: Convert to SIMD accelerated version
     @always_inline
     fn validate_quality_schema(self, record: FastqRecord) raises:
-        """Validate each quality byte is within schema LOWER..UPPER."""
+        """Validate each quality byte is within schema LOWER..UPPER.
+
+        Raises:
+            Error: If any quality byte is outside the schema range.
+        """
         for i in range(len(record.QuStr)):
             if (
                 record.QuStr[i] > self.quality_schema.UPPER
@@ -359,16 +424,22 @@ struct Validator(Copyable):
 
     @always_inline
     fn validate_ascii(self, record: FastqRecord) raises:
-        """Validate all record lines contain only ASCII bytes."""
+        """Validate all record lines contain only ASCII bytes (0x20-0x7E).
+
+        Raises:
+            Error: If any non-ASCII byte is found.
+        """
         _check_ascii(record.SeqHeader.as_span())
         _check_ascii(record.SeqStr.as_span())
         _check_ascii(record.QuHeader.as_span())
         _check_ascii(record.QuStr.as_span())
 
     @always_inline
-    fn validate(self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0) raises:
+    fn validate(
+        self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
+    ) raises:
         """Run configured validations for a parsed FASTQ record.
-        
+
         Args:
             record: The FastqRecord to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
@@ -414,9 +485,11 @@ struct Validator(Copyable):
                 raise
 
     @always_inline
-    fn validate(self, record: RefRecord, record_number: Int = 0, line_number: Int = 0) raises:
+    fn validate(
+        self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
+    ) raises:
         """Run configured validations for a parsed FASTQ record.
-        
+
         Args:
             record: The RefRecord to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
@@ -488,8 +561,27 @@ fn _schema_string_to_offset(quality_format: String) -> Int8:
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     ImplicitlyDestructible, Movable, Sized, Writable
 ):
-    """Struct that represent reference to a FastqRecord. Provides minimal validation of the record. Not thread safe and can't be stored in collections.
-    Use only for fast parsing.
+    """Zero-copy reference to a FASTQ record inside the parser's buffer.
+
+    Lifetime: Valid only until the next parser read or buffer mutation. Do not
+    store in collections (e.g. List); consume or copy to FastqRecord promptly.
+    Not thread-safe. Use for maximum parsing throughput when processing
+    immediately; use FastqRecord when you need to store or reuse records.
+
+    Attributes:
+        SeqHeader, SeqStr, QuHeader, QuStr: Spans into the parser buffer.
+        quality_offset: Phred offset (33 or 64) for quality decoding.
+
+    Example:
+        ```mojo
+        from blazeseq.parser import FastqParser
+        from blazeseq.readers import FileReader
+        from pathlib import Path
+        var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
+        for record_ref in parser.ref_records():
+            _ = record_ref.get_header()
+            _ = record_ref.get_seq()
+        ```
     """
 
     var SeqHeader: Span[Byte, Self.origin]
@@ -528,28 +620,37 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn get_seq(self) -> StringSlice[origin = Self.origin]:
+        """Return the sequence line as a string slice (valid only while ref is valid).
+        """
         return StringSlice[origin = Self.origin](unsafe_from_utf8=self.SeqStr)
 
     @always_inline
     fn get_quality(self) -> StringSlice[origin = Self.origin]:
+        """Return the quality line as a string slice (valid only while ref is valid).
+        """
         return StringSlice[origin = Self.origin](unsafe_from_utf8=self.QuStr)
 
     @always_inline
     fn get_header(self) -> StringSlice[origin = Self.origin]:
+        """Return the @-line (read id) as a string slice (valid only while ref is valid).
+        """
         return StringSlice[origin = Self.origin](
             unsafe_from_utf8=self.SeqHeader
         )
 
     @always_inline
     fn __len__(self) -> Int:
+        """Return the sequence length (number of bases)."""
         return self.len_record()
 
     @always_inline
     fn len_record(self) -> Int:
+        """Return the sequence line length."""
         return len(self.SeqStr)
 
     @always_inline
     fn len_quality(self) -> Int:
+        """Return the quality line length."""
         return len(self.QuStr)
 
     @always_inline
@@ -571,6 +672,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn get_quality_scores(self) -> List[Byte]:
+        """Return Phred quality scores using the record's quality_offset."""
         output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - UInt8(self.quality_offset)
@@ -578,6 +680,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn get_quality_scores(self, offset: UInt8) -> List[Byte]:
+        """Return Phred quality scores using the given offset (e.g. 33 or 64).
+        """
         output = List[Byte](length=self.len_quality(), fill=0)
         for i in range(self.len_quality()):
             output[i] = self.QuStr[i] - offset
@@ -600,6 +704,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         return Int32(len(self.SeqHeader))
 
     fn write_to[w: Writer](self, mut writer: w):
+        """Write the record in standard four-line FASTQ format to writer."""
         writer.write_string(StringSlice(unsafe_from_utf8=self.SeqHeader))
         writer.write("\n")
         writer.write_string(StringSlice(unsafe_from_utf8=self.SeqStr))

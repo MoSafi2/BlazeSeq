@@ -47,9 +47,24 @@ comptime gzwrite_fn_type = fn (
 
 
 trait Reader(ImplicitlyDestructible):
+    """Trait for reading bytes from a source (file, memory, gzip, etc.).
+    
+    Implement this trait to provide a custom data source to FastqParser via
+    BufferedReader. read_to_buffer() fills the given buffer span and returns
+    the number of bytes read (0 at EOF). The parser uses this with
+    LineIterator/BufferedReader for efficient line-based parsing.
+    
+    Example:
+        struct MyReader(Reader):
+            fn read_to_buffer(mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int) raises -> UInt64:
+                # ... copy up to amt bytes from your source into buf starting at pos
+                return bytes_read
+            fn __moveinit__(out self, deinit other: Self): ...
+    """
     fn read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
+        """Read up to amt bytes into buf at offset pos. Returns bytes read (0 at EOF)."""
         ...
 
     fn __moveinit__(out self, deinit other: Self):
@@ -61,19 +76,43 @@ trait Reader(ImplicitlyDestructible):
 
 
 struct FileReader(Movable, Reader):
+    """Reader that reads from a file on disk. Use with FastqParser for .fastq files.
+
+    Example:
+        ```mojo
+        from blazeseq.readers import FileReader
+        from blazeseq.parser import FastqParser
+        from pathlib import Path
+        var r = FileReader(Path("data.fastq"))
+        var parser = FastqParser[FileReader](r^, "generic")
+        for record in parser.records():
+            _ = record.get_header_string()
+        ```
+    """
+
     var handle: FileHandle
 
     fn __init__(out self, path: Path) raises:
+        """Open a file for reading.
+        
+        Args:
+            path: Path to the file (e.g. Path("data.fastq")).
+        
+        Raises:
+            Error: If the file cannot be opened.
+        """
         self.handle = open(path, "r")
 
     @always_inline
     fn read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
+        """Read up to amt bytes (or all if amt < 0) as a list of bytes."""
         return self.handle.read_bytes(amt)
 
     @always_inline
     fn read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
+        """Read up to amt bytes from the file into buf at offset pos. Returns bytes read."""
         if pos > len(buf):
             raise Error("Position is outside the buffer")
         var s = Span[Byte, MutExternalOrigin](
@@ -92,34 +131,27 @@ struct FileReader(Movable, Reader):
 
 struct MemoryReader(Movable, Reader):
     """Reader that reads from an in-memory buffer.
-
-    Allows BufferedReader to read from memory instead of disk I/O,
-    enabling disk I/O independent performance testing.
+    
+    Use for testing, benchmarking (without disk I/O), or when FASTQ data is
+    already in memory. Implements the same Reader trait as FileReader and GZFile.
     """
 
     var data: List[Byte]
     var position: Int
 
     fn __init__(out self, var data: List[Byte]):
-        """Initialize with a List[Byte] buffer.
-
-        Args:
-            data: The source data buffer (owned).
-        """
+        """Initialize with an owned List[Byte] buffer. Takes ownership of data."""
         self.data = data^
         self.position = 0
 
     fn __init__(out self, data: Span[Byte]):
-        """Initialize with a Span[Byte] buffer (copies into owned list).
-
-        Args:
-            data: The source data buffer (will be copied).
-        """
+        """Initialize with a Span[Byte]; bytes are copied into an internal list."""
         self.data = List[Byte](capacity=len(data))
         self.data.extend(data)
         self.position = 0
 
     fn __init__(out self, var content: String) raises:
+        """Initialize from a string; copies its bytes into an internal buffer."""
         self.data = List(content.as_bytes())
         self.position = 0
 
@@ -170,10 +202,7 @@ struct MemoryReader(Movable, Reader):
         return UInt64(bytes_to_read)
 
     fn reset(mut self):
-        """Reset the reader position to the beginning of the buffer.
-
-        Allows re-reading the same buffer multiple times, useful for benchmarking.
-        """
+        """Reset the read position to the start. Use to re-read the same buffer (e.g. for benchmarking)."""
         self.position = 0
 
     fn __moveinit__(out self, deinit other: Self):
@@ -236,7 +265,22 @@ struct ZLib(Movable):
 
 
 struct GZFile(Movable, Reader):
-    """Helper class for gzip file operations."""
+    """Reader for gzip-compressed files (.gz). Implements the Reader trait like FileReader.
+    
+    Use for .fastq.gz files with FastqParser. Some builds auto-detect uncompressed
+    files and pass through; see module docstring. Same interface as FileReader
+    for drop-in use with parsers.
+
+    Example:
+        ```mojo
+        from blazeseq.readers import GZFile
+        from blazeseq.parser import FastqParser
+        var r = GZFile("data.fastq.gz", "rb")
+        var parser = FastqParser[GZFile](r^, "illumina_1.8")
+        for record in parser.records():
+            _ = record.get_header_string()
+        ```
+    """
 
     var handle: c_void_ptr
     var lib: ZLib
@@ -244,7 +288,15 @@ struct GZFile(Movable, Reader):
     var mode: String
 
     fn __init__(out self, filename: String, mode: String) raises:
-        """Open a gzip file."""
+        """Open a gzip file (e.g. mode "rb" for read binary).
+        
+        Args:
+            filename: Path to the .gz file.
+            mode: Open mode (e.g. "rb").
+        
+        Raises:
+            Error: If the file cannot be opened.
+        """
         self.lib = ZLib()
         # Note: must keep filename and mode because gzopen takes a ref to them and they need to live as long as the file is open.
         self.filename = filename
@@ -267,6 +319,7 @@ struct GZFile(Movable, Reader):
     fn read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
+        """Read decompressed bytes into buf at offset pos. Returns bytes read (0 at EOF)."""
         if pos > len(buf):
             raise Error("Position is outside the buffer")
         var s = Span[Byte, MutExternalOrigin](

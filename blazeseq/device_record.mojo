@@ -32,9 +32,24 @@ trait GpuMovableBatch:
 
 struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     """
-    Structure-of-Arrays batch format: host-side container that stacks multiple FastqRecords
-    into packed quality (and sequence) byte buffers and an offsets index, then uploads to device.
-    Optimized for GPU operations with coalesced memory access.
+    Structure-of-Arrays (SoA) batch format for multiple FASTQ records.
+    
+    Stores headers, sequences, and qualities in packed byte buffers with
+    offset arrays, enabling coalesced GPU access after upload. Use with
+    parser.batched() or next_batch(), or build from a list of FastqRecords.
+    Implements GpuMovableBatch for upload_to_device().
+    
+    Use cases: GPU kernels, batch processing.
+    
+    Example:
+        ```mojo
+        from blazeseq.parser import FastqParser
+        from blazeseq.readers import FileReader
+        from pathlib import Path
+        var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
+        for batch in parser.batched():
+            _ = batch.num_records()
+        ```
     """
 
     var _header_bytes: List[UInt8]
@@ -50,6 +65,13 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         avg_record_size: Int = 100,
         quality_offset: UInt8 = 33,
     ):
+        """Create an empty batch with preallocated capacity.
+        
+        Args:
+            batch_size: Expected number of records (capacity for offset arrays).
+            avg_record_size: Estimated bytes per record for buffer preallocation.
+            quality_offset: Phred offset (33 or 64) for the batch.
+        """
         self._header_bytes = List[UInt8](capacity=avg_record_size * batch_size)
         self._header_ends = List[Int64](capacity=batch_size)
         self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
@@ -86,10 +108,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             self.add(records[i])
 
     fn add(mut self, record: FastqRecord):
-        """
-        Append one FastqRecord: copy its QuStr and SeqStr bytes into the
-        packed buffers and record the cumulative quality length for offsets.
-        """
+        """Append one FastqRecord to the batch (copies into packed buffers)."""
 
         current_loaded = self.num_records()
         self._quality_bytes.extend(record.QuStr.as_span())
@@ -110,11 +129,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             )
 
     fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
-        """
-        Append one RefRecord: copy its QuStr and SeqStr bytes into the
-        packed buffers and record the cumulative quality length for offsets.
-        Zero-copy path that avoids intermediate FastqRecord allocation.
-        """
+        """Append one RefRecord to the batch (copies into packed buffers; no FastqRecord allocation)."""
 
         current_loaded = self.num_records()
         self._quality_bytes.extend(record.QuStr)
@@ -140,15 +155,19 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         return upload_batch_to_device(self, ctx)
 
     fn num_records(self) -> Int:
+        """Return the number of records in the batch."""
         return len(self._qual_ends)
 
     fn seq_len(self) -> Int:
+        """Return total length of all sequence bytes in the batch."""
         return len(self._sequence_bytes)
 
     fn quality_offset(self) -> UInt8:
+        """Return the Phred quality offset (33 or 64) for this batch."""
         return self._quality_offset
 
     fn __len__(self) -> Int:
+        """Return the number of records (same as num_records())."""
         return self.num_records()
 
     fn get_record(self, index: Int) raises -> FastqRecord:
@@ -267,13 +286,20 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             out.append(self.get_record(i))
         return out^
 
+    fn write_to(self, mut w: Some[Writer]) raises:
+        """Write each record in FASTQ format (4 lines per record) to the given writer."""
+        for i in range(self.num_records()):
+            self.get_ref(i).write_to(w)
+
 
 @fieldwise_init
 struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
     """
-    Device-side buffers and metadata after upload. Holds device buffers and
-    num_records / quality_offset for launching the prefix-sum kernel.
-    Header, sequence, and quality bytes are always present (full payload).
+    Device-side representation of a FastqBatch after upload_batch_to_device().
+    
+    Holds device buffers for header, sequence, quality, and offset arrays, plus
+    num_records, seq_len, quality_offset. Use for GPU kernels (e.g. quality
+    prefix-sum). copy_to_host() brings data back to a FastqBatch.
     """
 
     var num_records: Int
@@ -287,7 +313,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
     var header_ends: DeviceBuffer[DType.int64]
 
     fn copy_to_host(self, ctx: DeviceContext) raises -> FastqBatch:
-        """Copy device buffers to host and return a FastqBatch."""
+        """Copy device buffers back to host and return a FastqBatch."""
 
         var staged = download_device_batch_to_staged(self, ctx)
         var batch = FastqBatch(quality_offset=self.quality_offset, batch_size=0)
@@ -310,7 +336,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
         return batch^
 
     fn to_records(self, ctx: DeviceContext) raises -> List[FastqRecord]:
-        """Copy device buffers to host and return a list of FastqRecords."""
+        """Copy device batch to host and convert to a list of FastqRecords."""
         return self.copy_to_host(ctx).to_records()
 
 
@@ -480,13 +506,16 @@ fn upload_batch_to_device(
     batch: FastqBatch,
     ctx: DeviceContext,
 ) raises -> DeviceFastqBatch:
-    """
-    Allocates device buffers and moves batch data to the GPU by staging through host memory.
-    Header, sequence, and quality bytes are always uploaded together.
-
-    This implementation splits the work into two distinct phases:
-    1. Staging: CPU-driven memcpy from standard List memory to DMA-accessible HostBuffers.
-    2. Dispatching: Enqueueing asynchronous DMA transfers from Host to Device.
+    """Upload a FastqBatch to the GPU. Allocates device buffers and copies header, sequence, and quality.
+    
+    Args:
+        batch: Host-side SoA batch from parser.batched() or next_batch().
+        ctx: GPU device context for allocation and transfer.
+    
+    Returns:
+        DeviceFastqBatch: Device-side buffers and metadata for kernels.
+    
+    Implementation: Stages through pinned host memory, then enqueues async DMA to device.
     """
 
     var staged = stage_batch_to_host(batch, ctx)
