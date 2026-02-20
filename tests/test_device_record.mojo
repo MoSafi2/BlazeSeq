@@ -128,6 +128,7 @@ fn test_stage_batch_to_host_always_full() raises:
     if not has_accelerator():
         print("No GPU available")
         return
+    
     var batch = FastqBatch()
     batch.add(FastqRecord("@a", "AC", "+", "!!"))
     batch.add(FastqRecord("@b", "GT", "+", "!!"))

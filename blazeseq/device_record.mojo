@@ -109,7 +109,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
                 Int64(len(record.QuStr)) + self._qual_ends[current_loaded - 1]
             )
 
-    fn add[origin: Origin](mut self, record: RefRecord[origin]):
+    fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
         """
         Append one RefRecord: copy its QuStr and SeqStr bytes into the
         packed buffers and record the cumulative quality length for offsets.
