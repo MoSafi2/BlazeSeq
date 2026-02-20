@@ -38,3 +38,6 @@ rbuild = "pixi build"
 rtest = { cmd = "sh -c 'PKG=$(ls ./blazeseq*.conda 2>/dev/null || find .pixi/build -name \"blazeseq*.conda\" -type f 2>/dev/null | head -1); test -n \"$PKG\" && rattler-build test -c conda-forge -c https://conda.modular.com/max --package-file \"$PKG\"'", depends-on = [
     "rbuild",
 ] }
+
+[pypi-dependencies]
+pymodo = ">=0.11.12, <0.12"
