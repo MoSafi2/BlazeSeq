@@ -175,13 +175,19 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
         """
         Extract a batch of records in Structure-of-Arrays format for GPU operations.
+        Stops at EOF and returns a partial batch instead of raising.
         """
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
         while len(batch) < actual_max and self.line_iter.has_more():
-            var ref_record = self._parse_record_ref()
-            self.validator.validate(ref_record)
-            batch.add(ref_record)
+            try:
+                var ref_record = self._parse_record_ref()
+                self.validator.validate(ref_record)
+                batch.add(ref_record)
+            except e:
+                if String(e) == EOF:
+                    break
+                raise
         return batch^
 
     fn ref_records(
