@@ -2,6 +2,7 @@
 
 from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
+from os import remove
 from blazeseq.readers import FileReader, MemoryReader
 from memory import alloc, Span
 from testing import TestSuite
@@ -594,6 +595,35 @@ fn test_file_reader_read_to_buffer_amt_too_large_with_pos() raises:
 
 
 # ============================================================================
+# Cleanup: remove files produced by tests
+# ============================================================================
+
+
+fn cleanup_reader_test_files() raises:
+    """Remove all files created by create_test_file (ignore missing files)."""
+    var names = List[String]()
+    names.append("test_file_reader_init.txt")
+    names.append("test_file_reader_read_bytes.txt")
+    names.append("test_file_reader_read_bytes_partial.txt")
+    names.append("test_file_reader_read_bytes_empty.txt")
+    names.append("test_file_reader_read_bytes_large.txt")
+    names.append("test_file_reader_read_to_buffer_basic.txt")
+    names.append("test_file_reader_read_to_buffer_partial.txt")
+    names.append("test_file_reader_read_to_buffer_with_pos.txt")
+    names.append("test_file_reader_read_to_buffer_multiple.txt")
+    names.append("test_file_reader_read_to_buffer_large.txt")
+    names.append("test_file_reader_read_to_buffer_invalid_pos.txt")
+    names.append("test_file_reader_read_to_buffer_negative_amt.txt")
+    names.append("test_file_reader_read_to_buffer_amt_too_large.txt")
+    names.append("test_file_reader_read_to_buffer_amt_too_large_with_pos.txt")
+    for name in names:
+        try:
+            remove(Path("tests/test_data") / Path(name))
+        except:
+            pass
+
+
+# ============================================================================
 # Test Suite
 # ============================================================================
 
@@ -602,4 +632,5 @@ fn main() raises:
     """Run all tests."""
     print("Running FileReader and MemoryReader tests...\n")
     TestSuite.discover_tests[__functions_in_module()]().run()
+    cleanup_reader_test_files()
     print("\n✓ All tests passed!")

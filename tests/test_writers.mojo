@@ -1,5 +1,6 @@
 from testing import assert_equal, assert_raises, assert_true
 from pathlib import Path
+from os import remove
 from blazeseq.writers import Writer, FileWriter, MemoryWriter, GZWriter
 from blazeseq.iostream import (
     BufferedWriter, BufferedReader,
@@ -350,6 +351,24 @@ fn test_writer_error_handling() raises:
     print("✓ test_writer_error_handling passed")
 
 
+fn cleanup_writer_test_files() raises:
+    """Remove all files created by writer tests (ignore missing files)."""
+    var base = Path("tests/test_data")
+    var names = List[String]()
+    names.append("test_file_writer.txt")
+    names.append("test_file_writer_partial.txt")
+    names.append("test_file_writer_offset.txt")
+    names.append("test_gz_writer.gz")
+    names.append("test_buffered_file.txt")
+    names.append("test_convenience.txt")
+    names.append("test_convenience.gz")
+    for name in names:
+        try:
+            remove(base / Path(name))
+        except:
+            pass
+
+
 fn main() raises:
     """Run all writer tests."""
     print("Running Writer trait and backend tests...")
@@ -368,5 +387,6 @@ fn main() raises:
     test_buffered_writer_auto_flush()
     test_writer_error_handling()
     
+    cleanup_writer_test_files()
     print("=" * 60)
     print("All writer tests passed! ✓")
