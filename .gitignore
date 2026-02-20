@@ -5,13 +5,12 @@ llm*
 test_file.mojo
 kgen.trace.json.time-events.txt
 kgen.trace.json.time-trace
-scatch_file.mojo
 data/
 !.gitignore
-.* 
-
+.VSCodeCounter
+.vscode
 # Modo-generated API docs (plain markdown)
-docs/site/src/content/docs/api/
+docs/site/src/content/docs/api/*
 
 # Astro Starlight docs site
 docs/site/node_modules/
