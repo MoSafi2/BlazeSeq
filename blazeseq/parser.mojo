@@ -166,7 +166,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-        """Return the next record as a zero-copy RefRecord."""
+        """
+        Return the next record as a zero-copy RefRecord.
+        Unsafe parsing mode, not thread-safe, can't be added to collections as List.
+        should be promptly consumer by caller.
+        """
         var ref_record = self._parse_record_ref()
         self.validator.validate(ref_record)
         return ref_record^
