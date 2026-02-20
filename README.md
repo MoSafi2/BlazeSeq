@@ -1,6 +1,6 @@
 # BlazeSeq
 
-[![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
+[![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml) 
 
 BlazeSeq is a performant FASTQ parser for [Mojo](https://docs.modular.com/mojo/) with configurable validation and optional GPU-oriented batch types. It can be used as a starting point to support quality control, k-mer generation, alignment, and similar workflows. The unified `FastqParser` supports optional ASCII and quality-schema validation via `ParserConfig` and exposes three parsing modes: `next_ref()` (zero-copy), `next_record()` (owned), and `next_batch()` (SoA); iteration via `ref_records()`, `records()`, or `batched()`. Device upload is available for GPU pipelines (e.g. quality prefix-sum).
 
