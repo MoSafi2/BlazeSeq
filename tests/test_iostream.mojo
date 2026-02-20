@@ -1,7 +1,7 @@
 from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from blazeseq.iostream import BufferedReader
+from blazeseq.iostream import BufferedReader, BufferedWriter
 from blazeseq.readers import FileReader, MemoryReader
 from memory import alloc, Span
 from collections.string import StringSlice
@@ -1063,6 +1063,310 @@ fn test_memory_reader_init_span() raises:
     )
 
     print("✓ test_memory_reader_init_span passed")
+
+
+# ============================================================================
+# BufferedWriter Tests
+# ============================================================================
+
+
+fn test_buffered_writer_init() raises:
+    """Test BufferedWriter initialization with default capacity."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_init.txt")
+    var writer = BufferedWriter(test_path)
+    
+    assert_equal(
+        writer.capacity(), DEFAULT_CAPACITY, "Should use default capacity"
+    )
+    assert_equal(
+        writer.available_space(), DEFAULT_CAPACITY, "Should have full capacity available"
+    )
+    assert_equal(
+        writer.bytes_written(), 0, "Should start with 0 bytes written"
+    )
+    
+    writer.flush()
+    print("✓ test_buffered_writer_init passed")
+
+
+fn test_buffered_writer_init_custom_capacity() raises:
+    """Test BufferedWriter initialization with custom capacity."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_init_custom.txt")
+    var custom_capacity = 1024
+    var writer = BufferedWriter(test_path, capacity=custom_capacity)
+    
+    assert_equal(
+        writer.capacity(), custom_capacity, "Should use custom capacity"
+    )
+    assert_equal(
+        writer.available_space(), custom_capacity, "Should have full capacity available"
+    )
+    
+    writer.flush()
+    print("✓ test_buffered_writer_init_custom_capacity passed")
+
+
+fn test_buffered_writer_init_invalid_capacity() raises:
+    """Test BufferedWriter initialization with invalid capacity raises error."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_init_invalid.txt")
+    
+    with assert_raises(contains="capacity"):
+        _ = BufferedWriter(test_path, capacity=0)
+    
+    with assert_raises(contains="capacity"):
+        _ = BufferedWriter(test_path, capacity=-1)
+    
+    print("✓ test_buffered_writer_init_invalid_capacity passed")
+
+
+fn test_buffered_writer_write_small() raises:
+    """Test writing bytes that fit in buffer."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_write_small.txt")
+    var writer = BufferedWriter(test_path)
+    
+    var data = List[Byte]()
+    data.append(ord("H"))
+    data.append(ord("e"))
+    data.append(ord("l"))
+    data.append(ord("l"))
+    data.append(ord("o"))
+    
+    writer.write_bytes(data)
+    
+    assert_equal(
+        writer.available_space(), DEFAULT_CAPACITY - 5, "Should have 5 bytes less space"
+    )
+    assert_equal(
+        writer.bytes_written(), 0, "Should not have written to file yet"
+    )
+    
+    writer.flush()
+    
+    assert_equal(
+        writer.bytes_written(), 5, "Should have written 5 bytes after flush"
+    )
+    assert_equal(
+        writer.available_space(), DEFAULT_CAPACITY, "Should have full capacity after flush"
+    )
+    
+    # Verify file contents
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 5, "File should contain 5 bytes")
+    assert_equal(bytes_read[0], ord("H"), "First byte should be 'H'")
+    assert_equal(bytes_read[4], ord("o"), "Last byte should be 'o'")
+    
+    print("✓ test_buffered_writer_write_small passed")
+
+
+fn test_buffered_writer_write_large() raises:
+    """Test writing bytes that exceed buffer capacity (triggers automatic flush)."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_write_large.txt")
+    var buffer_size = 64
+    var writer = BufferedWriter(test_path, capacity=buffer_size)
+    
+    # Write more than buffer capacity
+    var data = List[Byte]()
+    for i in range(100):
+        data.append(Byte(i % 256))
+    
+    writer.write_bytes(data)
+    
+    # Should have automatically flushed
+    assert_true(
+        writer.bytes_written() >= buffer_size, "Should have flushed at least buffer_size bytes"
+    )
+    assert_true(
+        writer.available_space() > 0, "Should have some space available after flush"
+    )
+    
+    writer.flush()
+    
+    assert_equal(
+        writer.bytes_written(), 100, "Should have written all 100 bytes"
+    )
+    
+    # Verify file contents
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 100, "File should contain 100 bytes")
+    for i in range(100):
+        assert_equal(bytes_read[i], Byte(i % 256), "Byte at index " + String(i) + " should match")
+    
+    print("✓ test_buffered_writer_write_large passed")
+
+
+fn test_buffered_writer_write_span() raises:
+    """Test writing bytes from a Span."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_write_span.txt")
+    var writer = BufferedWriter(test_path)
+    
+    var data_bytes = List[Byte]()
+    data_bytes.append(ord("T"))
+    data_bytes.append(ord("e"))
+    data_bytes.append(ord("s"))
+    data_bytes.append(ord("t"))
+    
+    var span = Span[Byte](ptr=data_bytes.unsafe_ptr(), length=len(data_bytes))
+    writer.write_bytes(span)
+    writer.flush()
+    
+    assert_equal(writer.bytes_written(), 4, "Should have written 4 bytes")
+    
+    # Verify file contents
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 4, "File should contain 4 bytes")
+    assert_equal(String(bytes_read), "Test", "Content should match")
+    
+    print("✓ test_buffered_writer_write_span passed")
+
+
+fn test_buffered_writer_explicit_flush() raises:
+    """Test explicit flush functionality."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_explicit_flush.txt")
+    var writer = BufferedWriter(test_path)
+    
+    var data1 = List[Byte]()
+    data1.append(ord("A"))
+    writer.write_bytes(data1)
+    
+    assert_equal(writer.bytes_written(), 0, "Should not have written before flush")
+    
+    writer.flush()
+    
+    assert_equal(writer.bytes_written(), 1, "Should have written 1 byte after flush")
+    
+    var data2 = List[Byte]()
+    data2.append(ord("B"))
+    writer.write_bytes(data2)
+    writer.flush()
+    
+    assert_equal(writer.bytes_written(), 2, "Should have written 2 bytes total")
+    
+    # Verify file contents
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 2, "File should contain 2 bytes")
+    assert_equal(bytes_read[0], ord("A"), "First byte should be 'A'")
+    assert_equal(bytes_read[1], ord("B"), "Second byte should be 'B'")
+    
+    print("✓ test_buffered_writer_explicit_flush passed")
+
+
+fn test_buffered_writer_destructor_flush() raises:
+    """Test that destructor flushes remaining data."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_destructor_flush.txt")
+    
+    var data = List[Byte]()
+    data.append(ord("D"))
+    data.append(ord("e"))
+    data.append(ord("s"))
+    data.append(ord("t"))
+    data.append(ord("r"))
+    data.append(ord("u"))
+    data.append(ord("c"))
+    data.append(ord("t"))
+    
+    # Write without explicit flush, let destructor handle it
+    var writer = BufferedWriter(test_path)
+    writer.write_bytes(data)
+    # Writer goes out of scope here, destructor should flush
+    
+    # Verify file contents were written
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 8, "File should contain 8 bytes")
+    assert_equal(String(bytes_read), "Destruct", "Content should match")
+    
+    print("✓ test_buffered_writer_destructor_flush passed")
+
+
+fn test_buffered_writer_bytes_written_counter() raises:
+    """Test bytes_written counter accuracy."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_bytes_written.txt")
+    var writer = BufferedWriter(test_path, capacity=32)
+    
+    # Write in chunks
+    var chunk1 = List[Byte]()
+    for i in range(10):
+        chunk1.append(Byte(i))
+    writer.write_bytes(chunk1)
+    writer.flush()
+    assert_equal(writer.bytes_written(), 10, "Should have written 10 bytes")
+    
+    var chunk2 = List[Byte]()
+    for i in range(20):
+        chunk2.append(Byte(i + 10))
+    writer.write_bytes(chunk2)
+    writer.flush()
+    assert_equal(writer.bytes_written(), 30, "Should have written 30 bytes total")
+    
+    var chunk3 = List[Byte]()
+    for i in range(5):
+        chunk3.append(Byte(i + 30))
+    writer.write_bytes(chunk3)
+    writer.flush()
+    assert_equal(writer.bytes_written(), 35, "Should have written 35 bytes total")
+    
+    # Verify file contents
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 35, "File should contain 35 bytes")
+    
+    print("✓ test_buffered_writer_bytes_written_counter passed")
+
+
+fn test_buffered_writer_empty_write() raises:
+    """Test writing empty data."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_empty_write.txt")
+    var writer = BufferedWriter(test_path)
+    
+    var empty_data = List[Byte]()
+    writer.write_bytes(empty_data)
+    
+    assert_equal(
+        writer.available_space(), DEFAULT_CAPACITY, "Available space should be unchanged"
+    )
+    assert_equal(writer.bytes_written(), 0, "Should not have written anything")
+    
+    writer.flush()
+    
+    # Verify file is empty
+    var reader = FileReader(test_path)
+    var bytes_read = reader.read_bytes()
+    assert_equal(len(bytes_read), 0, "File should be empty")
+    
+    print("✓ test_buffered_writer_empty_write passed")
+
+
+fn test_buffered_writer_multiple_flushes() raises:
+    """Test multiple flush calls."""
+    var test_path = Path("tests/test_data") / Path("test_buffered_writer_multiple_flushes.txt")
+    var writer = BufferedWriter(test_path)
+    
+    var data = List[Byte]()
+    data.append(ord("F"))
+    writer.write_bytes(data)
+    
+    writer.flush()
+    var bytes_after_first = writer.bytes_written()
+    
+    writer.flush()  # Flush again with no new data
+    assert_equal(
+        writer.bytes_written(), bytes_after_first, "Bytes written should not change"
+    )
+    
+    var data2 = List[Byte]()
+    data2.append(ord("L"))
+    writer.write_bytes(data2)
+    writer.flush()
+    
+    assert_equal(
+        writer.bytes_written(), bytes_after_first + 1, "Should have written one more byte"
+    )
+    
+    print("✓ test_buffered_writer_multiple_flushes passed")
 
 
 fn main() raises:

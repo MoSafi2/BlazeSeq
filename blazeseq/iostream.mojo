@@ -334,6 +334,130 @@ struct BufferedReader[R: Reader](
     #         self._ptr.free()
 
 
+struct BufferedWriter(ImplicitlyDestructible, Movable):
+    """Buffered writer for efficient byte writing to files.
+    
+    Similar to BufferedReader but for writing. Maintains an internal buffer
+    and flushes automatically when full or on explicit flush() call.
+    """
+    
+    var file_handle: FileHandle
+    var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
+    var _len: Int  # Buffer capacity
+    var _pos: Int  # Current write position in buffer
+    var _bytes_written: Int  # Total bytes written to file
+    
+    fn __init__(
+        out self,
+        path: Path,
+        capacity: Int = DEFAULT_CAPACITY
+    ) raises:
+        """Initialize BufferedWriter with a file path.
+        
+        Args:
+            path: Path to the output file.
+            capacity: Size of the write buffer in bytes.
+        
+        Raises:
+            Error: If the file cannot be opened for writing.
+        """
+        if capacity <= 0:
+            raise Error(
+                "Can't have BufferedWriter with the following capacity: ",
+                capacity,
+                " Bytes",
+            )
+        self.file_handle = open(path, "w")
+        self._ptr = alloc[Byte](capacity)
+        self._len = capacity
+        self._pos = 0
+        self._bytes_written = 0
+    
+    @always_inline
+    fn capacity(self) -> Int:
+        """Return the buffer capacity."""
+        return self._len
+    
+    @always_inline
+    fn available_space(self) -> Int:
+        """Return available space in buffer."""
+        return self._len - self._pos
+    
+    @always_inline
+    fn bytes_written(self) -> Int:
+        """Return total bytes written to file."""
+        return self._bytes_written
+    
+    fn write_bytes(mut self, data: Span[Byte]) raises:
+        """Write bytes from a Span to the buffer, flushing if needed.
+        
+        Args:
+            data: Span of bytes to write.
+        
+        Raises:
+            Error: If writing fails.
+        """
+        var remaining = len(data)
+        var offset = 0
+        
+        while remaining > 0:
+            var space = self.available_space()
+            if space == 0:
+                self._flush_buffer()
+                space = self.available_space()
+            
+            var to_write = min(remaining, space)
+            memcpy(
+                dest=self._ptr + self._pos,
+                src=data.unsafe_ptr() + offset,
+                count=to_write
+            )
+            self._pos += to_write
+            offset += to_write
+            remaining -= to_write
+    
+    fn write_bytes(mut self, data: List[Byte]) raises:
+        """Write bytes from a List to the buffer, flushing if needed.
+        
+        Args:
+            data: List of bytes to write.
+        
+        Raises:
+            Error: If writing fails.
+        """
+        if len(data) == 0:
+            return
+        var span = Span[Byte](ptr=data.unsafe_ptr(), length=len(data))
+        self.write_bytes(span)
+    
+    fn flush(mut self) raises:
+        """Flush the buffer to disk.
+        
+        Ensures all buffered data is written to the file.
+        """
+        self._flush_buffer()
+    
+    fn _flush_buffer(mut self) raises:
+        """Internal method to flush buffer to file."""
+        if self._pos > 0:
+            var span = Span[Byte, MutExternalOrigin](
+                ptr=self._ptr, length=self._pos
+            )
+            self.file_handle.write_bytes(span)
+            self._bytes_written += self._pos
+            self._pos = 0
+    
+    fn __del__(deinit self):
+        """Destructor: flush buffer and close file."""
+        try:
+            self._flush_buffer()
+            self.file_handle.close()
+        except:
+            pass
+        if self._ptr:
+            self._ptr.free()
+
+
 @always_inline
 fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     """
