@@ -768,7 +768,7 @@ fn test_next_line_position_after_boundary_cross() raises:
 
 
 fn test_next_complete_line_returns_line_when_newline_in_buffer() raises:
-    """next_complete_line returns the line and consumes when newline is in buffer."""
+    """Next_complete_line returns the line and consumes when newline is in buffer."""
     var content = "Hello\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
@@ -785,7 +785,7 @@ fn test_next_complete_line_returns_line_when_newline_in_buffer() raises:
 
 
 fn test_next_complete_line_raises_incomplete_when_no_newline() raises:
-    """next_complete_line raises INCOMPLETE_LINE when no newline in buffer, does not consume."""
+    """Next_complete_line raises INCOMPLETE_LINE when no newline in buffer, does not consume."""
     var content = "incomplete"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
@@ -805,7 +805,7 @@ fn test_next_complete_line_raises_incomplete_when_no_newline() raises:
 
 
 fn test_next_complete_line_raises_eof_when_empty_buffer_at_eof() raises:
-    """next_complete_line raises EOF when buffer is empty and at EOF."""
+    """Next_complete_line raises EOF when buffer is empty and at EOF."""
     var content = ""
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)

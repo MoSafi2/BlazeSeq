@@ -22,7 +22,18 @@ struct LineIteratorError(
         return self.value == other.value
 
     fn write_to(self, mut writer: Some[Writer]):
-        writer.write(String("LineIteratorError: ") + String(self.value))
+        var msg: String
+        if self.value == 0:
+            msg = "LineIteratorError: EOF"
+        elif self.value == 1:
+            msg = "LineIteratorError: INCOMPLETE_LINE"
+        elif self.value == 2:
+            msg = "LineIteratorError: BUFFER_TOO_SMALL"
+        elif self.value == 3:
+            msg = "LineIteratorError: OTHER"
+        else:
+            msg = "LineIteratorError: " + String(self.value)
+        writer.write(msg)
 
 
 @register_passable("trivial")
@@ -444,16 +455,25 @@ struct LineIterator[R: Reader](Iterable, Movable):
     ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
         Return the next line only if a complete line (ending with newline) is in
-        the current buffer. Does not refill or compact. If no newline is found,
-        raise Error("INCOMPLETE_LINE") and do not consume; caller can fall back
-        to next_line() to refill. Invalidated by next next_line/next_complete_line
-        or any buffer mutation.
+        the current buffer. Does not refill or compact (except for initial empty buffer).
+        If no newline is found, raise Error("INCOMPLETE_LINE") and do not consume; 
+        caller can fall back to next_line() to refill. Invalidated by next 
+        next_line/next_complete_line or any buffer mutation.
         """
         if self.buffer.available() == 0:
             if self.buffer.is_eof():
                 raise LineIteratorError.EOF
-            else:
-                raise LineIteratorError.INCOMPLETE_LINE
+            # Allow one initial fill if buffer is empty but not EOF
+            # This handles the case where buffer wasn't filled during initialization
+            try:
+                _ = self.buffer._fill_buffer()
+            except Error:
+                raise LineIteratorError.OTHER
+            if self.buffer.available() == 0:
+                if self.buffer.is_eof():
+                    raise LineIteratorError.EOF
+                else:
+                    raise LineIteratorError.INCOMPLETE_LINE
 
         var view: Span[Byte, MutExternalOrigin]
         try:
