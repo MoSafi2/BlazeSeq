@@ -354,27 +354,21 @@ struct Validator(Copyable):
     fn _get_snippet(self, record: FastqRecord) -> String:
         """Extract snippet from record for error messages."""
         var snippet = String(capacity=100)
-        try:
-            var header_str = record.get_header_string()
-            if len(header_str) > 0:
-                snippet += String(header_str)
-                if len(snippet) > 100:
-                    snippet = snippet[:97] + "..."
-        except:
-            snippet = "<unable to extract snippet>"
+        var header_str = record.get_header_string()
+        if len(header_str) > 0:
+            snippet += String(header_str)
+            if len(snippet) > 100:
+                snippet = snippet[:97] + "..."
         return snippet
 
     fn _get_snippet_ref(self, record: RefRecord) -> String:
         """Extract snippet from RefRecord for error messages."""
         var snippet = String(capacity=100)
-        try:
-            var header_str = StringSlice(unsafe_from_utf8=record.SeqHeader)
-            if len(header_str) > 0:
-                snippet += String(header_str)
-                if len(snippet) > 100:
-                    snippet = snippet[:97] + "..."
-        except:
-            snippet = "<unable to extract snippet>"
+        var header_str = StringSlice(unsafe_from_utf8=record.SeqHeader)
+        if len(header_str) > 0:
+            snippet += String(header_str)
+            if len(snippet) > 100:
+                snippet = snippet[:97] + "..."
         return snippet
 
     @always_inline
@@ -712,3 +706,4 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         writer.write_string(StringSlice(unsafe_from_utf8=self.QuHeader))
         writer.write("\n")
         writer.write_string(StringSlice(unsafe_from_utf8=self.QuStr))
+        writer.write("\n")

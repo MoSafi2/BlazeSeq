@@ -40,16 +40,8 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
 
 fn valid_file_test_fun(file: String, schema: String = "generic") raises:
     var parser = FastqParser[FileReader](FileReader(test_dir + file), schema)
-    try:
-        for record in parser.records():
-            pass
-    except Error:
-        var err_msg = String(Error)
-        if err_msg == EOF:
-            pass
-        else:
-            print(err_msg)
-            raise
+    for record in parser.records():
+        pass
 
 
 fn create_non_ascii_fastq_data() -> List[Byte]:
@@ -304,7 +296,7 @@ fn test_batched_parser_empty_input() raises:
 
 
 fn test_batched_parser_has_more() raises:
-    """has_more() is True before consumption and False after all records consumed.
+    """`has_more()` is True before consumption and False after all records consumed.
     """
     var content = "@r1\nA\n+\n!\n"
     var reader = MemoryReader(content.as_bytes())

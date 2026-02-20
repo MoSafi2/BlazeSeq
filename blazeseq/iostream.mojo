@@ -418,34 +418,7 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
         """Return total bytes written to file."""
         return self._bytes_written
 
-    fn write_bytes(mut self, data: Span[Byte]) raises:
-        """Write bytes from a Span to the buffer, flushing if needed.
-
-        Args:
-            data: Span of bytes to write.
-
-        Raises:
-            Error: If writing fails.
-        """
-        var remaining = len(data)
-        var offset = 0
-
-        while remaining > 0:
-            var space = self.available_space()
-            if space == 0:
-                self._flush_buffer()
-                space = self.available_space()
-
-            var to_write = min(remaining, space)
-            memcpy(
-                dest=self._ptr + self._pos,
-                src=data.unsafe_ptr() + offset,
-                count=to_write,
-            )
-            self._pos += to_write
-            offset += to_write
-            remaining -= to_write
-
+    @always_inline
     fn write_bytes(mut self, data: List[Byte]) raises:
         """Write bytes from a List to the buffer, flushing if needed.
 
@@ -457,28 +430,27 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
         """
         if len(data) == 0:
             return
-        var span = Span[Byte](ptr=data.unsafe_ptr(), length=len(data))
-        self.write_bytes(span)
+        #var span = data[:]
+        self._write_bytes_impl(data[:])
 
+    @always_inline
     fn write_string(mut self, string: StringSlice):
         """Write a StringSlice to this Writer. Required by the builtin Writer trait."""
         try:
             var bytes_span = string.as_bytes()
             var lst = List[Byte](capacity=len(bytes_span))
             lst.extend(bytes_span)
-            self.write_bytes(lst)
+            self._write_bytes_impl(lst[:])
         except:
             pass  # Writer trait does not allow raises; use write_bytes() to handle errors
 
     fn write[*Ts: Writable](mut self, *args: *Ts):
         """Write a sequence of Writable arguments. Required by the builtin Writer trait."""
-        try:
-            @parameter
-            for i in range(args.__len__()):
-                args[i].write_to(self)
-        except:
-            pass  # Writer trait does not allow raises; use write_bytes() to handle errors
+        @parameter
+        for i in range(args.__len__()):
+            args[i].write_to(self)
 
+    @always_inline
     fn flush(mut self) raises:
         """Flush the buffer to disk.
 
@@ -486,6 +458,7 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
         """
         self._flush_buffer()
 
+    @always_inline
     fn _flush_buffer(mut self) raises:
         """Internal method to flush buffer to writer backend."""
         if self._pos > 0:
@@ -495,6 +468,36 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
             var written = self.writer.write_from_buffer(span, self._pos, 0)
             self._bytes_written += Int(written)
             self._pos = 0
+    
+    @always_inline
+    fn _write_bytes_impl(mut self, data: Span[Byte]) raises:
+        """Write bytes from a Span to the buffer, flushing if needed.
+
+        Args:
+            data: Span of bytes to write.
+
+        Raises:
+            Error: If writing fails.
+        """
+
+        var remaining = len(data)
+        var offset = 0
+
+        while remaining > 0:
+            var space = self.available_space()
+            if space == 0:
+                self._flush_buffer()
+                space = self.available_space()
+            var to_write = min(remaining, space)
+            memcpy(
+                dest=self._ptr + self._pos,
+                src=data.unsafe_ptr() + offset,
+                count=to_write,
+            )
+            self._pos += to_write
+            offset += to_write
+            remaining -= to_write
+
 
     fn __del__(deinit self):
         """Destructor: flush buffer."""

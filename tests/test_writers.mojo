@@ -1,4 +1,4 @@
-from testing import assert_equal, assert_raises, assert_true
+from testing import assert_equal, assert_raises, assert_true, TestSuite
 from pathlib import Path
 from os import remove
 from blazeseq.writers import Writer, FileWriter, MemoryWriter, GZWriter
@@ -134,7 +134,7 @@ fn test_memory_writer_multiple_writes() raises:
     var buf1 = alloc[Byte](2)
     memcpy(dest=buf1, src=data1.unsafe_ptr(), count=2)
     var span1 = Span[Byte, MutExternalOrigin](ptr=buf1, length=2)
-    writer.write_from_buffer(span1, 2, 0)
+    _ = writer.write_from_buffer(span1, 2, 0)
     buf1.free()
     
     # Second write
@@ -145,7 +145,7 @@ fn test_memory_writer_multiple_writes() raises:
     var buf2 = alloc[Byte](3)
     memcpy(dest=buf2, src=data2.unsafe_ptr(), count=3)
     var span2 = Span[Byte, MutExternalOrigin](ptr=buf2, length=3)
-    writer.write_from_buffer(span2, 3, 0)
+    _ = writer.write_from_buffer(span2, 3, 0)
     buf2.free()
     
     var result = writer.get_data()
@@ -171,7 +171,7 @@ fn test_memory_writer_clear() raises:
     var buf = alloc[Byte](4)
     memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)
-    writer.write_from_buffer(span, 4, 0)
+    _ = writer.write_from_buffer(span, 4, 0)
     buf.free()
     
     assert_equal(len(writer.get_data()), 4, "Should have 4 bytes before clear")
@@ -207,7 +207,7 @@ fn test_gz_writer_basic() raises:
         if buf_reader.available() > 0:
             var view = buf_reader.view()
             bytes_read.extend(view)
-            buf_reader.consume(len(view))
+            _ = buf_reader.consume(len(view))
         if not buf_reader.is_eof():
             _ = buf_reader._fill_buffer()
     assert_equal(len(bytes_read), 100, "Should read back 100 bytes")
@@ -328,21 +328,21 @@ fn test_writer_error_handling() raises:
     
     # Test negative amount
     try:
-        writer.write_from_buffer(span, -1, 0)
+        _ = writer.write_from_buffer(span, -1, 0)
         assert_true(False, "Should raise error for negative amount")
     except:
         pass  # Expected
     
     # Test position outside buffer
     try:
-        writer.write_from_buffer(span, 1, 10)
+        _ = writer.write_from_buffer(span, 1, 10)
         assert_true(False, "Should raise error for position outside buffer")
     except:
         pass  # Expected
     
     # Test amount larger than available space
     try:
-        writer.write_from_buffer(span, 10, 0)
+        _ = writer.write_from_buffer(span, 10, 0)
         assert_true(False, "Should raise error for amount larger than buffer")
     except:
         pass  # Expected
@@ -369,24 +369,14 @@ fn cleanup_writer_test_files() raises:
             pass
 
 
+
+
 fn main() raises:
     """Run all writer tests."""
     print("Running Writer trait and backend tests...")
     print("=" * 60)
+    TestSuite.discover_tests[__functions_in_module()]().run()
     
-    test_file_writer_basic()
-    test_file_writer_partial_write()
-    test_file_writer_with_offset()
-    test_memory_writer_basic()
-    test_memory_writer_multiple_writes()
-    test_memory_writer_clear()
-    test_gz_writer_basic()
-    test_buffered_writer_with_file_writer()
-    test_buffered_writer_with_memory_writer()
-    test_buffered_writer_convenience_constructors()
-    test_buffered_writer_auto_flush()
-    test_writer_error_handling()
-    
-    cleanup_writer_test_files()
+    # cleanup_writer_test_files()
     print("=" * 60)
     print("All writer tests passed! ✓")

@@ -1242,7 +1242,10 @@ fn test_buffered_writer_write_span() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 4, "File should contain 4 bytes")
-    assert_equal(String(bytes_read), "Test", "Content should match")
+    assert_equal(bytes_read[0], ord("T"), "First byte should be 'T'")
+    assert_equal(bytes_read[1], ord("e"), "Second byte should be 'e'")
+    assert_equal(bytes_read[2], ord("s"), "Third byte should be 's'")
+    assert_equal(bytes_read[3], ord("t"), "Fourth byte should be 't'")
 
     print("✓ test_buffered_writer_write_span passed")
 
@@ -1310,7 +1313,14 @@ fn test_buffered_writer_destructor_flush() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 8, "File should contain 8 bytes")
-    assert_equal(String(bytes_read), "Destruct", "Content should match")
+    assert_equal(bytes_read[0], ord("D"), "Byte 0 should be 'D'")
+    assert_equal(bytes_read[1], ord("e"), "Byte 1 should be 'e'")
+    assert_equal(bytes_read[2], ord("s"), "Byte 2 should be 's'")
+    assert_equal(bytes_read[3], ord("t"), "Byte 3 should be 't'")
+    assert_equal(bytes_read[4], ord("r"), "Byte 4 should be 'r'")
+    assert_equal(bytes_read[5], ord("u"), "Byte 5 should be 'u'")
+    assert_equal(bytes_read[6], ord("c"), "Byte 6 should be 'c'")
+    assert_equal(bytes_read[7], ord("t"), "Byte 7 should be 't'")
 
     print("✓ test_buffered_writer_destructor_flush passed")
 
