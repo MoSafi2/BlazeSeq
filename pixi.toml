@@ -30,10 +30,13 @@ mojo-compiler = "=0.26.1.0"
 
 [dependencies]
 mojo = "=0.26.1.0"
+hugo = ">=0.124,<0.999"
 
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"
 test = { cmd = "sh -c 'find ./tests -name test_*.mojo | xargs -I % pixi run mojo run -I . -D ASSERT=all %'" } # test
+docs = "modo build && hugo -s docs/site/ --gc --minify"
+docs-serve = "modo build && hugo serve -s docs/site/"
 rbuild = "pixi build"
 rtest = { cmd = "sh -c 'PKG=$(ls ./blazeseq*.conda 2>/dev/null || find .pixi/build -name \"blazeseq*.conda\" -type f 2>/dev/null | head -1); test -n \"$PKG\" && rattler-build test -c conda-forge -c https://conda.modular.com/max --package-file \"$PKG\"'", depends-on = [
     "rbuild",

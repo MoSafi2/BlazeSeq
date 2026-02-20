@@ -9,3 +9,7 @@ scatch_file.mojo
 data/
 !.gitignore
 .* 
+
+# Modo-generated docs (content) and Hugo output (public)
+docs/site/content/
+docs/site/public/

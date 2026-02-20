@@ -119,6 +119,19 @@ pixi run test
 
 Tests use the same valid/invalid FASTQ corpus as [BioJava](https://github.com/biojava/biojava/tree/master/biojava-genome%2Fsrc%2Ftest%2Fresources%2Forg%2Fbiojava%2Fnbio%2Fgenome%2Fio%2Ffastq), [Biopython](https://biopython.org/), and [BioPerl](https://bioperl.org/) FASTQ parsers. Multi-line FASTQ is not supported.
 
+## Documentation
+
+API documentation is published at **[https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)** (built from `main` via GitHub Actions).
+
+To build and serve the docs locally:
+
+```bash
+pixi run docs          # generate API docs and build the site
+pixi run docs-serve    # build and serve at http://localhost:1313
+```
+
+The site is generated with [Modo](https://mlange-42.github.io/modo/) from `mojo doc` output and [Hugo](https://gohugo.io/).
+
 ## Performance
 
 Benchmark numbers are approximate and depend on hardware, disk, and Mojo version. They serve as internal targets and regression checks. Scripts and datasets are in the repo; current Mojo is 0.26.x (see `pixi.toml`).

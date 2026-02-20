@@ -22,5 +22,8 @@ jobs:
       with:
         cache: true
 
+    - name: Build docs
+      run: pixi run docs
+
     - name: Run tests
       run: pixi run test
