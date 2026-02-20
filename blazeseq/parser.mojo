@@ -1,6 +1,6 @@
 from blazeseq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
-from blazeseq.iostream import (
+from blazeseq.buffered import (
     BufferedReader,
     Reader,
     LineIterator,

@@ -29,7 +29,7 @@ from blazeseq.device_record import (
     FastqBatch,
     upload_batch_to_device,
 )
-from blazeseq.iostream import (
+from blazeseq.buffered import (
     BufferedReader, Reader, LineIterator, BufferedWriter,
     buffered_writer_for_file, buffered_writer_for_memory, buffered_writer_for_gzip
 )

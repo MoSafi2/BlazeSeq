@@ -2,7 +2,7 @@ from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from os import remove
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from blazeseq.iostream import BufferedReader, BufferedWriter
+from blazeseq.buffered import BufferedReader, BufferedWriter
 from blazeseq.readers import FileReader, MemoryReader
 from blazeseq.writers import FileWriter, GZWriter
 from memory import alloc, Span

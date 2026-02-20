@@ -1,4 +1,4 @@
-from blazeseq.iostream import LineIterator
+from blazeseq.buffered import LineIterator
 from blazeseq.readers import FileReader
 from pathlib import Path
 from sys import argv

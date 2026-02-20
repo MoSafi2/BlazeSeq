@@ -15,7 +15,7 @@ import math
 from sys.info import simd_width_of
 import math
 from blazeseq.CONSTS import *
-from blazeseq.iostream import EOFError, LineIteratorError
+from blazeseq.buffered import EOFError, LineIteratorError
 
 
 comptime NEW_LINE = 10

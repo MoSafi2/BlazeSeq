@@ -2,7 +2,7 @@ from testing import assert_equal, assert_raises, assert_true, TestSuite
 from pathlib import Path
 from os import remove
 from blazeseq.writers import Writer, FileWriter, MemoryWriter, GZWriter
-from blazeseq.iostream import (
+from blazeseq.buffered import (
     BufferedWriter, BufferedReader,
     buffered_writer_for_file,
     buffered_writer_for_memory,

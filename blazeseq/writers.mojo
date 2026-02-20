@@ -46,7 +46,7 @@ struct FileWriter(Movable, WriterBackend):
 
     Example:
         ```mojo
-        from blazeseq.iostream import buffered_writer_for_file
+        from blazeseq.buffered import buffered_writer_for_file
         from pathlib import Path
         from collections.string import String
         var writer = buffered_writer_for_file(Path("out.fastq"))

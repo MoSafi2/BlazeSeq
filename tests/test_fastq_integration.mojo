@@ -15,7 +15,7 @@ from blazeseq.record import FastqRecord
 from blazeseq.parser import FastqParser
 from blazeseq.readers import FileReader, GZFile
 from blazeseq.writers import WriterBackend
-from blazeseq.iostream import (
+from blazeseq.buffered import (
     BufferedWriter,
     buffered_writer_for_file,
     buffered_writer_for_gzip,
