@@ -196,8 +196,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             Int8(self._quality_offset),
         )
 
-    # Probably not safe, check how make the RefRecord safer
-    fn get_ref(self, index: Int) raises -> RefRecord[origin=MutExternalOrigin]:
+    fn get_ref(self, index: Int) raises -> RefRecord[origin_of(self)]:
         """
         Return the record at the given index as a zero-copy RefRecord.
         Bounds-checked; raises if index < 0 or index >= num_records().
@@ -216,29 +215,40 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var range = get_offsets(self._qual_ends, index)
 
         # Create spans directly from list data
-        var header_span = Span[Byte, MutExternalOrigin](
-            ptr=self._header_bytes.unsafe_ptr() + header_range[0],
-            length=header_range[1] - header_range[0]
+        var header_span = Span[Byte, origin_of(self)](
+            ptr=self._header_bytes.unsafe_ptr().unsafe_origin_cast[
+                origin_of(self)
+            ]()
+            + header_range[0],
+            length=header_range[1] - header_range[0],
         )
-        var seq_span = Span[Byte, MutExternalOrigin](
-            ptr=self._sequence_bytes.unsafe_ptr() + range[0],
-            length=range[1] - range[0]
+        var seq_span = Span[Byte, origin_of(self)](
+            ptr=self._sequence_bytes.unsafe_ptr().unsafe_origin_cast[
+                origin_of(self)
+            ]()
+            + range[0],
+            length=range[1] - range[0],
         )
-        var qual_span = Span[Byte, MutExternalOrigin](
-            ptr=self._quality_bytes.unsafe_ptr() + range[0],
-            length=range[1] - range[0]
+        var qual_span = Span[Byte, origin_of(self)](
+            ptr=self._quality_bytes.unsafe_ptr().unsafe_origin_cast[
+                origin_of(self)
+            ]()
+            + range[0],
+            length=range[1] - range[0],
         )
 
         # TODO: check for away to eliminate this
         # QuHeader is always "+" in FASTQ format
         var qu_header_ptr = alloc[UInt8](1)
         qu_header_ptr[0] = UInt8(ord("+"))
-        var qu_header_span = Span[Byte, MutExternalOrigin](
-            ptr=qu_header_ptr.unsafe_mut_cast[Byte](),
-            length=1
+        var qu_header_span = Span[Byte, origin_of(self)](
+            ptr=qu_header_ptr.unsafe_mut_cast[False]().unsafe_origin_cast[
+                origin_of(self)
+            ](),
+            length=1,
         )
 
-        return RefRecord[origin=MutExternalOrigin](
+        return RefRecord[origin = origin_of(self)](
             SeqHeader=header_span,
             SeqStr=seq_span,
             QuHeader=qu_header_span,
@@ -308,6 +318,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
 struct StagedFastqBatch:
     """Intermediary host-side storage in pinned memory. Header, sequence, and quality are always present.
     """
+
     # Metadata
     var num_records: Int
     var total_seq_bytes: Int64
@@ -343,10 +354,12 @@ fn download_device_batch_to_staged(
     )
     var header_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
     ctx.synchronize()
-    
+
     ctx.enqueue_copy(src_buf=device_batch.qual_buffer, dst_buf=quality_data)
     ctx.enqueue_copy(src_buf=device_batch.qual_ends, dst_buf=quality_ends)
-    ctx.enqueue_copy(src_buf=device_batch.sequence_buffer, dst_buf=sequence_data)
+    ctx.enqueue_copy(
+        src_buf=device_batch.sequence_buffer, dst_buf=sequence_data
+    )
     ctx.enqueue_copy(src_buf=device_batch.header_buffer, dst_buf=header_data)
     ctx.enqueue_copy(src_buf=device_batch.header_ends, dst_buf=header_ends)
 
@@ -375,7 +388,9 @@ fn stage_batch_to_host(
 
     var quality_data = ctx.enqueue_create_host_buffer[DType.uint8](total_bytes)
     var sequence_data = ctx.enqueue_create_host_buffer[DType.uint8](total_bytes)
-    var header_data = ctx.enqueue_create_host_buffer[DType.uint8](total_header_bytes)
+    var header_data = ctx.enqueue_create_host_buffer[DType.uint8](
+        total_header_bytes
+    )
 
     var quality_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
     var header_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
@@ -478,4 +493,3 @@ fn upload_batch_to_device(
     return move_staged_to_device(
         staged, ctx, quality_offset=batch.quality_offset()
     )
-

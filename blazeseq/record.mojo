@@ -370,7 +370,7 @@ fn _schema_string_to_offset(quality_format: String) -> Int8:
     return 33
 
 
-struct RefRecord[origin: Origin[mut=True] = MutExternalOrigin](
+struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     ImplicitlyDestructible, Movable, Sized, Writable
 ):
     """Struct that represent reference to a FastqRecord. Provides minimal validation of the record. Not thread safe and can't be stored in collections.
