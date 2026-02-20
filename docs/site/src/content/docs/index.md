@@ -1,24 +1,9 @@
 ---
-title: BlazeSeq
-description: High-performance FASTQ parsing and GPU-accelerated sequencing utilities in Mojo.
-template: splash
-hero:
-  title: Parse FASTQ at several GB/s — in Mojo
-  tagline: Zero-copy and batched APIs. Configurable validation. Optional GPU acceleration. One unified parser interface.
-  actions:
-    - text: API Reference
-      link: /api/
-      icon: right-arrow
-      variant: primary
-    - text: GitHub
-      link: https://github.com/MoSafi2/BlazeSeq
-      icon: external
-      variant: minimal
+title: Introduction
+description: BlazeSeq — high-performance FASTQ parsing and GPU-accelerated sequencing utilities in Mojo.
 ---
 
-**GB/s** disk throughput · **Zero-copy** `next_ref()` API · **GPU** device upload + kernels · **SoA** FastqBatch layout
-
----
+BlazeSeq provides fast FASTQ parsing with configurable validation and optional GPU-oriented batch types.
 
 ## Quick Start
 
@@ -49,16 +34,11 @@ fn main() raises:
         _ = batch.to_device()  # → DeviceFastqBatch
 ```
 
-See the [API Reference](/api/) for full documentation.
-
----
+See the [API Reference](/api/blazeseq/) for full documentation.
 
 ## Features
 
-**Configurable Parsing** — ParserConfig controls buffer size, growth strategy, and validation — ASCII and quality schema. Disable validation entirely for maximum throughput on trusted data.
-
-**Multi-GB/s Throughput** — Targets several GB/s from disk on modern hardware. Three read modes: zero-copy next_ref(), owned next_record(), and bulk next_batch() for every pipeline shape.
-
-**Unified Iteration API** — One parser, three styles: ref_records(), records(), or batched(). SoA FastqBatch and DeviceFastqBatch give you the layout your downstream step needs.
-
-**GPU Acceleration** — Device upload, quality prefix-sum kernel, and device-side types are included. Drop into GPU-accelerated QC and alignment workflows without restructuring your code.
+- **Configurable parsing** — Buffer size, validation (ASCII and quality schema), optional batch size.
+- **High throughput** — Targets several GB/s from disk.
+- **Unified API** — `ref_records()`, `records()`, or `batched()`.
+- **GPU support** — `FastqBatch`, `DeviceFastqBatch`, device upload.

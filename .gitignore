@@ -12,5 +12,8 @@ data/
 
 # Modo-generated API docs (plain markdown)
 docs/site/src/content/docs/api/
-# Astro build output
-docs/site/*
+
+# Astro Starlight docs site
+docs/site/node_modules/
+docs/site/dist/
+docs/site/.astro/
