@@ -11,7 +11,14 @@ from blazeseq.readers import Reader
 from blazeseq.device_record import FastqBatch
 from std.iter import Iterator
 from blazeseq.byte_string import ByteString
-from blazeseq.utils import _parse_schema, SearchState, SearchResults, _parse_record_fast_path, _handle_incomplete_line_with_buffer_growth, _handle_incomplete_line
+from blazeseq.utils import (
+    _parse_schema,
+    SearchState,
+    SearchResults,
+    _parse_record_fast_path,
+    _handle_incomplete_line_with_buffer_growth,
+    _handle_incomplete_line,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +133,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         out self,
         var reader: Self.R,
         default_batch_size: Int,
-        schema: String = "generic"
+        schema: String = "generic",
     ) raises:
         """Initialize FastqParser with schema and batch size."""
         self.line_iter = LineIterator(
@@ -153,7 +160,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn has_more(self) -> Bool:
-        """True if there may be more records (more input in the buffer or stream)."""
+        """True if there may be more records (more input in the buffer or stream).
+        """
         return self.line_iter.has_more()
 
     @always_inline
@@ -193,7 +201,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn ref_records(
         ref self,
     ) -> _FastqParserRefIter[Self.R, Self.config, origin_of(self)]:
-        """Return an iterator over RefRecords: for ref in parser.ref_records()."""
+        """Return an iterator over RefRecords: for ref in parser.ref_records().
+        """
         return _FastqParserRefIter[Self.R, Self.config, origin_of(self)](
             Pointer(to=self)
         )
@@ -209,7 +218,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn batched(
         ref self,
     ) -> _FastqParserBatchIter[Self.R, Self.config, origin_of(self)]:
-        """Return an iterator over FastqBatches: for batch in parser.batched()."""
+        """Return an iterator over FastqBatches: for batch in parser.batched().
+        """
         return _FastqParserBatchIter[Self.R, Self.config, origin_of(self)](
             Pointer(to=self)
         )
@@ -236,10 +246,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 self.line_iter, interim, state, self.quality_schema
             )
         except e:
-            if e == LineIteratorError.EOF:
+            if e.value == LineIteratorError.EOF.value:
                 raise EOFError()
             if e != LineIteratorError.INCOMPLETE_LINE:
                 raise e
+
             @parameter
             if self.config.buffer_growth_enabled:
                 return _handle_incomplete_line_with_buffer_growth(
@@ -366,4 +377,3 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
             return batch^
         except:
             raise StopIteration()
-
