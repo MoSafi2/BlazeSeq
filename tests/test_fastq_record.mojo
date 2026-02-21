@@ -8,7 +8,7 @@ validation with explicit assert_raises where errors are expected.
 from memory import alloc
 from blazeseq import FastqRecord, Validator
 from blazeseq.CONSTS import generic_schema
-from blazeseq.byte_string import ByteString
+from blazeseq.ascii_string import ASCIIString
 from testing import assert_equal, assert_false, assert_true, TestSuite, assert_raises
 
 
@@ -86,8 +86,8 @@ fn test_fastq_record_from_file_data() raises:
 
     assert_false(len(read) == 0)
     assert_equal(len(read.SeqStr), len(read.QuStr))
-    assert_true(read.SeqHeader.startswith(String("@")))
-    assert_true(read.QuHeader.startswith(String("+")))
+    assert_true(read.SeqHeader.as_string_slice().startswith(String("@")))
+    assert_true(read.QuHeader.as_string_slice().startswith(String("+")))
 
     _validator_structure_only().validate(read)
 
@@ -154,18 +154,18 @@ fn test_validator_ascii_valid_passes() raises:
 fn test_validator_ascii_invalid_raises() raises:
     """With check_ascii=True, validate() raises when a field contains non-ASCII."""
     var v = Validator(True, False, materialize[generic_schema]())
-    # Build record with non-ASCII byte in header (String is UTF-8, so use alloc + ByteString).
+    # Build record with non-ASCII byte in header (String is UTF-8, so use alloc + ASCIIString).
     var ptr = alloc[UInt8](2)
     ptr[0] = 64  # '@'
     ptr[1] = 128  # non-ASCII
     var span = Span[UInt8, MutExternalOrigin](ptr=ptr, length=2)
-    var bad_header = ByteString(span)
+    var bad_header = ASCIIString(span)
     ptr.free()
     var record = FastqRecord(
         bad_header^,
-        ByteString("ACGT"),
-        ByteString("+"),
-        ByteString("!!!!"),
+        ASCIIString("ACGT"),
+        ASCIIString("+"),
+        ASCIIString("!!!!"),
         33,
     )
     with assert_raises(contains="Non ASCII letters found"):

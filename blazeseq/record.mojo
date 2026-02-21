@@ -3,7 +3,7 @@ from blazeseq.quality_schema import (
     QualitySchema,
     generic_schema,
 )
-from blazeseq.byte_string import ByteString
+from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import _check_ascii
 from blazeseq.errors import ValidationError
 
@@ -44,10 +44,10 @@ struct FastqRecord(
         ```
     """
 
-    var SeqHeader: ByteString
-    var SeqStr: ByteString
-    var QuHeader: ByteString
-    var QuStr: ByteString
+    var SeqHeader: ASCIIString
+    var SeqStr: ASCIIString
+    var QuHeader: ASCIIString
+    var QuStr: ASCIIString
     var quality_offset: Int8
 
     @always_inline
@@ -60,10 +60,10 @@ struct FastqRecord(
         quality_offset: Int8 = 33,
     ) raises:
         """Build from four string lines and Phred offset (default 33)."""
-        self.SeqHeader = ByteString(seq_header)
-        self.SeqStr = ByteString(seq_str)
-        self.QuHeader = ByteString(qu_header)
-        self.QuStr = ByteString(qu_str)
+        self.SeqHeader = ASCIIString(seq_header)
+        self.SeqStr = ASCIIString(seq_str)
+        self.QuHeader = ASCIIString(qu_header)
+        self.QuStr = ASCIIString(qu_str)
         self.quality_offset = quality_offset
 
     @always_inline
@@ -77,10 +77,10 @@ struct FastqRecord(
     ) raises:
         """Build from four string lines; offset from schema name (e.g. "sanger", "illumina_1.8").
         """
-        self.SeqHeader = ByteString(seq_header)
-        self.SeqStr = ByteString(seq_str)
-        self.QuHeader = ByteString(qu_header)
-        self.QuStr = ByteString(qu_str)
+        self.SeqHeader = ASCIIString(seq_header)
+        self.SeqStr = ASCIIString(seq_str)
+        self.QuHeader = ASCIIString(qu_header)
+        self.QuStr = ASCIIString(qu_str)
         self.quality_offset = _schema_string_to_offset(quality_schema)
 
     @always_inline
@@ -92,10 +92,10 @@ struct FastqRecord(
         QuStr: Span[Byte, MutExternalOrigin],
         quality_offset: Int8 = 33,
     ) raises:
-        self.SeqHeader = ByteString(SeqHeader)
-        self.QuHeader = ByteString(QuHeader)
-        self.SeqStr = ByteString(SeqStr)
-        self.QuStr = ByteString(QuStr)
+        self.SeqHeader = ASCIIString(SeqHeader)
+        self.QuHeader = ASCIIString(QuHeader)
+        self.SeqStr = ASCIIString(SeqStr)
+        self.QuStr = ASCIIString(QuStr)
         self.quality_offset = quality_offset
 
     @always_inline
@@ -107,10 +107,10 @@ struct FastqRecord(
         QuStr: Span[Byte, MutExternalOrigin],
         quality_schema: String,
     ) raises:
-        self.SeqHeader = ByteString(SeqHeader)
-        self.QuHeader = ByteString(QuHeader)
-        self.SeqStr = ByteString(SeqStr)
-        self.QuStr = ByteString(QuStr)
+        self.SeqHeader = ASCIIString(SeqHeader)
+        self.QuHeader = ASCIIString(QuHeader)
+        self.SeqStr = ASCIIString(SeqStr)
+        self.QuStr = ASCIIString(QuStr)
         self.quality_offset = _schema_string_to_offset(quality_schema)
 
     fn __init__(out self, sequence: String) raises:
@@ -120,18 +120,18 @@ struct FastqRecord(
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
-        self.SeqHeader = ByteString(String(seqs[0].strip()))
-        self.SeqStr = ByteString(String(seqs[1].strip()))
-        self.QuHeader = ByteString(String(seqs[2].strip()))
-        self.QuStr = ByteString(String(seqs[3].strip()))
+        self.SeqHeader = ASCIIString(String(seqs[0].strip()))
+        self.SeqStr = ASCIIString(String(seqs[1].strip()))
+        self.QuHeader = ASCIIString(String(seqs[2].strip()))
+        self.QuStr = ASCIIString(String(seqs[3].strip()))
         self.quality_offset = 33
 
     fn __init__(
         out self,
-        var seq_header: ByteString,
-        var seq_str: ByteString,
-        var qu_header: ByteString,
-        var qu_str: ByteString,
+        var seq_header: ASCIIString,
+        var seq_str: ASCIIString,
+        var qu_header: ASCIIString,
+        var qu_str: ASCIIString,
         quality_offset: Int8,
     ):
         self.SeqHeader = seq_header^
@@ -142,10 +142,10 @@ struct FastqRecord(
 
     fn __init__(
         out self,
-        var seq_header: ByteString,
-        var seq_str: ByteString,
-        var qu_header: ByteString,
-        var qu_str: ByteString,
+        var seq_header: ASCIIString,
+        var seq_str: ASCIIString,
+        var qu_header: ASCIIString,
+        var qu_str: ASCIIString,
         quality_schema: QualitySchema,
     ):
         self.SeqHeader = seq_header^

@@ -19,9 +19,9 @@ from os import remove
 
 from blazeseq.record import FastqRecord
 from blazeseq.parser import FastqParser
-from blazeseq.readers import FileReader, GZFile
-from blazeseq.writers import WriterBackend
-from blazeseq.buffered import (
+from blazeseq.io.readers import FileReader, GZFile
+from blazeseq.io.writers import WriterBackend
+from blazeseq.io.buffered import (
     BufferedWriter,
     buffered_writer_for_file,
     buffered_writer_for_gzip,

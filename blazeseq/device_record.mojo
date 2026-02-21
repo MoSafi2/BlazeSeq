@@ -1,7 +1,7 @@
 """Device-compatible Fastq record descriptor and batch for GPU kernels."""
 
 from blazeseq.record import FastqRecord, RefRecord
-from blazeseq.byte_string import ByteString
+from blazeseq.ascii_string import ASCIIString
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
@@ -184,9 +184,9 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             var end = Int(ends[idx])
             return start, end
 
-        fn unsafe_span_to_byte_string[
+        fn unsafe_span_to_ascii_string[
             origin: Origin
-        ](bs: Span[Byte, origin]) -> ByteString:
+        ](bs: Span[Byte, origin]) -> ASCIIString:
             var len_bs = len(bs)
             var new_ptr = (
                 bs.unsafe_ptr()
@@ -194,7 +194,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
                 .unsafe_origin_cast[MutExternalOrigin]()
             )
             var span = Span[Byte, MutExternalOrigin](ptr=new_ptr, length=len_bs)
-            return ByteString(span)
+            return ASCIIString(span)
 
         var header_range = get_offsets(self._header_ends, index)
         var header_bs = self._header_bytes[header_range[0] : header_range[1]]
@@ -203,14 +203,14 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var seq_bs = self._sequence_bytes[range[0] : range[1]]
         var qual_bs = self._quality_bytes[range[0] : range[1]]
 
-        var header = unsafe_span_to_byte_string(header_bs)
-        var seq = unsafe_span_to_byte_string(seq_bs)
-        var qual = unsafe_span_to_byte_string(qual_bs)
+        var header = unsafe_span_to_ascii_string(header_bs)
+        var seq = unsafe_span_to_ascii_string(seq_bs)
+        var qual = unsafe_span_to_ascii_string(qual_bs)
 
         return FastqRecord(
             header^,
             seq^,
-            ByteString("+"),
+            ASCIIString("+"),
             qual^,
             Int8(self._quality_offset),
         )

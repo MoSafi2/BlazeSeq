@@ -6,7 +6,7 @@ from collections.string import StringSlice, String
 from blazeseq.utils import memchr
 
 
-struct ByteString(Copyable, Movable, Sized, Writable, Equatable):
+struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
     # TODO: add address_space
     var size: UInt32
     var cap: UInt32
@@ -70,7 +70,6 @@ struct ByteString(Copyable, Movable, Sized, Writable, Equatable):
                 return False
         return True
 
-
     # TODO: rename offset
     @always_inline
     fn addr[
@@ -117,44 +116,6 @@ struct ByteString(Copyable, Movable, Sized, Writable, Equatable):
         self.ptr.free()
         self.ptr = new_data
 
-    # TODO: rename append
-    @always_inline
-    fn push(mut self, c: UInt8):
-        self.resize(UInt32(len(self) + 1))
-        self.ptr[len(self) - 1] = c
-
-    # TODO: rename extend
-    @always_inline
-    fn append(
-        mut self, ptr: UnsafePointer[UInt8, MutExternalOrigin], length: Int
-    ):
-        if length <= 0:
-            return
-
-        var old_size = len(self)
-        self.resize(UInt32(len(self) + length))
-        memcpy(dest=self.ptr + old_size, src=ptr, count=Int(length))
-
-    fn find_chr[c: UInt8](read self, start: Int, end: Int) -> Int:
-        var p = memchr[do_alignment=False](
-            Span[UInt8, MutExternalOrigin](
-                ptr=self.ptr + start, length=end - start
-            ),
-            c,
-        )
-
-        return end if p == -1 else p + start
-
-    fn find_chr(read self, c: UInt8, start: Int, end: Int) -> Int:
-        var p = memchr[do_alignment=False](
-            Span[UInt8, MutExternalOrigin](
-                ptr=self.ptr + start, length=end - start
-            ),
-            c,
-        )
-
-        return end if p == -1 else p + start
-
     @always_inline
     fn as_span(self) -> Span[UInt8, MutExternalOrigin]:
         return Span[UInt8, MutExternalOrigin](ptr=self.ptr, length=len(self))
@@ -164,21 +125,11 @@ struct ByteString(Copyable, Movable, Sized, Writable, Equatable):
 
     @always_inline
     fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
-        """Return StringSlice view of ByteString bytes."""
+        """Return StringSlice view of ASCIIString bytes."""
         return StringSlice(unsafe_from_utf8=self.as_span())
 
-    fn startswith(self, prefix: String) -> Bool:
-        """Check if ByteString starts with the given prefix string."""
-        if len(self) < len(prefix):
-            return False
-        var prefix_bytes = prefix.as_bytes()
-        for i in range(len(prefix)):
-            if self[i] != prefix_bytes[i]:
-                return False
-        return True
-
     fn __ne__(self, other: Self) -> Bool:
-        """Compare two ByteStrings for inequality."""
+        """Compare two ASCIIStrings for inequality."""
         return not self.__eq__(other)
 
     fn write_to[w: Writer](self, mut writer: w) -> None:

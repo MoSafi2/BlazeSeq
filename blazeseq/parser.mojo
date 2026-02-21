@@ -9,7 +9,7 @@ from blazeseq.io.readers import Reader
 from blazeseq.device_record import FastqBatch
 from blazeseq.errors import ParseError, ValidationError
 from std.iter import Iterator
-from blazeseq.byte_string import ByteString
+from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import (
     _parse_schema,
     SearchState,
@@ -424,10 +424,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn _parse_record_line(mut self) raises -> FastqRecord:
-        var line1 = ByteString(self.line_iter.next_line())
-        var line2 = ByteString(self.line_iter.next_line())
-        var line3 = ByteString(self.line_iter.next_line())
-        var line4 = ByteString(self.line_iter.next_line())
+        var line1 = ASCIIString(self.line_iter.next_line())
+        var line2 = ASCIIString(self.line_iter.next_line())
+        var line3 = ASCIIString(self.line_iter.next_line())
+        var line4 = ASCIIString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line3^, line4^, schema)
 
