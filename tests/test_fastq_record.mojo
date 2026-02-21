@@ -17,9 +17,9 @@ from testing import assert_equal, assert_false, assert_true, TestSuite, assert_r
 # ---------------------------------------------------------------------------
 
 fn get_fastq_records() raises -> List[String]:
-    """Load first 4 lines of data/fastq_test.fastq as one FASTQ record."""
+    """Load first 4 lines of tests/test_data/fastq_parser/example.fastq as one FASTQ record."""
     var records = List[String]()
-    var f = open("data/fastq_test.fastq", "r")
+    var f = open("tests/test_data/fastq_parser/example.fastq", "r")
     var content = f.read()
     f.close()
     var lines = content.split("\n")
