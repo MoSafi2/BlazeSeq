@@ -5,7 +5,7 @@ BlazeSeq benchmarks) to the given path. Used by run_benchmarks.sh so the
 file can be placed on a tmpfs mount.
 
 Usage:
-    pixi run mojo run -I . benchmark/generate_synthetic_fastq.mojo <output_path> [size_gb]
+    pixi run mojo run -I . benchmark/fastq-parser/generate_synthetic_fastq.mojo <output_path> [size_gb]
     size_gb defaults to 1.
 """
 

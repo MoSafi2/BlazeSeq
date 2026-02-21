@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Install benchmarking toolchains into the pixi "benchmark" environment if not present.
-# Run from repository root: ./benchmark/install_toolchains.sh
-# After this, run benchmarks with: pixi run -e benchmark ./benchmark/run_benchmarks.sh
+# Run from repository root: ./benchmark/fastq-parser/install_toolchains.sh
+# After this, run benchmarks with: pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
 echo "=== BlazeSeq benchmark toolchain installer ==="
@@ -62,8 +62,8 @@ fi
 echo ""
 echo "=== Done ==="
 echo "Run benchmarks with:"
-echo "  pixi run -e benchmark ./benchmark/run_benchmarks.sh"
+echo "  pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh"
 echo ""
 echo "Or activate the benchmark env and run manually:"
 echo "  pixi shell -e benchmark"
-echo "  ./benchmark/run_benchmarks.sh"
+echo "  ./benchmark/fastq-parser/run_benchmarks.sh"

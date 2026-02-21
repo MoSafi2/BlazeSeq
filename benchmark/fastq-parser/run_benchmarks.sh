@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq, FASTX.jl.
 # Generates 1GB synthetic FASTQ on a tmpfs mount, runs each parser with hyperfine.
-# Run from repository root: ./benchmark/run_benchmarks.sh
+# Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh
 # Requires: pixi, hyperfine, cargo, gcc or clang, julia. On Linux: sudo for tmpfs mount/umount.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
 # Ensure common tool install locations are on PATH (e.g. when script runs non-interactively)
@@ -84,7 +84,7 @@ esac
 
 # --- Generate 1GB synthetic FASTQ ---
 echo "Generating 1GB synthetic FASTQ at $BENCH_FILE ..."
-if ! pixi run mojo run -I . benchmark/generate_synthetic_fastq.mojo "$BENCH_FILE" 1; then
+if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 1; then
     echo "Failed to generate 1GB FASTQ at $BENCH_FILE (check space on mounted tmpfs)."
     exit 1
 fi
@@ -118,7 +118,7 @@ echo "Building kseq_runner ..."
 # --- Build BlazeSeq runner (Mojo binary) ---
 BLAZESEQ_BIN="$SCRIPT_DIR/run_blazeseq"
 echo "Building BlazeSeq runner ..."
-if ! pixi run mojo build -I . -o "$BLAZESEQ_BIN" benchmark/run_blazeseq.mojo; then
+if ! pixi run mojo build -I . -o "$BLAZESEQ_BIN" "$SCRIPT_DIR/run_blazeseq.mojo"; then
     echo "Failed to build BlazeSeq runner. Check Mojo toolchain and blazeseq package."
     exit 1
 fi
@@ -126,7 +126,7 @@ fi
 # --- Ensure Julia (FASTX.jl) dependencies are installed ---
 echo "Ensuring Julia benchmark deps (FASTX.jl) ..."
 if ! julia --project="$SCRIPT_DIR" -e 'using Pkg; Pkg.instantiate()'; then
-    echo "Failed to install Julia dependencies. Run: julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'"
+    echo "Failed to install Julia dependencies. Run: julia --project=benchmark/fastq-parser -e 'using Pkg; Pkg.instantiate()'"
     exit 1
 fi
 

@@ -5,7 +5,7 @@ and prints exactly "records base_pairs" on one line for verification
 against other parsers.
 
 Usage:
-    pixi run mojo run -I . benchmark/run_blazeseq.mojo <path.fastq>
+    pixi run mojo run -I . benchmark/fastq-parser/run_blazeseq.mojo <path.fastq>
 """
 
 from sys import argv

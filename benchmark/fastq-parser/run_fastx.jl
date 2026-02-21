@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 # FASTQ parser benchmark runner using FASTX.jl.
 # Reads path from argv[1], counts records and base pairs, prints "records base_pairs".
-# Run: julia --project=benchmark benchmark/run_fastx.jl <path.fastq>
+# Run: julia --project=benchmark/fastq-parser benchmark/fastq-parser/run_fastx.jl <path.fastq>
 
 using FASTX
 
