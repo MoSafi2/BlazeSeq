@@ -1,18 +1,17 @@
-"""Example: Using FastqParser for FASTQ parsing.
+"""Example: Using `FastqParser` for FASTQ parsing.
 
 This example demonstrates:
-1. FastqParser: Parsing records one at a time with validation (ASCII + quality schema)
-2. FastqParser: Parsing with validation disabled for maximum speed
+1. `FastqParser`: Parsing records one at a time with validation (ASCII + quality schema)
+2. `FastqParser`: Parsing with validation disabled for maximum speed
 
-Use parser.records() for owned FastqRecords, parser.ref_records() for zero-copy RefRecords,
-or parser.batched() for FastqBatch (SoA). Direct methods: next_record(), next_ref(), next_batch().
+Use `parser.records()` for owned `FastqRecord`s, `parser.ref_records()` for zero-copy `RefRecord`s,
+or `parser.batched()` for `FastqBatch` (SoA). Direct methods: `next_record()`, `next_ref()`, `next_batch()`.
 
 Usage:
     pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 """
 
-from blazeseq.parser import FastqParser, ParserConfig
-from blazeseq.io.readers import FileReader
+from blazeseq import FastqParser, ParserConfig, FileReader
 from pathlib import Path
 from sys import argv
 

@@ -16,13 +16,14 @@ from blazeseq.utils import memchr
 
 @register_passable("trivial")
 @fieldwise_init
+@doc_private
 struct LineIteratorError(
     Copyable, Equatable, ImplicitlyDestructible, Movable, Writable
 ):
-    """Error type used by LineIterator.next_complete_line() to signal conditions without raising.
+    """Error type used by `LineIterator.next_complete_line()` to signal conditions without raising.
     
-    Values: EOF (no more input), INCOMPLETE_LINE (no newline in buffer yet),
-    BUFFER_TOO_SMALL (line exceeds buffer), OTHER. Parser uses these to decide
+    Values: `EOF` (no more input), `INCOMPLETE_LINE` (no newline in buffer yet),
+    `BUFFER_TOO_SMALL` (line exceeds buffer), `OTHER`. Parser uses these to decide
     whether to refill buffer or grow before retrying.
     """
     var value: Int8
@@ -54,8 +55,8 @@ struct LineIteratorError(
 struct EOFError(Writable):
     """Raised when no more input is available (end of file or stream).
     
-    FastqParser and LineIterator raise EOFError when next_ref()/next_record()
-    or next_line() is called and there is no more data. Iterators catch it
+    `FastqParser` and `LineIterator` raise `EOFError` when `next_ref()/next_record()`
+    or `next_line()` is called and there is no more data. Iterators catch it
     and raise StopIteration instead.
     """
     fn write_to(self, mut writer: Some[Writer]):
@@ -67,7 +68,7 @@ struct BufferedReader[R: Reader](
 ):
     """
     Buffered reader over a Reader. Fills an internal buffer and exposes
-    view(), consume(), stream_position(), etc. Used by LineIterator and
+    `view()`, `consume()`, `stream_position()`, etc. Used by `LineIterator` and
     thus by FastqParser. Supports buffer growth for long lines when
     enabled in LineIterator.
     """
@@ -102,14 +103,14 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     fn available(self) -> Int:
-        """Current number of bytes in the buffer (same as __len__)."""
+        """Current number of bytes in the buffer (same as `__len__`)."""
         return self._end - self._head
 
     @always_inline
     fn consume(mut self, size: Int) -> Int:
         """
-        Advance read position by `size`. Must not exceed available().
-        Does not compact; caller must call compact_from() when needed.
+        Advance read position by `size`. Must not exceed `available()`.
+        Does not compact; caller must call `compact_from()` when needed.
         """
         var cons_size = min(size, self.available())
         self._head += cons_size
@@ -118,7 +119,7 @@ struct BufferedReader[R: Reader](
     @always_inline
     fn unconsume(mut self, size: Int) raises:
         """
-        Unconsume `size` bytes. Must not exceed available().
+        Unconsume `size` bytes. Must not exceed `available()`.
         """
         if size > self._head:
             raise Error("Cannot unconsume more than available")
@@ -169,21 +170,19 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     fn buffer_position(self) -> Int:
-        """Current read offset in the buffer (for parser compact_from)."""
+        """Current read offset in the buffer (for parser `compact_from`)."""
         return self._head
 
     @always_inline
     fn buffer_base(ref self) -> UnsafePointer[Byte, MutExternalOrigin]:
-        """Base pointer of the buffer. Used by parser to rebase spans after resize.
-        """
+        """Base pointer of the buffer. Used by parser to rebase spans after resize."""
         return self._ptr
 
     @always_inline
     fn span_at(
         ref self, offset: Int, length: Int
     ) -> Span[Byte, MutExternalOrigin]:
-        """Span over buffer at given offset from buffer base and length. Used after resize+compact to rebase SearchResults.
-        """
+        """Span over buffer at given offset from buffer base and length. Used after resize+compact to rebase `SearchResults`."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + offset, length=length
         )
@@ -268,8 +267,7 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     fn _fill_buffer(mut self) raises -> UInt64:
-        """Returns the number of bytes read into the buffer. Caller must call compact_from() when buffer is full to make room.
-        """
+        """Returns the number of bytes read into the buffer. Caller must call `compact_from()` when buffer is full to make room."""
         if self._is_eof:
             return 0
 
@@ -369,8 +367,8 @@ struct BufferedReader[R: Reader](
 struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer):
     """Buffered writer for efficient byte writing.
 
-    Works with any Writer backend (FileWriter, MemoryWriter, GZWriter).
-    Maintains an internal buffer and flushes automatically when full or on explicit flush() call.
+    Works with any `WriterBackend` (`FileWriter`, `MemoryWriter`, `GZWriter`).
+    Maintains an internal buffer and flushes automatically when full or on explicit `flush()` call.
     """
 
     var writer: Self.W
@@ -385,7 +383,7 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
         """Initialize BufferedWriter with a Writer backend.
 
         Args:
-            writer: Writer backend (FileWriter, MemoryWriter, or GZWriter).
+            writer: Writer backend (`FileWriter`, `MemoryWriter`, or `GZWriter`).
             capacity: Size of the write buffer in bytes.
 
         Raises:
@@ -435,7 +433,7 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
 
     @always_inline
     fn write_string(mut self, string: StringSlice):
-        """Write a StringSlice to this Writer. Required by the builtin Writer trait."""
+        """Write a StringSlice to this Writer. Required by the builtin `Writer` trait."""
         try:
             var bytes_span = string.as_bytes()
             var lst = List[Byte](capacity=len(bytes_span))
@@ -445,7 +443,7 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
             pass  # Writer trait does not allow raises; use write_bytes() to handle errors
 
     fn write[*Ts: Writable](mut self, *args: *Ts):
-        """Write a sequence of Writable arguments. Required by the builtin Writer trait."""
+        """Write a sequence of Writable arguments. Required by the builtin `Writer` trait."""
         @parameter
         for i in range(args.__len__()):
             args[i].write_to(self)
@@ -509,6 +507,7 @@ struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer)
             self._ptr.free()
 
 
+@doc_private
 fn buffered_writer_for_file(
     path: Path, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[FileWriter]:
@@ -516,6 +515,7 @@ fn buffered_writer_for_file(
     return BufferedWriter[FileWriter](FileWriter(path), capacity)
 
 
+@doc_private
 fn buffered_writer_for_memory(
     capacity: Int = DEFAULT_CAPACITY,
 ) raises -> BufferedWriter[MemoryWriter]:
@@ -523,13 +523,14 @@ fn buffered_writer_for_memory(
     return BufferedWriter[MemoryWriter](MemoryWriter(), capacity)
 
 
+@doc_private
 fn buffered_writer_for_gzip(
     filename: String, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[GZWriter]:
     """Create BufferedWriter for a gzipped file."""
     return BufferedWriter[GZWriter](GZWriter(filename), capacity)
 
-
+@doc_private
 @always_inline
 fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     """
@@ -543,12 +544,12 @@ fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
 
 struct LineIterator[R: Reader](Iterable, Movable):
     """
-    Iterates over newline-separated lines from a BufferedReader.
-    Owns the buffer; parsers hold LineIterator and use next_line/next_n_lines.
+    Iterates over newline-separated lines from a `BufferedReader`.
+    Owns the buffer; parsers hold `LineIterator` and use `next_line` / `next_n_lines`.
 
-    Supports the Mojo Iterator protocol: ``for line in line_iterator`` works.
-    Each ``line`` is a ``Span[Byte, MutExternalOrigin]`` invalidated by the
-    next iteration or any buffer mutation (same contract as ``next_line()``).
+    Supports the Mojo Iterator protocol: `for line in line_iterator` works.
+    Each `line` is a `Span[Byte, MutExternalOrigin]` invalidated by the
+    next iteration or any buffer mutation (same contract as `next_line()`).
     """
 
     comptime IteratorType[
@@ -568,10 +569,10 @@ struct LineIterator[R: Reader](Iterable, Movable):
         growth_enabled: Bool = False,
         max_capacity: Int = MAX_CAPACITY,
     ) raises:
-        """Build a line iterator over a Reader. Optionally allow buffer growth for long lines.
+        """Build a line iterator over a `Reader`. Optionally allow buffer growth for long lines.
         
         Args:
-            reader: Source (e.g. FileReader, MemoryReader).
+            reader: Source (e.g. `FileReader`, `MemoryReader`).
             capacity: Initial buffer size in bytes.
             growth_enabled: If True, buffer can grow up to max_capacity for long lines.
             max_capacity: Maximum buffer size when growth is enabled.
@@ -593,7 +594,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """Return the current line number (1-indexed).
 
         Returns:
-            The line number of the last line returned by next_line(), or 0 if no lines have been read yet.
+            The line number of the last line returned by `next_line()`, or 0 if no lines have been read yet.
         """
         return self._current_line_number
 
@@ -616,7 +617,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     fn next_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
         """
         Next line as span excluding newline (and trimming trailing \\r). None at EOF.
-        Invalidated by next next_line() or any buffer mutation.
+        Invalidated by next `next_line()` or any buffer mutation.
         """
         # Update file position before reading line
         self._file_position = Int64(self.buffer.stream_position())
@@ -661,8 +662,8 @@ struct LineIterator[R: Reader](Iterable, Movable):
         Return the next line only if a complete line (ending with newline) is in
         the current buffer. Does not refill or compact (except for initial empty buffer).
         If no newline is found, raise Error("INCOMPLETE_LINE") and do not consume;
-        caller can fall back to next_line() to refill. Invalidated by next
-        next_line/next_complete_line or any buffer mutation.
+        caller can fall back to `next_line()` to refill. Invalidated by next
+        `next_line` / `next_complete_line` or any buffer mutation.
         """
         if self.buffer.available() == 0:
             if self.buffer.is_eof():
@@ -740,14 +741,13 @@ struct LineIterator[R: Reader](Iterable, Movable):
     fn __iter__(
         ref self,
     ) -> _LineIteratorIter[Self.R, origin_of(self)]:
-        """Return an iterator for use in ``for line in self``."""
+        """Return an iterator for use in `for line in self`."""
         return _LineIteratorIter[Self.R, origin_of(self)](Pointer(to=self))
 
 
 # ---------------------------------------------------------------------------
 # Iterator adapter for LineIterator so that ``for line in line_iter`` works.
 # ---------------------------------------------------------------------------
-
 
 struct _LineIteratorIter[R: Reader, origin: Origin](Iterator):
     """Iterator over lines; yields Span[Byte, MutExternalOrigin] per line."""

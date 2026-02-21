@@ -30,8 +30,8 @@ struct ParserConfig(Copyable):
     Configuration struct for FASTQ parser options.
     
     Centralizes buffer capacity, growth policy, validation flags, and quality
-    schema settings. Pass as a comptime parameter to FastqParser, e.g.
-    FastqParser[FileReader, ParserConfig(check_ascii=False)].
+    schema settings. Pass as a comptime parameter to `FastqParser`, e.g.
+    `FastqParser[FileReader, ParserConfig(check_ascii=False)]`.
     
     Attributes:
         buffer_capacity: Size in bytes of the internal read buffer. Larger
@@ -41,17 +41,16 @@ struct ParserConfig(Copyable):
             buffer_capacity, up to buffer_max_capacity. Disable for fixed memory.
         check_ascii: If True, validate that all record bytes are ASCII.
         check_quality: If True, validate quality bytes against the quality schema.
-        quality_schema: Optional schema name; used when not passed to __init__.
+        quality_schema: Optional schema name; used when not passed to `__init__`.
             One of: "generic", "sanger", "solexa", "illumina_1.3", "illumina_1.5", "illumina_1.8".
-        batch_size: Default max records per batch for next_batch()/batched().
+        batch_size: Default max records per batch for `next_batch()` / `batched()`.
     
     Note:
         Disable check_ascii and check_quality for maximum parsing throughput.
     
     Example:
         ```mojo
-        from blazeseq.parser import ParserConfig, FastqParser
-        from blazeseq.io.readers import FileReader
+        from blazeseq import ParserConfig, FastqParser, FileReader
         from pathlib import Path
         comptime config = ParserConfig(check_ascii=True, buffer_capacity=65536)
         var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "sanger")
@@ -105,28 +104,27 @@ struct ParserConfig(Copyable):
 
 struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     """
-    Unified FASTQ parser over a Reader.
+    Unified FASTQ parser over a `Reader`.
     
     Exposes three parsing modes:
-    - next_ref() -> RefRecord (zero-copy; consume promptly, do not store in collections).
-    - next_record() -> FastqRecord (owned; safe to store and reuse).
-    - next_batch(max_records) -> FastqBatch (Structure-of-Arrays for GPU or batch processing).
+    - `next_ref()` -> `RefRecord` (zero-copy; consume promptly, do not store in collections).
+    - `next_record()` -> `FastqRecord` (owned; safe to store and reuse).
+    - `next_batch(max_records)` -> `FastqBatch` (Structure-of-Arrays for GPU or batch processing).
     
-    For iteration use ref_records(), records(), or batched(). Direct methods
-    raise EOFError at end of input; iterators raise StopIteration and print
+    For iteration use `ref_records()`, `records()`, or `batched()`. Direct methods
+    raise `EOFError` at end of input; iterators raise `StopIteration` and print
     parse/validation errors with context before stopping.
     
     Type parameters:
-        R: Reader type (e.g. FileReader, MemoryReader, GZFile).
-        config: ParserConfig (optional); controls buffer size, validation, batch size.
+        R: Reader type (e.g. `FileReader`, `MemoryReader`, `GZFile`).
+        config: `ParserConfig` (optional); controls buffer size, validation, batch size.
     
     See also:
-        ParserConfig, RefRecord, FastqRecord, FastqBatch.
+        `ParserConfig`, `RefRecord`, `FastqRecord`, `FastqBatch`.
     
     Example:
         ```mojo
-        from blazeseq.parser import FastqParser
-        from blazeseq.io.readers import FileReader
+        from blazeseq import FastqParser, FileReader
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record in parser.records():
@@ -508,10 +506,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    """Iterator over RefRecords (zero-copy); use parser.ref_records().
+    """Iterator over `RefRecord`s (zero-copy); use `parser.ref_records()`.
     
-    Lifetime: Each yielded RefRecord is a view into the parser's buffer and is
-    invalidated by the next __next__ call or any parser mutation. Do not store
+    Lifetime: Each yielded `RefRecord` is a view into the parser's buffer and is
+    invalidated by the next `__next__` call or any parser mutation. Do not store
     refs in collections; consume or copy to owned buffer before advancing. On parse/validation
     error the error is printed with context and iteration stops.
     """
@@ -556,10 +554,10 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
 struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    """Iterator over owned FastqRecords; use parser.records().
+    """Iterator over owned `FastqRecord`s; use `parser.records()`.
     
-    Each yielded FastqRecord is owned and safe to store. On parse/validation
-    error the error is printed with context and iteration stops (StopIteration).
+    Each yielded `FastqRecord` is owned and safe to store. On parse/validation
+    error the error is printed with context and iteration stops (`StopIteration`).
     """
 
     comptime Element = FastqRecord
@@ -602,7 +600,7 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
 struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    """Iterator over FastqBatch (SoA); use parser.batched().
+    """Iterator over `FastqBatch` (SoA); use `parser.batched()`.
     
     Yields batches of up to the configured batch size. Last batch may be
     partial at EOF. On parse/validation error the error is printed with

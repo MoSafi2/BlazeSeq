@@ -17,8 +17,7 @@ blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 Then `pixi install` and import in Mojo:
 
 ```mojo
-from blazeseq import FastqParser
-from blazeseq.readers import FileReader
+from blazeseq import FastqParser, FileReader
 from pathlib import Path
 
 fn main() raises:

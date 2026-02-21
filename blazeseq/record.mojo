@@ -24,8 +24,8 @@ struct FastqRecord(
 ):
     """A single FASTQ record (four lines: @id, sequence, +, quality).
 
-    Owned representation; safe to store in collections and reuse. Use RefRecord
-    for zero-copy parsing when consuming immediately. quality_offset is the
+    Owned representation; safe to store in collections and reuse. Use `RefRecord`
+    for zero-copy parsing when consuming immediately. `quality_offset` is the
     Phred offset (33 or 64) used to decode quality scores.
 
     Attributes:
@@ -33,7 +33,7 @@ struct FastqRecord(
         SeqStr: Sequence line.
         QuHeader: Line starting with '+' (optional repeat of id).
         QuStr: Quality line (same length as SeqStr).
-        quality_offset: Phred offset for get_quality_scores() (e.g. 33 for Sanger).
+        quality_offset: Phred offset for `get_quality_scores()` (e.g. 33 for Sanger).
 
     Example:
         ```mojo
@@ -269,7 +269,7 @@ struct Validator(Copyable):
         Args:
             check_ascii: If True, validate() will reject non-ASCII bytes in records.
             check_quality: If True, validate() will check quality bytes against schema.
-            quality_schema: Schema used for quality validation (e.g. from _parse_schema).
+            quality_schema: Schema used for quality validation (e.g. from `_parse_schema`).
         """
         self.check_ascii = check_ascii
         self.check_quality = check_quality
@@ -282,7 +282,7 @@ struct Validator(Copyable):
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
 
         Args:
-            record: The FastqRecord to validate.
+            record: The `FastqRecord` to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
@@ -318,7 +318,7 @@ struct Validator(Copyable):
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
 
         Args:
-            record: The RefRecord to validate.
+            record: The `RefRecord` to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
@@ -529,6 +529,7 @@ struct Validator(Copyable):
                 raise
 
 
+@doc_private
 @always_inline
 fn _schema_string_to_offset(quality_format: String) -> Int8:
     """Map schema name to Phred offset (33 or 64). Used by record/coord constructors.
@@ -558,9 +559,9 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     """Zero-copy reference to a FASTQ record inside the parser's buffer.
 
     Lifetime: Valid only until the next parser read or buffer mutation. Do not
-    store in collections (e.g. List); consume or copy to FastqRecord promptly.
+    store in collections (e.g. `List`); consume or copy to `FastqRecord` promptly.
     Not thread-safe. Use for maximum parsing throughput when processing
-    immediately; use FastqRecord when you need to store or reuse records.
+    immediately; use `FastqRecord` when you need to store or reuse records.
 
     Attributes:
         SeqHeader, SeqStr, QuHeader, QuStr: Spans into the parser buffer.
@@ -568,8 +569,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     Example:
         ```mojo
-        from blazeseq.parser import FastqParser
-        from blazeseq.io.readers import FileReader
+        from blazeseq import FastqParser, FileReader
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record_ref in parser.ref_records():

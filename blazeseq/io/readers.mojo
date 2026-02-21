@@ -4,7 +4,7 @@ Mojo bindings for zlib.
 
 Note that `GZFile` will auto detect compression. If the file is not compressed
 it pass through to a normal reader that is quite fast when paired with a
-BufferedReader.
+`BufferedReader`.
 
 """
 
@@ -49,17 +49,19 @@ comptime gzwrite_fn_type = fn (
 trait Reader(ImplicitlyDestructible):
     """Trait for reading bytes from a source (file, memory, gzip, etc.).
     
-    Implement this trait to provide a custom data source to FastqParser via
-    BufferedReader. read_to_buffer() fills the given buffer span and returns
+    Implement this trait to provide a custom data source to `FastqParser` via
+    `BufferedReader`. `read_to_buffer()` fills the given buffer span and returns
     the number of bytes read (0 at EOF). The parser uses this with
-    LineIterator/BufferedReader for efficient line-based parsing.
+    `LineIterator` / `BufferedReader` for efficient line-based parsing.
     
     Example:
+        ```mojo
         struct MyReader(Reader):
             fn read_to_buffer(mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int) raises -> UInt64:
                 # ... copy up to amt bytes from your source into buf starting at pos
                 return bytes_read
             fn __moveinit__(out self, deinit other: Self): ...
+        ```
     """
     fn read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
@@ -76,12 +78,11 @@ trait Reader(ImplicitlyDestructible):
 
 
 struct FileReader(Movable, Reader):
-    """Reader that reads from a file on disk. Use with FastqParser for .fastq files.
+    """Reader that reads from a file on disk. Use with `FastqParser` for .fastq files.
 
     Example:
         ```mojo
-        from blazeseq.readers import FileReader
-        from blazeseq.parser import FastqParser
+        from blazeseq import FileReader, FastqParser
         from pathlib import Path
         var r = FileReader(Path("data.fastq"))
         var parser = FastqParser[FileReader](r^, "generic")
@@ -211,6 +212,7 @@ struct MemoryReader(Movable, Reader):
         self.position = other.position
 
 
+@doc_private
 @fieldwise_init
 struct ZLib(Movable):
     """Wrapper for zlib library functions."""
@@ -265,16 +267,15 @@ struct ZLib(Movable):
 
 
 struct GZFile(Movable, Reader):
-    """Reader for gzip-compressed files (.gz). Implements the Reader trait like FileReader.
+    """Reader for gzip-compressed files (.gz). Implements the `Reader` trait like `FileReader`.
     
-    Use for .fastq.gz files with FastqParser. Some builds auto-detect uncompressed
-    files and pass through; see module docstring. Same interface as FileReader
+    Use for .fastq.gz files with `FastqParser`. Some builds auto-detect uncompressed
+    files and pass through; see module docstring. Same interface as `FileReader`
     for drop-in use with parsers.
 
     Example:
         ```mojo
-        from blazeseq.readers import GZFile
-        from blazeseq.parser import FastqParser
+        from blazeseq import GZFile, FastqParser
         var r = GZFile("data.fastq.gz", "rb")
         var parser = FastqParser[GZFile](r^, "illumina_1.8")
         for record in parser.records():
@@ -339,6 +340,7 @@ struct GZFile(Movable, Reader):
 
         return UInt64(bytes_read)
 
+    @doc_private
     fn unbuffered_read[](
         mut self, buffer: Span[UInt8, MutExternalOrigin]
     ) raises -> Int:

@@ -1,8 +1,8 @@
 """Example: Writing FASTQ to plain or gzipped files.
 
 This example demonstrates:
-1. Writing FastqRecords to a plain .fastq file (BufferedWriter[FileWriter])
-2. Writing FastqRecords to a gzipped .fastq.gz file (BufferedWriter[GZWriter])
+1. Writing `FastqRecord`s to a plain .fastq file (`BufferedWriter[FileWriter]`)
+2. Writing `FastqRecord`s to a gzipped .fastq.gz file (`BufferedWriter[GZWriter]`)
 3. Optionally reading from an input file and writing to both formats
 
 Usage:
@@ -17,9 +17,7 @@ from pathlib import Path
 from sys import argv
 from os import remove
 
-from blazeseq.record import FastqRecord
-from blazeseq.parser import FastqParser
-from blazeseq.io.readers import FileReader, GZFile
+from blazeseq import FastqRecord, FastqParser, FileReader, GZFile
 from blazeseq.io.writers import WriterBackend
 from blazeseq.io.buffered import (
     BufferedWriter,

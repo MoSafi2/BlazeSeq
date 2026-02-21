@@ -13,8 +13,8 @@ from blazeseq.io.readers import ZLib, c_void_ptr, c_uint
 trait WriterBackend(ImplicitlyDestructible):
     """Trait for writing bytes to various backends.
 
-    Similar to Reader trait but for writing operations.
-    Implementations provide write_from_buffer() to write bytes
+    Similar to `Reader` trait but for writing operations.
+    Implementations provide `write_from_buffer()` to write bytes
     from a buffer to the underlying storage.
     """
 

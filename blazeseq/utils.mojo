@@ -1,11 +1,11 @@
 """Internal parsing utilities and public helpers for BlazeSeq.
 
 Public helpers:
-- generate_synthetic_fastq_buffer: Build in-memory FASTQ for tests/benchmarks.
-- compute_num_reads_for_size: Estimate read count for a target byte size.
+- `generate_synthetic_fastq_buffer`: Build in-memory FASTQ for tests/benchmarks.
+- `compute_num_reads_for_size`: Estimate read count for a target byte size.
 
-Most other symbols (SearchState, SearchResults, _parse_schema, _parse_record_fast_path,
-_handle_incomplete_line, etc.) are used by the parser and are internal.
+Most other symbols (`SearchState`, `SearchResults`, `_parse_schema`, `_parse_record_fast_path`,
+`_handle_incomplete_line`, etc.) are used by the parser and are internal.
 """
 
 from memory import pack_bits
@@ -24,6 +24,7 @@ comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 
 # Parsing Algorithm adopted from Needletaile and Seq-IO with modifications.
+@doc_private
 @register_passable("trivial")
 @fieldwise_init
 struct SearchState(Copyable, ImplicitlyDestructible, Movable):
@@ -44,6 +45,7 @@ struct SearchState(Copyable, ImplicitlyDestructible, Movable):
         return Self(self.state - other)
 
 
+@doc_private
 @register_passable("trivial")
 @fieldwise_init
 struct SearchResults(
@@ -174,6 +176,7 @@ struct SearchResults(
 
 # From extramojo pacakge, skipping version problems
 @always_inline("nodebug")
+@doc_private
 fn memchr[
     do_alignment: Bool = False
 ](haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
@@ -242,25 +245,22 @@ fn memchr[
     return -1
 
 
+@doc_private
 @always_inline
 fn _strip_spaces[
     mut: Bool, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
     var start = 0
-    # Find the first non-space character from the beginning
     while start < len(in_slice) and is_posix_space(in_slice[start]):
         start += 1
 
     var end = len(in_slice)
-    # Find the first non-space character from the end
     while end > start and is_posix_space(in_slice[end - 1]):
         end -= 1
-
-    # This correctly handles all-space lines (where end will equal start)
-    # and avoids creating a new span if no stripping was needed.
     return in_slice[start:end]
 
 
+@doc_private
 @always_inline
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
@@ -279,6 +279,7 @@ fn _check_ascii[
 
 
 # Ported from the is_posix_space() in Mojo Stdlib
+@doc_private
 @always_inline
 fn is_posix_space(c: Byte) -> Bool:
     comptime SPACE = Byte(ord(" "))
@@ -305,6 +306,7 @@ fn is_posix_space(c: Byte) -> Bool:
     )
 
 
+@doc_private
 @always_inline
 fn _parse_schema(quality_format: String) -> QualitySchema:
     """Parse quality schema string into QualitySchema."""
@@ -345,7 +347,7 @@ fn compute_num_reads_for_size(
     - Plus line: +\\n (2 bytes)
     - Quality line: read_len + 1 (newline)
 
-    Uses average read length and constant header size (indices are zero-padded in generate_synthetic_fastq_buffer).
+    Uses average read length and constant header size (indices are zero-padded in `generate_synthetic_fastq_buffer`).
 
     Args:
         target_size_bytes: Target total size in bytes.
@@ -477,6 +479,7 @@ fn generate_synthetic_fastq_buffer(
 
 
 # BUG: There is a bug here when the buffer is grown, but the record is not parsed correctly.
+@doc_private
 @always_inline
 fn _handle_incomplete_line_with_buffer_growth[
     R: Reader
@@ -519,6 +522,7 @@ fn _handle_incomplete_line_with_buffer_growth[
     )
 
 
+@doc_private
 @always_inline
 fn _handle_incomplete_line[
     R: Reader
@@ -564,6 +568,7 @@ fn _handle_incomplete_line[
     )
 
 
+@doc_private
 @always_inline
 fn _parse_record_fast_path[
     R: Reader

@@ -40,9 +40,13 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 
+    @doc_private
+    @always_inline
     fn __del__(deinit self):
         self.ptr.free()
 
+    @doc_private
+    @always_inline
     fn __copyinit__(out self, read other: Self):
         self.cap = other.cap
         self.size = other.size
