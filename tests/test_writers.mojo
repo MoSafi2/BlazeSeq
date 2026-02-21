@@ -370,13 +370,13 @@ fn cleanup_writer_test_files() raises:
 
 
 
-
 fn main() raises:
     """Run all writer tests."""
-    print("Running Writer trait and backend tests...")
-    print("=" * 60)
-    TestSuite.discover_tests[__functions_in_module()]().run()
-    
-    # cleanup_writer_test_files()
-    print("=" * 60)
-    print("All writer tests passed! ✓")
+    try:
+        print("Running Writer trait and backend tests...")
+        print("=" * 60)
+        TestSuite.discover_tests[__functions_in_module()]().run()
+        print("=" * 60)
+        print("All writer tests passed! ✓")
+    finally:
+        cleanup_writer_test_files()
