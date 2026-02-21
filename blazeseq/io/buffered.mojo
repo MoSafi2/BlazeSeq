@@ -3,8 +3,8 @@ from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
 from collections.string import StringSlice, String
-from blazeseq.readers import Reader
-from blazeseq.writers import (
+from blazeseq.io.readers import Reader
+from blazeseq.io.writers import (
     WriterBackend,
     FileWriter,
     MemoryWriter,

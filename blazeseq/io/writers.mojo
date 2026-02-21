@@ -7,7 +7,7 @@ or compressed files. Similar to the Reader trait but for writing operations.
 from memory import Span, UnsafePointer
 from pathlib import Path
 from collections.string import String
-from blazeseq.readers import ZLib, c_void_ptr, c_uint
+from blazeseq.io.readers import ZLib, c_void_ptr, c_uint
 
 
 trait WriterBackend(ImplicitlyDestructible):
@@ -46,7 +46,7 @@ struct FileWriter(Movable, WriterBackend):
 
     Example:
         ```mojo
-        from blazeseq.buffered import buffered_writer_for_file
+        from blazeseq.io.buffered import buffered_writer_for_file
         from pathlib import Path
         from collections.string import String
         var writer = buffered_writer_for_file(Path("out.fastq"))

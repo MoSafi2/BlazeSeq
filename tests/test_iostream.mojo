@@ -2,13 +2,9 @@ from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from os import remove
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from blazeseq.buffered import BufferedReader, BufferedWriter
-from blazeseq.readers import FileReader, MemoryReader
-from blazeseq.writers import FileWriter, GZWriter
-from memory import alloc, Span
-from collections.string import StringSlice
-from testing import TestSuite
-
+from blazeseq.io.buffered import BufferedReader, BufferedWriter
+from blazeseq.io.readers import FileReader, MemoryReader
+from blazeseq.io.writers import FileWriter
 
 fn create_test_file(path: Path, content: String) raises -> Path:
     """Helper function to create test files."""

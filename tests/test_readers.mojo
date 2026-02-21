@@ -3,7 +3,7 @@
 from testing import assert_equal, assert_raises, assert_true, assert_false
 from pathlib import Path
 from os import remove
-from blazeseq.readers import FileReader, MemoryReader
+from blazeseq.io.readers import FileReader, MemoryReader
 from memory import alloc, Span
 from testing import TestSuite
 

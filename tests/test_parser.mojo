@@ -6,7 +6,7 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 """
 
 from blazeseq.parser import FastqParser, ParserConfig
-from blazeseq.readers import FileReader, MemoryReader
+from blazeseq.io.readers import FileReader, MemoryReader
 from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.record import FastqRecord
 from blazeseq.device_record import FastqBatch

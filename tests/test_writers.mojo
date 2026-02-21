@@ -1,14 +1,14 @@
 from testing import assert_equal, assert_raises, assert_true, TestSuite
 from pathlib import Path
 from os import remove
-from blazeseq.writers import Writer, FileWriter, MemoryWriter, GZWriter
-from blazeseq.buffered import (
+from blazeseq.io.writers import Writer, FileWriter, MemoryWriter, GZWriter
+from blazeseq.io.buffered import (
     BufferedWriter, BufferedReader,
     buffered_writer_for_file,
     buffered_writer_for_memory,
     buffered_writer_for_gzip
 )
-from blazeseq.readers import FileReader, GZFile
+from blazeseq.io.readers import FileReader, GZFile
 from blazeseq.CONSTS import DEFAULT_CAPACITY
 from memory import Span, alloc, memcpy
 from collections.string import String

@@ -569,7 +569,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     Example:
         ```mojo
         from blazeseq.parser import FastqParser
-        from blazeseq.readers import FileReader
+        from blazeseq.io.readers import FileReader
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record_ref in parser.ref_records():

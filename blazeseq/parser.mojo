@@ -1,13 +1,11 @@
 from blazeseq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
-from blazeseq.buffered import (
-    BufferedReader,
-    Reader,
+from blazeseq.io.buffered import (
     LineIterator,
     EOFError,
     LineIteratorError,
 )
-from blazeseq.readers import Reader
+from blazeseq.io.readers import Reader
 from blazeseq.device_record import FastqBatch
 from blazeseq.errors import ParseError, ValidationError
 from std.iter import Iterator
@@ -53,7 +51,7 @@ struct ParserConfig(Copyable):
     Example:
         ```mojo
         from blazeseq.parser import ParserConfig, FastqParser
-        from blazeseq.readers import FileReader
+        from blazeseq.io.readers import FileReader
         from pathlib import Path
         comptime config = ParserConfig(check_ascii=True, buffer_capacity=65536)
         var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "sanger")
@@ -128,7 +126,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     Example:
         ```mojo
         from blazeseq.parser import FastqParser
-        from blazeseq.readers import FileReader
+        from blazeseq.io.readers import FileReader
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record in parser.records():
