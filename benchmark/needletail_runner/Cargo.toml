@@ -1,0 +1,12 @@
+[package]
+name = "needletail_runner"
+version = "0.1.0"
+edition = "2021"
+description = "FASTQ parse benchmark runner using needletail"
+
+[[bin]]
+name = "needletail_runner"
+path = "src/main.rs"
+
+[dependencies]
+needletail = "0.6.3"

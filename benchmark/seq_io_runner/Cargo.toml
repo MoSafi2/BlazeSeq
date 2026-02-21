@@ -1,0 +1,12 @@
+[package]
+name = "seq_io_runner"
+version = "0.1.0"
+edition = "2021"
+description = "FASTQ parse benchmark runner using seq_io"
+
+[[bin]]
+name = "seq_io_runner"
+path = "src/main.rs"
+
+[dependencies]
+seq_io = "0.3"

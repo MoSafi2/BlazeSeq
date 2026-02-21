@@ -44,3 +44,18 @@ rtest = { cmd = "sh -c 'PKG=$(ls ./blazeseq*.conda 2>/dev/null || find .pixi/bui
 
 [pypi-dependencies]
 pymodo = ">=0.11.12, <0.12"
+
+# Benchmark environment: tools for run_benchmarks.sh (hyperfine, Rust).
+# Julia is not in conda-forge for all platforms; install from https://julialang.org and ensure it is on PATH.
+# Install with: pixi install -e benchmark
+# Run benchmarks with: pixi run -e benchmark ./benchmark/run_benchmarks.sh
+[feature.benchmark.dependencies]
+hyperfine = "*"
+rust = "*"
+
+[feature.benchmark.tasks]
+# Run the full benchmark suite (run ./benchmark/install_toolchains.sh first)
+benchmark = "bash -c './benchmark/run_benchmarks.sh'"
+
+[environments]
+benchmark = ["default", "benchmark"]
