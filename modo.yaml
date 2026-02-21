@@ -47,6 +47,7 @@ templates: []
 pre-run:
   - |
     echo Running 'mojo doc'...
+    mkdir -p docs/src
     pixi run mojo doc -o docs/src/blazeseq.json blazeseq
     echo Done.
 
