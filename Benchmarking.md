@@ -42,43 +42,45 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 
 ## Prerequisites
 
-Install the following so that `benchmark/fastq-parser/run_benchmarks.sh` can run:
+| Tool       | Purpose              | Install |
+|------------|----------------------|--------|
+| pixi       | Mojo, hyperfine, Rust | See [Install pixi](#install-pixi) below |
+| C compiler | kseq (plain C)       | gcc or clang (system; not in pixi) |
+| Julia      | FASTX.jl             | [julialang.org](https://julialang.org) (system; not in pixi) |
 
-| Tool      | Purpose              | Install |
-|-----------|----------------------|--------|
-| pixi      | Run Mojo (BlazeSeq)  | [pixi.sh](https://pixi.sh) |
-| hyperfine | Timed runs           | [sharkdp/hyperfine](https://github.com/sharkdp/hyperfine) |
-| Rust      | needletail, seq_io   | [rustup.rs](https://rustup.rs) |
-| C compiler| kseq (plain C)       | gcc or clang |
-| Julia     | FASTX.jl             | [julialang.org](https://julialang.org) |
+The pixi **benchmark** environment supplies Mojo, hyperfine, and Rust. You must install a C compiler and Julia yourself if you want to run the kseq and FASTX.jl benchmarks.
 
 For the tmpfs workflow on Linux, **sudo** is needed for mount/umount (or use the `/dev/shm` fallback).
 
-## Installing toolchains (recommended)
+## Install pixi
 
-From the **repository root**, run the install script to install missing tools into the pixi **benchmark** environment (hyperfine, Rust, Julia from conda-forge). It will also install pixi if needed. The C compiler (gcc or clang) is not provided by the env; the script will tell you how to install it on your OS if missing.
+Install pixi (required to run Mojo and the benchmark environment):
 
 ```bash
-./benchmark/fastq-parser/install_toolchains.sh
+curl -fsSL https://pixi.sh/install.sh | bash
 ```
 
-Then run benchmarks using the benchmark environment so the correct tools are on PATH:
+Ensure `~/.local/bin` is on your `PATH`. Then, from the **repository root**, install the benchmark environment (hyperfine, Rust, Mojo):
 
 ```bash
-pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
-# or
-pixi run -e benchmark benchmark
+pixi install -e benchmark
 ```
 
 ## How to Run
 
-From the **repository root**, after installing toolchains (see above):
+From the **repository root**, after [installing pixi](#install-pixi) and running `pixi install -e benchmark`:
 
 ```bash
 pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
 ```
 
-If all tools (pixi, hyperfine, cargo, rustc, gcc or clang, julia) are already on your PATH, you can run:
+Or use the pixi task:
+
+```bash
+pixi run -e benchmark benchmark
+```
+
+If all tools (pixi, hyperfine, cargo, rustc, gcc or clang, julia) are already on your PATH, you can run the script directly:
 
 ```bash
 ./benchmark/fastq-parser/run_benchmarks.sh
