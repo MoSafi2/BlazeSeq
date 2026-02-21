@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq, FASTX.jl.
-# Generates 1GB synthetic FASTQ on a tmpfs mount, runs each parser with hyperfine.
+# Generates 3GB synthetic FASTQ on a tmpfs mount, runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh
 # Requires: pixi, hyperfine, cargo, gcc or clang, julia. On Linux: sudo for tmpfs mount/umount.
 
@@ -63,7 +63,7 @@ trap cleanup_mount EXIT
 
 case "$(uname -s)" in
     Linux)
-        if sudo mount -t tmpfs -o size=2G tmpfs "$BENCH_DIR" 2>/dev/null; then
+        if sudo mount -t tmpfs -o size=5G tmpfs "$BENCH_DIR" 2>/dev/null; then
             MOUNTED=1
         else
             echo "Failed to mount tmpfs on $BENCH_DIR. Ensure sudo is available and tmpfs is supported."
@@ -82,10 +82,10 @@ case "$(uname -s)" in
         ;;
 esac
 
-# --- Generate 1GB synthetic FASTQ ---
-echo "Generating 1GB synthetic FASTQ at $BENCH_FILE ..."
-if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 1; then
-    echo "Failed to generate 1GB FASTQ at $BENCH_FILE (check space on mounted tmpfs)."
+# --- Generate 3GB synthetic FASTQ ---
+echo "Generating 3GB synthetic FASTQ at $BENCH_FILE ..."
+if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 3; then
+    echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted tmpfs)."
     exit 1
 fi
 
