@@ -127,10 +127,12 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
     fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
         """Return StringSlice view of ASCIIString bytes."""
         return StringSlice(unsafe_from_utf8=self.as_span())
-
+    
+    @always_inline
     fn __ne__(self, other: Self) -> Bool:
         """Compare two ASCIIStrings for inequality."""
         return not self.__eq__(other)
 
+    @always_inline
     fn write_to[w: Writer](self, mut writer: w) -> None:
         writer.write(self.as_string_slice())
