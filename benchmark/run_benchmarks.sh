@@ -115,26 +115,43 @@ echo "Building kseq_runner ..."
     exit 1
 }
 
-# --- Optional: verify all parsers agree on record/base count ---
+# --- Build BlazeSeq runner (Mojo binary) ---
+BLAZESEQ_BIN="$SCRIPT_DIR/run_blazeseq"
+echo "Building BlazeSeq runner ..."
+if ! pixi run mojo build -I . -o "$BLAZESEQ_BIN" benchmark/run_blazeseq.mojo; then
+    echo "Failed to build BlazeSeq runner. Check Mojo toolchain and blazeseq package."
+    exit 1
+fi
+
+# --- Ensure Julia (FASTX.jl) dependencies are installed ---
+echo "Ensuring Julia benchmark deps (FASTX.jl) ..."
+if ! julia --project="$SCRIPT_DIR" -e 'using Pkg; Pkg.instantiate()'; then
+    echo "Failed to install Julia dependencies. Run: julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'"
+    exit 1
+fi
+
+# --- Optional: verify all parsers agree on record/base count (non-fatal) ---
 echo "Verifying parser outputs..."
 ref=""
 for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq" "FASTX.jl"; do
     case "$cmd_label" in
-        BlazeSeq)     out=$(pixi run mojo run -I . benchmark/run_blazeseq.mojo "$BENCH_FILE" 2>/dev/null) ;;
-        needletail)   out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_FILE" 2>/dev/null) ;;
-        seq_io)       out=$("$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner" "$BENCH_FILE" 2>/dev/null) ;;
-        kseq)         out=$("$SCRIPT_DIR/kseq_runner/kseq_runner" "$BENCH_FILE" 2>/dev/null) ;;
-        FASTX.jl)     out=$(julia --project="$SCRIPT_DIR" "$SCRIPT_DIR/run_fastx.jl" "$BENCH_FILE" 2>/dev/null) ;;
+        BlazeSeq)     out=$("$BLAZESEQ_BIN" "$BENCH_FILE" 2>/dev/null) || out="" ;;
+        needletail)   out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
+        seq_io)       out=$("$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
+        kseq)         out=$("$SCRIPT_DIR/kseq_runner/kseq_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
+        FASTX.jl)     out=$(julia --project="$SCRIPT_DIR" "$SCRIPT_DIR/run_fastx.jl" "$BENCH_FILE" 2>/dev/null) || out="" ;;
     esac
     out=$(echo "$out" | tail -1)
-    if [ -z "$ref" ]; then
+    if [ -z "$out" ]; then
+        echo "Warning: $cmd_label produced no output (runner may have failed)"
+    elif [ -z "$ref" ]; then
         ref="$out"
     fi
-    if [ "$out" != "$ref" ]; then
+    if [ -n "$out" ] && [ "$out" != "$ref" ]; then
         echo "Warning: $cmd_label output '$out' differs from reference '$ref'"
     fi
 done
-echo "Reference counts: $ref"
+echo "Reference counts: ${ref:- (none; one or more runners failed)}"
 
 # --- Hyperfine ---
 echo "Running hyperfine (warmup=2, runs=5) ..."
@@ -143,7 +160,7 @@ hyperfine \
     --runs 5 \
     --export-markdown "$REPO_ROOT/benchmark_results.md" \
     --export-json "$REPO_ROOT/benchmark_results.json" \
-    -n BlazeSeq    "pixi run mojo run -I . benchmark/run_blazeseq.mojo $BENCH_FILE" \
+    -n BlazeSeq    "$BLAZESEQ_BIN $BENCH_FILE" \
     -n needletail  "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
     -n seq_io      "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
     -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE" \

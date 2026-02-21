@@ -23,16 +23,19 @@ fn main() raises:
     comptime config = ParserConfig(
         check_ascii=False,
         check_quality=False,
-        buffer_capacity=64 * 1024,
+        buffer_capacity= 64 * 1024,
         buffer_growth_enabled=False,
     )
 
     var parser = FastqParser[FileReader, config](FileReader(Path(file_path)))
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
-
-    for record in parser.ref_records():
-        total_reads += 1
-        total_base_pairs += len(record)
+    while True:
+        try:
+            var record = parser.next_ref()
+            total_reads += 1
+            total_base_pairs += len(record)
+        except Error:
+            break
 
     print(total_reads, total_base_pairs)
