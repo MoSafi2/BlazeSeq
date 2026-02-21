@@ -1,4 +1,3 @@
-*.fastq*
 *.mojopkg
 llm*
 test_file.mojo
