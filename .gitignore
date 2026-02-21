@@ -1,6 +1,5 @@
 *.fastq*
 *.mojopkg
-tests/test_data/*.txt
 llm*
 test_file.mojo
 kgen.trace.json.time-events.txt
