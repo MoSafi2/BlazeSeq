@@ -579,6 +579,8 @@ fn _parse_record_fast_path[
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
     interim.start = stream.buffer.buffer_position()
+    
+    @parameter
     for i in range(4):
         try:
             interim[i] = stream.next_complete_line()
