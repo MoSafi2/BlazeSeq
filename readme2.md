@@ -109,3 +109,12 @@ Run the test suite:
 ``` bash
 pixi run test
 ```
+
+
+### Datasets
+
+- [Raposa (2020)](https://zenodo.org/records/3736457/files/9_Swamp_S2B_rbcLa_2019_minq7.fastq?download=1) (40K reads)
+- [Biofast benchmark](https://github.com/lh3/biofast/releases/tag/biofast-data-v1) (5.5M reads)
+- [Elsafi Mabrouk et al.](https://www.ebi.ac.uk/ena/browser/view/SRR16012060) (12.2M reads)
+- [Galonska et al.](https://www.ebi.ac.uk/ena/browser/view/SRR4381936) (27.7M reads)
+- [Galonska et al.](https://www.ebi.ac.uk/ena/browser/view/SRR4381933) (R1 only, 169.8M reads)

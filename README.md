@@ -137,10 +137,6 @@ The site is generated with [Modo](https://mlange-42.github.io/modo/) (plain mark
 
 Benchmark numbers are approximate and depend on hardware, disk, and Mojo version. They serve as internal targets and regression checks. Scripts and datasets are in the repo; current Mojo is 0.26.x (see `pixi.toml`).
 
-### Setup
-
-Benchmarks were run on a machine with an Intel Core i7-13700K, 32 GB DDR5, 2 TB Samsung 980 Pro NVMe, Ubuntu 22.04. Scripts were built with `mojo build` and run with `hyperfine "<binary> /path/to/file.fastq" --warmup 2`.
-
 ### Datasets
 
 - [Raposa (2020)](https://zenodo.org/records/3736457/files/9_Swamp_S2B_rbcLa_2019_minq7.fastq?download=1) (40K reads)
@@ -149,15 +145,6 @@ Benchmarks were run on a machine with an Intel Core i7-13700K, 32 GB DDR5, 2 TB 
 - [Galonska et al.](https://www.ebi.ac.uk/ena/browser/view/SRR4381936) (27.7M reads)
 - [Galonska et al.](https://www.ebi.ac.uk/ena/browser/view/SRR4381933) (R1 only, 169.8M reads)
 
-### FASTQ parsing
-
-| reads  | RefRectord (no validation)     | FastqParser (no validation) | FastqParser (quality validation) | FastqParser (full validation) |
-|--------|-----------------|------------------------------|-----------------------------------|--------------------------------|
-| 40k    | 13.7 ± 5.0 ms   | 18.2 ± 4.7 ms                | 26.0 ± 4.9 ms                     | 50.3 ± 6.3 ms                  |
-| 5.5M   | 244.8 ± 4.3 ms  | 696.9 ± 2.7 ms               | 935.8 ± 6.3 ms                    | 1.441 ± 0.024 s                |
-| 12.2M  | 669.4 ± 3.2 ms  | 1.671 ± 0.08 s               | 2.198 ± 0.014 s                   | 3.428 ± 0.042 s                |
-| 27.7M  | 1.247 ± 0.07 s  | 3.478 ± 0.08 s               | 3.92 ± 0.030 s                    | 4.838 ± 0.034 s                |
-| 169.8M | 17.84 ± 0.04 s  | 37.863 ± 0.237 s             | 40.430 ± 1.648 s                  | 54.969 ± 0.232 s               |
 
 ## License
 
