@@ -54,38 +54,38 @@ struct FastqRecord(
     @always_inline
     fn __init__(
         out self,
-        seq_header: String,
-        seq_str: String,
-        qu_header: String,
-        qu_str: String,
+        header: String,
+        sequence: String,
+        plus_line: String,
+        quality: String,
         schema: QualitySchema = generic_schema,
     ) raises:
         """Build from four string lines; phred_offset from schema (default generic_schema)."""
-        self.header = ASCIIString(seq_header)
-        self.sequence = ASCIIString(seq_str)
-        self.plus_line = ASCIIString(qu_header)
-        self.quality = ASCIIString(qu_str)
+        self.header = ASCIIString(header)
+        self.sequence = ASCIIString(sequence)
+        self.plus_line = ASCIIString(plus_line)
+        self.quality = ASCIIString(quality)
         self.phred_offset = Int8(schema.OFFSET)
 
     @always_inline
     fn __init__(
         out self,
-        header_span: Span[Byte, MutExternalOrigin],
-        seq_span: Span[Byte, MutExternalOrigin],
-        plus_line_span: Span[Byte, MutExternalOrigin],
-        quality_span: Span[Byte, MutExternalOrigin],
-        quality_offset: Int8 = 33,
+        header: Span[Byte, MutExternalOrigin],
+        sequence: Span[Byte, MutExternalOrigin],
+        plus_line: Span[Byte, MutExternalOrigin],
+        quality: Span[Byte, MutExternalOrigin],
+        phred_offset: Int8 = 33,
     ) raises:
-        self.header = ASCIIString(header_span)
-        self.plus_line = ASCIIString(plus_line_span)
-        self.sequence = ASCIIString(seq_span)
-        self.quality = ASCIIString(quality_span)
-        self.phred_offset = quality_offset
+        self.header = ASCIIString(header)
+        self.sequence = ASCIIString(sequence)
+        self.plus_line = ASCIIString(plus_line)
+        self.quality = ASCIIString(quality)
+        self.phred_offset = phred_offset
 
-    fn __init__(out self, sequence: String) raises:
+    fn __init__(out self, four_lines: String) raises:
         """Build from a single string containing four newline-separated lines.
         """
-        var seqs = sequence.strip().split("\n")
+        var seqs = four_lines.strip().split("\n")
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
@@ -97,30 +97,30 @@ struct FastqRecord(
 
     fn __init__(
         out self,
-        var seq_header: ASCIIString,
-        var seq_str: ASCIIString,
-        var qu_header: ASCIIString,
-        var qu_str: ASCIIString,
-        quality_offset: Int8,
+        var header: ASCIIString,
+        var sequence: ASCIIString,
+        var plus_line: ASCIIString,
+        var quality: ASCIIString,
+        phred_offset: Int8,
     ):
-        self.header = seq_header^
-        self.sequence = seq_str^
-        self.plus_line = qu_header^
-        self.quality = qu_str^
-        self.phred_offset = quality_offset
+        self.header = header^
+        self.sequence = sequence^
+        self.plus_line = plus_line^
+        self.quality = quality^
+        self.phred_offset = phred_offset
 
     fn __init__(
         out self,
-        var seq_header: ASCIIString,
-        var seq_str: ASCIIString,
-        var qu_header: ASCIIString,
-        var qu_str: ASCIIString,
+        var header: ASCIIString,
+        var sequence: ASCIIString,
+        var plus_line: ASCIIString,
+        var quality: ASCIIString,
         schema: QualitySchema = generic_schema,
     ):
-        self.header = seq_header^
-        self.sequence = seq_str^
-        self.plus_line = qu_header^
-        self.quality = qu_str^
+        self.header = header^
+        self.sequence = sequence^
+        self.plus_line = plus_line^
+        self.quality = quality^
         self.phred_offset = Int8(schema.OFFSET)
 
     @always_inline
@@ -534,17 +534,17 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     fn __init__(
         out self,
-        header_span: Span[Byte, Self.origin],
-        seq_span: Span[Byte, Self.origin],
-        plus_line_span: Span[Byte, Self.origin],
-        quality_span: Span[Byte, Self.origin],
-        quality_offset: Int8 = 33,
+        header: Span[Byte, Self.origin],
+        sequence: Span[Byte, Self.origin],
+        plus_line: Span[Byte, Self.origin],
+        quality: Span[Byte, Self.origin],
+        phred_offset: Int8 = 33,
     ):
-        self.header = header_span
-        self.sequence = seq_span
-        self.plus_line = plus_line_span
-        self.quality = quality_span
-        self.phred_offset = quality_offset
+        self.header = header
+        self.sequence = sequence
+        self.plus_line = plus_line
+        self.quality = quality
+        self.phred_offset = phred_offset
 
     @always_inline
     fn sequence_slice(self) -> StringSlice[origin = Self.origin]:
