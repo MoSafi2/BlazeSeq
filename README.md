@@ -1,40 +1,58 @@
-# BlazeSeq 
+# BlazeSeq
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://mosafi2.github.io/BlazeSeq/)
+[![Mojo](https://img.shields.io/badge/Mojo-0.26.x-fire)](https://docs.modular.com)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-BlazeSeq is a performant FASTQ parser for [Mojo](https://docs.modular.com/mojo/) with configurable validation and optional GPU-oriented batch types. It can be used as a starting point to support quality control, k-mer generation, alignment, and similar workflows. The unified `FastqParser` supports optional ASCII and quality-schema validation via `ParserConfig` and exposes three parsing modes: `next_ref()` (zero-copy), `next_record()` (owned), and `next_batch()` (SoA); iteration via `ref_records()`, `records()`, or `batched()`. Device upload is available for GPU pipelines (e.g. quality prefix-sum).
+A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq supports different modes of parsing. it targets several GB/s throughput from disk using zero-copy parsing (similair to needletail and seq-io). In addition to owned records, and GPU-friendly batching. It supports gzip input (via zlib binding), and configurable validation — all through a single unified API.
+BlazeSeq aims to be
 
-**Note:** BlazeSeq is a re-write of the earlier `MojoFastTrim`, which can still be accessed from [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim).
+---
 
-## Key features
+## Key **features**
 
-- **Configurable parsing:** `FastqParser[R, config]` with `ParserConfig` for buffer size, growth, and validation (ASCII and quality schema). Validation can be turned off for maximum throughput.
-- **High throughput:** Parsing targets on the order of several GB/s from disk on modern hardware (see [Performance](#performance)).
-- **Unified API:** One parser with `next_ref()` (zero-copy `RefRecord`), `next_record()` (owned `FastqRecord`), and `next_batch()` (`FastqBatch` SoA). Iteration: `ref_records()`, `records()`, or `batched()`.
-- **GPU support:** `FastqBatch` / `DeviceFastqBatch`, `upload_batch_to_device`, and device-side types. Needleman-Wunsch GPU/CPU example: `examples/device_nw/` (see its README).
+- **SIMD-accelerated scanning** — Vectorized from the ground up using mojo's SIMD first-class support.
+- **Three parsing modes** — Choose your trade-off between speed and convenience:
+  - `ref_records()` — Zero-copy views (fastest, borrow semantics)
+  - `records()` — Owned records (thread-safe)
+  - `batched()` — Structure-of-Arrays for GPU upload
+- **Compile-time validation toggles** — Disable ASCII/quality checks at compile time for maximum throughput
+
+---
 
 ## Requirements
 
-- [Mojo](https://docs.modular.com/mojo/) (project uses **0.26.1** via [pixi](https://prefix.dev/docs/pixi/)). Supported on Linux, macOS, and WSL2.
+- [Mojo](https://docs.modular.com/mojo/) — the project uses **0.26.1** (pinned via [pixi](https://prefix.dev/docs/pixi/))
+- Linux, macOS, or WSL2
 
-## Installation
+---
 
-Add BlazeSeq as a dependency in your project's `pixi.toml` (e.g. under `[dependencies]`):
+## Quick Start
+
+### Installation (Pixi)
+
+If you don't have pixi already, install it first:
+
+```bash
+curl -fsSL https://pixi.sh/install.sh | sh
+```
+
+This will install the `pixi` environment manager (see [pixi documentation](https://prefix.dev/docs/pixi/)). BlazeSeq uses pixi to manage dependencies and compatible Mojo toolchains.
 
 ```toml
+# In your pixi.toml
+[dependencies]
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
-Then run `pixi install`. The project also provides a conda/rattler-build package; use the same dependency line when installing via pixi.
+```bash
+pixi install
+pixi run mojo run -I . your_script.mojo
+```
 
-## Using in your project
-
-- **With pixi**: In your project's `pixi.toml`, add `blazeseq` as above. After `pixi install`, run scripts with `pixi run mojo run -I . path/to/script.mojo` so that `from blazeseq import ...` resolves.
-- **Clone and use**: Clone this repo and run from the repo root: `mojo run -I . path/to/your_script.mojo`. The `-I .` lets Mojo find the `blazeseq` package in the current directory.
-- **Pre-built package**: Run `mojo package blazeseq -o BlazeSeq.mojopkg` in this repo, then in another project use `mojo run -I /path/to/BlazeSeq.mojopkg your_script.mojo`.
-
-For gzip-compressed FASTQ, use `GZFile` from the readers module: `from blazeseq import GZFile` or `from blazeseq.readers import GZFile`. It implements the same `Reader` interface as `FileReader` and auto-detects compression.
+---
 
 ## Getting started
 
@@ -48,35 +66,6 @@ pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 pixi run mojo run -I . examples/device_nw/main.mojo
 ```
 
-### Using the library
-
-```mojo
-from blazeseq import FastqParser, ParserConfig
-from blazeseq.readers import FileReader
-from pathlib import Path
-
-fn main() raises:
-    # Schema: "generic", "sanger", "solexa", "illumina_1.3", "illumina_1.5", "illumina_1.8"
-    var parser = FastqParser(FileReader(Path("path/to/your/file.fastq")), "sanger")
-    for record in parser.records():
-        # record is a FastqRecord
-        _ = record.id_slice()
-        _ = len(record)  # sequence length
-        _ = record.quality_slice()
-```
-
-With validation disabled for maximum speed:
-
-```mojo
-var config = ParserConfig(check_ascii=False, check_quality=False)
-var parser = FastqParser[config](FileReader(Path("path/to/file.fastq")), "generic")
-while parser.has_more():
-    var record = parser.next_record()
-    # use record
-```
-
-(`next_record()` raises `EOFError` when there is no more input. Use `parser.records()` for iteration, `parser.ref_records()` for zero-copy refs, or `parser.batched()` for batches.)
-
 ### Count reads and base pairs
 
 ```mojo
@@ -85,30 +74,83 @@ from blazeseq.readers import FileReader
 from pathlib import Path
 
 fn main() raises:
-    var parser = FastqParser[FileReader](FileReader(Path("path/to/file.fastq")), "generic")
-    var total_reads = 0
-    var total_base_pairs = 0
+    var parser = FastqParser(FileReader(Path("data.fastq")), "sanger")
+    var reads = 0
+    var bases = 0
     for record in parser.records():
-        total_reads += 1
-        total_base_pairs += len(record)
-    print(total_reads, total_base_pairs)
+        reads += 1
+        bases += len(record)
+    print(reads, bases)
 ```
 
-### Zero-copy and batched parsing
+### Maximum speed (validation off)
 
 ```mojo
-from blazeseq import FastqParser
+from blazeseq import FastqParser, ParserConfig
 from blazeseq.readers import FileReader
+from pathlib import Path
 
-var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", default_batch_size=1024)
+fn main() raises:
+    comptime config = ParserConfig(check_ascii=False, check_quality=False)
+    var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "generic")
+    for record in parser.ref_records():   # zero-copy
+        _ = len(record)
+```
 
-# Zero-copy refs: for ref in parser.ref_records()
-# Owned records: for rec in parser.records()
-# Batches (SoA): for batch in parser.batched()
+### Batched (for GPU pipelines)
+
+```mojo
+from blazeseq import FastqBatch, upload_batch_to_device
+from gpu.host import DeviceContext
+
+var ctx = DeviceContext()
+var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", default_batch_size=4096)
 for batch in parser.batched():
     # batch is a FastqBatch (Structure-of-Arrays)
-    _ = len(batch)
+    var device_batch = batch.upload_to_device(ctx)   # GPU upload
+    # Your GPU kernel, check examples
 ```
+
+### Reading gzip
+
+```mojo
+from blazeseq import GZFile, FastqParser
+
+var parser = FastqParser[GZFile](GZFile("data.fastq.gz", "rb"), "illumina_1.8")
+for record in parser.records():
+    _ = record.id_slice()
+```
+
+---
+
+## Benchmarks
+
+Benchmark numbers are hardware- and Mojo-version-dependent.
+
+### Throughput benchmark
+
+The througput (`benchmark/throughput_benchmark.mojo`) generates ~3 GB of synthetic FASTQ in memory and times all three parsing modes. Run it yourself:
+
+```bash
+pixi run mojo run -I . benchmark/throughput_benchmark.mojo
+```
+
+### Comparison with other tools
+
+---
+
+## Documentation
+
+API Reference: [https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)
+Examples: `examples/` directory includes parser usage, writer, and GPU alignment
+---
+
+## Limitations
+
+- No multi-line FASTQ support — Records must fit four lines (standard Illumina/ONT format)
+- No current support for Paired-end reads, or FASTA files (in progress)
+- No index/seek — Streaming parser only; use MemoryReader for repeated scans
+- Mojo-only — No Python interop (python binding in progress)
 
 ## Testing
 
@@ -137,14 +179,12 @@ The site is generated with [Modo](https://mlange-42.github.io/modo/) (plain mark
 
 Benchmark numbers are approximate and depend on hardware, disk, and Mojo version. They serve as internal targets and regression checks. Scripts and datasets are in the repo; current Mojo is 0.26.x (see `pixi.toml`).
 
-### Datasets
+## Project History
 
-- [Raposa (2020)](https://zenodo.org/records/3736457/files/9_Swamp_S2B_rbcLa_2019_minq7.fastq?download=1) (40K reads)
-- [Biofast benchmark](https://github.com/lh3/biofast/releases/tag/biofast-data-v1) (5.5M reads)
-- [Elsafi Mabrouk et al.](https://www.ebi.ac.uk/ena/browser/view/SRR16012060) (12.2M reads)
-- [Galonska et al.](https://www.ebi.ac.uk/ena/browser/view/SRR4381936) (27.7M reads)
-- [Galonska et al.](https://www.ebi.ac.uk/ena/browser/view/SRR4381933) (R1 only, 169.8M reads)
-
+BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim)), redesigned for:
+Unified parser architecture (one parser, three modes)
+GPU-oriented batch types
+Compile-time configuration
 
 ## License
 

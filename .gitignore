@@ -28,3 +28,4 @@ benchmark_results.json
 # Benchmark binaries (fastq-parser)
 benchmark/fastq-parser/kseq_runner/kseq_runner
 benchmark/fastq-parser/run_blazeseq
+blazeseq_mojo_sources.txt
