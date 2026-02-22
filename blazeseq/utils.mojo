@@ -526,21 +526,33 @@ fn _handle_incomplete_line_with_buffer_growth[
         interim = SearchResults.DEFAULT
         interim.start = 0
         state = SearchState.START
+        var plus_line_consumed_short = False
         try:
             for i in range(4):
-                var line = stream.next_complete_line()
-                interim[i] = line
-                state = state + 1
+                if i == 2:
+                    if stream.try_consume[Byte(quality_header), Byte(new_line)]():
+                        plus_line_consumed_short = True
+                        state = state + 1
+                    else:
+                        var line = stream.next_complete_line()
+                        interim[i] = line
+                        state = state + 1
+                else:
+                    var line = stream.next_complete_line()
+                    interim[i] = line
+                    state = state + 1
         except e:
             if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
                 continue
             else:
                 raise e
-    interim.end = stream.buffer.buffer_position()
-    if interim.all_set():
-        break
-    if len(interim[2]) == 0 or interim[2][0] != quality_header:
-        raise Error("Plus line does not start with '+'")
+        interim.end = stream.buffer.buffer_position()
+        if plus_line_consumed_short or interim.all_set():
+            break
+        if not plus_line_consumed_short and (
+            len(interim[2]) == 0 or interim[2][0] != quality_header
+        ):
+            raise Error("Plus line does not start with '+'")
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
@@ -566,11 +578,21 @@ fn _handle_incomplete_line[
     stream.buffer._compact_from(interim.start)
     _ = stream.buffer._fill_buffer()
     interim = interim - interim.start
+    var plus_line_consumed_short = False
     for i in range(state.state, 4):
         try:
-            var line = stream.next_complete_line()
-            interim[i] = line
-            state = state + 1
+            if i == 2:
+                if stream.try_consume[Byte(quality_header), Byte(new_line)]():
+                    plus_line_consumed_short = True
+                    state = state + 1
+                else:
+                    var line = stream.next_complete_line()
+                    interim[i] = line
+                    state = state + 1
+            else:
+                var line = stream.next_complete_line()
+                interim[i] = line
+                state = state + 1
         except e:
             if e == LineIteratorError.EOF:
                 raise EOFError()
@@ -583,10 +605,9 @@ fn _handle_incomplete_line[
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    # if not interim.all_set():
-    #     raise LineIteratorError.OTHER
-
-    if len(interim[2]) == 0 or interim[2][0] != quality_header:
+    if not plus_line_consumed_short and (
+        len(interim[2]) == 0 or interim[2][0] != quality_header
+    ):
         raise Error("Plus line does not start with '+'")
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
@@ -607,20 +628,28 @@ fn _parse_record_fast_path[
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
     interim.start = stream.buffer.buffer_position()
-    
+    var plus_line_consumed_short = False
+
     @parameter
     for i in range(4):
         try:
-            interim[i] = stream.next_complete_line()
-            state = state + 1
+            if i == 2:
+                if stream.try_consume[Byte(quality_header), Byte(new_line)]():
+                    plus_line_consumed_short = True
+                    state = state + 1
+                else:
+                    interim[2] = stream.next_complete_line()
+                    state = state + 1
+            else:
+                interim[i] = stream.next_complete_line()
+                state = state + 1
         except e:
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    # if not interim.all_set():
-    #     raise LineIteratorError.OTHER
-
-    if len(interim[2]) == 0 or interim[2][0] != quality_header:
+    if not plus_line_consumed_short and (
+        len(interim[2]) == 0 or interim[2][0] != quality_header
+    ):
         raise LineIteratorError.OTHER
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
