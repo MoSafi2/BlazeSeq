@@ -12,7 +12,7 @@ BlazeSeq is a performant FASTQ parser for [Mojo](https://docs.modular.com/mojo/)
 - **Configurable parsing:** `FastqParser[R, config]` with `ParserConfig` for buffer size, growth, and validation (ASCII and quality schema). Validation can be turned off for maximum throughput.
 - **High throughput:** Parsing targets on the order of several GB/s from disk on modern hardware (see [Performance](#performance)).
 - **Unified API:** One parser with `next_ref()` (zero-copy `RefRecord`), `next_record()` (owned `FastqRecord`), and `next_batch()` (`FastqBatch` SoA). Iteration: `ref_records()`, `records()`, or `batched()`.
-- **GPU support:** `FastqBatch` / `DeviceFastqBatch`, `upload_batch_to_device`, and device-side types. Optional quality prefix-sum kernel (see `examples/example_device.mojo`; may require additional kernel modules).
+- **GPU support:** `FastqBatch` / `DeviceFastqBatch`, `upload_batch_to_device`, and device-side types. Needleman-Wunsch GPU/CPU example: `examples/device_nw/` (see its README).
 
 ## Requirements
 
@@ -45,7 +45,7 @@ For gzip-compressed FASTQ, use `GZFile` from the readers module: `from blazeseq 
 pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 
 # GPU quality prefix-sum (requires GPU and optional kernel modules)
-pixi run mojo run examples/example_device.mojo
+pixi run mojo run -I . examples/device_nw/main.mojo
 ```
 
 ### Using the library
