@@ -756,7 +756,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         var current_cap = self.buffer.capacity()
         var growth_amount = min(current_cap, self._max_capacity - current_cap)
         self.buffer.grow_buffer(growth_amount, self._max_capacity)
-         _ = self.buffer._fill_buffer()
+        _ = self.buffer._fill_buffer()
 
     @always_inline
     fn _handle_eof_line(
