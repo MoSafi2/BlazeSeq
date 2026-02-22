@@ -1,4 +1,4 @@
-from memory import memcpy, UnsafePointer, Span, alloc
+from memory import memcpy, mem, UnsafePointer, Span, alloc
 from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
@@ -117,12 +117,13 @@ struct BufferedReader[R: Reader](
         return cons_size
 
     @always_inline
-    fn unconsume(mut self, size: Int) raises:
+    fn unconsume(mut self, size: Int):
         """
-        Unconsume `size` bytes. Must not exceed `available()`.
+        Unconsume `size` bytes. `_head` tracks position relative to compacted data;
+        must not unconsume past the start (size <= _head). Use debug build with
+        ASSERT=all to catch violations.
         """
-        if size > self._head:
-            raise Error("Cannot unconsume more than available")
+        debug_assert(size <= self._head, "unconsume exceeds head position")
         self._head -= size
 
     @always_inline
@@ -222,7 +223,7 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref [_]self) raises -> Span[Byte, MutExternalOrigin]:
+    fn view(ref [_]self) -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head
@@ -245,11 +246,13 @@ struct BufferedReader[R: Reader](
         )
 
     @always_inline
-    fn _compact_from(mut self, from_pos: Int = 0) raises:
+    fn _compact_from(mut self, from_pos: Int = 0):
         """
         Discard bytes [0, from_pos) and shift remaining data to [0, end - from_pos).
         Resets head if it was before from_pos (parser record-boundary use case).
         """
+        if from_pos == 0:
+            return
         if from_pos >= self._end:
             self._stream_position += self._end
             self._head = 0
@@ -258,7 +261,7 @@ struct BufferedReader[R: Reader](
 
         self._stream_position += from_pos
         var remaining = self._end - from_pos
-        memcpy(dest=self._ptr, src=self._ptr + from_pos, count=remaining)
+        memmove(dest=self._ptr, src=self._ptr + from_pos, count=remaining)
         if self._head < from_pos:
             self._head = 0
         else:
@@ -276,9 +279,9 @@ struct BufferedReader[R: Reader](
             return 0
 
         var buf_span = Span[Byte, MutExternalOrigin](
-            ptr=self._ptr, length=self._len
+            ptr=self._ptr + self._end, length=space
         )
-        var amt = self.source.read_to_buffer(buf_span, space, self._end)
+        var amt = self.source.read_to_buffer(buf_span, space, 0)
         self._end += Int(amt)
         if amt == 0:
             self._is_eof = True
@@ -310,14 +313,9 @@ struct BufferedReader[R: Reader](
     fn __getitem__(self, index: Int) raises -> Byte:
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
         """
+        debug_assert(index >= 0 and index < self.available(), "index out of bounds")
         if index < 0 or index >= self.available():
-            raise Error(
-                "Out of bounds: index "
-                + String(index)
-                + " not in valid range [0, "
-                + String(self.available())
-                + ")"
-            )
+            raise Error("Out of bounds")
         return self._ptr[self._head + index]
 
     @always_inline

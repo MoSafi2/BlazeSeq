@@ -197,7 +197,7 @@ fn memchr[
     Returns:
         The index of the found character, or -1 if not found.
     """
-    if len(haystack[start:]) < SIMD_U8_WIDTH:
+    if (len(haystack) - start) < SIMD_U8_WIDTH:
         for i in range(start, len(haystack)):
             if haystack[i] == chr:
                 return i
