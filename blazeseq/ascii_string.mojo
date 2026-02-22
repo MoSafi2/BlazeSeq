@@ -131,7 +131,7 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
     fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
         """Return StringSlice view of ASCIIString bytes."""
         return StringSlice(unsafe_from_utf8=self.as_span())
-    
+
     @always_inline
     fn __ne__(self, other: Self) -> Bool:
         """Compare two ASCIIStrings for inequality."""

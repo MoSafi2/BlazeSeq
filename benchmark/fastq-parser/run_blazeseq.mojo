@@ -23,7 +23,7 @@ fn main() raises:
     comptime config = ParserConfig(
         check_ascii=False,
         check_quality=False,
-        buffer_capacity= 64 * 1024,
+        buffer_capacity= 1024 * 64,
         buffer_growth_enabled=False,
     )
 
