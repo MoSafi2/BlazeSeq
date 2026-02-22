@@ -424,7 +424,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _parse_record_line(mut self) raises -> FastqRecord:
         var line1 = ASCIIString(self.line_iter.next_line())
         var line2 = ASCIIString(self.line_iter.next_line())
-        _ = self.line_iter.next_line()  # plus line, consumed but not stored
+        var line3 = self.line_iter.next_line()  # plus line, consumed but not stored
+        if len(line3) == 0 or line3[0] != quality_header:
+            raise Error("Plus line does not start with '+'")
         var line4 = ASCIIString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line4^, schema)

@@ -536,9 +536,11 @@ fn _handle_incomplete_line_with_buffer_growth[
                 continue
             else:
                 raise e
-        interim.end = stream.buffer.buffer_position()
-        if interim.all_set():
-            break
+    interim.end = stream.buffer.buffer_position()
+    if interim.all_set():
+        break
+    if len(interim[2]) == 0 or interim[2][0] != quality_header:
+        raise Error("Plus line does not start with '+'")
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
@@ -584,6 +586,8 @@ fn _handle_incomplete_line[
     # if not interim.all_set():
     #     raise LineIteratorError.OTHER
 
+    if len(interim[2]) == 0 or interim[2][0] != quality_header:
+        raise Error("Plus line does not start with '+'")
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
@@ -616,6 +620,8 @@ fn _parse_record_fast_path[
     # if not interim.all_set():
     #     raise LineIteratorError.OTHER
 
+    if len(interim[2]) == 0 or interim[2][0] != quality_header:
+        raise LineIteratorError.OTHER
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],

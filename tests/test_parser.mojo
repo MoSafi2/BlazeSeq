@@ -19,6 +19,7 @@ comptime corrput_qu_score = "Corrupt quality score according to provided schema"
 comptime cor_len = "Quality and sequence string do not match in length"
 comptime cor_seq_hed = "Sequence id does not start with '@'"
 comptime cor_qu_hed = "Plus line does not start with '+'"
+comptime plus_line_start = "Plus line does not start with '+'"
 comptime non_mat_hed = "Plus line is not the same as the header"
 comptime len_mismatch = "Plus line is not the same length as the header"
 
@@ -37,12 +38,12 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
     except e:
         raised = True
         err_msg = String(e)
-        if err_msg.find(msg) < 0 and err_msg.find("EOF") < 0 and err_msg.find(cor_len) < 0 and err_msg.find(cor_seq_hed) < 0:
+        if err_msg.find(msg) < 0 and err_msg.find("EOF") < 0 and err_msg.find(cor_len) < 0 and err_msg.find(cor_seq_hed) < 0 and err_msg.find(plus_line_start) < 0:
             print(err_msg)
             raise
     assert_true(raised, "invalid file should raise: " + file)
     assert_true(
-        err_msg.find(msg) >= 0 or err_msg.find("EOF") >= 0 or err_msg.find(cor_len) >= 0 or err_msg.find(cor_seq_hed) >= 0,
+        err_msg.find(msg) >= 0 or err_msg.find("EOF") >= 0 or err_msg.find(cor_len) >= 0 or err_msg.find(cor_seq_hed) >= 0 or err_msg.find(plus_line_start) >= 0,
         "expected error containing '" + msg + "', EOF, or length mismatch, got: " + err_msg,
     )
 
@@ -94,7 +95,8 @@ fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
         or err_msg.find("Line exceeds buffer") >= 0
         or err_msg.find("EOF") >= 0
         or err_msg.find(cor_len) >= 0
-        or err_msg.find(cor_seq_hed) >= 0,
+        or err_msg.find(cor_seq_hed) >= 0
+        or err_msg.find(plus_line_start) >= 0,
         "expected error containing '" + msg + "' or parse/buffer error, got: "
         + err_msg,
     )
