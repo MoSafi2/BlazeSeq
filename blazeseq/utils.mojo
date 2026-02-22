@@ -609,23 +609,25 @@ fn _parse_record_fast_path[
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
     interim.start = stream.buffer.buffer_position()
 
-    var line1 = stream.next_complete_line()
-    interim[0] = line1
-    var line2 = stream.next_complete_line()
-    interim[1] = line2
-    # if stream.buffer.peek(2) == InlineArray[Byte, 2](Byte(ord("\n")), Byte(ord("+"))):
-    #     interim[2] = stream.buffer.view()[0:2]
-    #     _ = stream.buffer.consume(2)
-    # else:        
-    #     var line3 = stream.consume_line_scalar()
-    #     if len(line3) == 0 or line3[0] != quality_header:
-    #         raise LineIteratorError.OTHER
-    var line3 = stream.consume_line_scalar()
-    if len(line3) == 0 or line3[0] != quality_header:
-        raise LineIteratorError.OTHER
-    interim[2] = line3
-    var line4 = stream.next_complete_line()
-    interim[3] = line4
+    @parameter    
+    for i in range(4):
+        @parameter
+        if i == 2:
+            line3 = stream.consume_line_scalar()
+            if len(line3) == 0 or line3[0] != quality_header:
+                raise LineIteratorError.OTHER
+            interim[2] = line3
+            state = state + 1
+            continue
 
+        interim[i] = stream.next_complete_line()
+        state = state + 1
     interim.end = stream.buffer.buffer_position()
-    return RefRecord[origin=MutExternalOrigin](line1, line2, line4, quality_schema.OFFSET)
+
+
+    return RefRecord[origin=MutExternalOrigin](
+        interim[0],
+        interim[1],
+        interim[3],
+        quality_schema.OFFSET,
+    )

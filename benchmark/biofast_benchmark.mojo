@@ -1,6 +1,6 @@
 from sys import argv
-from blazeseq.io.readers import FileReader, GZFile
-from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq import FileReader, GZFile
+from blazeseq import FastqParser, ParserConfig
 from pathlib import Path
 from utils import Variant
 
