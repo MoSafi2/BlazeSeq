@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq, FASTX.jl.
-# Generates 3GB synthetic FASTQ on a tmpfs mount, runs each parser with hyperfine.
+# Generates 3GB synthetic FASTQ on a ramfs mount, runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh
-# Requires: pixi, hyperfine, cargo, gcc or clang, julia. On Linux: sudo for tmpfs mount/umount.
+# Requires: pixi, hyperfine, cargo, gcc or clang, julia. On Linux: sudo for ramfs mount/umount.
 
 set -e
 
@@ -43,7 +43,7 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
-# --- Tmpfs mount (minimize disk I/O) ---
+# --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/blazeseq_bench_1g.fastq"
 MOUNTED=0
@@ -63,10 +63,11 @@ trap cleanup_mount EXIT
 
 case "$(uname -s)" in
     Linux)
-        if sudo mount -t tmpfs -o size=5G tmpfs "$BENCH_DIR" 2>/dev/null; then
+        if sudo mount -t ramfs ramfs "$BENCH_DIR" 2>/dev/null; then
             MOUNTED=1
+            sudo chown "$(id -u):$(id -g)" "$BENCH_DIR"
         else
-            echo "Failed to mount tmpfs on $BENCH_DIR. Ensure sudo is available and tmpfs is supported."
+            echo "Failed to mount ramfs on $BENCH_DIR. Ensure sudo is available and ramfs is supported."
             echo "Fallback: using /dev/shm (no mount)."
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_bench_$$"
@@ -85,7 +86,7 @@ esac
 # --- Generate 3GB synthetic FASTQ ---
 echo "Generating 3GB synthetic FASTQ at $BENCH_FILE ..."
 if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 3; then
-    echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted tmpfs)."
+    echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
     exit 1
 fi
 
