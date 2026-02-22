@@ -237,10 +237,36 @@ fn memchr[
             var index = Int(count_trailing_zeros(packed))
             return s + index + offset + start
 
+    
+    var tail_start = aligned_end + offset  # relative to ptr base (haystack[start:])
+    var tail_len = len(haystack) - (start + tail_start)
+
     # Finish and last bytes
-    for i in range(aligned_end + start + offset, len(haystack)):
-        if haystack[i] == chr:
-            return i
+    @parameter
+    fn check_tail[width: Int](p: UnsafePointer[UInt8], base_offset: Int) -> Int:
+        """Load `width` bytes, return absolute index of first match or -1."""
+        var v = p.load[width=width]()
+        var mask = v.eq(SIMD[DType.uint8, width](chr))
+        var packed = pack_bits(mask)
+        if packed:
+            return Int(count_trailing_zeros(packed)) + base_offset + start
+        return -1
+
+    var tail_ptr = ptr + tail_start
+    var tail_off = tail_start + offset  # absolute offset from haystack.unsafe_ptr()
+
+    @parameter
+    for w in [SIMD_U8_WIDTH // 2, SIMD_U8_WIDTH // 4, SIMD_U8_WIDTH // 8, 1]:
+        @parameter
+        if w >= 1:
+            if tail_len >= w:
+                var result = check_tail[w](tail_ptr, tail_off)
+                if result != -1:
+                    return result
+                tail_ptr  = tail_ptr + w
+                tail_off  = tail_off + w
+                tail_len -= w
+
 
     return -1
 
