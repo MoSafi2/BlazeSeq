@@ -1,7 +1,11 @@
-"""GPU and CPU Needleman-Wunsch kernels for device_nw example.
+"""GPU and CPU Needleman-Wunsch kernels for the needlemann-wunsh_gpu_alignment example.
 
-Defines the NW alignment kernel (device), mismatch-count kernel (device),
-and CPU reference implementation. Shared constants for max lengths and layout.
+  - nw_kernel: GPU kernel runs one block per read. Each block computes
+    the global alignment score (Needleman-Wunsch) for one (reference, query) pair
+    using two-row DP and writes the score to scores[block_idx]. Uses ref_tensor
+    for the reference, and seq_ptr + seq_ends to get the query for this record.
+  - needleman_wunsch_cpu: host-side reference implementation with the same
+    scoring (match +1, mismatch -1, gap -1) for correctness and CPU benchmarking.
 """
 
 from gpu import block_idx
@@ -11,7 +15,7 @@ from layout import Layout, LayoutTensor
 # Max reference and query length for the NW kernel (avoids dynamic alloc on device).
 comptime MAX_REF_LEN: Int = 256
 comptime MAX_QUERY_LEN: Int = 256
-# Two rows of (MAX_REF_LEN+1) Int32 per record for DP.
+# Two rows of (MAX_REF_LEN+1) Int32 per record for DP; each block uses one "slot."
 comptime ROW_STRIDE: Int = 2 * (MAX_REF_LEN + 1)
 
 # Static 1D layout for reference on device (used with LayoutTensor).
@@ -22,25 +26,33 @@ fn nw_kernel(
     ref_tensor: LayoutTensor[DType.uint8, REF_LAYOUT, MutAnyOrigin],
     ref_len: Int,
     seq_ptr: UnsafePointer[UInt8, MutAnyOrigin],
-    qual_ends: UnsafePointer[Int64, MutAnyOrigin],
+    seq_ends: UnsafePointer[Int64, MutAnyOrigin],
     num_records: Int,
     scores: UnsafePointer[Int32, MutAnyOrigin],
     row_scratch: UnsafePointer[Int32, MutAnyOrigin],
 ) -> None:
-    """Needleman-Wunsch global alignment: one block per record. Writes score to scores[block_idx]."""
+    """Needleman-Wunsch global alignment: one block per record.
+
+    Block index identifies the read. Query is seq_ptr[q_start:q_end] with
+    q_start/q_end from seq_ends. Fills two rows of DP (prev/curr), then
+    writes the final cell (ref_len, query_len) to scores[block_idx].
+    Scoring: match +1, mismatch -1, gap -1.
+    """
     var rec_idx = Int(block_idx.x)
     if rec_idx >= num_records:
         return
 
+    # Query bounds for this record (concatenated sequences, seq_ends are boundaries).
     var q_start: Int = 0
     if rec_idx > 0:
-        q_start = Int(qual_ends[rec_idx - 1])
-    var q_end = Int(qual_ends[rec_idx])
+        q_start = Int(seq_ends[rec_idx - 1])
+    var q_end = Int(seq_ends[rec_idx])
     var query_len = q_end - q_start
     if query_len > MAX_QUERY_LEN or ref_len > MAX_REF_LEN:
         scores[rec_idx] = 0
         return
 
+    # This block's slice of row_scratch: two rows of (MAX_REF_LEN+1) Int32.
     var scratch_base = row_scratch + rec_idx * ROW_STRIDE
     var dp_prev = scratch_base
     var dp_curr = scratch_base + (MAX_REF_LEN + 1)
@@ -49,9 +61,11 @@ fn nw_kernel(
     var mismatch_score: Int32 = -1
     var gap_score: Int32 = -1
 
+    # Initialize first row: gap penalties along reference.
     for i in range(ref_len + 1):
         dp_prev.store(i, gap_score * Int32(i))
 
+    # Fill DP by column (query position j); only two rows kept.
     for j in range(1, query_len + 1):
         dp_curr.store(0, gap_score * Int32(j))
         for i in range(1, ref_len + 1):
@@ -71,6 +85,7 @@ fn nw_kernel(
             if ins_score > best:
                 best = ins_score
             dp_curr.store(i, best)
+        # Swap rows for next j.
         var tmp = dp_prev
         dp_prev = dp_curr
         dp_curr = tmp
@@ -78,33 +93,12 @@ fn nw_kernel(
     scores[rec_idx] = dp_prev.load(ref_len)[0]
 
 
-fn mismatch_count_kernel(
-    ref_tensor: LayoutTensor[DType.uint8, REF_LAYOUT, MutAnyOrigin],
-    ref_len: Int,
-    seq_ptr: UnsafePointer[UInt8, MutAnyOrigin],
-    qual_ends: UnsafePointer[Int64, MutAnyOrigin],
-    num_records: Int,
-    mismatch_out: UnsafePointer[Int32, MutAnyOrigin],
-) -> None:
-    """One block per record: count position-wise mismatches with reference over min(query_len, ref_len)."""
-    var rec_idx = Int(block_idx.x)
-    if rec_idx >= num_records:
-        return
-    var q_start: Int = 0
-    if rec_idx > 0:
-        q_start = Int(qual_ends[rec_idx - 1])
-    var q_end = Int(qual_ends[rec_idx])
-    var query_len = q_end - q_start
-    var cmp_len = min(query_len, ref_len)
-    var count: Int32 = 0
-    for i in range(cmp_len):
-        if ref_tensor.load_scalar(i) != (seq_ptr + q_start + i)[]:
-            count += 1
-    mismatch_out[rec_idx] = count
-
-
 fn needleman_wunsch_cpu(reference: String, query: String) -> Int32:
-    """Host-side NW. Same scoring: match +1, mismatch -1, gap -1."""
+    """Host-side Needleman-Wunsch; same scoring as GPU: match +1, mismatch -1, gap -1.
+
+    Returns the optimal global alignment score. Logic and indexing are kept
+    identical to nw_kernel for CPU/GPU result parity.
+    """
     var r_len = len(reference)
     var q_len = len(query)
     if r_len == 0 or q_len == 0:
@@ -119,14 +113,17 @@ fn needleman_wunsch_cpu(reference: String, query: String) -> Int32:
     for _ in range(r_len + 1):
         dp_curr.append(Int32(0))
 
+    # Match GPU: same loop structure and row swap; compare bytes as UInt8 like the kernel.
+    var ref_bytes = reference.as_bytes()
+    var q_bytes = query.as_bytes()
     for j in range(1, q_len + 1):
         dp_curr[0] = gap_score * Int32(j)
         for i in range(1, r_len + 1):
             var im1 = i - 1
             var jm1 = j - 1
             var diag: Int32 = dp_prev[im1]
-            var ref_byte = Int(reference.as_bytes()[im1])
-            var q_byte = Int(query.as_bytes()[jm1])
+            var ref_byte: UInt8 = ref_bytes[im1]
+            var q_byte: UInt8 = q_bytes[jm1]
             if ref_byte == q_byte:
                 diag += match_score
             else:
@@ -139,8 +136,7 @@ fn needleman_wunsch_cpu(reference: String, query: String) -> Int32:
             if ins_score > best:
                 best = ins_score
             dp_curr[i] = best
-        if j == q_len:
-            return dp_curr[r_len]
+        # Same row swap as GPU; result is in the row we just filled, which becomes dp_prev.
         var tmp = dp_prev.copy()
         dp_prev = dp_curr.copy()
         dp_curr = tmp.copy()
