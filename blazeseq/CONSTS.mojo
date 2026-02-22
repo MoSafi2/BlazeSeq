@@ -17,7 +17,7 @@ comptime EOF = "EOF"
 
 comptime simd_width: Int = simd_width_of[UInt8]()
 
-comptime DEFAULT_CAPACITY = 4 * 1024
+comptime DEFAULT_CAPACITY = 64 * KB
 comptime MAX_SHIFT = 30
 comptime MAX_CAPACITY = 2**MAX_SHIFT
 
