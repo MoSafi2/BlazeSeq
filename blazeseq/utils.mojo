@@ -582,8 +582,8 @@ fn _handle_incomplete_line[
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    if not interim.all_set():
-        raise LineIteratorError.OTHER
+    # if not interim.all_set():
+    #     raise LineIteratorError.OTHER
 
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
@@ -615,8 +615,8 @@ fn _parse_record_fast_path[
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    if not interim.all_set():
-        raise LineIteratorError.OTHER
+    # if not interim.all_set():
+    #     raise LineIteratorError.OTHER
 
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
