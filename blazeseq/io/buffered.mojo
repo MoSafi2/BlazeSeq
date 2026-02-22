@@ -352,7 +352,6 @@ struct BufferedReader[R: Reader](
     fn __getitem__(self, index: Int) raises -> Byte:
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
         """
-        debug_assert(index >= 0 and index < self.available(), "index out of bounds")
         if index < 0 or index >= self.available():
             raise Error("Out of bounds")
         return self._ptr[self._head + index]

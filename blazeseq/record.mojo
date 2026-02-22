@@ -286,10 +286,10 @@ struct Validator(Copyable):
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
-        if record.SeqHeader[0] != UInt8(read_header):
+        if len(record.SeqHeader) == 0 or record.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
 
-        if record.QuHeader[0] != UInt8(quality_header):
+        if len(record.QuHeader) == 0 or record.QuHeader[0] != UInt8(quality_header):
             raise Error("Quality header does not start with '+'")
 
         if len(record.SeqStr) != len(record.QuStr):
@@ -322,10 +322,10 @@ struct Validator(Copyable):
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
-        if record.SeqHeader[0] != UInt8(read_header):
+        if len(record.SeqHeader) == 0 or record.SeqHeader[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
 
-        if record.QuHeader[0] != UInt8(quality_header):
+        if len(record.QuHeader) == 0 or record.QuHeader[0] != UInt8(quality_header):
             raise Error("Quality header does not start with '+'")
 
         if len(record.SeqStr) != len(record.QuStr):
