@@ -25,7 +25,7 @@ fn main() raises:
 
     # Zero-copy ref iteration
     for record in parser.ref_records():
-        _ = record.get_header_string()
+        _ = record.header_slice()
         _ = len(record)
 
     # Batched for GPU pipelines

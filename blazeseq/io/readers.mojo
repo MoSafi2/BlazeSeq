@@ -87,7 +87,7 @@ struct FileReader(Movable, Reader):
         var r = FileReader(Path("data.fastq"))
         var parser = FastqParser[FileReader](r^, "generic")
         for record in parser.records():
-            _ = record.get_header_string()
+            _ = record.header_slice()
         ```
     """
 
@@ -279,7 +279,7 @@ struct GZFile(Movable, Reader):
         var r = GZFile("data.fastq.gz", "rb")
         var parser = FastqParser[GZFile](r^, "illumina_1.8")
         for record in parser.records():
-            _ = record.get_header_string()
+            _ = record.header_slice()
         ```
     """
 

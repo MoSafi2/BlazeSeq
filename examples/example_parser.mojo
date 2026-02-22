@@ -43,9 +43,9 @@ fn example_record_parser(file_path: String) raises:
         # Print first 3 records as examples
         if record_count <= 3:
             print("Record " + String(record_count) + ":")
-            print("  Header: " + String(record.get_header_string()))
+            print("  Header: " + String(record.header_slice()))
             print("  Sequence length: " + String(len(record)))
-            print("  Quality length: " + String(len(record.QuStr)))
+            print("  Quality length: " + String(len(record.quality)))
             print()
 
     print("Summary:")
@@ -84,9 +84,9 @@ fn example_record_parser_no_validation(file_path: String) raises:
         # Print first 3 records as examples
         if record_count <= 3:
             print("Record " + String(record_count) + ":")
-            print("  Header: " + String(record.get_header_string()))
+            print("  Header: " + String(record.header_slice()))
             print("  Sequence length: " + String(len(record)))
-            print("  Quality length: " + String(len(record.QuStr)))
+            print("  Quality length: " + String(len(record.quality)))
             print()
 
     print("Summary:")
@@ -122,9 +122,9 @@ fn example_batched_parser(file_path: String) raises:
             for i in range(3):
                 var rec = batch.get_ref(i)
                 print("Record " + String(i + 1) + ":")
-                print("  Header: " + String(rec.get_header()))
+                print("  Header: " + String(rec.header_slice()))
                 print("  Sequence length: " + String(len(rec)))
-                print("  Quality length: " + String(rec.len_quality()))
+                print("  Quality length: " + String(len(rec.quality)))
                 print()
             batch_no += 1
         record_count += batch.num_records()

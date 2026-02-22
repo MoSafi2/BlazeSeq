@@ -109,42 +109,42 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         """Append one FastqRecord to the batch (copies into packed buffers)."""
 
         current_loaded = self.num_records()
-        self._quality_bytes.extend(record.QuStr.as_span())
-        self._sequence_bytes.extend(record.SeqStr.as_span())
-        self._header_bytes.extend(record.SeqHeader.as_span())
+        self._quality_bytes.extend(record.quality.as_span())
+        self._sequence_bytes.extend(record.sequence.as_span())
+        self._header_bytes.extend(record.header.as_span())
 
         if current_loaded == 0:
-            self._header_ends.append(Int64(len(record.SeqHeader)))
-            self._qual_ends.append(Int64(len(record.QuStr)))
+            self._header_ends.append(Int64(len(record.header)))
+            self._qual_ends.append(Int64(len(record.quality)))
         else:
             self._header_ends.append(
-                Int64(len(record.SeqHeader))
+                Int64(len(record.header))
                 + self._header_ends[current_loaded - 1]
             )
 
             self._qual_ends.append(
-                Int64(len(record.QuStr)) + self._qual_ends[current_loaded - 1]
+                Int64(len(record.quality)) + self._qual_ends[current_loaded - 1]
             )
 
     fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
         """Append one RefRecord to the batch (copies into packed buffers; no FastqRecord allocation)."""
 
         current_loaded = self.num_records()
-        self._quality_bytes.extend(record.QuStr)
-        self._sequence_bytes.extend(record.SeqStr)
-        self._header_bytes.extend(record.SeqHeader)
+        self._quality_bytes.extend(record.quality)
+        self._sequence_bytes.extend(record.sequence)
+        self._header_bytes.extend(record.header)
 
         if current_loaded == 0:
-            self._header_ends.append(Int64(len(record.SeqHeader)))
-            self._qual_ends.append(Int64(len(record.QuStr)))
+            self._header_ends.append(Int64(len(record.header)))
+            self._qual_ends.append(Int64(len(record.quality)))
         else:
             self._header_ends.append(
-                Int64(len(record.SeqHeader))
+                Int64(len(record.header))
                 + self._header_ends[current_loaded - 1]
             )
 
             self._qual_ends.append(
-                Int64(len(record.QuStr)) + self._qual_ends[current_loaded - 1]
+                Int64(len(record.quality)) + self._qual_ends[current_loaded - 1]
             )
 
     fn upload_to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
@@ -266,11 +266,11 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         )
 
         return RefRecord[origin = origin_of(self)](
-            SeqHeader=header_span,
-            SeqStr=seq_span,
-            QuHeader=qu_header_span,
-            QuStr=qual_span,
-            quality_offset=Int8(self._quality_offset),
+            header_span,
+            seq_span,
+            qu_header_span,
+            qual_span,
+            Int8(self._quality_offset),
         )
 
     fn to_records(self) raises -> List[FastqRecord]:

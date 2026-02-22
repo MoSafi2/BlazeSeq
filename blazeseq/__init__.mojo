@@ -20,7 +20,7 @@ Example:
 
     var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
     for record in parser.records():
-        print(record.get_header_string())
+        print(record.header_slice())
     ```
 """
 

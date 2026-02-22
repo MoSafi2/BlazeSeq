@@ -16,11 +16,11 @@ from testing import assert_equal, assert_raises, assert_true, TestSuite
 comptime test_dir = "tests/test_data/fastq_parser/"
 
 comptime corrput_qu_score = "Corrupt quality score according to provided schema"
-comptime cor_len = "Quality and Sequencing string does not match in lengths"
+comptime cor_len = "Quality and sequence string do not match in length"
 comptime cor_seq_hed = "Sequence header does not start with '@'"
-comptime cor_qu_hed = "Quality header does not start with '+'"
-comptime non_mat_hed = "Quality Header is not the same as the Sequencing Header"
-comptime len_mismatch = "Quality Header is not the same length as the Sequencing header"
+comptime cor_qu_hed = "Plus line does not start with '+'"
+comptime non_mat_hed = "Plus line is not the same as the header"
+comptime len_mismatch = "Plus line is not the same length as the header"
 
 
 fn invalid_file_test_fun(file: String, msg: String = "") raises:
@@ -48,9 +48,9 @@ fn valid_file_test_fun_ref(file: String, schema: String = "generic") raises:
     """Same valid files as valid_file_test_fun but iterate via RefRecord (ref_records())."""
     var parser = FastqParser[FileReader](FileReader(test_dir + file), schema)
     for ref_record in parser.ref_records():
-        _ = ref_record.get_header()
-        _ = ref_record.get_seq()
-        _ = ref_record.get_quality()
+        _ = ref_record.header_slice()
+        _ = ref_record.sequence_slice()
+        _ = ref_record.quality_slice()
 
 
 fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
@@ -280,17 +280,17 @@ fn test_record_parser_for_loop() raises:
 
     assert_equal(len(records), 2, "Should iterate over 2 records")
     assert_equal(
-        records[0].SeqHeader.to_string(),
+        records[0].header.to_string(),
         "@r1",
         "First record header should match",
     )
     assert_equal(
-        records[0].SeqStr.to_string(),
+        records[0].sequence.to_string(),
         "ACGT",
         "First record sequence should match",
     )
     assert_equal(
-        records[1].SeqHeader.to_string(),
+        records[1].header.to_string(),
         "@r2",
         "Second record header should match",
     )
@@ -337,7 +337,7 @@ fn test_record_parser_ascii_validation_disabled() raises:
     ](reader^)
     var record = parser.next_record()
     assert_equal(
-        record.SeqHeader.to_string(),
+        record.header.to_string(),
         "@r1",
         "Parser should yield record when ASCII validation is disabled",
     )
@@ -401,9 +401,9 @@ fn test_batched_parser_single_batch_content() raises:
     var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record in batch")
     var rec = batch.get_record(0)
-    assert_equal(rec.SeqHeader.to_string(), "@seq1", "Header should match")
-    assert_equal(rec.SeqStr.to_string(), "ACGT", "Sequence should match")
-    assert_equal(rec.QuStr.to_string(), "!!!!", "Quality should match")
+    assert_equal(rec.header.to_string(), "@seq1", "Header should match")
+    assert_equal(rec.sequence.to_string(), "ACGT", "Sequence should match")
+    assert_equal(rec.quality.to_string(), "!!!!", "Quality should match")
 
 
 fn test_batched_parser_empty_input() raises:
@@ -449,7 +449,7 @@ fn test_batched_parser_schema() raises:
     var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record")
     var rec = batch.get_record(0)
-    assert_equal(rec.SeqStr.to_string(), "ACGT", "Sequence unchanged by schema")
+    assert_equal(rec.sequence.to_string(), "ACGT", "Sequence unchanged by schema")
 
 
 fn test_generate_synthetic_fastq_buffer() raises:
@@ -474,7 +474,7 @@ fn test_generate_synthetic_fastq_buffer() raises:
         total += len(batch)
         for i in range(len(batch)):
             var rec = batch.get_record(i)
-            var seq_len = len(rec.SeqStr)
+            var seq_len = len(rec.sequence)
             assert_true(
                 seq_len >= min_len and seq_len <= max_len,
                 "Record sequence length in [min_length, max_length]",
@@ -493,12 +493,12 @@ fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r1 = parser.next_ref()
-    assert_equal(String(r1.get_header()), "@r1", "First record header")
-    assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
-    assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
+    assert_equal(String(r1.header_slice()), "@r1", "First record header")
+    assert_equal(String(r1.sequence_slice()), "ACGT", "First record seq")
+    assert_equal(String(r1.quality_slice()), "!!!!", "First record quality")
     var r2 = parser.next_ref()
-    assert_equal(String(r2.get_header()), "@r2", "Second record header")
-    assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
+    assert_equal(String(r2.header_slice()), "@r2", "Second record header")
+    assert_equal(String(r2.sequence_slice()), "TGCA", "Second record seq")
     with assert_raises(contains="EOF"):
         _ = parser.next_ref()
 
@@ -523,9 +523,9 @@ fn test_ref_parser_fallback_record_span_chunks() raises:
     var parser = FastqParser[MemoryReader, ref_parser_small_config](reader^)
 
     var r = parser.next_ref()
-    assert_equal(String(r.get_header()), "@r1", "Header should match")
-    assert_equal(String(r.get_seq()), "ACGT", "Sequence should match")
-    assert_equal(String(r.get_quality()), "!!!!", "Quality should match")
+    assert_equal(String(r.header_slice()), "@r1", "Header should match")
+    assert_equal(String(r.sequence_slice()), "ACGT", "Sequence should match")
+    assert_equal(String(r.quality_slice()), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
         _ = parser.next_ref()
 
@@ -540,13 +540,13 @@ fn test_ref_parser_multiple_records_next_loop() raises:
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r1 = parser.next_ref()
-    assert_equal(String(r1.get_header()), "@r1", "First record header")
-    assert_equal(String(r1.get_seq()), "ACGT", "First record seq")
-    assert_equal(String(r1.get_quality()), "!!!!", "First record quality")
+    assert_equal(String(r1.header_slice()), "@r1", "First record header")
+    assert_equal(String(r1.sequence_slice()), "ACGT", "First record seq")
+    assert_equal(String(r1.quality_slice()), "!!!!", "First record quality")
     var r2 = parser.next_ref()
-    assert_equal(String(r2.get_header()), "@r2", "Second record header")
-    assert_equal(String(r2.get_seq()), "TGCA", "Second record seq")
-    assert_equal(String(r2.get_quality()), "####", "Second record quality")
+    assert_equal(String(r2.header_slice()), "@r2", "Second record header")
+    assert_equal(String(r2.sequence_slice()), "TGCA", "Second record seq")
+    assert_equal(String(r2.quality_slice()), "####", "Second record quality")
     with assert_raises(contains="EOF"):
         _ = parser.next_ref()
 
@@ -563,8 +563,8 @@ fn test_ref_parser_for_loop_iteration() raises:
     var last_seq: String = ""
     for ref_record in parser.ref_records():
         if count == 0:
-            first_header = String(ref_record.get_header())
-        last_seq = String(ref_record.get_seq())
+            first_header = String(ref_record.header_slice())
+        last_seq = String(ref_record.sequence_slice())
         count += 1
 
     assert_equal(count, 2, "Should yield two records")
@@ -579,9 +579,9 @@ fn test_ref_parser_eof_after_one_record() raises:
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r = parser.next_ref()
-    assert_equal(String(r.get_header()), "@r1", "Header should match")
-    assert_equal(String(r.get_seq()), "ACGT", "Sequence should match")
-    assert_equal(String(r.get_quality()), "!!!!", "Quality should match")
+    assert_equal(String(r.header_slice()), "@r1", "Header should match")
+    assert_equal(String(r.sequence_slice()), "ACGT", "Sequence should match")
+    assert_equal(String(r.quality_slice()), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
         _ = parser.next_ref()
 
@@ -614,16 +614,16 @@ fn test_ref_parser_multiple_records_span_chunks() raises:
     var parser = FastqParser[MemoryReader, ref_parser_small_config](reader^)
 
     var r1 = parser.next_ref()
-    assert_equal(String(r1.get_header()), "@r1", "First record header")
-    assert_equal(String(r1.get_seq()), "A", "First record seq")
-    assert_equal(String(r1.get_quality()), "!", "First record quality")
+    assert_equal(String(r1.header_slice()), "@r1", "First record header")
+    assert_equal(String(r1.sequence_slice()), "A", "First record seq")
+    assert_equal(String(r1.quality_slice()), "!", "First record quality")
     var r2 = parser.next_ref()
-    assert_equal(String(r2.get_header()), "@r2", "Second record header")
-    assert_equal(String(r2.get_seq()), "B", "Second record seq")
+    assert_equal(String(r2.header_slice()), "@r2", "Second record header")
+    assert_equal(String(r2.sequence_slice()), "B", "Second record seq")
     var r3 = parser.next_ref()
-    assert_equal(String(r3.get_header()), "@r3", "Third record header")
-    assert_equal(String(r3.get_seq()), "C", "Third record seq")
-    assert_equal(String(r3.get_quality()), "!", "Third record quality")
+    assert_equal(String(r3.header_slice()), "@r3", "Third record header")
+    assert_equal(String(r3.sequence_slice()), "C", "Third record seq")
+    assert_equal(String(r3.quality_slice()), "!", "Third record quality")
     with assert_raises(contains="EOF"):
         _ = parser.next_ref()
 
@@ -649,14 +649,14 @@ fn _ref_parser_long_record_content() -> String:
 #     var parser = FastqParser[MemoryReader, ref_parser_growth_config](reader^)
 
 #     var r = parser.next_ref()
-#     assert_equal(String(r.get_header()), "@id", "Header should match")
+#     assert_equal(String(r.header_slice()), "@id", "Header should match")
 #     assert_equal(r.len_record(), 20, "Sequence length 20")
 #     assert_equal(r.len_quality(), 20, "Quality length 20")
 #     assert_equal(
-#         String(r.get_seq()), "AAAAAAAAAAAAAAAAAAAA", "Sequence content"
+#         String(r.sequence_slice()), "AAAAAAAAAAAAAAAAAAAA", "Sequence content"
 #     )
 #     assert_equal(
-#         String(r.get_quality()), "!!!!!!!!!!!!!!!!!!!!", "Quality content"
+#         String(r.quality_slice()), "!!!!!!!!!!!!!!!!!!!!", "Quality content"
 #     )
 #     with assert_raises(contains="EOF"):
 #         _ = parser.next_ref()
@@ -721,8 +721,8 @@ fn test_ref_parser_valid_file_parity() raises:
         FileReader(test_dir + "example.fastq")
     )
     var first = parser.next_ref()
-    assert_true(len(String(first.get_header())) > 0, "First record has header")
-    assert_true(first.len_record() > 0, "First record has sequence")
+    assert_true(len(String(first.header_slice())) > 0, "First record has header")
+    assert_true(len(first) > 0, "First record has sequence")
     var count = 1
     while True:
         try:

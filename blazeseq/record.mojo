@@ -29,26 +29,27 @@ struct FastqRecord(
     Phred offset (33 or 64) used to decode quality scores.
 
     Attributes:
-        SeqHeader: Line starting with '@' (read identifier).
-        SeqStr: Sequence line.
-        QuHeader: Line starting with '+' (optional repeat of id).
-        QuStr: Quality line (same length as SeqStr).
-        quality_offset: Phred offset for `get_quality_scores()` (e.g. 33 for Sanger).
+        header: Line starting with '@' (read identifier).
+        sequence: Sequence line.
+        plus_line: Line starting with '+' (optional repeat of id).
+        quality: Quality line (same length as sequence).
+        phred_offset: Phred offset for `phred_scores()` (e.g. 33 for Sanger).
 
     Example:
         ```mojo
         from blazeseq import FastqRecord
-        var rec = FastqRecord("@read1", "ACGT", "+", "IIII", "sanger")
-        print(rec.get_header_string())
-        var scores = rec.get_quality_scores()
+        from blazeseq.quality_schema import generic_schema
+        var rec = FastqRecord("@read1", "ACGT", "+", "IIII", generic_schema)
+        print(rec.header_slice())
+        var scores = rec.phred_scores()
         ```
     """
 
-    var SeqHeader: ASCIIString
-    var SeqStr: ASCIIString
-    var QuHeader: ASCIIString
-    var QuStr: ASCIIString
-    var quality_offset: Int8
+    var header: ASCIIString
+    var sequence: ASCIIString
+    var plus_line: ASCIIString
+    var quality: ASCIIString
+    var phred_offset: Int8
 
     @always_inline
     fn __init__(
@@ -57,61 +58,29 @@ struct FastqRecord(
         seq_str: String,
         qu_header: String,
         qu_str: String,
+        schema: QualitySchema = generic_schema,
+    ) raises:
+        """Build from four string lines; phred_offset from schema (default generic_schema)."""
+        self.header = ASCIIString(seq_header)
+        self.sequence = ASCIIString(seq_str)
+        self.plus_line = ASCIIString(qu_header)
+        self.quality = ASCIIString(qu_str)
+        self.phred_offset = Int8(schema.OFFSET)
+
+    @always_inline
+    fn __init__(
+        out self,
+        header_span: Span[Byte, MutExternalOrigin],
+        seq_span: Span[Byte, MutExternalOrigin],
+        plus_line_span: Span[Byte, MutExternalOrigin],
+        quality_span: Span[Byte, MutExternalOrigin],
         quality_offset: Int8 = 33,
     ) raises:
-        """Build from four string lines and Phred offset (default 33)."""
-        self.SeqHeader = ASCIIString(seq_header)
-        self.SeqStr = ASCIIString(seq_str)
-        self.QuHeader = ASCIIString(qu_header)
-        self.QuStr = ASCIIString(qu_str)
-        self.quality_offset = quality_offset
-
-    @always_inline
-    fn __init__(
-        out self,
-        seq_header: String,
-        seq_str: String,
-        qu_header: String,
-        qu_str: String,
-        quality_schema: String,
-    ) raises:
-        """Build from four string lines; offset from schema name (e.g. "sanger", "illumina_1.8").
-        """
-        self.SeqHeader = ASCIIString(seq_header)
-        self.SeqStr = ASCIIString(seq_str)
-        self.QuHeader = ASCIIString(qu_header)
-        self.QuStr = ASCIIString(qu_str)
-        self.quality_offset = _schema_string_to_offset(quality_schema)
-
-    @always_inline
-    fn __init__(
-        out self,
-        SeqHeader: Span[Byte, MutExternalOrigin],
-        SeqStr: Span[Byte, MutExternalOrigin],
-        QuHeader: Span[Byte, MutExternalOrigin],
-        QuStr: Span[Byte, MutExternalOrigin],
-        quality_offset: Int8 = 33,
-    ) raises:
-        self.SeqHeader = ASCIIString(SeqHeader)
-        self.QuHeader = ASCIIString(QuHeader)
-        self.SeqStr = ASCIIString(SeqStr)
-        self.QuStr = ASCIIString(QuStr)
-        self.quality_offset = quality_offset
-
-    @always_inline
-    fn __init__(
-        out self,
-        SeqHeader: Span[Byte, MutExternalOrigin],
-        SeqStr: Span[Byte, MutExternalOrigin],
-        QuHeader: Span[Byte, MutExternalOrigin],
-        QuStr: Span[Byte, MutExternalOrigin],
-        quality_schema: String,
-    ) raises:
-        self.SeqHeader = ASCIIString(SeqHeader)
-        self.QuHeader = ASCIIString(QuHeader)
-        self.SeqStr = ASCIIString(SeqStr)
-        self.QuStr = ASCIIString(QuStr)
-        self.quality_offset = _schema_string_to_offset(quality_schema)
+        self.header = ASCIIString(header_span)
+        self.plus_line = ASCIIString(plus_line_span)
+        self.sequence = ASCIIString(seq_span)
+        self.quality = ASCIIString(quality_span)
+        self.phred_offset = quality_offset
 
     fn __init__(out self, sequence: String) raises:
         """Build from a single string containing four newline-separated lines.
@@ -120,11 +89,11 @@ struct FastqRecord(
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
-        self.SeqHeader = ASCIIString(String(seqs[0].strip()))
-        self.SeqStr = ASCIIString(String(seqs[1].strip()))
-        self.QuHeader = ASCIIString(String(seqs[2].strip()))
-        self.QuStr = ASCIIString(String(seqs[3].strip()))
-        self.quality_offset = 33
+        self.header = ASCIIString(String(seqs[0].strip()))
+        self.sequence = ASCIIString(String(seqs[1].strip()))
+        self.plus_line = ASCIIString(String(seqs[2].strip()))
+        self.quality = ASCIIString(String(seqs[3].strip()))
+        self.phred_offset = 33
 
     fn __init__(
         out self,
@@ -134,11 +103,11 @@ struct FastqRecord(
         var qu_str: ASCIIString,
         quality_offset: Int8,
     ):
-        self.SeqHeader = seq_header^
-        self.SeqStr = seq_str^
-        self.QuHeader = qu_header^
-        self.QuStr = qu_str^
-        self.quality_offset = quality_offset
+        self.header = seq_header^
+        self.sequence = seq_str^
+        self.plus_line = qu_header^
+        self.quality = qu_str^
+        self.phred_offset = quality_offset
 
     fn __init__(
         out self,
@@ -146,87 +115,92 @@ struct FastqRecord(
         var seq_str: ASCIIString,
         var qu_header: ASCIIString,
         var qu_str: ASCIIString,
-        quality_schema: QualitySchema,
+        schema: QualitySchema = generic_schema,
     ):
-        self.SeqHeader = seq_header^
-        self.SeqStr = seq_str^
-        self.QuHeader = qu_header^
-        self.QuStr = qu_str^
-        self.quality_offset = Int8(quality_schema.OFFSET)
+        self.header = seq_header^
+        self.sequence = seq_str^
+        self.plus_line = qu_header^
+        self.quality = qu_str^
+        self.phred_offset = Int8(schema.OFFSET)
 
     @always_inline
-    fn get_seq(self) -> StringSlice[MutExternalOrigin]:
+    fn sequence_slice(self) -> StringSlice[MutExternalOrigin]:
         """Return the sequence line as a string slice."""
-        return self.SeqStr.as_string_slice()
+        return self.sequence.as_string_slice()
 
     @always_inline
-    fn get_quality_string(self) -> StringSlice[MutExternalOrigin]:
+    fn quality_slice(self) -> StringSlice[MutExternalOrigin]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
-        return self.QuStr.as_string_slice()
+        return self.quality.as_string_slice()
 
     @always_inline
-    fn get_quality_scores(self) -> List[UInt8]:
-        """Return Phred quality scores using the record's quality_offset (e.g. 33).
+    fn phred_scores(self) -> List[UInt8]:
+        """Return Phred quality scores using the record's phred_offset (e.g. 33).
         """
-        output = List[UInt8](length=len(self.QuStr), fill=0)
-        for i in range(len(self.QuStr)):
-            output[i] = self.QuStr[i] - UInt8(self.quality_offset)
+        output = List[UInt8](length=len(self.quality), fill=0)
+        for i in range(len(self.quality)):
+            output[i] = self.quality[i] - UInt8(self.phred_offset)
         return output^
 
     @always_inline
-    fn get_quality_scores(self, offset: UInt8) -> List[UInt8]:
+    fn phred_scores(self, offset: UInt8) -> List[UInt8]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
-        output = List[UInt8](length=len(self.QuStr), fill=0)
-        for i in range(len(self.QuStr)):
-            output[i] = self.QuStr[i] - offset
+        output = List[UInt8](length=len(self.quality), fill=0)
+        for i in range(len(self.quality)):
+            output[i] = self.quality[i] - offset
         return output^
 
     @always_inline
-    fn get_header_string(self) -> StringSlice[MutExternalOrigin]:
+    fn header_slice(self) -> StringSlice[MutExternalOrigin]:
         """Return the @-line (read identifier) as a string slice."""
-        return self.SeqHeader.as_string_slice()
+        return self.header.as_string_slice()
 
     @always_inline
-    fn total_length(self) -> Int:
+    fn byte_len(self) -> Int:
         """Return total byte length of all four lines (headers + sequence + quality).
         """
         return (
-            len(self.QuHeader)
-            + len(self.QuStr)
-            + len(self.SeqHeader)
-            + len(self.SeqStr)
+            len(self.plus_line)
+            + len(self.quality)
+            + len(self.header)
+            + len(self.sequence)
         )
 
     @always_inline
     fn __str__(self) -> String:
         return String.write(self)
 
-    fn write_to[w: Writer](self, mut writer: w):
+    fn write[w: Writer](self, mut writer: w):
         """Write the record in standard four-line FASTQ format to writer."""
         writer.write(
-            self.SeqHeader.to_string(),
+            self.header.to_string(),
             "\n",
-            self.SeqStr.to_string(),
+            self.sequence.to_string(),
             "\n",
-            self.QuHeader.to_string(),
+            self.plus_line.to_string(),
             "\n",
-            self.QuStr.to_string(),
+            self.quality.to_string(),
             "\n",
         )
 
     @always_inline
+    fn write_to[w: Writer](self, mut writer: w):
+        """Required by Writable trait; delegates to write()."""
+        self.write(writer)
+
+    @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
-        return len(self.SeqStr)
+        return len(self.sequence)
 
     @always_inline
     fn __hash__[H: Hasher](self, mut hasher: H):
-        hasher.update(self.SeqStr.as_string_slice())
+        hasher.update(self.sequence.as_string_slice())
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
-        return self.SeqStr == other.SeqStr
+        return self.sequence == other.sequence
 
     fn __ne__(self, other: Self) -> Bool:
         return not self.__eq__(other)
@@ -246,10 +220,10 @@ struct Validator(Copyable):
 
     Used by FastqParser when check_ascii/check_quality are True. Can also be
     used standalone to validate FastqRecord or RefRecord. validate() runs
-    structure checks plus optional ASCII and quality-schema checks.
+    structure checks plus optional ASCII and quality-range checks.
 
     Attributes:
-        check_ascii: If True, validate_record and validate() also require ASCII bytes.
+        check_ascii: If True, validate_structure and validate() also require ASCII bytes.
         check_quality: If True, validate() also checks quality bytes against quality_schema.
         quality_schema: Bounds (LOWER, UPPER) and OFFSET for quality validation.
     """
@@ -276,7 +250,7 @@ struct Validator(Copyable):
         self.quality_schema = quality_schema.copy()
 
     @always_inline
-    fn validate_record(
+    fn validate_structure(
         self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
     ) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
@@ -286,33 +260,32 @@ struct Validator(Copyable):
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
-        if len(record.SeqHeader) == 0 or record.SeqHeader[0] != UInt8(read_header):
+        if len(record.header) == 0 or record.header[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
 
-        if len(record.QuHeader) == 0 or record.QuHeader[0] != UInt8(quality_header):
-            raise Error("Quality header does not start with '+'")
+        if len(record.plus_line) == 0 or record.plus_line[0] != UInt8(quality_header):
+            raise Error("Plus line does not start with '+'")
 
-        if len(record.SeqStr) != len(record.QuStr):
+        if len(record.sequence) != len(record.quality):
             raise Error(
-                "Quality and Sequencing string does not match in lengths"
+                "Quality and sequence string do not match in length"
             )
 
-        if len(record.QuHeader) > 1:
-            if len(record.QuHeader) != len(record.SeqHeader):
+        if len(record.plus_line) > 1:
+            if len(record.plus_line) != len(record.header):
                 raise Error(
-                    "Quality Header is not the same length as the Sequencing"
-                    " header"
+                    "Plus line is not the same length as the header"
                 )
 
-            var qu_header_slice = record.QuHeader.as_string_slice()[1:]
-            var seq_header_slice = record.SeqHeader.as_string_slice()[1:]
-            if qu_header_slice != seq_header_slice:
+            var plus_slice = record.plus_line.as_string_slice()[1:]
+            var header_slice = record.header.as_string_slice()[1:]
+            if plus_slice != header_slice:
                 raise Error(
-                    "Quality Header is not the same as the Sequencing Header"
+                    "Plus line is not the same as the header"
                 )
 
     @always_inline
-    fn validate_record(
+    fn validate_structure(
         self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
     ) raises:
         """Validate record structure: @ header, + header, seq/qual length, optional header match.
@@ -322,49 +295,48 @@ struct Validator(Copyable):
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
-        if len(record.SeqHeader) == 0 or record.SeqHeader[0] != UInt8(read_header):
+        if len(record.header) == 0 or record.header[0] != UInt8(read_header):
             raise Error("Sequence header does not start with '@'")
 
-        if len(record.QuHeader) == 0 or record.QuHeader[0] != UInt8(quality_header):
-            raise Error("Quality header does not start with '+'")
+        if len(record.plus_line) == 0 or record.plus_line[0] != UInt8(quality_header):
+            raise Error("Plus line does not start with '+'")
 
-        if len(record.SeqStr) != len(record.QuStr):
+        if len(record.sequence) != len(record.quality):
             raise Error(
-                "Quality and Sequencing string does not match in lengths"
+                "Quality and sequence string do not match in length"
             )
 
-        if len(record.QuHeader) > 1:
-            if len(record.QuHeader) != len(record.SeqHeader):
+        if len(record.plus_line) > 1:
+            if len(record.plus_line) != len(record.header):
                 raise Error(
-                    "Quality Header is not the same length as the Sequencing"
-                    " header"
+                    "Plus line is not the same length as the header"
                 )
 
-            var qu_header_slice = StringSlice(unsafe_from_utf8=record.QuHeader)[
+            var plus_slice = StringSlice(unsafe_from_utf8=record.plus_line)[
                 1:
             ]
-            var seq_header_slice = StringSlice(
-                unsafe_from_utf8=record.SeqHeader
+            var header_slice = StringSlice(
+                unsafe_from_utf8=record.header
             )[1:]
-            if qu_header_slice != seq_header_slice:
+            if plus_slice != header_slice:
                 raise Error(
-                    "Quality Header is not the same as the Sequencing Header"
+                    "Plus line is not the same as the header"
                 )
 
-    fn _get_snippet(self, record: FastqRecord) -> String:
-        """Extract snippet from record for error messages."""
+    fn header_snippet(self, record: FastqRecord) -> String:
+        """Extract header snippet from record for error messages."""
         var snippet = String(capacity=100)
-        var header_str = record.get_header_string()
+        var header_str = record.header_slice()
         if len(header_str) > 0:
             snippet += String(header_str)
             if len(snippet) > 100:
                 snippet = snippet[:97] + "..."
         return snippet
 
-    fn _get_snippet_ref(self, record: RefRecord) -> String:
-        """Extract snippet from RefRecord for error messages."""
+    fn header_snippet(self, record: RefRecord) -> String:
+        """Extract header snippet from RefRecord for error messages."""
         var snippet = String(capacity=100)
-        var header_str = StringSlice(unsafe_from_utf8=record.SeqHeader)
+        var header_str = StringSlice(unsafe_from_utf8=record.header)
         if len(header_str) > 0:
             snippet += String(header_str)
             if len(snippet) > 100:
@@ -372,16 +344,16 @@ struct Validator(Copyable):
         return snippet
 
     @always_inline
-    fn validate_quality_schema(self, record: RefRecord) raises:
+    fn validate_quality_range(self, record: RefRecord) raises:
         """Validate each quality byte is within schema LOWER..UPPER.
 
         Raises:
             Error: If any quality byte is outside the schema range.
         """
-        for i in range(len(record.QuStr)):
+        for i in range(len(record.quality)):
             if (
-                record.QuStr[i] > self.quality_schema.UPPER
-                or record.QuStr[i] < self.quality_schema.LOWER
+                record.quality[i] > self.quality_schema.UPPER
+                or record.quality[i] < self.quality_schema.LOWER
             ):
                 raise Error(
                     "Corrupt quality score according to provided schema"
@@ -394,23 +366,23 @@ struct Validator(Copyable):
         Raises:
             Error: If any non-ASCII byte is found.
         """
-        _check_ascii(record.SeqHeader)
-        _check_ascii(record.SeqStr)
-        _check_ascii(record.QuHeader)
-        _check_ascii(record.QuStr)
+        _check_ascii(record.header)
+        _check_ascii(record.sequence)
+        _check_ascii(record.plus_line)
+        _check_ascii(record.quality)
 
     # TODO: Convert to SIMD accelerated version
     @always_inline
-    fn validate_quality_schema(self, record: FastqRecord) raises:
+    fn validate_quality_range(self, record: FastqRecord) raises:
         """Validate each quality byte is within schema LOWER..UPPER.
 
         Raises:
             Error: If any quality byte is outside the schema range.
         """
-        for i in range(len(record.QuStr)):
+        for i in range(len(record.quality)):
             if (
-                record.QuStr[i] > self.quality_schema.UPPER
-                or record.QuStr[i] < self.quality_schema.LOWER
+                record.quality[i] > self.quality_schema.UPPER
+                or record.quality[i] < self.quality_schema.LOWER
             ):
                 raise Error(
                     "Corrupt quality score according to provided schema"
@@ -423,10 +395,10 @@ struct Validator(Copyable):
         Raises:
             Error: If any non-ASCII byte is found.
         """
-        _check_ascii(record.SeqHeader.as_span())
-        _check_ascii(record.SeqStr.as_span())
-        _check_ascii(record.QuHeader.as_span())
-        _check_ascii(record.QuStr.as_span())
+        _check_ascii(record.header.as_span())
+        _check_ascii(record.sequence.as_span())
+        _check_ascii(record.plus_line.as_span())
+        _check_ascii(record.quality.as_span())
 
     @always_inline
     fn validate(
@@ -440,14 +412,14 @@ struct Validator(Copyable):
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
         try:
-            self.validate_record(record, record_number, line_number)
+            self.validate_structure(record, record_number, line_number)
         except e:
             if record_number > 0:
                 var val_err = ValidationError(
                     String(e),
                     record_number=record_number,
                     field="record",
-                    record_snippet=self._get_snippet(record),
+                    record_snippet=self.header_snippet(record),
                 )
                 raise Error(val_err.__str__())
             raise
@@ -460,20 +432,20 @@ struct Validator(Copyable):
                         String(e),
                         record_number=record_number,
                         field="ascii",
-                        record_snippet=self._get_snippet(record),
+                        record_snippet=self.header_snippet(record),
                     )
                     raise Error(val_err.__str__())
                 raise
         if self.check_quality:
             try:
-                self.validate_quality_schema(record)
+                self.validate_quality_range(record)
             except e:
                 if record_number > 0:
                     var val_err = ValidationError(
                         String(e),
                         record_number=record_number,
                         field="quality",
-                        record_snippet=self._get_snippet(record),
+                        record_snippet=self.header_snippet(record),
                     )
                     raise Error(val_err.__str__())
                 raise
@@ -490,14 +462,14 @@ struct Validator(Copyable):
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
         try:
-            self.validate_record(record, record_number, line_number)
+            self.validate_structure(record, record_number, line_number)
         except e:
             if record_number > 0:
                 var val_err = ValidationError(
                     String(e),
                     record_number=record_number,
                     field="record",
-                    record_snippet=self._get_snippet_ref(record),
+                    record_snippet=self.header_snippet(record),
                 )
                 raise Error(val_err.__str__())
             raise
@@ -510,47 +482,23 @@ struct Validator(Copyable):
                         String(e),
                         record_number=record_number,
                         field="ascii",
-                        record_snippet=self._get_snippet_ref(record),
+                        record_snippet=self.header_snippet(record),
                     )
                     raise Error(val_err.__str__())
                 raise
         if self.check_quality:
             try:
-                self.validate_quality_schema(record)
+                self.validate_quality_range(record)
             except e:
                 if record_number > 0:
                     var val_err = ValidationError(
                         String(e),
                         record_number=record_number,
                         field="quality",
-                        record_snippet=self._get_snippet_ref(record),
+                        record_snippet=self.header_snippet(record),
                     )
                     raise Error(val_err.__str__())
                 raise
-
-
-@doc_private
-@always_inline
-fn _schema_string_to_offset(quality_format: String) -> Int8:
-    """Map schema name to Phred offset (33 or 64). Used by record/coord constructors.
-    """
-    if (
-        quality_format == "sanger"
-        or quality_format == "generic"
-        or quality_format == "illumina_1.8"
-    ):
-        return 33
-    if (
-        quality_format == "solexa"
-        or quality_format == "illumina_1.3"
-        or quality_format == "illumina_1.5"
-    ):
-        return 64
-    print(
-        "Unknown quality schema; use one of 'sanger', 'solexa', 'illumina_1.3',"
-        " 'illumina_1.5', 'illumina_1.8', or 'generic'. Using 33."
-    )
-    return 33
 
 
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
@@ -564,8 +512,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     immediately; use `FastqRecord` when you need to store or reuse records.
 
     Attributes:
-        SeqHeader, SeqStr, QuHeader, QuStr: Spans into the parser buffer.
-        quality_offset: Phred offset (33 or 64) for quality decoding.
+        header, sequence, plus_line, quality: Spans into the parser buffer.
+        phred_offset: Phred offset (33 or 64) for quality decoding.
 
     Example:
         ```mojo
@@ -573,137 +521,95 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record_ref in parser.ref_records():
-            _ = record_ref.get_header()
-            _ = record_ref.get_seq()
+            _ = record_ref.header_slice()
+            _ = record_ref.sequence_slice()
         ```
     """
 
-    var SeqHeader: Span[Byte, Self.origin]
-    var SeqStr: Span[Byte, Self.origin]
-    var QuHeader: Span[Byte, Self.origin]
-    var QuStr: Span[Byte, Self.origin]
-    var quality_offset: Int8
+    var header: Span[Byte, Self.origin]
+    var sequence: Span[Byte, Self.origin]
+    var plus_line: Span[Byte, Self.origin]
+    var quality: Span[Byte, Self.origin]
+    var phred_offset: Int8
 
     fn __init__(
         out self,
-        SeqHeader: Span[Byte, Self.origin],
-        SeqStr: Span[Byte, Self.origin],
-        QuHeader: Span[Byte, Self.origin],
-        QuStr: Span[Byte, Self.origin],
+        header_span: Span[Byte, Self.origin],
+        seq_span: Span[Byte, Self.origin],
+        plus_line_span: Span[Byte, Self.origin],
+        quality_span: Span[Byte, Self.origin],
         quality_offset: Int8 = 33,
     ):
-        self.SeqHeader = SeqHeader
-        self.SeqStr = SeqStr
-        self.QuHeader = QuHeader
-        self.QuStr = QuStr
-        self.quality_offset = quality_offset
-
-    fn __init__(
-        out self,
-        SeqHeader: Span[Byte, Self.origin],
-        SeqStr: Span[Byte, Self.origin],
-        QuHeader: Span[Byte, Self.origin],
-        QuStr: Span[Byte, Self.origin],
-        quality_schema: String,
-    ):
-        self.SeqHeader = SeqHeader
-        self.SeqStr = SeqStr
-        self.QuHeader = QuHeader
-        self.QuStr = QuStr
-        self.quality_offset = _schema_string_to_offset(quality_schema)
+        self.header = header_span
+        self.sequence = seq_span
+        self.plus_line = plus_line_span
+        self.quality = quality_span
+        self.phred_offset = quality_offset
 
     @always_inline
-    fn get_seq(self) -> StringSlice[origin = Self.origin]:
+    fn sequence_slice(self) -> StringSlice[origin = Self.origin]:
         """Return the sequence line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.SeqStr)
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.sequence)
 
     @always_inline
-    fn get_quality(self) -> StringSlice[origin = Self.origin]:
+    fn quality_slice(self) -> StringSlice[origin = Self.origin]:
         """Return the quality line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.QuStr)
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.quality)
 
     @always_inline
-    fn get_header(self) -> StringSlice[origin = Self.origin]:
+    fn header_slice(self) -> StringSlice[origin = Self.origin]:
         """Return the @-line (read id) as a string slice (valid only while ref is valid).
         """
         return StringSlice[origin = Self.origin](
-            unsafe_from_utf8=self.SeqHeader
+            unsafe_from_utf8=self.header
         )
 
     @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
-        return self.len_record()
+        return len(self.sequence)
 
     @always_inline
-    fn len_record(self) -> Int:
-        """Return the sequence line length."""
-        return len(self.SeqStr)
-
-    @always_inline
-    fn len_quality(self) -> Int:
-        """Return the quality line length."""
-        return len(self.QuStr)
-
-    @always_inline
-    fn len_qu_header(self) -> Int:
-        return len(self.QuHeader)
-
-    @always_inline
-    fn len_seq_header(self) -> Int:
-        return len(self.SeqHeader)
-
-    @always_inline
-    fn total_length(self) -> Int:
+    fn byte_len(self) -> Int:
+        """Return total byte length of all four lines."""
         return (
-            self.len_seq_header()
-            + self.len_record()
-            + self.len_qu_header()
-            + self.len_quality()
+            len(self.header)
+            + len(self.sequence)
+            + len(self.plus_line)
+            + len(self.quality)
         )
 
     @always_inline
-    fn get_quality_scores(self) -> List[Byte]:
-        """Return Phred quality scores using the record's quality_offset."""
-        output = List[Byte](length=self.len_quality(), fill=0)
-        for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - UInt8(self.quality_offset)
+    fn phred_scores(self) -> List[Byte]:
+        """Return Phred quality scores using the record's phred_offset."""
+        output = List[Byte](length=len(self.quality), fill=0)
+        for i in range(len(self.quality)):
+            output[i] = self.quality[i] - UInt8(self.phred_offset)
         return output^
 
     @always_inline
-    fn get_quality_scores(self, offset: UInt8) -> List[Byte]:
+    fn phred_scores(self, offset: UInt8) -> List[Byte]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
-        output = List[Byte](length=self.len_quality(), fill=0)
-        for i in range(self.len_quality()):
-            output[i] = self.QuStr[i] - offset
+        output = List[Byte](length=len(self.quality), fill=0)
+        for i in range(len(self.quality)):
+            output[i] = self.quality[i] - offset
         return output^
 
-    @always_inline
-    fn seq_len(self) -> Int32:
-        return Int32(len(self.SeqStr))
-
-    @always_inline
-    fn qu_len(self) -> Int32:
-        return Int32(len(self.QuStr))
-
-    @always_inline
-    fn qu_header_len(self) -> Int32:
-        return Int32(len(self.QuHeader))
-
-    @always_inline
-    fn seq_header_len(self) -> Int32:
-        return Int32(len(self.SeqHeader))
-
-    fn write_to[w: Writer](self, mut writer: w):
+    fn write[w: Writer](self, mut writer: w):
         """Write the record in standard four-line FASTQ format to writer."""
-        writer.write_string(StringSlice(unsafe_from_utf8=self.SeqHeader))
+        writer.write_string(StringSlice(unsafe_from_utf8=self.header))
         writer.write("\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self.SeqStr))
+        writer.write_string(StringSlice(unsafe_from_utf8=self.sequence))
         writer.write("\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self.QuHeader))
+        writer.write_string(StringSlice(unsafe_from_utf8=self.plus_line))
         writer.write("\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self.QuStr))
+        writer.write_string(StringSlice(unsafe_from_utf8=self.quality))
         writer.write("\n")
+
+    @always_inline
+    fn write_to[w: Writer](self, mut writer: w):
+        """Required by Writable trait; delegates to write()."""
+        self.write(writer)

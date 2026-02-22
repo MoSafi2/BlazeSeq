@@ -57,16 +57,17 @@ fn example_write_sample_to_plain_and_gzip() raises:
     print("=" * 60)
     print()
 
-    # Sanger quality (offset 33); header, sequence, plus line, quality string
+    # Sanger quality (offset 33 via generic_schema); header, sequence, plus line, quality
     var records = List[FastqRecord]()
+    from blazeseq.quality_schema import generic_schema
     records.append(
-        FastqRecord("@read/1", "ACGTACGT", "+", "IIIIIIII", 33)
+        FastqRecord("@read/1", "ACGTACGT", "+", "IIIIIIII", generic_schema)
     )
     records.append(
-        FastqRecord("@read/2", "NNNNGATTACA", "+", "!!!!!IIIIII", 33)
+        FastqRecord("@read/2", "NNNNGATTACA", "+", "!!!!!IIIIII", generic_schema)
     )
     records.append(
-        FastqRecord("@read/3", "GGGGCCCC", "+", "HHHHHHHH", 33)
+        FastqRecord("@read/3", "GGGGCCCC", "+", "HHHHHHHH", generic_schema)
     )
 
     var plain_path = Path("example_output.fastq")

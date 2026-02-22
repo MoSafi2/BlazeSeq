@@ -1,4 +1,5 @@
 from blazeseq.record import FastqRecord
+from blazeseq.quality_schema import QualitySchema, generic_schema
 import random
 from collections.string import chr, String
 from time import perf_counter_ns
@@ -8,7 +9,7 @@ comptime QUAL_UPPER: Int64 = 126
 
 
 fn generate_fastq_record(
-    length: Int, quality_offset: Int8 = 33
+    length: Int, schema: QualitySchema = generic_schema
 ) raises -> FastqRecord:
     var DNA_BASES = ["A", "T", "G", "C", "N"]
     var HEADER = "@"
@@ -25,7 +26,7 @@ fn generate_fastq_record(
         seq += letter
         var chr_ = Int(random.random_si64(min=QUAL_LOWER, max=QUAL_UPPER))
         qual += chr(chr_)
-    return FastqRecord(HEADER, seq, QU_HEADER, qual, quality_offset)
+    return FastqRecord(HEADER, seq, QU_HEADER, qual, schema)
 
 
 fn main() raises:

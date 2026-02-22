@@ -48,20 +48,20 @@ fn test_fastq_record_construction_never_validates() raises:
 
 
 fn test_fastq_record_getters_and_length() raises:
-    """Getters and length methods return correct values."""
+    """Accessors and length methods return correct values."""
     var record = FastqRecord("@test_seq", "ATCGATCGG", "+", "!!!!!!!!!")
 
-    assert_equal(String(record.get_seq()), "ATCGATCGG")
-    assert_equal(String(record.get_quality_string()), "!!!!!!!!!")
-    assert_equal(String(record.get_header_string()), "@test_seq")
+    assert_equal(String(record.sequence_slice()), "ATCGATCGG")
+    assert_equal(String(record.quality_slice()), "!!!!!!!!!")
+    assert_equal(String(record.header_slice()), "@test_seq")
 
     assert_equal(len(record), 9)
-    # total_length = len(SeqHeader) + len(SeqStr) + len(QuHeader) + len(QuStr)
-    assert_equal(record.total_length(), 9 + 9 + 1 + 9)
+    # byte_len = len(header) + len(sequence) + len(plus_line) + len(quality)
+    assert_equal(record.byte_len(), 9 + 9 + 1 + 9)
 
 
 fn test_fastq_record_equality() raises:
-    """Equality is based on SeqStr only (headers ignored)."""
+    """Equality is based on sequence only (headers ignored)."""
     var record1 = FastqRecord("@test1", "ATCG", "+", "!!!!")
     var record2 = FastqRecord("@test2", "ATCG", "+", "!!!!")
     var record3 = FastqRecord("@test1", "GCTA", "+", "!!!!")
@@ -85,15 +85,15 @@ fn test_fastq_record_from_file_data() raises:
     var read = FastqRecord(lines[0], lines[1], lines[2], lines[3])
 
     assert_false(len(read) == 0)
-    assert_equal(len(read.SeqStr), len(read.QuStr))
-    assert_true(read.SeqHeader.as_string_slice().startswith(String("@")))
-    assert_true(read.QuHeader.as_string_slice().startswith(String("+")))
+    assert_equal(len(read.sequence), len(read.quality))
+    assert_true(read.header.as_string_slice().startswith(String("@")))
+    assert_true(read.plus_line.as_string_slice().startswith(String("+")))
 
     _validator_structure_only().validate(read)
 
 
 # ---------------------------------------------------------------------------
-# Validator: structure validation (validate_record)
+# Validator: structure validation (validate_structure)
 # ---------------------------------------------------------------------------
 
 fn test_validator_structure_valid_passes() raises:
@@ -112,10 +112,10 @@ fn test_validator_structure_invalid_seq_header_raises() raises:
 
 
 fn test_validator_structure_invalid_qual_header_raises() raises:
-    """Quality header not starting with '+' causes validate() to raise."""
+    """Plus line not starting with '+' causes validate() to raise."""
     var v = _validator_structure_only()
     var record = FastqRecord("@test", "ATCG", "INVALID", "!!!!")
-    with assert_raises(contains="Quality header does not start with '+'"):
+    with assert_raises(contains="Plus line does not start with '+'"):
         v.validate(record)
 
 
@@ -123,20 +123,20 @@ fn test_validator_structure_mismatched_lengths_raises() raises:
     """Seq/quality length mismatch causes validate() to raise."""
     var v = _validator_structure_only()
     var record = FastqRecord("@test", "ATCG", "+", "!!")
-    with assert_raises(contains="Quality and Sequencing string does not match in lengths"):
+    with assert_raises(contains="Quality and sequence string do not match in length"):
         v.validate(record)
 
 
 fn test_validator_structure_extended_header_mismatch_raises() raises:
-    """When quality header has len>1, it must match sequence header after '+'/@'; otherwise validate() raises."""
+    """When plus line has len>1, it must match header after '+'/@'; otherwise validate() raises."""
     var v = _validator_structure_only()
     # Length mismatch: "+ab" vs "@x"
     var record_len = FastqRecord("@x", "AC", "+ab", "!!")
-    with assert_raises(contains="Quality Header is not the same length as the Sequencing"):
+    with assert_raises(contains="Plus line is not the same length as the header"):
         v.validate(record_len)
     # Content mismatch: "+xy" vs "@ab"
     var record_content = FastqRecord("@ab", "AC", "+xy", "!!")
-    with assert_raises(contains="Quality Header is not the same as the Sequencing Header"):
+    with assert_raises(contains="Plus line is not the same as the header"):
         v.validate(record_content)
 
 
@@ -173,7 +173,7 @@ fn test_validator_ascii_invalid_raises() raises:
 
 
 # ---------------------------------------------------------------------------
-# Validator: quality schema validation (validate_quality_schema when check_quality=True)
+# Validator: quality range validation (validate_quality_range when check_quality=True)
 # ---------------------------------------------------------------------------
 
 fn test_validator_quality_schema_valid_passes() raises:

@@ -55,7 +55,7 @@ struct ParserConfig(Copyable):
         comptime config = ParserConfig(check_ascii=True, buffer_capacity=65536)
         var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "sanger")
         for record in parser.records():
-            _ = record.get_header_string()
+            _ = record.header_slice()
         ```
     """
 
@@ -128,7 +128,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record in parser.records():
-            print(record.get_header_string())
+            print(record.header_slice())
         ```
     """
 
@@ -468,13 +468,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""
         var snippet = String(capacity=200)
-        var header_str = StringSlice(unsafe_from_utf8=record.SeqHeader)
+        var header_str = StringSlice(unsafe_from_utf8=record.header)
         if len(header_str) > 0:
             snippet += String(header_str)
             if len(snippet) < 200:
                 snippet += "\n"
-        if len(snippet) < 200 and len(record.SeqStr) > 0:
-            var seq_str = StringSlice(unsafe_from_utf8=record.SeqStr)
+        if len(snippet) < 200 and len(record.sequence) > 0:
+            var seq_str = StringSlice(unsafe_from_utf8=record.sequence)
             var seq_len = min(len(seq_str), 200 - len(snippet))
             snippet += String(seq_str[:seq_len])
         if len(snippet) > 200:
@@ -484,13 +484,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
         """Get first 200 characters of FastqRecord for error context."""
         var snippet = String(capacity=200)
-        var header_str = record.get_header_string()
+        var header_str = record.header_slice()
         if len(header_str) > 0:
             snippet += String(header_str)
             if len(snippet) < 200:
                 snippet += "\n"
         if len(snippet) < 200:
-            var seq_str = record.get_seq()
+            var seq_str = record.sequence_slice()
             var seq_len = min(len(seq_str), 200 - len(snippet))
             snippet += String(seq_str[:seq_len])
         if len(snippet) > 200:

@@ -1,7 +1,7 @@
 """Integration tests: FASTQ read → parse → write (plain/gzip) → read → parse → compare.
 
 Round-trips FASTQ through plain and gzipped paths and asserts re-parsed records
-match the originals (full record equality: SeqHeader, SeqStr, QuHeader, QuStr, quality_offset).
+match the originals (full record equality: header, sequence, plus_line, quality, phred_offset).
 
 Small fixtures: tests/test_data/fastq_parser/example.fastq (3 records).
 Large fixtures: generated synthetic reads written to tests/test_data/ (see
@@ -42,31 +42,31 @@ comptime SYNTHETIC_GZ_PATH = "tests/test_data/fastq_integration_synthetic.fastq.
 
 
 fn assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") raises:
-    """Assert two FastqRecords are equal on all fields (not just SeqStr)."""
+    """Assert two FastqRecords are equal on all fields (not just sequence)."""
     assert_equal(
-        a.SeqHeader.to_string(),
-        b.SeqHeader.to_string(),
-        "SeqHeader mismatch" + (" " + msg) if len(msg) else "",
+        a.header.to_string(),
+        b.header.to_string(),
+        "header mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.SeqStr.to_string(),
-        b.SeqStr.to_string(),
-        "SeqStr mismatch" + (" " + msg) if len(msg) else "",
+        a.sequence.to_string(),
+        b.sequence.to_string(),
+        "sequence mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.QuHeader.to_string(),
-        b.QuHeader.to_string(),
-        "QuHeader mismatch" + (" " + msg) if len(msg) else "",
+        a.plus_line.to_string(),
+        b.plus_line.to_string(),
+        "plus_line mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.QuStr.to_string(),
-        b.QuStr.to_string(),
-        "QuStr mismatch" + (" " + msg) if len(msg) else "",
+        a.quality.to_string(),
+        b.quality.to_string(),
+        "quality mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.quality_offset,
-        b.quality_offset,
-        "quality_offset mismatch" + (" " + msg) if len(msg) else "",
+        a.phred_offset,
+        b.phred_offset,
+        "phred_offset mismatch" + (" " + msg) if len(msg) else "",
     )
 
 
