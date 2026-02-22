@@ -735,27 +735,9 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         return self.buffer.peek(amt)
 
-    @always_inline
-    fn try_consume[
-        b0: Byte = Byte(43),
-        b1: Byte = Byte(10),
-    ](mut self) -> Bool:
-        """
-        If the next 2 bytes in the buffer equal the compile-time pattern (b0, b1),
-        consume them, increment the line number, and return True. Otherwise return False.
-        Default pattern is '+' and '\\n' (plus line). Does not refill the buffer.
-        """
-        if self.buffer.available() < 2:
-            return False
-        var view = self.buffer.peek(2)
-        if len(view) >= 2 and view[0] == b0 and view[1] == b1:
-            _ = self.buffer.consume(2)
-            self._current_line_number += 1
-            return True
-        return False
 
     @always_inline
-    fn consume_line_scalar(mut self) raises LineIteratorError:
+    fn consume_line_scalar(mut self) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
         Consume the next line (plus line) using scalar memchr to find newline.
         Validates line starts with '+'. Does not refill; raises INCOMPLETE_LINE if
@@ -778,13 +760,13 @@ struct LineIterator[R: Reader](Iterable, Movable):
         var newline_at = memchr_scalar(haystack=view, chr=new_line)
         if newline_at == -1:
             raise LineIteratorError.INCOMPLETE_LINE
-
-        if view[0] != quality_header:
-            raise LineIteratorError.OTHER
-
+        
+        var end = _trim_trailing_cr(view, newline_at)
+        var span = view[0:end]
         _ = self.buffer.consume(newline_at + 1)
         self._current_line_number += 1
-
+        return span
+    
     @always_inline
     fn _handle_line_exceeds_capacity(mut self) raises:
         """

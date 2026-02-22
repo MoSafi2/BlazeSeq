@@ -145,7 +145,7 @@ struct SearchResults(
             new_qual,
         )
 
-    fn __getitem__(self, index: Int) -> Span[Byte, MutExternalOrigin]:
+    fn __getitem__(self, index: Int8) -> Span[Byte, MutExternalOrigin]:
         if index == 0:
             return self.id
         elif index == 1:
@@ -157,7 +157,7 @@ struct SearchResults(
         else:
             return Span[Byte, MutExternalOrigin]()
 
-    fn __setitem__(mut self, index: Int, value: Span[Byte, MutExternalOrigin]):
+    fn __setitem__(mut self, index: Int8, value: Span[Byte, MutExternalOrigin]):
         if index == 0:
             self.id = value
         elif index == 1:
@@ -514,9 +514,6 @@ fn generate_synthetic_fastq_buffer(
 
 
 
-
-
-
 # BUG: There is a bug here when the buffer is grown, but the record is not parsed correctly.
 @doc_private
 @always_inline
@@ -540,14 +537,9 @@ fn _handle_incomplete_line_with_buffer_growth[
         interim.start = 0
         state = SearchState.START
         try:
-            for i in range(4):
-                if i == 2:
-                    stream.consume_line_scalar()
-                    state = state + 1
-                else:
-                    var line = stream.next_complete_line()
-                    interim[i] = line
-                    state = state + 1
+            var line = stream.next_complete_line()
+            interim[state.state] = line
+            state = state + 1
         except e:
             if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
                 continue
@@ -559,7 +551,7 @@ fn _handle_incomplete_line_with_buffer_growth[
         interim[0],
         interim[1],
         interim[3],
-        Int8(quality_schema.OFFSET),
+        quality_schema.OFFSET,
     )
 
 
@@ -582,13 +574,9 @@ fn _handle_incomplete_line[
     interim = interim - interim.start
     for i in range(state.state, 4):
         try:
-            if i == 2:
-                stream.consume_line_scalar()
-                state = state + 1
-            else:
-                var line = stream.next_complete_line()
-                interim[i] = line
-                state = state + 1
+            var line = stream.next_complete_line()
+            interim[i] = line
+            state = state + 1
         except e:
             if e == LineIteratorError.EOF:
                 raise EOFError()
@@ -605,7 +593,7 @@ fn _handle_incomplete_line[
         interim[0],
         interim[1],
         interim[3],
-        Int8(quality_schema.OFFSET),
+        quality_schema.OFFSET,
     )
 
 
@@ -621,22 +609,23 @@ fn _parse_record_fast_path[
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
     interim.start = stream.buffer.buffer_position()
 
-    @parameter
-    for i in range(4):
-        try:
-            if i == 2:
-                stream.consume_line_scalar()
-                state = state + 1
-            else:
-                interim[i] = stream.next_complete_line()
-                state = state + 1
-        except e:
-            raise e
-    interim.end = stream.buffer.buffer_position()
+    var line1 = stream.next_complete_line()
+    interim[0] = line1
+    var line2 = stream.next_complete_line()
+    interim[1] = line2
+    # if stream.buffer.peek(2) == InlineArray[Byte, 2](Byte(ord("\n")), Byte(ord("+"))):
+    #     interim[2] = stream.buffer.view()[0:2]
+    #     _ = stream.buffer.consume(2)
+    # else:        
+    #     var line3 = stream.consume_line_scalar()
+    #     if len(line3) == 0 or line3[0] != quality_header:
+    #         raise LineIteratorError.OTHER
+    var line3 = stream.consume_line_scalar()
+    if len(line3) == 0 or line3[0] != quality_header:
+        raise LineIteratorError.OTHER
+    interim[2] = line3
+    var line4 = stream.next_complete_line()
+    interim[3] = line4
 
-    return RefRecord[origin=MutExternalOrigin](
-        interim[0],
-        interim[1],
-        interim[3],
-        Int8(quality_schema.OFFSET),
-    )
+    interim.end = stream.buffer.buffer_position()
+    return RefRecord[origin=MutExternalOrigin](line1, line2, line4, quality_schema.OFFSET)

@@ -475,14 +475,14 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     var id: Span[Byte, Self.origin]
     var sequence: Span[Byte, Self.origin]
     var quality: Span[Byte, Self.origin]
-    var phred_offset: Int8
+    var phred_offset: UInt8
 
     fn __init__(
         out self,
         id: Span[Byte, Self.origin],
         sequence: Span[Byte, Self.origin],
         quality: Span[Byte, Self.origin],
-        phred_offset: Int8 = 33,
+        phred_offset: UInt8 = 33,
     ):
         self.id = id
         self.sequence = sequence
