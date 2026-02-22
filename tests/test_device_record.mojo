@@ -25,8 +25,8 @@ from testing import (
 # fn test_device_fastq_batch_add_and_layout() raises:
 #     """FastqBatch stacks records and builds correct qual_ends."""
 #     var batch = FastqBatch()
-#     var r1 = FastqRecord("@a", "AC", "+", "!!")
-#     var r2 = FastqRecord("@b", "GT", "+", "!!")
+#     var r1 = FastqRecord("@a", "AC", "!!")
+#     var r2 = FastqRecord("@b", "GT", "!!")
 #     batch.add(r1)
 #     batch.add(r2)
 #     assert_equal(batch.num_records(), 2)
@@ -40,8 +40,8 @@ from testing import (
 # fn test_fastq_batch_write_to() raises:
 #     """FastqBatch.write_to writes each record in FASTQ format (4 lines per record)."""
 #     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@r1", "ACGT", "+", "!!!!"))
-#     records.append(FastqRecord("@r2", "TGCA", "+", "####"))
+#     records.append(FastqRecord("@r1", "ACGT", "!!!!"))
+#     records.append(FastqRecord("@r2", "TGCA", "####"))
 #     var batch = FastqBatch(records)
 #     var out = String()
 #     batch.write_to(out)
@@ -53,9 +53,9 @@ from testing import (
 #     """Round-trip: List[FastqRecord] -> FastqBatch -> to_records() equals original list.
 #     """
 #     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@a", "ACGT", "+", "!!!!"))
-#     records.append(FastqRecord("@b", "TGCA", "+", "!!!!"))
-#     records.append(FastqRecord("@c", "N", "+", "!"))
+#     records.append(FastqRecord("@a", "ACGT", "!!!!"))
+#     records.append(FastqRecord("@b", "TGCA", "!!!!"))
+#     records.append(FastqRecord("@c", "N", "!"))
 #     var batch = FastqBatch(records)
 #     assert_equal(batch.num_records(), 3)
 #     var back = batch.to_records()
@@ -79,8 +79,8 @@ from testing import (
 #     """Get_record(i) returns the same record as to_records()[i]; compare to original added records.
 #     """
 #     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@x", "AA", "+", "!!"))
-#     records.append(FastqRecord("@y", "TT", "+", "!!"))
+#     records.append(FastqRecord("@x", "AA", "!!"))
+#     records.append(FastqRecord("@y", "TT", "!!"))
 #     # Sanity: input quality strings are as expected (33 = '!')
 #     assert_equal(records[0].QuStr.as_string_slice(), String("!!"))
 #     assert_equal(records[1].QuStr.as_string_slice(), String("!!"))
@@ -142,16 +142,16 @@ from testing import (
 #         return
 
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@a", "AC", "+", "!!"))
-#     batch.add(FastqRecord("@b", "GT", "+", "!!"))
+#     batch.add(FastqRecord("@a", "AC", "!!"))
+#     batch.add(FastqRecord("@b", "GT", "!!"))
 #     var ctx = DeviceContext()
 #     var staged = stage_batch_to_host(batch, ctx)
 #     assert_equal(staged.num_records, 2)
 #     assert_equal(staged.total_seq_bytes, batch.seq_len())
 #     assert_equal(len(staged.sequence_data), batch.seq_len())
-#     var total_header_bytes = len(batch._header_bytes)
-#     assert_equal(len(staged.header_data), total_header_bytes)
-#     assert_equal(len(staged.header_ends), 2)
+#     var total_id_bytes = len(batch._id_bytes)
+#     assert_equal(len(staged.id_data), total_id_bytes)
+#     assert_equal(len(staged.id_ends), 2)
 
 
 # fn test_stage_batch_to_host_full_content() raises:
@@ -162,16 +162,16 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@h1", "ACGT", "+", "!!!!"))
-#     batch.add(FastqRecord("@h2", "TGCA", "+", "!!!!"))
+#     batch.add(FastqRecord("@h1", "ACGT", "!!!!"))
+#     batch.add(FastqRecord("@h2", "TGCA", "!!!!"))
 #     var ctx = DeviceContext()
 #     var staged = stage_batch_to_host(batch, ctx)
 #     assert_equal(staged.num_records, 2)
 #     assert_equal(staged.total_seq_bytes, batch.seq_len())
 #     assert_equal(len(staged.sequence_data), batch.seq_len())
-#     var total_header_bytes = len(batch._header_bytes)
-#     assert_equal(len(staged.header_data), total_header_bytes)
-#     assert_equal(len(staged.header_ends), 2)
+#     var total_id_bytes = len(batch._id_bytes)
+#     assert_equal(len(staged.id_data), total_id_bytes)
+#     assert_equal(len(staged.id_ends), 2)
 
 
 # fn test_move_staged_to_device() raises:
@@ -182,8 +182,8 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@a", "AC", "+", "!!"))
-#     batch.add(FastqRecord("@b", "GT", "+", "!!"))
+#     batch.add(FastqRecord("@a", "AC", "!!"))
+#     batch.add(FastqRecord("@b", "GT", "!!"))
 #     var ctx = DeviceContext()
 #     var staged = stage_batch_to_host(batch, ctx)
 #     var d = move_staged_to_device(staged, ctx, batch.quality_offset())
@@ -193,9 +193,9 @@ from testing import (
 #     assert_equal(len(d.qual_buffer), Int(d.seq_len))
 #     assert_equal(len(d.qual_ends), d.num_records)
 #     assert_equal(len(d.sequence_buffer), Int(d.seq_len))
-#     assert_equal(d.total_header_bytes, Int(batch._header_ends[1]))
-#     assert_equal(len(d.header_buffer), Int(d.total_header_bytes))
-#     assert_equal(len(d.header_ends), d.num_records)
+#     assert_equal(d.total_id_bytes, Int(batch._id_ends[1]))
+#     assert_equal(len(d.id_buffer), Int(d.total_id_bytes))
+#     assert_equal(len(d.id_ends), d.num_records)
 
 
 # fn test_upload_batch_to_device_always_full() raises:
@@ -206,8 +206,8 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@x", "AA", "+", "!!"))
-#     batch.add(FastqRecord("@y", "TT", "+", "!!"))
+#     batch.add(FastqRecord("@x", "AA", "!!"))
+#     batch.add(FastqRecord("@y", "TT", "!!"))
 #     var ctx = DeviceContext()
 #     var d = upload_batch_to_device(batch, ctx)
 #     assert_equal(d.num_records, 2)
@@ -215,10 +215,10 @@ from testing import (
 #     assert_equal(len(d.qual_buffer), Int(d.seq_len))
 #     assert_equal(len(d.qual_ends), d.num_records)
 #     assert_equal(len(d.sequence_buffer), Int(d.seq_len))
-#     var total_header_bytes = len(batch._header_bytes)
-#     assert_equal(d.total_header_bytes, total_header_bytes)
-#     assert_equal(len(d.header_buffer), total_header_bytes)
-#     assert_equal(len(d.header_ends), 2)
+#     var total_id_bytes = len(batch._id_bytes)
+#     assert_equal(d.total_id_bytes, total_id_bytes)
+#     assert_equal(len(d.id_buffer), total_id_bytes)
+#     assert_equal(len(d.id_ends), 2)
 
 
 # fn test_upload_batch_to_device_single_record() raises:
@@ -228,7 +228,7 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@a", "ACGT", "+", "!!!!"))
+#     batch.add(FastqRecord("@a", "ACGT", "!!!!"))
 #     var ctx = DeviceContext()
 #     var d = upload_batch_to_device(batch, ctx)
 #     assert_equal(d.num_records, 1)
@@ -246,7 +246,7 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@a", "AC", "+", "!!"))
+#     batch.add(FastqRecord("@a", "AC", "!!"))
 #     batch.add(FastqRecord("@b", "G", "+", "!"))
 #     var ctx = DeviceContext()
 #     var d = upload_batch_to_device(batch, ctx)
@@ -267,8 +267,8 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
-#     records.append(FastqRecord("@h2", "TGCA", "+", "!!!!"))
+#     records.append(FastqRecord("@h1", "ACGT", "!!!!"))
+#     records.append(FastqRecord("@h2", "TGCA", "!!!!"))
 #     records.append(FastqRecord("@h3", "N", "+", "!"))
 #     var batch = FastqBatch(records)
 #     var ctx = DeviceContext()
@@ -333,7 +333,7 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var records = List[FastqRecord]()
-#     records.append(FastqRecord("@h1", "ACGT", "+", "!!!!"))
+#     records.append(FastqRecord("@h1", "ACGT", "!!!!"))
 #     records.append(FastqRecord("@h2", "TG", "+", "!!"))
 #     var batch = FastqBatch(records)
 #     var ctx = DeviceContext()
@@ -360,7 +360,7 @@ from testing import (
 #     if not has_accelerator():
 #         return
 #     var batch = FastqBatch()
-#     batch.add(FastqRecord("@a", "AC", "+", "!!"))
+#     batch.add(FastqRecord("@a", "AC", "!!"))
 #     var ctx = DeviceContext()
 #     var d = upload_batch_to_device(batch, ctx)
 #     var back = d.copy_to_host(ctx)

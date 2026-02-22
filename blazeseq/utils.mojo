@@ -53,7 +53,7 @@ struct SearchResults(
 ):
     var start: Int
     var end: Int
-    var header: Span[Byte, MutExternalOrigin]
+    var id: Span[Byte, MutExternalOrigin]
     var seq: Span[Byte, MutExternalOrigin]
     var qual_header: Span[Byte, MutExternalOrigin]
     var qual: Span[Byte, MutExternalOrigin]
@@ -72,8 +72,8 @@ struct SearchResults(
             String("SearchResults(start=") + String(self.start),
             ", end=",
             String(self.end)
-            + ", header="
-            + String(StringSlice(unsafe_from_utf8=self.header))
+            + ", id="
+            + String(StringSlice(unsafe_from_utf8=self.id))
             + ", seq="
             + String(StringSlice(unsafe_from_utf8=self.seq))
             + ", qual_header="
@@ -87,16 +87,16 @@ struct SearchResults(
         return (
             self.start != -1
             and self.end != -1
-            and len(self.header) > 0
+            and len(self.id) > 0
             and len(self.seq) > 0
             and len(self.qual_header) > 0
             and len(self.qual) > 0
         )
 
     fn __add__(self, amt: Int) -> Self:
-        new_header = Span[Byte, MutExternalOrigin](
-            ptr=self.header.unsafe_ptr() + amt,
-            length=len(self.header),
+        new_id = Span[Byte, MutExternalOrigin](
+            ptr=self.id.unsafe_ptr() + amt,
+            length=len(self.id),
         )
         new_seq = Span[Byte, MutExternalOrigin](
             ptr=self.seq.unsafe_ptr() + amt,
@@ -113,16 +113,16 @@ struct SearchResults(
         return Self(
             self.start + amt,
             self.end + amt,
-            new_header,
+            new_id,
             new_seq,
             new_qual_header,
             new_qual,
         )
 
     fn __sub__(self, amt: Int) -> Self:
-        new_header = Span[Byte, MutExternalOrigin](
-            ptr=self.header.unsafe_ptr() - amt,
-            length=len(self.header),
+        new_id = Span[Byte, MutExternalOrigin](
+            ptr=self.id.unsafe_ptr() - amt,
+            length=len(self.id),
         )
         new_seq = Span[Byte, MutExternalOrigin](
             ptr=self.seq.unsafe_ptr() - amt,
@@ -139,7 +139,7 @@ struct SearchResults(
         return Self(
             self.start - amt,
             self.end - amt,
-            new_header,
+            new_id,
             new_seq,
             new_qual_header,
             new_qual,
@@ -147,7 +147,7 @@ struct SearchResults(
 
     fn __getitem__(self, index: Int) -> Span[Byte, MutExternalOrigin]:
         if index == 0:
-            return self.header
+            return self.id
         elif index == 1:
             return self.seq
         elif index == 2:
@@ -159,7 +159,7 @@ struct SearchResults(
 
     fn __setitem__(mut self, index: Int, value: Span[Byte, MutExternalOrigin]):
         if index == 0:
-            self.header = value
+            self.id = value
         elif index == 1:
             self.seq = value
         elif index == 2:
@@ -542,7 +542,6 @@ fn _handle_incomplete_line_with_buffer_growth[
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
-        interim[2],
         interim[3],
         Int8(quality_schema.OFFSET),
     )
@@ -588,7 +587,6 @@ fn _handle_incomplete_line[
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
-        interim[2],
         interim[3],
         Int8(quality_schema.OFFSET),
     )
@@ -621,7 +619,6 @@ fn _parse_record_fast_path[
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
-        interim[2],
         interim[3],
         Int8(quality_schema.OFFSET),
     )

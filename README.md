@@ -60,7 +60,7 @@ fn main() raises:
     var parser = FastqParser(FileReader(Path("path/to/your/file.fastq")), "sanger")
     for record in parser.records():
         # record is a FastqRecord
-        _ = record.header_slice()
+        _ = record.id_slice()
         _ = len(record)  # sequence length
         _ = record.quality_slice()
 ```

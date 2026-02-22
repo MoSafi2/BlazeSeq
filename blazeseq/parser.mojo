@@ -55,7 +55,7 @@ struct ParserConfig(Copyable):
         comptime config = ParserConfig(check_ascii=True, buffer_capacity=65536)
         var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "sanger")
         for record in parser.records():
-            _ = record.header_slice()
+            _ = record.id_slice()
         ```
     """
 
@@ -128,7 +128,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record in parser.records():
-            print(record.header_slice())
+            print(record.id_slice())
         ```
     """
 
@@ -424,10 +424,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _parse_record_line(mut self) raises -> FastqRecord:
         var line1 = ASCIIString(self.line_iter.next_line())
         var line2 = ASCIIString(self.line_iter.next_line())
-        var line3 = ASCIIString(self.line_iter.next_line())
+        _ = self.line_iter.next_line()  # plus line, consumed but not stored
         var line4 = ASCIIString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
-        return FastqRecord(line1^, line2^, line3^, line4^, schema)
+        return FastqRecord(line1^, line2^, line4^, schema)
 
     @always_inline
     fn _parse_record_ref(
@@ -468,9 +468,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""
         var snippet = String(capacity=200)
-        var header_str = StringSlice(unsafe_from_utf8=record.header)
-        if len(header_str) > 0:
-            snippet += String(header_str)
+        var id_str = StringSlice(unsafe_from_utf8=record.id)
+        if len(id_str) > 0:
+            snippet += String(id_str)
             if len(snippet) < 200:
                 snippet += "\n"
         if len(snippet) < 200 and len(record.sequence) > 0:
@@ -484,9 +484,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
         """Get first 200 characters of FastqRecord for error context."""
         var snippet = String(capacity=200)
-        var header_str = record.header_slice()
-        if len(header_str) > 0:
-            snippet += String(header_str)
+        var id_str = record.id_slice()
+        if len(id_str) > 0:
+            snippet += String(id_str)
             if len(snippet) < 200:
                 snippet += "\n"
         if len(snippet) < 200:

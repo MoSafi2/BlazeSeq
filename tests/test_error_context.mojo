@@ -7,7 +7,7 @@ from blazeseq.CONSTS import EOF
 from testing import assert_equal, assert_raises, assert_true, TestSuite
 
 
-fn create_invalid_header_fastq() -> List[Byte]:
+fn create_invalid_id_fastq() -> List[Byte]:
     """Create FASTQ data with invalid header (doesn't start with @)."""
     var data = List[Byte]()
     # Invalid header - doesn't start with @
@@ -56,7 +56,7 @@ fn create_mismatched_length_fastq() -> List[Byte]:
 
 fn test_parse_error_with_context() raises:
     """Test that ParseError includes contextual information."""
-    var invalid_data = create_invalid_header_fastq()
+    var invalid_data = create_invalid_id_fastq()
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
@@ -80,7 +80,7 @@ fn test_validation_error_with_context() raises:
 
 fn test_error_context_in_iterator() raises:
     """Test that errors in iterators are printed with context."""
-    var invalid_data = create_invalid_header_fastq()
+    var invalid_data = create_invalid_id_fastq()
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
@@ -139,7 +139,7 @@ fn test_record_number_tracking() raises:
 
 fn test_line_number_tracking() raises:
     """Test that line numbers are tracked correctly."""
-    var invalid_data = create_invalid_header_fastq()
+    var invalid_data = create_invalid_id_fastq()
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)

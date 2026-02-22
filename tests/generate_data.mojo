@@ -13,7 +13,6 @@ fn generate_fastq_record(
 ) raises -> FastqRecord:
     var DNA_BASES = ["A", "T", "G", "C", "N"]
     var HEADER = "@"
-    var QU_HEADER = "+"
 
     var seq = String(capacity=length)
     var qual = String(capacity=length)
@@ -26,7 +25,7 @@ fn generate_fastq_record(
         seq += letter
         var chr_ = Int(random.random_si64(min=QUAL_LOWER, max=QUAL_UPPER))
         qual += chr(chr_)
-    return FastqRecord(HEADER, seq, QU_HEADER, qual, schema)
+    return FastqRecord(HEADER, seq, qual, schema)
 
 
 fn main() raises:

@@ -1,7 +1,7 @@
 """Integration tests: FASTQ read → parse → write (plain/gzip) → read → parse → compare.
 
 Round-trips FASTQ through plain and gzipped paths and asserts re-parsed records
-match the originals (full record equality: header, sequence, plus_line, quality, phred_offset).
+match the originals (full record equality: id, sequence, quality, phred_offset).
 
 Small fixtures: tests/test_data/fastq_parser/example.fastq (3 records).
 Large fixtures: generated synthetic reads written to tests/test_data/ (see
@@ -44,19 +44,14 @@ comptime SYNTHETIC_GZ_PATH = "tests/test_data/fastq_integration_synthetic.fastq.
 fn assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") raises:
     """Assert two FastqRecords are equal on all fields (not just sequence)."""
     assert_equal(
-        a.header.to_string(),
-        b.header.to_string(),
-        "header mismatch" + (" " + msg) if len(msg) else "",
+        a.id.to_string(),
+        b.id.to_string(),
+        "id mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
         a.sequence.to_string(),
         b.sequence.to_string(),
         "sequence mismatch" + (" " + msg) if len(msg) else "",
-    )
-    assert_equal(
-        a.plus_line.to_string(),
-        b.plus_line.to_string(),
-        "plus_line mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
         a.quality.to_string(),
