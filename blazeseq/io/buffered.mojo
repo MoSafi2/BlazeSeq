@@ -686,6 +686,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
             if len(view) >= self.buffer.capacity():
                 self._handle_line_exceeds_capacity()
+                _ = self.buffer._fill_buffer()
                 continue
 
             self.buffer._compact_from(self.buffer.buffer_position())
