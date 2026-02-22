@@ -30,12 +30,9 @@ fn main() raises:
     var parser = FastqParser[FileReader, config](FileReader(Path(file_path)))
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
-    while True:
-        try:
-            var record = parser.next_ref()
-            total_reads += 1
-            total_base_pairs += len(record)
-        except Error:
-            break
+    for record in parser.ref_records():
+        total_reads += 1
+        total_base_pairs += len(record)
+
 
     print(total_reads, total_base_pairs)
