@@ -11,7 +11,7 @@ from blazeseq.io.writers import (
     GZWriter,
 )
 from blazeseq.CONSTS import *
-from blazeseq.utils import memchr
+from blazeseq.utils import memchr, memchr_scalar
 
 
 from sys import (
@@ -753,6 +753,37 @@ struct LineIterator[R: Reader](Iterable, Movable):
             self._current_line_number += 1
             return True
         return False
+
+    @always_inline
+    fn consume_line_scalar(mut self) raises LineIteratorError:
+        """
+        Consume the next line (plus line) using scalar memchr to find newline.
+        Validates line starts with '+'. Does not refill; raises INCOMPLETE_LINE if
+        newline not in current buffer. Raises OTHER if line does not start with '+'.
+        """
+        if self.buffer.available() == 0:
+            if self.buffer.is_eof():
+                raise LineIteratorError.EOF
+            try:
+                _ = self.buffer._fill_buffer()
+            except Error:
+                raise LineIteratorError.OTHER
+            if self.buffer.available() == 0:
+                if self.buffer.is_eof():
+                    raise LineIteratorError.EOF
+                else:
+                    raise LineIteratorError.INCOMPLETE_LINE
+
+        var view = self.buffer.view()
+        var newline_at = memchr_scalar(haystack=view, chr=new_line)
+        if newline_at == -1:
+            raise LineIteratorError.INCOMPLETE_LINE
+
+        if view[0] != quality_header:
+            raise LineIteratorError.OTHER
+
+        _ = self.buffer.consume(newline_at + 1)
+        self._current_line_number += 1
 
     @always_inline
     fn _handle_line_exceeds_capacity(mut self) raises:

@@ -272,6 +272,19 @@ fn memchr[
 
 
 @doc_private
+@always_inline("nodebug")
+fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
+    """
+    Scalar (non-SIMD) variant of memchr. Find first occurrence of byte in haystack.
+    Returns index or -1 if not found.
+    """
+    for i in range(start, len(haystack)):
+        if haystack[i] == chr:
+            return i
+    return -1
+
+
+@doc_private
 @always_inline
 fn _strip_spaces[
     mut: Bool, o: Origin[mut=mut]
@@ -526,17 +539,11 @@ fn _handle_incomplete_line_with_buffer_growth[
         interim = SearchResults.DEFAULT
         interim.start = 0
         state = SearchState.START
-        var plus_line_consumed_short = False
         try:
             for i in range(4):
                 if i == 2:
-                    if stream.try_consume[Byte(quality_header), Byte(new_line)]():
-                        plus_line_consumed_short = True
-                        state = state + 1
-                    else:
-                        var line = stream.next_complete_line()
-                        interim[i] = line
-                        state = state + 1
+                    stream.consume_line_scalar()
+                    state = state + 1
                 else:
                     var line = stream.next_complete_line()
                     interim[i] = line
@@ -547,12 +554,7 @@ fn _handle_incomplete_line_with_buffer_growth[
             else:
                 raise e
         interim.end = stream.buffer.buffer_position()
-        if plus_line_consumed_short or interim.all_set():
-            break
-        if not plus_line_consumed_short and (
-            len(interim[2]) == 0 or interim[2][0] != quality_header
-        ):
-            raise Error("Plus line does not start with '+'")
+        break
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
@@ -578,17 +580,11 @@ fn _handle_incomplete_line[
     stream.buffer._compact_from(interim.start)
     _ = stream.buffer._fill_buffer()
     interim = interim - interim.start
-    var plus_line_consumed_short = False
     for i in range(state.state, 4):
         try:
             if i == 2:
-                if stream.try_consume[Byte(quality_header), Byte(new_line)]():
-                    plus_line_consumed_short = True
-                    state = state + 1
-                else:
-                    var line = stream.next_complete_line()
-                    interim[i] = line
-                    state = state + 1
+                stream.consume_line_scalar()
+                state = state + 1
             else:
                 var line = stream.next_complete_line()
                 interim[i] = line
@@ -605,10 +601,6 @@ fn _handle_incomplete_line[
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    if not plus_line_consumed_short and (
-        len(interim[2]) == 0 or interim[2][0] != quality_header
-    ):
-        raise Error("Plus line does not start with '+'")
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
@@ -628,18 +620,13 @@ fn _parse_record_fast_path[
     quality_schema: QualitySchema,
 ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
     interim.start = stream.buffer.buffer_position()
-    var plus_line_consumed_short = False
 
     @parameter
     for i in range(4):
         try:
             if i == 2:
-                if stream.try_consume[Byte(quality_header), Byte(new_line)]():
-                    plus_line_consumed_short = True
-                    state = state + 1
-                else:
-                    interim[2] = stream.next_complete_line()
-                    state = state + 1
+                stream.consume_line_scalar()
+                state = state + 1
             else:
                 interim[i] = stream.next_complete_line()
                 state = state + 1
@@ -647,10 +634,6 @@ fn _parse_record_fast_path[
             raise e
     interim.end = stream.buffer.buffer_position()
 
-    if not plus_line_consumed_short and (
-        len(interim[2]) == 0 or interim[2][0] != quality_header
-    ):
-        raise LineIteratorError.OTHER
     return RefRecord[origin=MutExternalOrigin](
         interim[0],
         interim[1],
