@@ -1,4 +1,4 @@
-from testing import assert_equal, assert_raises, assert_true, assert_false
+from testing import assert_equal, assert_raises, assert_true, assert_false, TestSuite
 from pathlib import Path
 from os import remove
 from blazeseq.CONSTS import DEFAULT_CAPACITY

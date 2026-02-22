@@ -1,4 +1,4 @@
-from memory import memcpy, mem, UnsafePointer, Span, alloc
+from memory import memcpy, UnsafePointer, Span, alloc
 from pathlib import Path
 from utils import StaticTuple
 from builtin.builtin_slice import ContiguousSlice
@@ -12,6 +12,48 @@ from blazeseq.io.writers import (
 )
 from blazeseq.CONSTS import *
 from blazeseq.utils import memchr
+
+
+from sys import (
+    is_compile_time,
+    llvm_intrinsic,
+    size_of,
+)
+
+@always_inline
+fn memmove[
+    T: AnyType
+](
+    *,
+    dest: UnsafePointer[mut=True, T],
+    src: UnsafePointer[mut=False, T],
+    count: Int,
+):
+    """Copy `count * size_of[T]()` bytes from src to dest.
+
+    Unlike `memcpy`, the memory regions are allowed to overlap.
+
+    Parameters:
+        T: The element type.
+
+    Args:
+        dest: The destination pointer.
+        src: The source pointer.
+        count: The number of elements to copy.
+    """
+    var n = count * size_of[T]()
+    if is_compile_time():
+        for i in range(n):
+            (dest.bitcast[Byte]() + i).store((src.bitcast[Byte]() + i).load())
+    else:
+        llvm_intrinsic["llvm.memmove", NoneType](
+            # <dest>, <src>, <len>, <isvolatile>
+            dest.bitcast[Byte](),
+            src.bitcast[Byte](),
+            n,
+            False,
+        )
+
 
 
 @register_passable("trivial")
@@ -230,13 +272,10 @@ struct BufferedReader[R: Reader](
         )
 
     fn write_to[w: Writer](self, mut writer: w):
-        try:
-            writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
-        except:
-            writer.write("")
+        writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
 
     @always_inline
-    fn peek(ref self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
+    fn peek(ref self, amt: Int) -> Span[Byte, MutExternalOrigin]:
         """
         Peek at the next `amt` bytes in the buffer without consuming them.
         """
@@ -679,10 +718,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
                     raise LineIteratorError.INCOMPLETE_LINE
 
         var view: Span[Byte, MutExternalOrigin]
-        try:
-            view = self.buffer.view()
-        except Error:
-            raise LineIteratorError.OTHER
+        view = self.buffer.view()
 
         var newline_at = memchr(haystack=view, chr=new_line)
         if newline_at == -1:
