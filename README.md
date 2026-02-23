@@ -115,8 +115,6 @@ for record in parser.records():
     _ = record.id_slice()
 ```
 
----
-
 ## Architecture & Trade-offs
 
 | Mode                           | Return Type        | Copies Data? | Use When                                                           |
@@ -126,8 +124,6 @@ for record in parser.records():
 | `next_batch()` / `batched()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, vectorized CPU operations, alignment                |
 
 **Critical**: `RefRecord` spans are only valid untill the next parser operation. Do not store them in collections or use after iteration advances.
-
----
 
 ## Benchmarks
 
@@ -150,15 +146,11 @@ Ensure that you have enough ram capacity (min ~5GB).
 pixi run -e benchmark benchmark
 ```
 
----
-
 ## Documentation
 
 - API Reference: [https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)
 - The site is generated with [Modo](https://mlange-42.github.io/modo/) (plain markdown from `mojo doc` output) and [Astro Starlight](https://starlight.astro.build/).
 - Examples: `examples/` directory includes parser usage, writer, and GPU alignment
-
----
 
 ## Limitations
 
