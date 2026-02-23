@@ -345,7 +345,7 @@ struct Validator(Copyable):
         _check_ascii(record.id.as_span())
         _check_ascii(record.sequence.as_span())
         _check_ascii(record.quality.as_span())
-
+    
     @always_inline
     fn validate(
         self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
@@ -368,7 +368,7 @@ struct Validator(Copyable):
                     record_snippet=self.id_snippet(record),
                 )
                 raise Error(val_err.__str__())
-            raise
+            raise Error(String(e))
         if self.check_ascii:
             try:
                 self.validate_ascii(record)
@@ -381,7 +381,7 @@ struct Validator(Copyable):
                         record_snippet=self.id_snippet(record),
                     )
                     raise Error(val_err.__str__())
-                raise
+                raise Error(String(e))
         if self.check_quality:
             try:
                 self.validate_quality_range(record)
@@ -394,7 +394,7 @@ struct Validator(Copyable):
                         record_snippet=self.id_snippet(record),
                     )
                     raise Error(val_err.__str__())
-                raise
+                raise Error(String(e))
 
     @always_inline
     fn validate(
@@ -418,7 +418,7 @@ struct Validator(Copyable):
                     record_snippet=self.id_snippet(record),
                 )
                 raise Error(val_err.__str__())
-            raise
+            raise Error(String(e))
         if self.check_ascii:
             try:
                 self.validate_ascii(record)
@@ -431,7 +431,7 @@ struct Validator(Copyable):
                         record_snippet=self.id_snippet(record),
                     )
                     raise Error(val_err.__str__())
-                raise
+                raise Error(String(e))
         if self.check_quality:
             try:
                 self.validate_quality_range(record)
@@ -444,7 +444,7 @@ struct Validator(Copyable):
                         record_snippet=self.id_snippet(record),
                     )
                     raise Error(val_err.__str__())
-                raise
+                raise Error(String(e))
 
 
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
