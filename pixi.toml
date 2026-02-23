@@ -31,6 +31,8 @@ mojo-compiler = "=0.26.1.0"
 [dependencies]
 mojo = "=0.26.1.0"
 nodejs = ">=20"
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
+
 
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"

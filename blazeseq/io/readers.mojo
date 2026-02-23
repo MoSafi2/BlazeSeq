@@ -14,6 +14,7 @@ from sys import ffi
 from sys.info import CompilationTarget
 from pathlib import Path
 from collections.string import String, chr
+from rapidgzip import RapidgzipFile
 
 
 # Constants for zlib return codes
@@ -360,3 +361,69 @@ struct GZFile(Movable, Reader):
         if bytes_read < 0:
             raise Error("Error reading from gzip file: " + String(bytes_read))
         return Int(bytes_read)
+
+
+struct RapidgzipReader(Movable, Reader):
+    """Reader for gzip-compressed files (.gz) using parallel rapidgzip decompression.
+
+    Implements the `Reader` trait like `FileReader` and `GZFile`. Use for .fastq.gz
+    files with `FastqParser` when higher throughput from parallel decompression
+    is desired.
+
+    Example:
+        ```mojo
+        from blazeseq import RapidgzipReader, FastqParser
+        var r = RapidgzipReader("data.fastq.gz", parallelism=0)
+        var parser = FastqParser[RapidgzipReader](r^, "illumina_1.8")
+        for record in parser.records():
+            _ = record.id_slice()
+        ```
+    """
+
+    var _file: RapidgzipFile
+
+    fn __init__(out self, path: String, parallelism: UInt32 = 0) raises:
+        """Open a gzip file for parallel decompression.
+
+        Args:
+            path: Path to the .gz file.
+            parallelism: Number of worker threads; 0 = auto-detect.
+
+        Raises:
+            Error: If the file cannot be opened.
+        """
+        self._file = RapidgzipFile.open(path, parallelism)
+
+    fn __init__(out self, path: Path, parallelism: UInt32 = 0) raises:
+        """Open a gzip file for parallel decompression.
+
+        Args:
+            path: Path to the .gz file.
+            parallelism: Number of worker threads; 0 = auto-detect.
+
+        Raises:
+            Error: If the file cannot be opened.
+        """
+        self._file = RapidgzipFile.open(path.path, parallelism)
+
+
+    fn read_to_buffer(
+        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
+    ) raises -> UInt64:
+        """Read decompressed bytes into buf at offset pos. Returns bytes read (0 at EOF)."""
+        if pos > len(buf):
+            raise Error("Position is outside the buffer")
+        var s = Span[Byte, MutExternalOrigin](
+            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        )
+        if amt > len(s):
+            raise Error(
+                "Number of elements to read is bigger than the available space"
+                " in the buffer"
+            )
+        if amt < 0:
+            raise Error("The amount to be read should be positive")
+
+        var count = min(amt, len(s))
+        var n = self._file.read(s.unsafe_ptr(), count)
+        return UInt64(n)

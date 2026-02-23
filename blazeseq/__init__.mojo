@@ -11,7 +11,7 @@ Key features:
 - Zero-copy parsing via `next_ref()` / `ref_records()`.
 - GPU batch support: `FastqBatch`, `DeviceFastqBatch`, `upload_batch_to_device()`.
 - Multiple quality schemas: generic, sanger, solexa, illumina_1.3/1.5/1.8.
-- Readers: `FileReader`, `MemoryReader`, `GZFile`. Writers: `FileWriter`, `MemoryWriter`, `GZWriter`.
+- Readers: `FileReader`, `MemoryReader`, `GZFile`, `RapidgzipReader`. Writers: `FileWriter`, `MemoryWriter`, `GZWriter`.
 
 Example:
     ```mojo
@@ -30,6 +30,6 @@ from blazeseq.device_record import (
     FastqBatch,
     upload_batch_to_device,
 )
-from blazeseq.io.readers import FileReader, MemoryReader, GZFile
+from blazeseq.io.readers import FileReader, MemoryReader, GZFile, RapidgzipReader
 from blazeseq.io.writers import Writer, FileWriter, MemoryWriter, GZWriter
 from blazeseq.errors import ParseError, ValidationError
