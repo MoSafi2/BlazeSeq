@@ -114,7 +114,7 @@ fn run_gpu_nw(
         var num_records = batch.num_records()
         if num_records == 0:
             continue
-        var device_batch = batch.upload_to_device(ctx)
+        var device_batch = batch.to_device(ctx)
         var scores_buffer = ctx.enqueue_create_buffer[DType.int32](num_records)
         var scratch_size = num_records * ROW_STRIDE
         var row_scratch = ctx.enqueue_create_buffer[DType.int32](scratch_size)

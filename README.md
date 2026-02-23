@@ -88,7 +88,7 @@ var ctx = DeviceContext()
 var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", default_batch_size=4096)
 for batch in parser.batched():
     # batch is a FastqBatch (Structure-of-Arrays)
-    var device_batch = batch.upload_to_device(ctx)   # GPU upload
+    var device_batch = batch.to_device(ctx)   # GPU upload
     # Your GPU kernel, check examples
 ```
 

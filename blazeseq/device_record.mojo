@@ -20,7 +20,7 @@ trait GpuMovableBatch:
     fn num_records(self) -> Int:
         ...
 
-    fn upload_to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
+    fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         ...
 
 
@@ -36,7 +36,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     Stores ids, sequences, and qualities in packed byte buffers with
     offset arrays, enabling coalesced GPU access after upload. Use with
     `parser.batched()` or `next_batch()`, or build from a list of `FastqRecord`s.
-    Implements `GpuMovableBatch` for `upload_to_device()`.
+    Implements `GpuMovableBatch` for `to_device()`.
     
     Use cases: GPU kernels, batch processing.
     
@@ -147,7 +147,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
                 Int64(len(record.quality)) + self._qual_ends[current_loaded - 1]
             )
 
-    fn upload_to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
+    fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         """Upload this batch to the device (id, sequence, and quality together).
         """
         return upload_batch_to_device(self, ctx)
