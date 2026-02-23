@@ -109,3 +109,35 @@ Record the versions you use when reporting results, for example:
 - **Throughput**: For a 3 GB file, throughput in GB/s is `3.0 / time_seconds`. Use this to compare parsers across machines.
 
 All parsers are run on the same file; the script checks that they report the same `records` and `base_pairs` before running hyperfine, so any difference in time is attributable to parsing and iteration rather than I/O or correctness.
+
+---
+
+## Compressed (gzip) FASTQ benchmark
+
+A separate benchmark compares **compressed file parsing** (decompress + parse) for BlazeSeq and needletail only.
+
+- **Purpose**: Compare throughput when reading a **gzip-compressed** FASTQ file (`.fastq.gz`). Both tools decompress on the fly and parse; the benchmark measures combined decompression and parsing time.
+- **Data**: The same 3 GB synthetic FASTQ is generated, then compressed with `gzip` to a single `.fastq.gz` file. The plain file is removed after compression to save space; only the compressed file is used during hyperfine.
+- **Parsers**: BlazeSeq (using `RapidgzipReader` for parallel gzip decompression) and needletail (which auto-detects gzip). No seq_io, kseq, or FASTX.jl in this benchmark.
+- **Hyperfine**: Same defaults as the plain benchmark: warmup 2, runs 5. Results are written to **separate** files so they do not overwrite the plain benchmark results.
+
+### Output files
+
+- `benchmark_results_gzip.md` (summary table)
+- `benchmark_results_gzip.json` (full hyperfine output)
+
+### How to run the gzip benchmark
+
+From the **repository root**, with the benchmark environment installed:
+
+```bash
+pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+```
+
+Or use the pixi task:
+
+```bash
+pixi run -e benchmark benchmark-gzip
+```
+
+**Requirements**: pixi, hyperfine, cargo, rustc, and **gzip** (system). Same ramfs/tmpfs setup as the plain benchmark on Linux (sudo for mount/umount, or `/dev/shm` fallback).
