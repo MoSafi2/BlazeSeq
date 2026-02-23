@@ -344,7 +344,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Error: On parse or validation failure (with context); does not
                 raise EOFError, returns partial batch instead.
         """
-        var actual_max = max(max_records, self._batch_size)
+        var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
         while len(batch) < actual_max and self.line_iter.has_more():
             self._record_number += 1

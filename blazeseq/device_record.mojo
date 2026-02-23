@@ -257,7 +257,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             id_span,
             seq_span,
             qual_span,
-            Int8(self._quality_offset),
+            UInt8(self._quality_offset),
         )
 
     fn to_records(self) raises -> List[FastqRecord]:

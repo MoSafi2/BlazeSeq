@@ -10,6 +10,7 @@ generate_synthetic_fastq_fixtures) so round-trip tests can run on larger data.
 
 from pathlib import Path
 from os import remove
+from os.path import exists
 from testing import assert_equal, TestSuite
 from blazeseq.record import FastqRecord
 from blazeseq.parser import FastqParser
@@ -223,6 +224,8 @@ fn test_gzip_to_gzip_roundtrip() raises:
 
 fn test_synthetic_plain_roundtrip() raises:
     """Round-trip on large synthetic plain fixture."""
+    if not exists(Path(SYNTHETIC_PLAIN_PATH)):
+        generate_synthetic_fastq_fixtures()
     var original = parse_plain_fastq(SYNTHETIC_PLAIN_PATH)
     var out_path = Path("tests/test_data/fastq_integration_synthetic_plain_out.fastq")
     var writer = buffered_writer_for_file(out_path)
@@ -236,6 +239,8 @@ fn test_synthetic_plain_roundtrip() raises:
 
 fn test_synthetic_plain_to_gzip_roundtrip() raises:
     """Round-trip: large synthetic plain → write gzip → read gzip → compare."""
+    if not exists(Path(SYNTHETIC_PLAIN_PATH)):
+        generate_synthetic_fastq_fixtures()
     var original = parse_plain_fastq(SYNTHETIC_PLAIN_PATH)
     var gz_path = "tests/test_data/fastq_integration_synthetic_plain2gz_out.fastq.gz"
     var writer = buffered_writer_for_gzip(gz_path)

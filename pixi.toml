@@ -34,7 +34,7 @@ nodejs = ">=20"
 
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"
-test = { cmd = "sh -c 'find ./tests -name test_*.mojo | xargs -I % pixi run mojo run -I . -D ASSERT=all %'" } # test
+test = { cmd = "sh -c 'find ./tests -name \"test_*.mojo\" | xargs -I % pixi run mojo run -I . -D ASSERT=all %'" }
 docs = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run build"
 docs-serve = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run dev"
 rbuild = "pixi build"
