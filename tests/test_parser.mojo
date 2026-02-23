@@ -66,8 +66,8 @@ fn valid_file_test_fun_ref(file: String, schema: String = "generic") raises:
 fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
     """Same invalid files as invalid_file_test_fun but consume via next_ref() (RefRecord path).
     Ref path must raise some error; we require the expected validation message or a known
-    alternate (LineIteratorError / buffer capacity) so the suite passes when ref path
-    diverges slightly on a few invalid files."""
+    alternate (buffer capacity / EOF) so the suite passes when ref path diverges slightly
+    on a few invalid files. Public API raises only Error and EOFError."""
     comptime config_ = ParserConfig(
         check_ascii=True,
         check_quality=True,
@@ -91,8 +91,8 @@ fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
     assert_true(raised, "invalid file should raise: " + file)
     assert_true(
         err_msg.find(msg) >= 0
-        or err_msg.find("LineIteratorError") >= 0
         or err_msg.find("Line exceeds buffer") >= 0
+        or err_msg.find("Line iteration failed") >= 0
         or err_msg.find("EOF") >= 0
         or err_msg.find(cor_len) >= 0
         or err_msg.find(cor_seq_hed) >= 0

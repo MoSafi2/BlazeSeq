@@ -57,10 +57,12 @@ trait Reader(ImplicitlyDestructible):
     
     Example:
         ```mojo
+        from blazeseq.io.readers import Reader
         struct MyReader(Reader):
             fn read_to_buffer(mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int) raises -> UInt64:
                 # ... copy up to amt bytes from your source into buf starting at pos
-                return bytes_read
+                var bytes_read: Int = 0
+                return UInt64(bytes_read)
             fn __moveinit__(out self, deinit other: Self): ...
         ```
     """

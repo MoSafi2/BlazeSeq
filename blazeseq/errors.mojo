@@ -92,3 +92,34 @@ struct ValidationError(Writable):
     fn write_to[w: Writer](self, mut writer: w):
         """Write error to writer."""
         writer.write(self.__str__())
+
+
+# ---------------------------------------------------------------------------
+# Shared error message helpers (for consistent Error strings across modules)
+# ---------------------------------------------------------------------------
+
+fn buffer_capacity_error(
+    capacity: Int,
+    max_capacity: Int = 0,
+    growth_hint: Bool = False,
+    at_max: Bool = False,
+) -> String:
+    """Build a single "line exceeds buffer" message for use by LineIterator and parser/utils.
+
+    Args:
+        capacity: Current buffer capacity in bytes.
+        max_capacity: Maximum buffer capacity when growth is enabled (0 if N/A).
+        growth_hint: If True, append hint to enable buffer_growth or use larger buffer_capacity.
+        at_max: If True and max_capacity > 0, message is about exceeding max capacity.
+
+    Returns:
+        A string suitable for raise Error(...).
+    """
+    var msg: String
+    if at_max and max_capacity > 0:
+        msg = "Line exceeds max buffer capacity of " + String(max_capacity) + " bytes"
+    else:
+        msg = "Line exceeds buffer capacity of " + String(capacity) + " bytes"
+    if growth_hint:
+        msg += ". Enable buffer_growth or use a larger buffer_capacity."
+    return msg

@@ -17,6 +17,27 @@ import math
 from blazeseq.CONSTS import *
 from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator
 from blazeseq.io.readers import Reader
+from blazeseq.errors import ParseError, buffer_capacity_error
+from blazeseq.parser import FastqParser
+
+
+
+
+@doc_private
+fn format_parse_error(
+    message: String,
+    parser: FastqParser,
+    record_snippet: String,
+) -> String:
+    """Build ParseError from message and parser context; return formatted string for raising Error."""
+    var parse_err = ParseError(
+        message,
+        record_number=parser.get_record_number(),
+        line_number=parser.get_line_number(),
+        file_position=parser.get_file_position(),
+        record_snippet=record_snippet,
+    )
+    return parse_err.__str__()
 
 
 comptime NEW_LINE = 10
@@ -543,8 +564,16 @@ fn _handle_incomplete_line_with_buffer_growth[
         except e:
             if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
                 continue
-            else:
-                raise e
+            if e == LineIteratorError.BUFFER_TOO_SMALL:
+                raise Error(
+                    buffer_capacity_error(
+                        stream.buffer.capacity(),
+                        max_capacity,
+                        growth_hint=True,
+                        at_max=(stream.buffer.capacity() >= max_capacity),
+                    )
+                )
+            raise Error(String(e))
         interim.end = stream.buffer.buffer_position()
         break
     return RefRecord[origin=MutExternalOrigin](
@@ -582,11 +611,9 @@ fn _handle_incomplete_line[
                 raise EOFError()
             if e == LineIteratorError.INCOMPLETE_LINE:
                 raise Error(
-                    "Line exceeds buffer capacity of "
-                    + String(buffer_capacity)
-                    + " bytes. Enable buffer_growth or use a larger buffer_capacity."
+                    buffer_capacity_error(buffer_capacity, growth_hint=True)
                 )
-            raise e
+            raise Error(String(e))
     interim.end = stream.buffer.buffer_position()
 
     return RefRecord[origin=MutExternalOrigin](

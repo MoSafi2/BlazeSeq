@@ -13,6 +13,9 @@ Key features:
 - Multiple quality schemas: generic, sanger, solexa, illumina_1.3/1.5/1.8.
 - Readers: `FileReader`, `MemoryReader`, `GZFile`, `RapidgzipReader`. Writers: `FileWriter`, `MemoryWriter`, `GZWriter`.
 
+Exceptions:
+- The public API (e.g. `FastqParser.next_ref()`, `next_record()`) raises only Mojo `Error` and `EOFError`. Parse and buffer-capacity failures use `Error` with consistent messages; end-of-input uses `EOFError`. Iterators (`records()`, `ref_records()`, `batched()`) catch `EOFError` and raise `StopIteration` instead.
+
 Example:
     ```mojo
     from blazeseq import FastqParser, FileReader

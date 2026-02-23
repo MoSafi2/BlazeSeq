@@ -7,7 +7,7 @@ from blazeseq.io.buffered import (
 )
 from blazeseq.io.readers import Reader
 from blazeseq.device_record import FastqBatch
-from blazeseq.errors import ParseError, ValidationError
+from blazeseq.errors import ParseError, ValidationError, buffer_capacity_error
 from std.iter import Iterator
 from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import (
@@ -17,6 +17,7 @@ from blazeseq.utils import (
     _parse_record_fast_path,
     _handle_incomplete_line_with_buffer_growth,
     _handle_incomplete_line,
+    format_parse_error,
 )
 
 
@@ -246,6 +247,18 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         self._record_number = 0
 
     @always_inline
+    fn get_record_number(ref self) -> Int:
+        return self._record_number
+
+    @always_inline
+    fn get_line_number(ref self) -> Int:
+        return self.line_iter.get_line_number()
+
+    @always_inline
+    fn get_file_position(ref self) -> Int64:
+        return self.line_iter.get_file_position()
+
+    @always_inline
     fn has_more(self) -> Bool:
         """Return True if there may be more records to read.
         
@@ -276,19 +289,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             next_ref/next_record/next_batch or buffer mutation. Consume promptly.
         """
         self._record_number += 1
-        var ref_record = self._parse_record_ref()
+        var ref_record: RefRecord[origin=MutExternalOrigin]
+        try:
+            ref_record = self._parse_record_ref()
+        except e:
+            raise Error(format_parse_error(String(e), self, ""))
         try:
             self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
         except e:
-            # Wrap error with context
-            var parse_err = ParseError(
-                String(e),
-                record_number=self._record_number,
-                line_number=self.line_iter.get_line_number(),
-                file_position=self.line_iter.get_file_position(),
-                record_snippet=self._get_record_snippet(ref_record),
-            )
-            raise Error(parse_err.__str__())
+            raise Error(format_parse_error(String(e), self, self._get_record_snippet(ref_record)))
         return ref_record^
 
     @always_inline
@@ -308,19 +317,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if not self.line_iter.has_more():
             raise EOFError()
         self._record_number += 1
-        var record = self._parse_record_line()
+        var record: FastqRecord
+        try:
+            record = self._parse_record_line()
+        except e:
+            raise Error(format_parse_error(String(e), self, ""))
         try:
             self.validator.validate(record, self._record_number, self.line_iter.get_line_number())
         except e:
-            # Wrap error with context
-            var parse_err = ParseError(
-                String(e),
-                record_number=self._record_number,
-                line_number=self.line_iter.get_line_number(),
-                file_position=self.line_iter.get_file_position(),
-                record_snippet=self._get_record_snippet_from_fastq(record),
-            )
-            raise Error(parse_err.__str__())
+            raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
         return record^
 
     fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
@@ -344,27 +349,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var actual_max = min(max_records, self._batch_size)
         var batch = FastqBatch(batch_size=actual_max)
         while len(batch) < actual_max and self.line_iter.has_more():
-            self._record_number += 1
-            var snippet = String("")
             try:
-                var ref_record = self._parse_record_ref()
-                # Try to extract snippet before validation (in case validation fails)
-                snippet = self._get_record_snippet(ref_record)
-                self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
+                var ref_record = self.next_ref()
                 batch.add(ref_record)
             except e:
-                if String(e) == EOF:
+                if String(e) == EOF or String(e).startswith(EOF):
                     break
-                # Wrap error with context before re-raising
-                # snippet may be empty if parsing failed before we could extract it
-                var parse_err = ParseError(
-                    String(e),
-                    record_number=self._record_number,
-                    line_number=self.line_iter.get_line_number(),
-                    file_position=self.line_iter.get_file_position(),
-                    record_snippet=snippet,
-                )
-                raise Error(parse_err.__str__())
+                raise
         return batch^
 
     fn ref_records(
@@ -422,8 +413,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var line1 = ASCIIString(self.line_iter.next_line())
         var line2 = ASCIIString(self.line_iter.next_line())
         var line3 = self.line_iter.next_line()
-        if len(line3) == 0 or line3[0] != quality_header:
-            raise Error("Plus line does not start with '+'")
         var line4 = ASCIIString(self.line_iter.next_line())
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line4^, schema)
@@ -443,8 +432,16 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         except e:
             if e.value == LineIteratorError.EOF.value:
                 raise EOFError()
+            if e == LineIteratorError.BUFFER_TOO_SMALL:
+                raise Error(
+                    buffer_capacity_error(
+                        self.line_iter.buffer.capacity(),
+                        self.config.buffer_max_capacity,
+                        growth_hint=self.config.buffer_growth_enabled,
+                    )
+                )
             if e != LineIteratorError.INCOMPLETE_LINE:
-                raise e
+                raise Error("Line iteration failed")
 
             @parameter
             if self.config.buffer_growth_enabled:

@@ -11,6 +11,7 @@ from blazeseq.io.writers import (
     GZWriter,
 )
 from blazeseq.CONSTS import *
+from blazeseq.errors import buffer_capacity_error
 from blazeseq.utils import memchr, memchr_scalar
 
 
@@ -129,7 +130,7 @@ struct BufferedReader[R: Reader](
         """Wrap a Reader with a buffer of given capacity. Reads once to fill buffer."""
         if capacity <= 0:
             raise Error(
-                "Can't have BufferedReader with the follwing capacity: ",
+                "Can't have BufferedReader with the following capacity: ",
                 capacity,
                 " Bytes",
             )
@@ -698,7 +699,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         Return the next line only if a complete line (ending with newline) is in
         the current buffer. Does not refill or compact (except for initial empty buffer).
-        If no newline is found, raise Error("INCOMPLETE_LINE") and do not consume;
+        If no newline is found, raise LineIteratorError.INCOMPLETE_LINE and do not consume;
         caller can fall back to `next_line()` to refill. Invalidated by next
         `next_line` / `next_complete_line` or any buffer mutation.
         """
@@ -774,17 +775,9 @@ struct LineIterator[R: Reader](Iterable, Movable):
         or grow the buffer so the caller can retry.
         """
         if not self._growth_enabled:
-            raise Error(
-                "Line exceeds buffer capacity of "
-                + String(self.buffer.capacity())
-                + " bytes"
-            )
+            raise Error(buffer_capacity_error(self.buffer.capacity()))
         if self.buffer.capacity() >= self._max_capacity:
-            raise Error(
-                "Line exceeds max buffer capacity of "
-                + String(self._max_capacity)
-                + " bytes"
-            )
+            raise Error(buffer_capacity_error(self.buffer.capacity(),self._max_capacity,at_max=True))
         var current_cap = self.buffer.capacity()
         var growth_amount = min(current_cap, self._max_capacity - current_cap)
         self.buffer.grow_buffer(growth_amount, self._max_capacity)
