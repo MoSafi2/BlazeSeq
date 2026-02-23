@@ -22,7 +22,7 @@ from pathlib import Path
 from layout import Layout, LayoutTensor
 from time import perf_counter_ns
 
-from examples.needlemanwunsh_gpu_alignment.kernels import (
+from examples.nw_gpu.kernels import (
     nw_kernel,
     needleman_wunsch_cpu,
     MAX_REF_LEN,

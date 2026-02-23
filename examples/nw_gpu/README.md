@@ -28,7 +28,7 @@ The GPU kernel assigns one block per read; each block fills its two-row DP table
 From the BlazeSeq repo root:
 
 ```bash
-pixi run mojo run -I . examples/needlemann-wunsh_gpu_alignment/main.mojo
+pixi run mojo run examples/nw_gpu/main.mojo
 ```
 
 ## Files

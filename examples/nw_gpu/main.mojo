@@ -22,7 +22,7 @@ from sys import has_accelerator, exit
 from blazeseq import FastqBatch
 from gpu.host import DeviceContext
 
-from examples.needlemanwunsh_gpu_alignment.execution import (
+from examples.nw_gpu.execution import (
     load_batches_synthetic,
     setup_reference,
     run_gpu_nw,

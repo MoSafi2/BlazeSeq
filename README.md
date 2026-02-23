@@ -1,4 +1,6 @@
-# BlazeSeq
+# 🔥 BlazeSeq
+
+**High-Performance FASTQ Parsing & GPU Tooling for Mojo**
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
@@ -11,7 +13,7 @@ BlazeSeq aims to be
 
 ---
 
-## Key **features**
+## ✨ Key **features**
 
 - **SIMD-accelerated scanning** — Vectorized from the ground up using mojo's SIMD first-class support.
 - **Three parsing modes** — Choose your trade-off between speed and convenience:
@@ -56,14 +58,14 @@ pixi run mojo run -I . your_script.mojo
 
 ## Getting started
 
-### Running examples
+### 🛠 Usage examples
 
 ```bash
 # FastqParser with and without validation
 pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 
 # GPU quality prefix-sum (requires GPU and optional kernel modules)
-pixi run mojo run -I . examples/device_nw/main.mojo
+pixi run mojo run examples/nw_gpu/main.mojo
 ```
 
 ### Count reads and base pairs
@@ -136,6 +138,12 @@ pixi run mojo run -I . benchmark/throughput_benchmark.mojo
 ```
 
 ### Comparison with other tools
+
+Run comparison with `needletail` (Rust), `seq_io` (Rust), `KSeq` (C) and `Fastx.jl` (Julia).
+
+```bash
+pixi run -e benchmark benchmark
+```
 
 ---
 
