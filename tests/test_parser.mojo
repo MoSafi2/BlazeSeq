@@ -523,6 +523,9 @@ fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
 # Buffer large enough that one record fits after one refill (fallback path).
 comptime ref_parser_small_config = ParserConfig(buffer_capacity=32)
 
+# Same small buffer for record path (next_record/records) so lines span chunks.
+comptime record_parser_small_config = ParserConfig(buffer_capacity=32)
+
 comptime ref_parser_growth_config = ParserConfig(
     buffer_capacity=16,
     buffer_growth_enabled=True,
@@ -545,6 +548,68 @@ fn test_ref_parser_fallback_record_span_chunks() raises:
         _ = parser.next_ref()
 
     print("✓ test_ref_parser_fallback_record_span_chunks passed")
+
+
+# ---------------------------------------------------------------------------
+# Record path (next_record / records) parsing across chunks
+# ---------------------------------------------------------------------------
+
+
+fn test_record_parser_fallback_record_span_chunks() raises:
+    """FastqParser.next_record() parses correctly when record spans two chunks.
+    """
+    var content = "@r1\nACGT\n+\n!!!!\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = FastqParser[MemoryReader, record_parser_small_config](reader^)
+
+    var r = parser.next_record()
+    assert_equal(r.id.to_string(), "@r1", "Id should match")
+    assert_equal(r.sequence.to_string(), "ACGT", "Sequence should match")
+    assert_equal(r.quality.to_string(), "!!!!", "Quality should match")
+    with assert_raises(contains="EOF"):
+        _ = parser.next_record()
+
+
+fn test_record_parser_multiple_records_span_chunks() raises:
+    """FastqParser.next_record(): multiple records with small buffer so lines span chunks.
+    """
+    var content = "@r1\nA\n+\n!\n@r2\nB\n+\n!\n@r3\nC\n+\n!\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = FastqParser[MemoryReader, record_parser_small_config](reader^)
+
+    var r1 = parser.next_record()
+    assert_equal(r1.id.to_string(), "@r1", "First record id")
+    assert_equal(r1.sequence.to_string(), "A", "First record seq")
+    assert_equal(r1.quality.to_string(), "!", "First record quality")
+    var r2 = parser.next_record()
+    assert_equal(r2.id.to_string(), "@r2", "Second record id")
+    assert_equal(r2.sequence.to_string(), "B", "Second record seq")
+    var r3 = parser.next_record()
+    assert_equal(r3.id.to_string(), "@r3", "Third record id")
+    assert_equal(r3.sequence.to_string(), "C", "Third record seq")
+    assert_equal(r3.quality.to_string(), "!", "Third record quality")
+    with assert_raises(contains="EOF"):
+        _ = parser.next_record()
+
+
+fn test_record_parser_records_iterator_span_chunks() raises:
+    """FastqParser.records() yields correct records when parsing across chunks.
+    """
+    var content = "@a\nAC\n+\n!!\n@b\nTG\n+\n##\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = FastqParser[MemoryReader, record_parser_small_config](reader^)
+
+    var records = List[FastqRecord]()
+    for record in parser.records():
+        records.append(record^)
+
+    assert_equal(len(records), 2, "Should yield two records")
+    assert_equal(records[0].id.to_string(), "@a", "First record id")
+    assert_equal(records[0].sequence.to_string(), "AC", "First record seq")
+    assert_equal(records[0].quality.to_string(), "!!", "First record quality")
+    assert_equal(records[1].id.to_string(), "@b", "Second record id")
+    assert_equal(records[1].sequence.to_string(), "TG", "Second record seq")
+    assert_equal(records[1].quality.to_string(), "##", "Second record quality")
 
 
 fn test_ref_parser_multiple_records_next_loop() raises:
