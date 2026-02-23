@@ -6,6 +6,10 @@ All notable changes to BlazeSeq are documented here.
 
 ### Added
 
+## [0.2] - 2026-02-23
+
+### Added
+
 - **RapidgzipReader** integration with [Rapidgzip](https://github.com/mxmlnkn/rapidgzip) C++ library for parallelized gzip decompression. Results in up to 5x speedup in parsing of gzipped files compared to GZFile.
 
   ```mojo
@@ -15,10 +19,6 @@ All notable changes to BlazeSeq are documented here.
   for record in parser.records():
       _ = record.id_slice()
   ```
-
-## [0.2] - 2026-02-23
-
-### Added
 
 - **FastqParser** unified API with three iterators: `ref_records()`, `records()`, `batched()`.
 - **RefParser** for zero-copy reference-style parsing.
