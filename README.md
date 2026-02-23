@@ -35,14 +35,9 @@ This will install the `pixi` environment manager (see [pixi documentation](https
 # In your pixi.toml
 [dependencies]
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
+# pixi install
 ```
 
-```sh
-pixi install
-pixi run mojo run -I . your_script.mojo
-```
-
----
 
 ### 🛠 Usage examples
 
