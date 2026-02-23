@@ -4,7 +4,6 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
-### Added
 
 ## [0.2] - 2026-02-23
 
@@ -19,7 +18,8 @@ All notable changes to BlazeSeq are documented here.
   for record in parser.records():
       _ = record.id_slice()
   ```
-
+  
+- **Compressed (gzip) FASTQ benchmark**  benchmark comparing BlazeSeq (RapidgzipReader) and needletail on a 3 GB synthetic FASTQ compressed to `.fastq.gz`. Run with `pixi run -e benchmark benchmark-gzip`.
 - **FastqParser** unified API with three iterators: `ref_records()`, `records()`, `batched()`.
 - **RefParser** for zero-copy reference-style parsing.
 - **Writers**: `BufferWriter` and writer system; test cleanup helpers.
