@@ -25,7 +25,7 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
 
 If you don't have pixi already, install it first:
 
-```bash
+```sh
 curl -fsSL https://pixi.sh/install.sh | sh
 ```
 
