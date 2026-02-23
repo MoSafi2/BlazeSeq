@@ -44,10 +44,7 @@ struct ParserConfig(Copyable):
         quality_schema: Optional schema name; used when not passed to `__init__`.
             One of: "generic", "sanger", "solexa", "illumina_1.3", "illumina_1.5", "illumina_1.8".
         batch_size: Default max records per batch for `next_batch()` / `batched()`.
-    
-    Note:
-        Disable check_ascii and check_quality for maximum parsing throughput.
-    
+        
     Example:
         ```mojo
         from blazeseq import ParserConfig, FastqParser, FileReader
