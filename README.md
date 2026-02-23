@@ -10,7 +10,6 @@
 
 A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It handles gzip input via `zlib` bindings and offers configurable validation — all through a single unified API.
 
----
 
 ## ✨ Key Features
 
@@ -21,14 +20,10 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
   - `batched()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Disable ASCII/quality checks at compile time for maximum throughput
 
----
-
 ## Requirements
 
 - [Mojo](https://docs.modular.com/mojo/) — the project uses **0.26.1** (pinned via [pixi](https://prefix.dev/docs/pixi/))
 - Linux, macOS, or WSL2
-
----
 
 ## Quick Start
 
@@ -48,7 +43,7 @@ This will install the `pixi` environment manager (see [pixi documentation](https
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
-```bash
+```sh
 pixi install
 pixi run mojo run -I . your_script.mojo
 ```
@@ -57,7 +52,7 @@ pixi run mojo run -I . your_script.mojo
 
 ### 🛠 Usage examples
 
-```bash
+```sh
 # FastqParser with and without validation
 pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 
