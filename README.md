@@ -10,7 +10,6 @@
 
 A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It handles gzip input via `zlib` bindings and offers configurable validation — all through a single unified API.
 
-
 ## ✨ Key Features
 
 - **SIMD-accelerated scanning** — Vectorized from the ground up using mojo SIMD first-class support.
@@ -18,12 +17,7 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
   - `ref_records()` — Zero-copy views (fastest, borrow semantics)
   - `records()` — Owned records (thread-safe)
   - `batched()` — Structure-of-Arrays for GPU upload
-- **Compile-time validation toggles** — Disable ASCII/quality checks at compile time for maximum throughput
-
-## Requirements
-
-- [Mojo](https://docs.modular.com/mojo/) — the project uses **0.26.1** (pinned via [pixi](https://prefix.dev/docs/pixi/))
-- Linux, macOS, or WSL2
+- **Compile-time validation toggles** — Enable/Disable ASCII/quality checks at compile time for maximum throughput
 
 ## Quick Start
 
