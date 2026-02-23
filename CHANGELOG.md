@@ -4,21 +4,47 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
-### Changed
-
-- **Records:** Removed `plus_line` from `FastqRecord` and `RefRecord`; the plus line is emitted as `"+"` when writing. Renamed `header` to `id` and `header_slice()` to `id_slice()` throughout. Validator's `header_snippet()` renamed to `id_snippet()`. Batch and device types use `_id_bytes` / `_id_ends` and `id_buffer` / `id_ends` for consistency.
-
-## [0.2.0] - 2025-02-19
+## [0.2] - 2026-02-23
 
 ### Added
 
-- **FastqParser** Unified parser that either iterate of Fastq records, record references (zero copy parsing) or batches of records (for GPU-friendly data structure).
-- **LineIterator**: New `LineIterator[R, check_ascii]` over a `BufferedReader`.
-- **GZFile**: Re-exported from `blazeseq` (from `blazeseq.readers`) for reading gzip-compressed FASTQ. Use `from blazeseq import GZFile` or `from blazeseq.readers import GZFile`.
+- **FastqParser** unified API with three iterators: `ref_records()`, `records()`, `batched()`.
+- **RefParser** for zero-copy reference-style parsing.
+- **Writers**: `BufferWriter` and writer system; test cleanup helpers.
+- **Benchmarking**: Benchmark subdir and tools (e.g. ref_reader, throughput).
+- **Docs**: Astro-based docs and GitHub Actions deploy.
+- **LineIterator** over `BufferedReader`; GZFile re-export from `blazeseq`.
+- **Testing** Added unit-tests and round-trip integration for plain and gziped files.
 
-## [0.1.0]
+### Changed
 
-- **Parsing**: `RecordParser` with compile-time ASCII and quality-schema validation; `BufferedReader`, `FileReader`.
-- **Records**: `FastqRecord`, `RecordCoord`; quality schemas (Sanger, Solexa, Illumina, generic).
-- **GPU**: `FastqBatch`, `DeviceFastqBatch`; device upload helpers (`upload_batch_to_device`, `fill_subbatch_host_buffers`, `upload_subbatch_from_host_buffers`); quality prefix-sum kernel in `blazeseq.kernels.prefix_sum`.
-- **Build**: Mojo package layout; conda/rattler recipe; pixi build and test tasks.
+- **Records**: Removed `plus_line`. Renamed `header` → `id`, `header_slice()` → `id_slice()`; validator `header_snippet()` → `id_snippet()`. Batch/device use `id_buffer` / `id_ends`.
+- **ByteString** replaced by ASCII string type; string-like API, less vector-like.
+- **BatchedParser**: Parse-then-copy RefRecords; parametric mutability and origin tracking for RefRecord from FastqBatch.
+- **MemoryReader** performance improvements; `BufferedReader` `__del__` enabled.
+- Custom error types; CI: restrict tests to main, disable GPU tests in GHA.
+
+### Fixed
+
+- EOF handling in batched parser; incomplete-line and buffer-growth paths.
+
+---
+
+## [0.1] - 2026-02-16
+
+### Added
+
+- **GPU path**: GPU-compatible record; `FastqBatch`, `DeviceFastqBatch`; device upload helpers; quality prefix-sum kernel; `quality_distribution` example.
+- **Batched parser** and batched iterator; `GpuPayload` enum-like struct.
+- **Iterator** for `RecordParser`; `FastqRecord` uses OFFSET for quality schema.
+- **Validation**: ASCII validation moved from readers into FASTQ validator (compile-time toggles).
+- **Build**: Mojo 0.26.1; pixi build/test; conda/rattler recipe.
+
+### Changed
+
+- **new_iostream** merged (PR #12); `BufferedReader` / reorganized I/O.
+- **FastqRecord** uses `ByteString`; multi-line support; `ParserConfig`; validator hoisted to own struct.
+
+### Fixed
+
+- Tests and formatting for device record, get_record, validator.
