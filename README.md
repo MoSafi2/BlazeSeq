@@ -17,7 +17,7 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
   - `ref_records()` — Zero-copy views (fastest, borrow semantics)
   - `records()` — Owned records (thread-safe)
   - `batched()` — Structure-of-Arrays for GPU upload
-- **Compile-time validation toggles** — Enable/Disable ASCII/quality checks at compile time for maximum throughput
+- **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
 
 ## Quick Start
 
@@ -50,7 +50,7 @@ pixi run mojo run -I . your_script.mojo
 # FastqParser with and without validation
 pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 
-# GPU quality prefix-sum (requires GPU and optional kernel modules)
+# GPU needleman-wunsch global alignment (requires GPU)
 pixi run mojo run examples/nw_gpu/main.mojo
 ```
 
@@ -80,7 +80,7 @@ from pathlib import Path
 
 fn main() raises:
     comptime config = ParserConfig(check_ascii=False, check_quality=False)
-    var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "generic")
+    var parser = FastqParser[config=config](FileReader(Path("data.fastq")), "generic")
     for record in parser.ref_records():   # zero-copy
         _ = len(record)
 ```
@@ -104,7 +104,7 @@ for batch in parser.batched():
 ```mojo
 from blazeseq import GZFile, FastqParser
 
-var parser = FastqParser[GZFile](GZFile("data.fastq.gz", "rb"), "illumina_1.8")
+var parser = FastqParser(GZFile("data.fastq.gz", "rb"), "illumina_1.8")
 for record in parser.records():
     _ = record.id_slice()
 ```
@@ -114,8 +114,8 @@ for record in parser.records():
 | Mode                           | Return Type        | Copies Data? | Use When                                                           |
 | ------------------------------ | ------------------ | ------------ | ------------------------------------------------------------------ |
 | `next_ref()` / `ref_records()` | `RefRecord`        | **No**       | Streaming transforms (QC, filtering) where you process and discard. Not thread-safe |
-| `next_record()` / `records()`  | `FastqRecord`      | **Yes**      | Building in-memory databases, random access, storing subsets       |
-| `next_batch()` / `batched()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, vectorized CPU operations, alignment                |
+| `next_record()` / `records()`  | `FastqRecord`      | **Yes**      | Simple scripting, building in-memory collections       |
+| `next_batch()` / `batched()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, parallel CPU operations                |
 
 **Critical**: `RefRecord` spans are only valid untill the next parser operation. Do not store them in collections or use after iteration advances.
 
