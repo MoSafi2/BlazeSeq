@@ -52,8 +52,7 @@ pixi run mojo run examples/nw_gpu/main.mojo
 ### Count reads and base pairs
 
 ```mojo
-from blazeseq import FastqParser
-from blazeseq.readers import FileReader
+from blazeseq import FastqParser, FileReader
 from pathlib import Path
 
 fn main() raises:
@@ -69,8 +68,7 @@ fn main() raises:
 ### Maximum speed (validation off)
 
 ```mojo
-from blazeseq import FastqParser, ParserConfig
-from blazeseq.readers import FileReader
+from blazeseq import FastqParser, ParserConfig, FileReader
 from pathlib import Path
 
 fn main() raises:
@@ -83,7 +81,7 @@ fn main() raises:
 ### Batched (for GPU pipelines)
 
 ```mojo
-from blazeseq import FastqBatch, upload_batch_to_device
+from blazeseq import FastqBatch
 from gpu.host import DeviceContext
 
 var ctx = DeviceContext()
