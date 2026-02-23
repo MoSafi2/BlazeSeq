@@ -18,7 +18,7 @@ fn main() raises:
     var total_reads = 0
     var total_base_pairs = 0
 
-    for record in parser.ref_records():
+    for record in parser.records():
         total_reads += 1
         total_base_pairs += len(record)
 
