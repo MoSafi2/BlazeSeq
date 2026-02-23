@@ -1,21 +1,20 @@
 # 🔥 BlazeSeq
 
-**High-Performance FASTQ Parsing & GPU Tooling for Mojo**
+**High-Performance FASTQ Parsing for Mojo — Zero-Copy to GPU**
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://mosafi2.github.io/BlazeSeq/)
-[![Mojo](https://img.shields.io/badge/Mojo-0.26.x-fire)](https://docs.modular.com)
+[![Mojo](https://img.shields.io/badge/Mojo-0.26.1-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq supports different modes of parsing. it targets several GB/s throughput from disk using zero-copy parsing (similair to needletail and seq-io). In addition to owned records, and GPU-friendly batching. It supports gzip input (via zlib binding), and configurable validation — all through a single unified API.
-BlazeSeq aims to be
+A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It handles gzip input via `zlib` bindings and offers configurable validation — all through a single unified API.
 
 ---
 
-## ✨ Key **features**
+## ✨ Key Features
 
-- **SIMD-accelerated scanning** — Vectorized from the ground up using mojo's SIMD first-class support.
+- **SIMD-accelerated scanning** — Vectorized from the ground up using mojo SIMD first-class support.
 - **Three parsing modes** — Choose your trade-off between speed and convenience:
   - `ref_records()` — Zero-copy views (fastest, borrow semantics)
   - `records()` — Owned records (thread-safe)
@@ -55,8 +54,6 @@ pixi run mojo run -I . your_script.mojo
 ```
 
 ---
-
-## Getting started
 
 ### 🛠 Usage examples
 
@@ -125,13 +122,25 @@ for record in parser.records():
 
 ---
 
+## Architecture & Trade-offs
+
+| Mode                           | Return Type        | Copies Data? | Use When                                                           |
+| ------------------------------ | ------------------ | ------------ | ------------------------------------------------------------------ |
+| `next_ref()` / `ref_records()` | `RefRecord`        | **No**       | Streaming transforms (QC, filtering) where you process and discard. Not thread-safe |
+| `next_record()` / `records()`  | `FastqRecord`      | **Yes**      | Building in-memory databases, random access, storing subsets       |
+| `next_batch()` / `batched()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, vectorized CPU operations, alignment                |
+
+**Critical**: `RefRecord` spans are only valid untill the next parser operation. Do not store them in collections or use after iteration advances.
+
+---
+
 ## Benchmarks
 
 Benchmark numbers are hardware- and Mojo-version-dependent.
 
 ### Throughput benchmark
 
-The througput (`benchmark/throughput_benchmark.mojo`) generates ~3 GB of synthetic FASTQ in memory and times all three parsing modes. Run it yourself:
+The throughput (`benchmark/throughput_benchmark.mojo`) generates ~3 GB of synthetic FASTQ in memory and times all three parsing modes. Run it yourself:
 
 ```bash
 pixi run mojo run -I . benchmark/throughput_benchmark.mojo
@@ -139,7 +148,8 @@ pixi run mojo run -I . benchmark/throughput_benchmark.mojo
 
 ### Comparison with other tools
 
-Run comparison with `needletail` (Rust), `seq_io` (Rust), `KSeq` (C) and `Fastx.jl` (Julia).
+Generates ~3GB in `ramfs` and compares parsing against `needletail` (Rust), `seq_io` (Rust), `KSeq` (C) and `Fastx.jl` (Julia).
+Ensure that you have enough ram capacity (min ~5GB).
 
 ```bash
 pixi run -e benchmark benchmark
@@ -149,8 +159,10 @@ pixi run -e benchmark benchmark
 
 ## Documentation
 
-API Reference: [https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)
-Examples: `examples/` directory includes parser usage, writer, and GPU alignment
+- API Reference: [https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)
+- The site is generated with [Modo](https://mlange-42.github.io/modo/) (plain markdown from `mojo doc` output) and [Astro Starlight](https://starlight.astro.build/).
+- Examples: `examples/` directory includes parser usage, writer, and GPU alignment
+
 ---
 
 ## Limitations
@@ -170,29 +182,13 @@ pixi run test
 
 Tests use the same valid/invalid FASTQ corpus as [BioJava](https://github.com/biojava/biojava/tree/master/biojava-genome%2Fsrc%2Ftest%2Fresources%2Forg%2Fbiojava%2Fnbio%2Fgenome%2Fio%2Ffastq), [Biopython](https://biopython.org/), and [BioPerl](https://bioperl.org/) FASTQ parsers. Multi-line FASTQ is not supported.
 
-## Documentation
-
-API documentation is published at **[https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)** (built from `main` via GitHub Actions).
-
-To build and serve the docs locally:
-
-```bash
-pixi run docs          # generate API docs and build the site
-pixi run docs-serve    # generate API docs and serve (Astro dev server)
-```
-
-The site is generated with [Modo](https://mlange-42.github.io/modo/) (plain markdown from `mojo doc` output) and [Astro Starlight](https://starlight.astro.build/).
-
-## Performance
-
-Benchmark numbers are approximate and depend on hardware, disk, and Mojo version. They serve as internal targets and regression checks. Scripts and datasets are in the repo; current Mojo is 0.26.x (see `pixi.toml`).
-
 ## Project History
 
 BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim)), redesigned for:
-Unified parser architecture (one parser, three modes)
-GPU-oriented batch types
-Compile-time configuration
+
+- Unified parser architecture (one parser, three modes)
+- GPU-oriented batch types
+- Compile-time configuration
 
 ## License
 
