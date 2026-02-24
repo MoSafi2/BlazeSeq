@@ -609,7 +609,9 @@ fn _handle_incomplete_line[
         except e:
             if e == LineIteratorError.EOF:
                 raise EOFError()
-            if e == LineIteratorError.INCOMPLETE_LINE:
+            elif e == LineIteratorError.INCOMPLETE_LINE and not stream.has_more():
+                raise EOFError()
+            elif e == LineIteratorError.INCOMPLETE_LINE:
                 raise Error(
                     buffer_capacity_error(buffer_capacity, growth_hint=True)
                 )

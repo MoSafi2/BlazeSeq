@@ -74,6 +74,8 @@ struct LineIteratorError(
     comptime INCOMPLETE_LINE = Self(1)
     comptime BUFFER_TOO_SMALL = Self(2)
     comptime OTHER = Self(3)
+    comptime EMPTY_BUFFER = Self(4)
+
 
     fn __eq__(self, other: Self) -> Bool:
         return self.value == other.value
@@ -604,35 +606,38 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
             self.buffer._compact_from(self.buffer.buffer_position())
 
+    # BUG: in some cases return INCOMPLETE_LINE at last line or EOF
     @always_inline
     fn next_complete_line(
         mut self,
     ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
         Return the next line only if a complete line (ending with newline) is in
-        the current buffer. Does not refill or compact (except for initial empty buffer).
+        the current buffer. Does not refill or compact.
         If no newline is found, raise LineIteratorError.INCOMPLETE_LINE and do not consume;
+        if the buffer is empty, raise LineIteratorError.EMPTY_BUFFER.
         caller can fall back to `next_line()` to refill. Invalidated by next
-        `next_line` / `next_complete_line` or any buffer mutation.
+        `next_line` or any buffer grow/compact/resize.
         """
         if self.buffer.available() == 0:
             if self.buffer.is_eof():
                 raise LineIteratorError.EOF
+            else:
+                raise LineIteratorError.EMPTY_BUFFER
             # Allow one initial fill if buffer is empty but not EOF
             # This handles the case where buffer wasn't filled during initialization
-            try:
-                _ = self.buffer._fill_buffer()
-            except Error:
-                raise LineIteratorError.OTHER
-            if self.buffer.available() == 0:
-                if self.buffer.is_eof():
-                    raise LineIteratorError.EOF
-                else:
-                    raise LineIteratorError.INCOMPLETE_LINE
+            # Probably not the intended behavior
+            # try:
+            #     _ = self.buffer._fill_buffer()
+            # except Error:
+            #     raise LineIteratorError.OTHER
+            # if self.buffer.available() == 0:
+            #     if self.buffer.is_eof():
+            #         raise LineIteratorError.EOF
+            #     else:
+            #         raise LineIteratorError.INCOMPLETE_LINE
 
-        var view: Span[Byte, MutExternalOrigin]
         view = self.buffer.view()
-
         var newline_at = memchr(haystack=view, chr=new_line)
         if newline_at == -1:
             raise LineIteratorError.INCOMPLETE_LINE
@@ -640,6 +645,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         var end = _trim_trailing_cr(view, newline_at)
         var span = view[0:end]
         _ = self.buffer.consume(newline_at + 1)
+        self._current_line_number += 1
         return span
 
     fn peek(self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
