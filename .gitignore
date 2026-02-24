@@ -21,6 +21,11 @@ benchmark_results.json
 benchmark_results_gzip.md
 benchmark_results_gzip.json
 
+# Throughput benchmarks (benchmark/throughput/)
+benchmark/throughput_benchmark_results.json
+benchmark/throughput_benchmark_results.md
+benchmark/throughput/run_throughput_blazeseq
+
 # Rust (Cargo) build output — avoid watching build dirs
 **/target/
 
