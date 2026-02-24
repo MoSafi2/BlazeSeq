@@ -279,6 +279,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         try:
             ref_record = self._parse_record_ref()
         except e:
+            if String(e) == EOF:
+                raise EOFError()
             raise Error(format_parse_error(String(e), self, ""))
         try:
             self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
@@ -524,13 +526,9 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
             var err_str = String(Error)
             # Check if it's a ParseError or ValidationError by checking the message format
             # ParseError and ValidationError will have "Record number:" in their string representation
-            if "Record number:" in err_str:
-                # Print error with context
-                print(err_str)
-            elif err_str == EOF:
+            if err_str == EOF:
                 raise StopIteration()
             else:
-                # Print generic error (may not have context)
                 print(err_str)
             raise StopIteration()
 
