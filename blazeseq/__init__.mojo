@@ -33,6 +33,7 @@ from blazeseq.record_batch import (
     FastqBatch,
     upload_batch_to_device,
 )
+from blazeseq.spmc import FastqBatchSPMCQueue
 from blazeseq.io.readers import FileReader, MemoryReader, GZFile, RapidgzipReader
 from blazeseq.io.writers import Writer, FileWriter, MemoryWriter, GZWriter
 from blazeseq.errors import ParseError, ValidationError
