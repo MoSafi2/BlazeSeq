@@ -122,8 +122,8 @@ echo "Building seq_io_gzip_runner ..."
 # --- Julia project (FASTX.jl + CodecZlib for gzip) ---
 JULIA_PROJECT="$SCRIPT_DIR"
 echo "Ensuring Julia deps (FASTX, CodecZlib) ..."
-if ! julia --project="$JULIA_PROJECT" -e 'using Pkg; Pkg.instantiate()' 2>/dev/null; then
-    echo "Failed to instantiate Julia project at $JULIA_PROJECT"
+if ! julia --project="$JULIA_PROJECT" -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'; then
+    echo "Failed to resolve/instantiate Julia project at $JULIA_PROJECT"
     exit 1
 fi
 
