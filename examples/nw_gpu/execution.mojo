@@ -124,7 +124,7 @@ fn run_gpu_nw(
             ref_tensor,
             ref_len,
             device_batch.sequence_buffer,
-            device_batch.qual_ends,
+            device_batch.ends,
             num_records,
             scores_buffer,
             row_scratch,

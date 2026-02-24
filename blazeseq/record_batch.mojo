@@ -54,7 +54,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     var _quality_bytes: List[UInt8]
     var _sequence_bytes: List[UInt8]
     var _id_ends: List[Int64]
-    var _qual_ends: List[Int64]
+    var _ends: List[Int64]
     var _quality_offset: UInt8
 
     fn __init__(
@@ -76,7 +76,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         self._sequence_bytes = List[UInt8](
             capacity=avg_record_size * batch_size
         )
-        self._qual_ends = List[Int64](capacity=batch_size)
+        self._ends = List[Int64](capacity=batch_size)
         self._quality_offset = quality_offset
 
     fn __init__(
@@ -97,10 +97,8 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         self._id_bytes = List[UInt8](capacity=avg_record_size * batch_size)
         self._id_ends = List[Int64](capacity=batch_size)
         self._quality_bytes = List[UInt8](capacity=avg_record_size * batch_size)
-        self._sequence_bytes = List[UInt8](
-            capacity=avg_record_size * batch_size
-        )
-        self._qual_ends = List[Int64](capacity=batch_size)
+        self._sequence_bytes = List[UInt8](capacity=avg_record_size * batch_size)
+        self._ends = List[Int64](capacity=batch_size)
         self._quality_offset = quality_offset
         for i in range(batch_size):
             self.add(records[i])
@@ -114,10 +112,10 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
 
         if self.num_records() == 0:
             self._id_ends.append(Int64(len(record.id)))
-            self._qual_ends.append(Int64(len(record.quality)))
+            self._ends.append(Int64(len(record.quality)))
         else:
             self._id_ends.append(Int64(len(record.id))+ self._id_ends[- 1])
-            self._qual_ends.append(Int64(len(record.quality)) + self._qual_ends[- 1])
+            self._ends.append(Int64(len(record.quality)) + self._ends[- 1])
 
     fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
         """Append one RefRecord to the batch (copies into packed buffers; no FastqRecord allocation)."""
@@ -128,10 +126,10 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
 
         if self.num_records() == 0:
             self._id_ends.append(Int64(len(record.id)))
-            self._qual_ends.append(Int64(len(record.quality)))
+            self._ends.append(Int64(len(record.quality)))
         else:
             self._id_ends.append(Int64(len(record.id))+ self._id_ends[- 1])
-            self._qual_ends.append(Int64(len(record.quality)) + self._qual_ends[- 1])
+            self._ends.append(Int64(len(record.quality)) + self._ends[- 1])
 
     fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         """Upload this batch to the device (id, sequence, and quality together).
@@ -144,11 +142,11 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
 
     fn num_records(self) -> Int:
         """Return the number of records in the batch."""
-        return len(self._qual_ends)
+        return len(self._ends)
 
     fn seq_len(self) -> Int:
         """Return total length of all sequence bytes in the batch."""
-        return len(self._sequence_bytes)
+        return Int(self._ends[-1])
 
     fn quality_offset(self) -> UInt8:
         """Return the Phred quality offset (33 or 64) for this batch."""
@@ -187,7 +185,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
         var id_range = get_offsets(self._id_ends, index)
         var id_bs = self._id_bytes[id_range[0] : id_range[1]]
 
-        var range = get_offsets(self._qual_ends, index)
+        var range = get_offsets(self._ends, index)
         var seq_bs = self._sequence_bytes[range[0] : range[1]]
         var qual_bs = self._quality_bytes[range[0] : range[1]]
 
@@ -218,7 +216,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
             return start, end
 
         var id_range = get_offsets(self._id_ends, index)
-        var range = get_offsets(self._qual_ends, index)
+        var range = get_offsets(self._ends, index)
 
         # Create spans directly from list data
         var id_span = Span[Byte, origin_of(self)](
@@ -282,7 +280,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
     var total_id_bytes: Int64
     var qual_buffer: DeviceBuffer[DType.uint8]
     var sequence_buffer: DeviceBuffer[DType.uint8]
-    var qual_ends: DeviceBuffer[DType.int64]
+    var ends: DeviceBuffer[DType.int64]
     var id_buffer: DeviceBuffer[DType.uint8]
     var id_ends: DeviceBuffer[DType.int64]
 
@@ -293,9 +291,9 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
         var batch = FastqBatch(quality_offset=self.quality_offset, batch_size=0)
 
         batch._quality_bytes = List[UInt8](capacity=Int(staged.total_seq_bytes))
-        batch._qual_ends = List[Int64](capacity=staged.num_records)
+        batch._ends = List[Int64](capacity=staged.num_records)
         batch._quality_bytes.extend(staged.quality_data.as_span())
-        batch._qual_ends.extend(staged.quality_ends.as_span())
+        batch._ends.extend(staged.ends.as_span())
 
         batch._sequence_bytes = List[UInt8](
             capacity=Int(staged.total_seq_bytes)
@@ -332,7 +330,7 @@ struct StagedFastqBatch:
     var id_data: HostBuffer[DType.uint8]
 
     # End offsets buffers
-    var quality_ends: HostBuffer[DType.int64]
+    var ends: HostBuffer[DType.int64]
     var id_ends: HostBuffer[DType.int64]
 
     fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
@@ -352,7 +350,7 @@ fn download_device_batch_to_staged(
     var quality_data = ctx.enqueue_create_host_buffer[DType.uint8](
         Int(total_seq)
     )
-    var quality_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
+    var ends = ctx.enqueue_create_host_buffer[DType.int64](n)
     var sequence_data = ctx.enqueue_create_host_buffer[DType.uint8](
         Int(total_seq)
     )
@@ -363,7 +361,7 @@ fn download_device_batch_to_staged(
     ctx.synchronize()
 
     ctx.enqueue_copy(src_buf=device_batch.qual_buffer, dst_buf=quality_data)
-    ctx.enqueue_copy(src_buf=device_batch.qual_ends, dst_buf=quality_ends)
+    ctx.enqueue_copy(src_buf=device_batch.ends, dst_buf=ends)
     ctx.enqueue_copy(
         src_buf=device_batch.sequence_buffer, dst_buf=sequence_data
     )
@@ -378,7 +376,7 @@ fn download_device_batch_to_staged(
         total_id_bytes=total_id,
         quality_offset=device_batch.quality_offset,
         quality_data=quality_data,
-        quality_ends=quality_ends,
+        ends=ends,
         sequence_data=sequence_data,
         id_data=id_data,
         id_ends=id_ends,
@@ -401,7 +399,7 @@ fn stage_batch_to_host(
         total_id_bytes
     )
 
-    var quality_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
+    var ends = ctx.enqueue_create_host_buffer[DType.int64](n)
     var id_ends = ctx.enqueue_create_host_buffer[DType.int64](n)
 
     ctx.synchronize()
@@ -412,8 +410,8 @@ fn stage_batch_to_host(
         count=total_bytes,
     )
     memcpy(
-        dest=quality_ends.as_span().unsafe_ptr(),
-        src=batch._qual_ends.unsafe_ptr(),
+        dest=ends.as_span().unsafe_ptr(),
+        src=batch._ends.unsafe_ptr(),
         count=n,
     )
     memcpy(
@@ -438,7 +436,7 @@ fn stage_batch_to_host(
         total_id_bytes=total_id_bytes,
         quality_offset=batch.quality_offset(),
         quality_data=quality_data,
-        quality_ends=quality_ends,
+        ends=ends,
         sequence_data=sequence_data,
         id_data=id_data,
         id_ends=id_ends,
@@ -452,7 +450,7 @@ fn move_staged_to_device(
     var quality_buffer = ctx.enqueue_create_buffer[DType.uint8](
         Int(staged.total_seq_bytes)
     )
-    var quality_ends_buffer = ctx.enqueue_create_buffer[DType.int64](
+    var ends_buffer = ctx.enqueue_create_buffer[DType.int64](
         staged.num_records
     )
     var sequence_buffer = ctx.enqueue_create_buffer[DType.uint8](
@@ -467,7 +465,7 @@ fn move_staged_to_device(
     ctx.synchronize()
 
     ctx.enqueue_copy(src_buf=staged.quality_data, dst_buf=quality_buffer)
-    ctx.enqueue_copy(src_buf=staged.quality_ends, dst_buf=quality_ends_buffer)
+    ctx.enqueue_copy(src_buf=staged.ends, dst_buf=ends_buffer)
     ctx.enqueue_copy(src_buf=staged.sequence_data, dst_buf=sequence_buffer)
     ctx.enqueue_copy(src_buf=staged.id_data, dst_buf=id_buffer)
     ctx.enqueue_copy(src_buf=staged.id_ends, dst_buf=id_ends_buffer)
@@ -481,7 +479,7 @@ fn move_staged_to_device(
         total_id_bytes=staged.total_id_bytes,
         qual_buffer=quality_buffer,
         sequence_buffer=sequence_buffer,
-        qual_ends=quality_ends_buffer,
+        ends=ends_buffer,
         id_buffer=id_buffer,
         id_ends=id_ends_buffer,
     )

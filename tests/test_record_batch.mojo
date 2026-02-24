@@ -23,7 +23,7 @@ from testing import (
 
 
 # fn test_device_fastq_batch_add_and_layout() raises:
-#     """FastqBatch stacks records and builds correct qual_ends."""
+#     """FastqBatch stacks records and builds correct ends."""
 #     var batch = FastqBatch()
 #     var r1 = FastqRecord("@a", "AC", "!!")
 #     var r2 = FastqRecord("@b", "GT", "!!")
@@ -31,8 +31,8 @@ from testing import (
 #     batch.add(r2)
 #     assert_equal(batch.num_records(), 2)
 #     assert_equal(batch.seq_len(), 4)
-#     assert_equal(batch._qual_ends[0], 2)
-#     assert_equal(batch._qual_ends[1], 4)
+#     assert_equal(batch._ends[0], 2)
+#     assert_equal(batch._ends[1], 4)
 #     assert_equal(len(batch._quality_bytes), 4)
 #     assert_equal(len(batch._sequence_bytes), 4)
 
@@ -191,7 +191,7 @@ from testing import (
 #     assert_equal(d.seq_len, staged.total_seq_bytes)
 #     assert_equal(d.quality_offset, batch.quality_offset())
 #     assert_equal(len(d.qual_buffer), Int(d.seq_len))
-#     assert_equal(len(d.qual_ends), d.num_records)
+#     assert_equal(len(d.ends), d.num_records)
 #     assert_equal(len(d.sequence_buffer), Int(d.seq_len))
 #     assert_equal(d.total_id_bytes, Int(batch._id_ends[1]))
 #     assert_equal(len(d.id_buffer), Int(d.total_id_bytes))
@@ -213,7 +213,7 @@ from testing import (
 #     assert_equal(d.num_records, 2)
 #     assert_equal(d.seq_len, batch.seq_len())
 #     assert_equal(len(d.qual_buffer), Int(d.seq_len))
-#     assert_equal(len(d.qual_ends), d.num_records)
+#     assert_equal(len(d.ends), d.num_records)
 #     assert_equal(len(d.sequence_buffer), Int(d.seq_len))
 #     var total_id_bytes = len(batch._id_bytes)
 #     assert_equal(d.total_id_bytes, total_id_bytes)
@@ -234,7 +234,7 @@ from testing import (
 #     assert_equal(d.num_records, 1)
 #     assert_equal(d.seq_len, 4)
 #     assert_equal(len(d.qual_buffer), 4)
-#     assert_equal(len(d.qual_ends), 1)
+#     assert_equal(len(d.ends), 1)
 #     assert_equal(len(d.sequence_buffer), 4)
 
 
