@@ -1,5 +1,6 @@
 ---
 name: Feature request
+about: Feature request template
 description: Suggest a new feature or improvement
 title: "[Feature] "
 labels: enhancement
