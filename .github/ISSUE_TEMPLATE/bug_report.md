@@ -1,5 +1,6 @@
 ---
 name: Bug report
+about: Bug report template
 description: Report a bug or unexpected behavior
 title: "[Bug] "
 labels: bug
