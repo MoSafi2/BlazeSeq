@@ -30,7 +30,6 @@ fn main() raises:
         check_quality=False,
         buffer_capacity=64 * KB,
         buffer_growth_enabled=False,
-        batch_size=4096,
     )
 
     var parser = FastqParser[FileReader, config](FileReader(Path(file_path)))
@@ -38,7 +37,7 @@ fn main() raises:
     var total_base_pairs: Int = 0
 
     if mode == "batched":
-        for batch in parser.batched():
+        for batch in parser.batched(4096):
             total_reads += batch.num_records()
             total_base_pairs += batch.seq_len()
     elif mode == "records":

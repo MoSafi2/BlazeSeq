@@ -368,7 +368,7 @@ fn test_batched_parser_for_loop() raises:
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n@r3\nNNNN\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
-        reader^, schema="generic", default_batch_size=2
+        reader^, schema="generic", batch_size=2
     )
 
     var batches = List[FastqBatch]()
@@ -383,13 +383,13 @@ fn test_batched_parser_for_loop() raises:
 
 
 fn test_batched_parser_batch_size_respected() raises:
-    """Custom default_batch_size limits records per batch."""
+    """Custom batch_size limits records per batch."""
     var content = (
         "@a\nA\n+\n!\n@b\nB\n+\n!\n@c\nC\n+\n!\n@d\nD\n+\n!\n@e\nE\n+\n!\n"
     )
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
-        reader^, schema="generic", default_batch_size=2
+        reader^, schema="generic", batch_size=2
     )
 
     var batch1 = parser.next_batch(2)
@@ -410,7 +410,7 @@ fn test_batched_parser_single_batch_content() raises:
     var content = "@seq1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
-        reader^, schema="generic", default_batch_size=4
+        reader^, schema="generic", batch_size=4
     )
 
     var batch = parser.next_batch(4)
@@ -426,7 +426,7 @@ fn test_batched_parser_empty_input() raises:
     var content = ""
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
-        reader^, schema="generic", default_batch_size=4
+        reader^, schema="generic", batch_size=4
     )
 
     var count = 0
@@ -441,7 +441,7 @@ fn test_batched_parser_has_more() raises:
     var content = "@r1\nA\n+\n!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
-        reader^, schema="generic", default_batch_size=4
+        reader^, schema="generic", batch_size=4
     )
 
     assert_true(parser.has_more(), "Should have more before next_batch")
@@ -458,7 +458,7 @@ fn test_batched_parser_schema() raises:
     var content = "@id\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
-        reader^, schema="sanger", default_batch_size=4
+        reader^, schema="sanger", batch_size=4
     )
 
     var batch = parser.next_batch(4)
@@ -482,7 +482,7 @@ fn test_generate_synthetic_fastq_buffer() raises:
 
     var reader = MemoryReader(buf^)
     var parser = FastqParser[MemoryReader](
-        reader^, schema="generic", default_batch_size=8
+        reader^, schema="generic", batch_size=8
     )
     var total = 0
     for batch in parser.batched():

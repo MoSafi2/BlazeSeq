@@ -44,8 +44,7 @@ struct ParserConfig(Copyable):
         check_quality: If True, validate quality bytes against the quality schema.
         quality_schema: Optional schema name; used when not passed to `__init__`.
             One of: "generic", "sanger", "solexa", "illumina_1.3", "illumina_1.5", "illumina_1.8".
-        batch_size: Default max records per batch for `next_batch()` / `batched()`.
-        
+
     Example:
         ```mojo
         from blazeseq import ParserConfig, FastqParser, FileReader
@@ -63,7 +62,6 @@ struct ParserConfig(Copyable):
     var check_ascii: Bool
     var check_quality: Bool
     var quality_schema: Optional[String]
-    var batch_size: Optional[Int]
 
     fn __init__(
         out self,
@@ -73,7 +71,6 @@ struct ParserConfig(Copyable):
         check_ascii: Bool = False,
         check_quality: Bool = False,
         quality_schema: Optional[String] = None,
-        batch_size: Optional[Int] = None,
     ):
         """Initialize ParserConfig with default or custom values.
         
@@ -84,7 +81,6 @@ struct ParserConfig(Copyable):
             check_ascii: Validate all record bytes are ASCII.
             check_quality: Validate quality bytes against schema.
             quality_schema: Optional schema name; None uses "generic" at parser init.
-            batch_size: Optional default batch size for batched iteration.
         """
         self.buffer_capacity = buffer_capacity
         self.buffer_max_capacity = buffer_max_capacity
@@ -92,7 +88,6 @@ struct ParserConfig(Copyable):
         self.check_ascii = check_ascii
         self.check_quality = check_quality
         self.quality_schema = quality_schema
-        self.batch_size = batch_size
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +110,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     
     Type parameters:
         R: Reader type (e.g. `FileReader`, `MemoryReader`, `GZFile`).
-        config: `ParserConfig` (optional); controls buffer size, validation, batch size.
+        config: `ParserConfig` (optional); controls buffer size and validation.
     
     See also:
         `ParserConfig`, `RefRecord`, `FastqRecord`, `FastqBatch`.
@@ -142,8 +137,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     ) raises:
         """Initialize FastqParser from config.
         
-        Uses quality_schema and batch_size from config if set; otherwise
-        generic schema and batch size 1024.
+        Uses quality_schema from config if set; otherwise generic schema.
+        Default batch size for batched() is 1024.
         
         Args:
             reader: Source implementing the Reader trait (e.g. FileReader(Path(...))).
@@ -168,10 +163,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.config.check_quality,
             self.quality_schema.copy(),
         )
-        if self.config.batch_size:
-            self._batch_size = self.config.batch_size.value()
-        else:
-            self._batch_size = 1024
+        self._batch_size = 1024
         self._record_number = 0
 
     fn __init__(
@@ -201,23 +193,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.config.check_quality,
             self.quality_schema.copy(),
         )
-        if self.config.batch_size:
-            self._batch_size = self.config.batch_size.value()
-        else:
-            self._batch_size = 1024
+        self._batch_size = 1024
         self._record_number = 0
 
     fn __init__(
         out self,
         var reader: Self.R,
-        default_batch_size: Int,
+        batch_size: Int,
         schema: String = "generic",
     ) raises:
         """Initialize FastqParser with schema and batch size.
         
         Args:
             reader: Source implementing the Reader trait.
-            default_batch_size: Max records per batch for next_batch()/batched().
+            batch_size: Max records per batch for next_batch()/batched().
             schema: Quality schema name (default "generic").
         
         Raises:
@@ -240,10 +229,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.config.check_quality,
             self.quality_schema.copy(),
         )
-        if self.config.batch_size:
-            self._batch_size = self.config.batch_size.value()
-        else:
-            self._batch_size = default_batch_size
+        self._batch_size = batch_size
         self._record_number = 0
 
     @always_inline
@@ -336,7 +322,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         
         Args:
             max_records: Maximum number of records to include (default 1024).
-                Capped by the parser's configured batch size.
         
         Returns:
             FastqBatch: SoA batch with 0 to max_records records. Use num_records()
@@ -346,7 +331,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Error: On parse or validation failure (with context); does not
                 raise EOFError, returns partial batch instead.
         """
-        var actual_max = min(max_records, self._batch_size)
+        var actual_max = max_records
         var batch = FastqBatch(batch_size=actual_max)
         while len(batch) < actual_max and self.line_iter.has_more():
             try:
@@ -393,19 +378,24 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     fn batched(
         ref self,
+        max_records: Optional[Int] = None,
     ) -> _FastqParserBatchIter[Self.R, Self.config, origin_of(self)]:
         """Return an iterator over FastqBatch (SoA) batches.
         
+        Args:
+            max_records: Max records per batch; if None, uses parser default (from init).
+        
         Returns:
-            Iterator yielding FastqBatch; each batch has up to the configured
-            batch size. Use for GPU upload or batch processing.
+            Iterator yielding FastqBatch; each batch has up to max_records records.
+            Use for GPU upload or batch processing.
         
         Note:
             On parse/validation error the error is printed with context and
             iteration stops. Last batch may be partial at EOF.
         """
+        var limit = max_records.value() if max_records else self._batch_size
         return _FastqParserBatchIter[Self.R, Self.config, origin_of(self)](
-            Pointer(to=self)
+            Pointer(to=self), limit
         )
 
     @always_inline
@@ -596,9 +586,9 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
 struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    """Iterator over `FastqBatch` (SoA); use `parser.batched()`.
+    """Iterator over `FastqBatch` (SoA); use `parser.batched()` or `parser.batched(max_records)`.
     
-    Yields batches of up to the configured batch size. Last batch may be
+    Yields batches of up to the given max_records. Last batch may be
     partial at EOF. On parse/validation error the error is printed with
     context and iteration stops.
     """
@@ -606,15 +596,18 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
     comptime Element = FastqBatch
 
     var _src: Pointer[FastqParser[Self.R, Self.config], Self.origin]
+    var _max_records: Int
 
     fn __init__(
         out self,
         src: Pointer[FastqParser[Self.R, Self.config], Self.origin],
+        max_records: Int,
     ):
         self._src = src
+        self._max_records = max_records
 
     fn __iter__(ref self) -> Self:
-        return Self(self._src)
+        return Self(self._src, self._max_records)
 
     fn __has_next__(self) -> Bool:
         return self._src[].has_more()
@@ -624,7 +617,7 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
             Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            var batch = mut_ptr[].next_batch()
+            var batch = mut_ptr[].next_batch(self._max_records)
             if len(batch) == 0:
                 raise StopIteration()
             return batch^

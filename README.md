@@ -38,7 +38,6 @@ blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 # pixi install
 ```
 
-
 ### 🛠 Usage examples
 
 ```sh
@@ -85,7 +84,7 @@ from blazeseq import FastqBatch
 from gpu.host import DeviceContext
 
 var ctx = DeviceContext()
-var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", default_batch_size=4096)
+var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", batch_size=4096)
 for batch in parser.batched():
     # batch is a FastqBatch (Structure-of-Arrays)
     var device_batch = batch.to_device(ctx)   # GPU upload
