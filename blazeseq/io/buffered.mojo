@@ -75,6 +75,7 @@ struct LineIteratorError(
     comptime BUFFER_TOO_SMALL = Self(2)
     comptime OTHER = Self(3)
     comptime EMPTY_BUFFER = Self(4)
+    comptime SUCCESS = Self(5)
 
 
     fn __eq__(self, other: Self) -> Bool:

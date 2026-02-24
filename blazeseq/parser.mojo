@@ -14,10 +14,11 @@ from blazeseq.utils import (
     _parse_schema,
     SearchState,
     SearchResults,
-    _parse_record_fast_path,
+    #_parse_record_fast_path,
     # _handle_incomplete_line_with_buffer_growth,  # Buffer growth disabled until stable
     _handle_incomplete_line,
     format_parse_error,
+    _scan_record_indices,
 )
 
 
@@ -257,36 +258,36 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """
         return self.line_iter.has_more()
 
-    @always_inline
-    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-        """Return the next record as a zero-copy RefRecord.
+    # @always_inline
+    # fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
+    #     """Return the next record as a zero-copy RefRecord.
         
-        Returns:
-            RefRecord: A view into the parser's buffer; valid only until the next
-                call that mutates the parser or buffer.
+    #     Returns:
+    #         RefRecord: A view into the parser's buffer; valid only until the next
+    #             call that mutates the parser or buffer.
         
-        Raises:
-            Error: On parse or validation failure (message includes record number,
-                line number, file position, and snippet when available).
-            EOFError: When there are no more records.
+    #     Raises:
+    #         Error: On parse or validation failure (message includes record number,
+    #             line number, file position, and snippet when available).
+    #         EOFError: When there are no more records.
         
-        Note:
-            Zero-copy; do not store in collections or use after the next
-            next_ref/next_record/next_batch or buffer mutation. Consume promptly.
-        """
-        self._record_number += 1
-        var ref_record: RefRecord[origin=MutExternalOrigin]
-        try:
-            ref_record = self._parse_record_ref()
-        except e:
-            if String(e) == EOF:
-                raise EOFError()
-            raise Error(format_parse_error(String(e), self, ""))
-        try:
-            self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
-        except e:
-            raise Error(format_parse_error(String(e), self, self._get_record_snippet(ref_record)))
-        return ref_record^
+    #     Note:
+    #         Zero-copy; do not store in collections or use after the next
+    #         next_ref/next_record/next_batch or buffer mutation. Consume promptly.
+    #     """
+    #     self._record_number += 1
+    #     var ref_record: RefRecord[origin=MutExternalOrigin]
+    #     try:
+    #         ref_record = self._parse_record_ref()
+    #     except e:
+    #         if String(e) == EOF:
+    #             raise EOFError()
+    #         raise Error(format_parse_error(String(e), self, ""))
+    #     try:
+    #         self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
+    #     except e:
+    #         raise Error(format_parse_error(String(e), self, self._get_record_snippet(ref_record)))
+    #     return ref_record^
 
     @always_inline
     fn next_record(mut self) raises -> FastqRecord:
@@ -408,50 +409,88 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line4^, schema)
 
+    # @always_inline
+    # fn _parse_record_ref(
+    #     mut self,
+    # ) raises -> RefRecord[origin=MutExternalOrigin]:
+    #     if not self.line_iter.has_more():
+    #         raise EOFError()
+    #     var state = SearchState.START
+    #     var interim = SearchResults.DEFAULT
+    #     try:
+    #         return _parse_record_fast_path(
+    #             self.line_iter, interim, state, self.quality_schema
+    #         )
+    #     except e:
+    #         if e.value == LineIteratorError.EOF.value:
+    #             raise EOFError()
+            
+    #         if e == LineIteratorError.BUFFER_TOO_SMALL:
+    #             raise Error(
+    #                 buffer_capacity_error(
+    #                     self.line_iter.buffer.capacity(),
+    #                     self.config.buffer_max_capacity,
+    #                     growth_hint=self.config.buffer_growth_enabled,
+    #                 )
+    #             )
+    #         # if e != LineIteratorError.INCOMPLETE_LINE:
+    #         #     raise 
+
+    #         # Buffer growth disabled until more stable.
+    #         # if self.config.buffer_growth_enabled:
+    #         #     return _handle_incomplete_line_with_buffer_growth(
+    #         #         self.line_iter,
+    #         #         interim,
+    #         #         state,
+    #         #         self.quality_schema,
+    #         #         self.config.buffer_max_capacity,
+    #         #     )
+    #         return _handle_incomplete_line(
+    #             self.line_iter,
+    #             interim,
+    #             state,
+    #             self.quality_schema,
+    #             self.config.buffer_capacity,
+    #         )
+
     @always_inline
-    fn _parse_record_ref(
-        mut self,
-    ) raises -> RefRecord[origin=MutExternalOrigin]:
+    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
         if not self.line_iter.has_more():
             raise EOFError()
-        var state = SearchState.START
-        var interim = SearchResults.DEFAULT
-        try:
-            return _parse_record_fast_path(
-                self.line_iter, interim, state, self.quality_schema
-            )
-        except e:
-            if e.value == LineIteratorError.EOF.value:
-                raise EOFError()
-            
-            if e == LineIteratorError.BUFFER_TOO_SMALL:
-                raise Error(
-                    buffer_capacity_error(
-                        self.line_iter.buffer.capacity(),
-                        self.config.buffer_max_capacity,
-                        growth_hint=self.config.buffer_growth_enabled,
-                    )
-                )
-            # if e != LineIteratorError.INCOMPLETE_LINE:
-            #     raise 
 
-            # Buffer growth disabled until more stable.
-            # if self.config.buffer_growth_enabled:
-            #     return _handle_incomplete_line_with_buffer_growth(
-            #         self.line_iter,
-            #         interim,
-            #         state,
-            #         self.quality_schema,
-            #         self.config.buffer_max_capacity,
-            #     )
-            return _handle_incomplete_line(
-                self.line_iter,
-                interim,
-                state,
-                self.quality_schema,
-                self.config.buffer_capacity,
-            )
+        self._record_number += 1
+        var state = SearchState()
+        var results = SearchResults()
+
+            # Attempt 1: Fast path (everything in current buffer)
+        code = _scan_record_indices(self.line_iter, results, state)
+        if code != LineIteratorError.SUCCESS:
+                code = _handle_incomplete_line(self.line_iter, results, state)
+                if code != LineIteratorError.SUCCESS:
+                    raise Error(format_parse_error("Invalid FASTQ format", self, ""))
+
+        # Finalize: Extract Spans and consume bytes
+        var view = self.line_iter.buffer.view()
+        var ref_rec = RefRecord[origin=MutExternalOrigin](
+            view[results.id_start : results.id_end],
+            view[results.seq_start : results.seq_end],
+            view[results.qual_start : results.qual_end],
+            self.quality_schema.OFFSET,
+        )
     
+        # Move buffer head and line count only after success
+        _ = self.line_iter.buffer.consume(results.total_bytes)
+        self.line_iter._current_line_number += 4
+
+        # Validation
+        try:
+            self.validator.validate(ref_rec, self._record_number, self.line_iter.get_line_number())
+        except e:
+            raise Error(format_parse_error(String(e), self, self._get_record_snippet(ref_rec)))
+
+
+        return ref_rec^
+
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""
         var snippet = String(capacity=200)

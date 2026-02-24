@@ -15,7 +15,7 @@ import math
 from sys.info import simd_width_of
 import math
 from blazeseq.CONSTS import *
-from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator
+from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, _trim_trailing_cr
 from blazeseq.io.readers import Reader
 from blazeseq.errors import ParseError, buffer_capacity_error
 from blazeseq.parser import FastqParser
@@ -43,156 +43,103 @@ fn format_parse_error(
 comptime NEW_LINE = 10
 comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
-
-# Parsing Algorithm adopted from Needletaile and Seq-IO with modifications.
 @doc_private
 @register_passable("trivial")
-@fieldwise_init
-struct SearchState(Copyable, ImplicitlyDestructible, Movable):
-    var state: Int8
-    comptime START = Self(0)
-    comptime HEADER_FOUND = Self(1)
-    comptime SEQ_FOUND = Self(2)
-    comptime QUAL_HEADER_FOUND = Self(3)
-    comptime QUAL_FOUND = Self(4)
+struct SearchResults(Copyable, ImplicitlyDestructible, Movable, Writable):
+    var id_start: Int
+    var id_end: Int
+    var seq_start: Int
+    var seq_end: Int
+    var qual_start: Int
+    var qual_end: Int
+    var total_bytes: Int # The offset of the byte after the 4th newline
 
-    fn __eq__(self, other: Self) -> Bool:
-        return self.state == other.state
-
-    fn __add__(self, other: Int8) -> Self:
-        return Self(self.state + other)
-
-    fn __sub__(self, other: Int8) -> Self:
-        return Self(self.state - other)
-
-
-@doc_private
-@register_passable("trivial")
-@fieldwise_init
-struct SearchResults(
-    Copyable, ImplicitlyDestructible, Movable, Sized, Writable
-):
-    var start: Int
-    var end: Int
-    var id: Span[Byte, MutExternalOrigin]
-    var seq: Span[Byte, MutExternalOrigin]
-    var qual_header: Span[Byte, MutExternalOrigin]
-    var qual: Span[Byte, MutExternalOrigin]
-
-    comptime DEFAULT = Self(
-        -1,
-        -1,
-        Span[Byte, MutExternalOrigin](),
-        Span[Byte, MutExternalOrigin](),
-        Span[Byte, MutExternalOrigin](),
-        Span[Byte, MutExternalOrigin](),
-    )
-
+    fn __init__(out self):
+        self.id_start = -1
+        self.id_end = -1
+        self.seq_start = -1
+        self.seq_end = -1
+        self.qual_start = -1
+        self.qual_end = -1
+        self.total_bytes = 0
+    
     fn write_to[w: Writer](self, mut writer: w) -> None:
         writer.write(
-            String("SearchResults(start=") + String(self.start),
-            ", end=",
-            String(self.end)
-            + ", id="
-            + String(StringSlice(unsafe_from_utf8=self.id))
-            + ", seq="
-            + String(StringSlice(unsafe_from_utf8=self.seq))
-            + ", qual_header="
-            + String(StringSlice(unsafe_from_utf8=self.qual_header))
-            + ", qual="
-            + String(StringSlice(unsafe_from_utf8=self.qual))
-            + ")",
+            String("SearchResults(id_start=") + String(self.id_start),
+            ", id_end=", String(self.id_end),
+            ", seq_start=", String(self.seq_start),
+            ", seq_end=", String(self.seq_end),
+            ", qual_start=", String(self.qual_start),
+            ", qual_end=", String(self.qual_end),
         )
 
-    fn all_set(self) -> Bool:
-        return (
-            self.start != -1
-            and self.end != -1
-            and len(self.id) > 0
-            and len(self.seq) > 0
-            and len(self.qual_header) > 0
-            and len(self.qual) > 0
-        )
+@doc_private
+@register_passable("trivial")
+struct SearchState:
+    var state: Int8
+    comptime START = 0
+    comptime SEQ = 1
+    comptime PLUS = 2
+    comptime QUAL = 3
+    comptime DONE = 4
 
-    fn __add__(self, amt: Int) -> Self:
-        new_id = Span[Byte, MutExternalOrigin](
-            ptr=self.id.unsafe_ptr() + amt,
-            length=len(self.id),
-        )
-        new_seq = Span[Byte, MutExternalOrigin](
-            ptr=self.seq.unsafe_ptr() + amt,
-            length=len(self.seq),
-        )
-        new_qual_header = Span[Byte, MutExternalOrigin](
-            ptr=self.qual_header.unsafe_ptr() + amt,
-            length=len(self.qual_header),
-        )
-        new_qual = Span[Byte, MutExternalOrigin](
-            ptr=self.qual.unsafe_ptr() + amt,
-            length=len(self.qual),
-        )
-        return Self(
-            self.start + amt,
-            self.end + amt,
-            new_id,
-            new_seq,
-            new_qual_header,
-            new_qual,
-        )
+    fn __init__(out self, state: Int8 = 0):
+        self.state = state
 
-    fn __sub__(self, amt: Int) -> Self:
-        new_id = Span[Byte, MutExternalOrigin](
-            ptr=self.id.unsafe_ptr() - amt,
-            length=len(self.id),
-        )
-        new_seq = Span[Byte, MutExternalOrigin](
-            ptr=self.seq.unsafe_ptr() - amt,
-            length=len(self.seq),
-        )
-        new_qual_header = Span[Byte, MutExternalOrigin](
-            ptr=self.qual_header.unsafe_ptr() - amt,
-            length=len(self.qual_header),
-        )
-        new_qual = Span[Byte, MutExternalOrigin](
-            ptr=self.qual.unsafe_ptr() - amt,
-            length=len(self.qual),
-        )
-        return Self(
-            self.start - amt,
-            self.end - amt,
-            new_id,
-            new_seq,
-            new_qual_header,
-            new_qual,
-        )
 
-    fn __getitem__(self, index: Int8) -> Span[Byte, MutExternalOrigin]:
-        if index == 0:
-            return self.id
-        elif index == 1:
-            return self.seq
-        elif index == 2:
-            return self.qual_header
-        elif index == 3:
-            return self.qual
-        else:
-            return Span[Byte, MutExternalOrigin]()
+@doc_private
+@always_inline
+fn _scan_record_indices[R: Reader](
+    mut stream: LineIterator[R],
+    mut results: SearchResults,
+    mut state: SearchState,
+) -> LineIteratorError:
+    var view = stream.buffer.view()
+    var pos: Int = results.total_bytes
+    while state.state < SearchState.DONE:
+        var found = memchr(haystack=view, chr=new_line, start=pos)
+        if found == -1:
+            if stream.buffer.is_eof() and pos < len(view):
+                found = len(view) # Treat EOF as a newline for the last line
+            else:
+                results.total_bytes = pos # Save progress
+                return LineIteratorError.INCOMPLETE_LINE
+        
+        if state.state == SearchState.START:
+            results.id_start = pos  # Include '@' so validator and id_slice() match line-based parser
+            results.id_end = _trim_trailing_cr(view, found)
+        elif state.state == SearchState.SEQ:
+            results.seq_start = pos
+            results.seq_end = _trim_trailing_cr(view, found)
+        elif state.state == SearchState.QUAL:
+            results.qual_start = pos
+            results.qual_end = _trim_trailing_cr(view, found)
 
-    fn __setitem__(mut self, index: Int8, value: Span[Byte, MutExternalOrigin]):
-        if index == 0:
-            self.id = value
-        elif index == 1:
-            self.seq = value
-        elif index == 2:
-            self.qual_header = value
-        elif index == 3:
-            self.qual = value
-        else:
-            print("Index out of bounds: ", index)
-            pass
+        pos = found + 1
+        state.state += 1
 
-    fn __len__(self) -> Int:
-        return self.end - self.start
+    results.total_bytes = pos
+    return LineIteratorError.SUCCESS
+
+
+@doc_private
+@always_inline
+fn _handle_incomplete_line[R: Reader](
+    mut stream: LineIterator[R],
+    mut results: SearchResults,
+    mut state: SearchState,
+)  raises-> LineIteratorError:
+    # Compact to the start of the current record to maximize refill space
+    stream.buffer._compact_from(stream.buffer.buffer_position())
+    # We must reset progress because _compact_from shifts memory to index 0
+    results = SearchResults()
+    state = SearchState()
+    var bytes_read = stream.buffer._fill_buffer()
+    if bytes_read == 0 and stream.buffer.available() == 0:
+        raise EOFError()
+
+    # Retry the scan now that the buffer is refilled
+    return _scan_record_indices(stream, results, state)
 
 
 # From extramojo pacakge, skipping version problems
@@ -584,79 +531,79 @@ fn generate_synthetic_fastq_buffer(
 #     )
 
 
-@doc_private
-@always_inline
-fn _handle_incomplete_line[
-    R: Reader
-](
-    mut stream: LineIterator[R],
-    mut interim: SearchResults,
-    mut state: SearchState,
-    quality_schema: QualitySchema,
-    buffer_capacity: Int,
-) raises -> RefRecord[origin=MutExternalOrigin]:
-    if not stream.has_more():
-        raise EOFError()
+# @doc_private
+# @always_inline
+# fn _handle_incomplete_line[
+#     R: Reader
+# ](
+#     mut stream: LineIterator[R],
+#     mut interim: SearchResults,
+#     mut state: SearchState,
+#     quality_schema: QualitySchema,
+#     buffer_capacity: Int,
+# ) raises -> RefRecord[origin=MutExternalOrigin]:
+#     if not stream.has_more():
+#         raise EOFError()
 
-    stream.buffer._compact_from(interim.start)
-    _ = stream.buffer._fill_buffer()
-    interim = interim - interim.start
-    for i in range(state.state, 4):
-        try:
-            var line = stream.next_complete_line()
-            interim[i] = line
-            state = state + 1
-        except e:
-            if e == LineIteratorError.EOF:
-                raise EOFError()
-            elif e == LineIteratorError.INCOMPLETE_LINE and not stream.has_more():
-                raise EOFError()
-            elif e == LineIteratorError.INCOMPLETE_LINE:
-                raise Error(
-                    buffer_capacity_error(buffer_capacity, growth_hint=True)
-                )
-            raise Error(String(e))
-    interim.end = stream.buffer.buffer_position()
+#     stream.buffer._compact_from(interim.start)
+#     _ = stream.buffer._fill_buffer()
+#     interim = interim - interim.start
+#     for i in range(state.state, 4):
+#         try:
+#             var line = stream.next_complete_line()
+#             interim[i] = line
+#             state = state + 1
+#         except e:
+#             if e == LineIteratorError.EOF:
+#                 raise EOFError()
+#             elif e == LineIteratorError.INCOMPLETE_LINE and not stream.has_more():
+#                 raise EOFError()
+#             elif e == LineIteratorError.INCOMPLETE_LINE:
+#                 raise Error(
+#                     buffer_capacity_error(buffer_capacity, growth_hint=True)
+#                 )
+#             raise Error(String(e))
+#     interim.end = stream.buffer.buffer_position()
 
-    return RefRecord[origin=MutExternalOrigin](
-        interim[0],
-        interim[1],
-        interim[3],
-        quality_schema.OFFSET,
-    )
-
-
-@doc_private
-@always_inline
-fn _parse_record_fast_path[
-    R: Reader
-](
-    mut stream: LineIterator[R],
-    mut interim: SearchResults,
-    mut state: SearchState,
-    quality_schema: QualitySchema,
-) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
-    interim.start = stream.buffer.buffer_position()
-
-    @parameter    
-    for i in range(4):
-        @parameter
-        if i == 2:
-            line3 = stream.consume_line_scalar()
-            if len(line3) == 0 or line3[0] != quality_header:
-                raise LineIteratorError.OTHER
-            interim[2] = line3
-            state = state + 1
-            continue
-
-        interim[i] = stream.next_complete_line()
-        state = state + 1
-    interim.end = stream.buffer.buffer_position()
+#     return RefRecord[origin=MutExternalOrigin](
+#         interim[0],
+#         interim[1],
+#         interim[3],
+#         quality_schema.OFFSET,
+#     )
 
 
-    return RefRecord[origin=MutExternalOrigin](
-        interim[0],
-        interim[1],
-        interim[3],
-        quality_schema.OFFSET,
-    )
+# @doc_private
+# @always_inline
+# fn _parse_record_fast_path[
+#     R: Reader
+# ](
+#     mut stream: LineIterator[R],
+#     mut interim: SearchResults,
+#     mut state: SearchState,
+#     quality_schema: QualitySchema,
+# ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
+#     interim.start = stream.buffer.buffer_position()
+
+#     @parameter    
+#     for i in range(4):
+#         @parameter
+#         if i == 2:
+#             line3 = stream.consume_line_scalar()
+#             if len(line3) == 0 or line3[0] != quality_header:
+#                 raise LineIteratorError.OTHER
+#             interim[2] = line3
+#             state = state + 1
+#             continue
+
+#         interim[i] = stream.next_complete_line()
+#         state = state + 1
+#     interim.end = stream.buffer.buffer_position()
+
+
+#     return RefRecord[origin=MutExternalOrigin](
+#         interim[0],
+#         interim[1],
+#         interim[3],
+#         quality_schema.OFFSET,
+#     )
