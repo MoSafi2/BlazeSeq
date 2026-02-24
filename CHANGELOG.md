@@ -4,6 +4,10 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
+### Parsing (public API)
+
+- **FastqParser[R, config]**:
+  - **Iterators**: `ref_records()`, `records()`, `batched(max_records=None)` (None uses parser default). On parse/validation error they print context and raise `StopIteration`.
 
 ## [0.2] - 2026-02-23
 
@@ -20,8 +24,7 @@ All notable changes to BlazeSeq are documented here.
   ```
   
 - **Compressed (gzip) FASTQ benchmark**  benchmark comparing BlazeSeq (RapidgzipReader) and needletail on a 3 GB synthetic FASTQ compressed to `.fastq.gz`. Run with `pixi run -e benchmark benchmark-gzip`.
-- **FastqParser** unified API with three iterators: `ref_records()`, `records()`, `batched()`.
-- **RefParser** for zero-copy reference-style parsing.
+- **FastqParser** unified API with three iterators: `ref_records()`, `records()`, `batched()`; zero-copy via `next_ref()` / `ref_records()`.
 - **Writers**: `BufferWriter` and writer system; test cleanup helpers.
 - **Benchmarking**: Benchmark subdir and tools (e.g. ref_reader, throughput).
 - **Docs**: Astro-based docs and GitHub Actions deploy.
