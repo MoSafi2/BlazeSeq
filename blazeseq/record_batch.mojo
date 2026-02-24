@@ -59,8 +59,8 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
 
     fn __init__(
         out self,
-        batch_size: Int = 100,
-        avg_record_size: Int = 100,
+        batch_size: Int = 4096,
+        avg_record_size: Int = 150,
         quality_offset: UInt8 = 33,
     ):
         """Create an empty batch with preallocated capacity.
@@ -82,7 +82,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     fn __init__(
         out self,
         records: List[FastqRecord],
-        avg_record_size: Int = 100,
+        avg_record_size: Int = 150,
         quality_offset: UInt8 = 33,
     ) raises:
         """

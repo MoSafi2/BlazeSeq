@@ -5,7 +5,7 @@ from blazeseq import (
     FastqBatch,
     upload_batch_to_device,
 )
-from blazeseq.device_record import (
+from blazeseq.record_batch import (
     DeviceFastqBatch,
     StagedFastqBatch,
     stage_batch_to_host,

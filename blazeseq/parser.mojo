@@ -6,7 +6,7 @@ from blazeseq.io.buffered import (
     LineIteratorError,
 )
 from blazeseq.io.readers import Reader
-from blazeseq.device_record import FastqBatch
+from blazeseq import FastqBatch
 from blazeseq.errors import ParseError, ValidationError, buffer_capacity_error
 from std.iter import Iterator
 from blazeseq.ascii_string import ASCIIString

@@ -25,15 +25,22 @@ tests:
   - script:
       - if: unix
         then:
-          - mojo test -I ${{ PREFIX }}/lib/mojo/BlazeSeq.mojopkg tests/test_device_record.mojo
-          - mojo test -I ${{ PREFIX }}/lib/mojo/BlazeSeq.mojopkg tests/test_iostream.mojo
+          - find tests -name "test_*.mojo" -exec mojo test -I ${{ PREFIX }}/lib/mojo/BlazeSeq.mojopkg {} \;
     requirements:
       run:
         - max ${{ mojo_version }}
     files:
       recipe:
-        - tests/test_device_record.mojo
+        - tests/test_error_context.mojo
+        - tests/test_fastq_integration.mojo
+        - tests/test_fastq_record.mojo
         - tests/test_iostream.mojo
+        - tests/test_line_iterator.mojo
+        - tests/test_parser.mojo
+        - tests/test_rapidgzip_reader.mojo
+        - tests/test_readers.mojo
+        - tests/test_record_batch.mojo
+        - tests/test_writers.mojo
 
 about:
   homepage: https://github.com/MoSafi2/BlazeSeq

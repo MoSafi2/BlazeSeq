@@ -9,7 +9,7 @@ from blazeseq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import FileReader, MemoryReader
 from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.record import FastqRecord
-from blazeseq.device_record import FastqBatch
+from blazeseq.record_batch import FastqBatch
 from blazeseq.CONSTS import EOF
 from testing import assert_equal, assert_raises, assert_true, TestSuite
 
