@@ -535,53 +535,53 @@ fn generate_synthetic_fastq_buffer(
 
 
 
-# BUG: There is a bug here when the buffer is grown, but the record is not parsed correctly.
-@doc_private
-@always_inline
-fn _handle_incomplete_line_with_buffer_growth[
-    R: Reader
-](
-    mut stream: LineIterator[R],
-    mut interim: SearchResults,
-    mut state: SearchState,
-    quality_schema: QualitySchema,
-    max_capacity: Int,
-) raises -> RefRecord[origin=MutExternalOrigin]:
-    while True:
-        if not stream.has_more():
-            raise EOFError()
-        if interim.start == 0:
-            stream.buffer.resize_buffer(stream.buffer.capacity(), max_capacity)
-        stream.buffer._compact_from(interim.start)
-        _ = stream.buffer._fill_buffer()
-        interim = SearchResults.DEFAULT
-        interim.start = 0
-        state = SearchState.START
-        try:
-            var line = stream.next_complete_line()
-            interim[state.state] = line
-            state = state + 1
-        except e:
-            if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
-                continue
-            if e == LineIteratorError.BUFFER_TOO_SMALL:
-                raise Error(
-                    buffer_capacity_error(
-                        stream.buffer.capacity(),
-                        max_capacity,
-                        growth_hint=True,
-                        at_max=(stream.buffer.capacity() >= max_capacity),
-                    )
-                )
-            raise Error(String(e))
-        interim.end = stream.buffer.buffer_position()
-        break
-    return RefRecord[origin=MutExternalOrigin](
-        interim[0],
-        interim[1],
-        interim[3],
-        quality_schema.OFFSET,
-    )
+# Buffer growth disabled until more stable. BUG: when the buffer is grown, the record is not parsed correctly.
+# @doc_private
+# @always_inline
+# fn _handle_incomplete_line_with_buffer_growth[
+#     R: Reader
+# ](
+#     mut stream: LineIterator[R],
+#     mut interim: SearchResults,
+#     mut state: SearchState,
+#     quality_schema: QualitySchema,
+#     max_capacity: Int,
+# ) raises -> RefRecord[origin=MutExternalOrigin]:
+#     while True:
+#         if not stream.has_more():
+#             raise EOFError()
+#         if interim.start == 0:
+#             stream.buffer.resize_buffer(stream.buffer.capacity(), max_capacity)
+#         stream.buffer._compact_from(interim.start)
+#         _ = stream.buffer._fill_buffer()
+#         interim = SearchResults.DEFAULT
+#         interim.start = 0
+#         state = SearchState.START
+#         try:
+#             var line = stream.next_complete_line()
+#             interim[state.state] = line
+#             state = state + 1
+#         except e:
+#             if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
+#                 continue
+#             if e == LineIteratorError.BUFFER_TOO_SMALL:
+#                 raise Error(
+#                     buffer_capacity_error(
+#                         stream.buffer.capacity(),
+#                         max_capacity,
+#                         growth_hint=True,
+#                         at_max=(stream.buffer.capacity() >= max_capacity),
+#                     )
+#                 )
+#             raise Error(String(e))
+#         interim.end = stream.buffer.buffer_position()
+#         break
+#     return RefRecord[origin=MutExternalOrigin](
+#         interim[0],
+#         interim[1],
+#         interim[3],
+#         quality_schema.OFFSET,
+#     )
 
 
 @doc_private

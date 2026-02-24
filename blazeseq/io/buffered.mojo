@@ -600,7 +600,6 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
             if len(view) >= self.buffer.capacity():
                 self._handle_line_exceeds_capacity()
-               
                 continue
 
             self.buffer._compact_from(self.buffer.buffer_position())
@@ -707,14 +706,22 @@ struct LineIterator[R: Reader](Iterable, Movable):
         Line does not fit in current buffer. Either raise (no growth or at max)
         or grow the buffer so the caller can retry.
         """
-        if not self._growth_enabled:
-            raise Error(buffer_capacity_error(self.buffer.capacity()))
-        if self.buffer.capacity() >= self._max_capacity:
-            raise Error(buffer_capacity_error(self.buffer.capacity(),self._max_capacity,at_max=True))
-        var current_cap = self.buffer.capacity()
-        var growth_amount = min(current_cap, self._max_capacity - current_cap)
-        self.buffer.grow_buffer(growth_amount, self._max_capacity)
-        _ = self.buffer._fill_buffer()
+        # Buffer growth disabled until more stable; always raise.
+        # if not self._growth_enabled:
+        #     raise Error(buffer_capacity_error(self.buffer.capacity()))
+        # if self.buffer.capacity() >= self._max_capacity:
+        #     raise Error(buffer_capacity_error(self.buffer.capacity(),self._max_capacity,at_max=True))
+        # var current_cap = self.buffer.capacity()
+        # var growth_amount = min(current_cap, self._max_capacity - current_cap)
+        # self.buffer.grow_buffer(growth_amount, self._max_capacity)
+        # _ = self.buffer._fill_buffer()
+        raise Error(
+            buffer_capacity_error(
+                self.buffer.capacity(),
+                self._max_capacity,
+                at_max=(self._max_capacity > 0 and self.buffer.capacity() >= self._max_capacity),
+            )
+        )
 
     @always_inline
     fn _handle_eof_line(

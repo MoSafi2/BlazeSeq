@@ -15,7 +15,7 @@ from blazeseq.utils import (
     SearchState,
     SearchResults,
     _parse_record_fast_path,
-    _handle_incomplete_line_with_buffer_growth,
+    # _handle_incomplete_line_with_buffer_growth,  # Buffer growth disabled until stable
     _handle_incomplete_line,
     format_parse_error,
 )
@@ -432,23 +432,22 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if e != LineIteratorError.INCOMPLETE_LINE:
                 raise Error("Line iteration failed")
 
-            @parameter
-            if self.config.buffer_growth_enabled:
-                return _handle_incomplete_line_with_buffer_growth(
-                    self.line_iter,
-                    interim,
-                    state,
-                    self.quality_schema,
-                    self.config.buffer_max_capacity,
-                )
-            else:
-                return _handle_incomplete_line(
-                    self.line_iter,
-                    interim,
-                    state,
-                    self.quality_schema,
-                    self.config.buffer_capacity,
-                )
+            # Buffer growth disabled until more stable.
+            # if self.config.buffer_growth_enabled:
+            #     return _handle_incomplete_line_with_buffer_growth(
+            #         self.line_iter,
+            #         interim,
+            #         state,
+            #         self.quality_schema,
+            #         self.config.buffer_max_capacity,
+            #     )
+            return _handle_incomplete_line(
+                self.line_iter,
+                interim,
+                state,
+                self.quality_schema,
+                self.config.buffer_capacity,
+            )
     
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""
