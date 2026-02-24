@@ -264,13 +264,13 @@ fn test_buffered_reader_read_exact() raises:
 
 
 fn test_buffered_reader_read_exact_zero() raises:
-    """Test read_exact(0) returns empty list."""
+    """Test read_exact(0) returns empty span."""
     var test_content = "Test\n"
     var reader = create_memory_reader(test_content)
     var buf_reader = BufferedReader(reader^)
 
     var bytes = buf_reader.read_exact(0)
-    assert_equal(len(bytes), 0, "Should return empty list for size 0")
+    assert_equal(len(bytes), 0, "Should return empty span for size 0")
 
     print("✓ test_buffered_reader_read_exact_zero passed")
 

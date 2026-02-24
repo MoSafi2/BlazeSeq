@@ -170,10 +170,10 @@ struct BufferedReader[R: Reader](
         self._head -= size
 
     @always_inline
-    fn read_exact(mut self, size: Int) raises -> List[Byte]:
+    fn read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
         """
         Read exactly `size` bytes. Raises if EOF is reached before that many bytes.
-        Returns owned bytes (safe to use after further mutating calls).
+        Returns a span over the buffer; valid only until the next mutating call on this reader.
         """
         if size < 0:
             raise Error(
@@ -189,12 +189,10 @@ struct BufferedReader[R: Reader](
                     + String(self.available())
                     + " available"
                 )
-        var v = self.view()
-        var result = List[Byte](capacity=size)
-        for i in range(size):
-            result.append(v[i])
+        var result = Span[Byte, MutExternalOrigin](
+            ptr=self._ptr + self._head, length=size
+        )
         var consumed = self.consume(size)
-        # Since we ensured size bytes are available, consumed should equal size
         if consumed != size:
             raise Error(
                 "Internal error: consume() returned "
@@ -202,7 +200,7 @@ struct BufferedReader[R: Reader](
                 + " but expected "
                 + String(size)
             )
-        return result^
+        return result
 
     @always_inline
     fn stream_position(self) -> Int:
@@ -217,19 +215,6 @@ struct BufferedReader[R: Reader](
         """Current read offset in the buffer (for parser `compact_from`)."""
         return self._head
 
-    @always_inline
-    fn buffer_base(ref self) -> UnsafePointer[Byte, MutExternalOrigin]:
-        """Base pointer of the buffer. Used by parser to rebase spans after resize."""
-        return self._ptr
-
-    @always_inline
-    fn span_at(
-        ref self, offset: Int, length: Int
-    ) -> Span[Byte, MutExternalOrigin]:
-        """Span over buffer at given offset from buffer base and length. Used after resize+compact to rebase `SearchResults`."""
-        return Span[Byte, MutExternalOrigin](
-            ptr=self._ptr + offset, length=length
-        )
 
     @always_inline
     fn is_eof(self) -> Bool:

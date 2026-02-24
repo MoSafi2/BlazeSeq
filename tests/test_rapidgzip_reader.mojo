@@ -158,10 +158,10 @@ fn test_rapidgzip_reader_with_buffered_reader() raises:
     var reader = RapidgzipReader("tests/test_data/test_rapidgzip_buffered.gz")
     var buf_reader = BufferedReader(reader^)
     var bytes_read = buf_reader.read_exact(18)
-
     assert_equal(len(bytes_read), 18, "Should read 18 bytes")
     assert_equal(bytes_read[0], 72, "First byte should be 'H'")
     assert_equal(bytes_read[12], 76, "Byte 13 (L) should be 'L'")
+    _ = buf_reader
 
     print("✓ test_rapidgzip_reader_with_buffered_reader passed")
 
