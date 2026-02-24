@@ -423,6 +423,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         except e:
             if e.value == LineIteratorError.EOF.value:
                 raise EOFError()
+            
             if e == LineIteratorError.BUFFER_TOO_SMALL:
                 raise Error(
                     buffer_capacity_error(
@@ -431,8 +432,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                         growth_hint=self.config.buffer_growth_enabled,
                     )
                 )
-            if e != LineIteratorError.INCOMPLETE_LINE:
-                raise Error("Line iteration failed")
+            # if e != LineIteratorError.INCOMPLETE_LINE:
+            #     raise 
 
             # Buffer growth disabled until more stable.
             # if self.config.buffer_growth_enabled:

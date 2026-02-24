@@ -624,22 +624,14 @@ struct LineIterator[R: Reader](Iterable, Movable):
                 raise LineIteratorError.EOF
             else:
                 raise LineIteratorError.EMPTY_BUFFER
-            # Allow one initial fill if buffer is empty but not EOF
-            # This handles the case where buffer wasn't filled during initialization
-            # Probably not the intended behavior
-            # try:
-            #     _ = self.buffer._fill_buffer()
-            # except Error:
-            #     raise LineIteratorError.OTHER
-            # if self.buffer.available() == 0:
-            #     if self.buffer.is_eof():
-            #         raise LineIteratorError.EOF
-            #     else:
-            #         raise LineIteratorError.INCOMPLETE_LINE
-
+    
         view = self.buffer.view()
         var newline_at = memchr(haystack=view, chr=new_line)
+    
         if newline_at == -1:
+            if self.buffer.is_eof():
+                self._current_line_number += 1
+                return self._handle_eof_line(view)
             raise LineIteratorError.INCOMPLETE_LINE
 
         var end = _trim_trailing_cr(view, newline_at)
@@ -732,7 +724,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     @always_inline
     fn _handle_eof_line(
         mut self, view: Span[Byte, MutExternalOrigin]
-    ) raises -> Span[Byte, MutExternalOrigin]:
+    ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
         Handle EOF case: return remaining data with trailing \\r trimmed, or None if no data.
         Assumes buffer.is_eof() is True when called.
@@ -742,7 +734,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
             var span = view[0:end]
             _ = self.buffer.consume(len(view))
             return span
-        raise EOFError()
+        raise LineIteratorError.EOF
 
     fn __iter__(
         ref self,
