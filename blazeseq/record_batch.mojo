@@ -108,49 +108,39 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     fn add(mut self, record: FastqRecord):
         """Append one FastqRecord to the batch (copies into packed buffers)."""
 
-        current_loaded = self.num_records()
         self._quality_bytes.extend(record.quality.as_span())
         self._sequence_bytes.extend(record.sequence.as_span())
         self._id_bytes.extend(record.id.as_span())
 
-        if current_loaded == 0:
+        if self.num_records() == 0:
             self._id_ends.append(Int64(len(record.id)))
             self._qual_ends.append(Int64(len(record.quality)))
         else:
-            self._id_ends.append(
-                Int64(len(record.id))
-                + self._id_ends[current_loaded - 1]
-            )
-
-            self._qual_ends.append(
-                Int64(len(record.quality)) + self._qual_ends[current_loaded - 1]
-            )
+            self._id_ends.append(Int64(len(record.id))+ self._id_ends[- 1])
+            self._qual_ends.append(Int64(len(record.quality)) + self._qual_ends[- 1])
 
     fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
         """Append one RefRecord to the batch (copies into packed buffers; no FastqRecord allocation)."""
 
-        current_loaded = self.num_records()
         self._quality_bytes.extend(record.quality)
         self._sequence_bytes.extend(record.sequence)
         self._id_bytes.extend(record.id)
 
-        if current_loaded == 0:
+        if self.num_records() == 0:
             self._id_ends.append(Int64(len(record.id)))
             self._qual_ends.append(Int64(len(record.quality)))
         else:
-            self._id_ends.append(
-                Int64(len(record.id))
-                + self._id_ends[current_loaded - 1]
-            )
-
-            self._qual_ends.append(
-                Int64(len(record.quality)) + self._qual_ends[current_loaded - 1]
-            )
+            self._id_ends.append(Int64(len(record.id))+ self._id_ends[- 1])
+            self._qual_ends.append(Int64(len(record.quality)) + self._qual_ends[- 1])
 
     fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         """Upload this batch to the device (id, sequence, and quality together).
         """
         return upload_batch_to_device(self, ctx)
+
+    fn stage(self, ctx: DeviceContext) raises -> StagedFastqBatch:
+        """Stage batch into pinned host memory for fast device transfer."""
+        return stage_batch_to_host(self, ctx)
 
     fn num_records(self) -> Int:
         """Return the number of records in the batch."""
@@ -334,6 +324,7 @@ struct StagedFastqBatch:
     var num_records: Int
     var total_seq_bytes: Int64
     var total_id_bytes: Int64
+    var quality_offset: UInt8
 
     # Data buffers
     var quality_data: HostBuffer[DType.uint8]
@@ -343,6 +334,10 @@ struct StagedFastqBatch:
     # End offsets buffers
     var quality_ends: HostBuffer[DType.int64]
     var id_ends: HostBuffer[DType.int64]
+
+    fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
+        """Copy staged buffers to device (DMA)."""
+        return move_staged_to_device(self, ctx, self.quality_offset)
 
 
 @doc_private
@@ -381,6 +376,7 @@ fn download_device_batch_to_staged(
         num_records=n,
         total_seq_bytes=total_seq,
         total_id_bytes=total_id,
+        quality_offset=device_batch.quality_offset,
         quality_data=quality_data,
         quality_ends=quality_ends,
         sequence_data=sequence_data,
@@ -440,6 +436,7 @@ fn stage_batch_to_host(
         num_records=n,
         total_seq_bytes=total_bytes,
         total_id_bytes=total_id_bytes,
+        quality_offset=batch.quality_offset(),
         quality_data=quality_data,
         quality_ends=quality_ends,
         sequence_data=sequence_data,
