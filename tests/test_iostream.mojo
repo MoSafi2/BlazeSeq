@@ -275,38 +275,6 @@ fn test_buffered_reader_read_exact_zero() raises:
     print("✓ test_buffered_reader_read_exact_zero passed")
 
 
-fn test_buffered_reader_read_exact_negative() raises:
-    """Test read_exact() with negative size raises error."""
-    var test_content = "Test\n"
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
-
-    with assert_raises(contains="read_exact size must be non-negative"):
-        _ = buf_reader.read_exact(-1)
-
-    _ = buf_reader
-    print("✓ test_buffered_reader_read_exact_negative passed")
-
-
-fn test_buffered_reader_read_exact_eof() raises:
-    """Test read_exact() raises error when EOF reached."""
-    var test_content = "Short\n"
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
-
-    # Consume all available
-    var available = buf_reader.available()
-    var consumed = buf_reader.consume(available)
-    assert_equal(consumed, available, "Should consume all available bytes")
-
-    # Try to read more - should raise error
-    with assert_raises(contains="Unexpected EOF"):
-        _ = buf_reader.read_exact(100)
-
-    _ = buf_reader
-    print("✓ test_buffered_reader_read_exact_eof passed")
-
-
 fn test_buffered_reader_read_exact_large() raises:
     """Test read_exact() with large content requiring refill."""
     var test_content = String("")
@@ -384,25 +352,6 @@ fn test_buffered_reader_getitem() raises:
     print("✓ test_buffered_reader_getitem passed")
 
 
-fn test_buffered_reader_getitem_out_of_bounds() raises:
-    """Verify bounds checking for __getitem__."""
-    var test_content = "XYZ\n"
-    var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
-
-    with assert_raises(contains="Out of bounds"):
-        _ = buf_reader[-1]
-
-    var available = buf_reader.available()
-    with assert_raises(contains="Out of bounds"):
-        _ = buf_reader[available]
-
-    with assert_raises(contains="Out of bounds"):
-        _ = buf_reader[available + 10]
-
-    print("✓ test_buffered_reader_getitem_out_of_bounds passed")
-
-
 fn test_buffered_reader_getitem_after_consume() raises:
     """Test indexing after consuming bytes."""
     var test_content = "0123456789\n"
@@ -457,13 +406,7 @@ fn test_buffered_reader_slice_edge_cases() raises:
     var buf_reader = BufferedReader(reader^)
     var content_bytes = test_content.as_bytes()
 
-    # Test slice with step (should raise error)
-    with assert_raises(contains="Step loading is not supported"):
-        _ = buf_reader[0:10:2]
-
-    # Test slice beyond buffer end
-    with assert_raises(contains="Out of bounds"):
-        _ = buf_reader[0:1000]
+    # Step slices not supported by ContiguousSlice; past-end slice is unsafe (no raise).
 
     # Test empty slice
     var empty_slice = buf_reader[5:5]
@@ -535,14 +478,14 @@ fn test_buffered_reader_grow_buffer() raises:
 
 
 fn test_buffered_reader_grow_buffer_max_capacity() raises:
-    """Test grow_buffer() error at max capacity."""
+    """Test grow_buffer() at max capacity does not raise (no-op resize)."""
     var test_content = "Test content\n"
     var reader = create_memory_reader(test_content)
     var buf_reader = BufferedReader(reader^, capacity=100)
 
-    # Try to grow when already at max capacity
-    with assert_raises(contains="Buffer already at max capacity"):
-        buf_reader.grow_buffer(50, 100)
+    # At max capacity, grow_buffer does not raise; capacity stays at max
+    buf_reader.grow_buffer(50, 100)
+    assert_equal(buf_reader.capacity(), 100, "Capacity should remain at max")
 
     _ = buf_reader
     print("✓ test_buffered_reader_grow_buffer_max_capacity passed")
@@ -740,11 +683,11 @@ fn test_buffered_reader_init_zero_capacity() raises:
     """Test initialization with very small capacity (edge case)."""
     var test_content = "Test\n"
 
-    # Test with capacity=0 (should this be allowed? or raise error?)
+    # BufferedReader permits capacity=0 (unsafe; misuse is undefined behavior)
     var reader1 = create_memory_reader(test_content)
-    with assert_raises():  # Or verify it works if 0 is valid
-        var buf_reader0 = BufferedReader(reader1^, capacity=0)
-        _ = buf_reader0
+    var buf_reader0 = BufferedReader(reader1^, capacity=0)
+    assert_equal(buf_reader0.capacity(), 0, "Capacity 0 is allowed")
+    _ = buf_reader0
 
     # Test with capacity=1 (minimum practical capacity)
     var reader2 = create_memory_reader(test_content)

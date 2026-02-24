@@ -114,6 +114,10 @@ struct BufferedReader[R: Reader](
     `view()`, `consume()`, `stream_position()`, etc. Used by `LineIterator` and
     thus by FastqParser. Supports buffer growth for long lines when
     enabled in LineIterator.
+
+    Unsafe, low-level building block: callers must uphold preconditions.
+    Misuse (e.g. capacity <= 0, negative read_exact size, out-of-bounds index,
+    or reading past EOF) can lead to undefined behavior.
     """
 
     var source: Self.R
@@ -128,13 +132,6 @@ struct BufferedReader[R: Reader](
         out self, var reader: Self.R, capacity: Int = DEFAULT_CAPACITY
     ) raises:
         """Wrap a Reader with a buffer of given capacity. Reads once to fill buffer."""
-        if capacity <= 0:
-            raise Error(
-                "Can't have BufferedReader with the following capacity: ",
-                capacity,
-                " Bytes",
-            )
-
         self.source = reader^
         self._ptr = alloc[Byte](capacity)
         self._len = capacity
@@ -172,34 +169,16 @@ struct BufferedReader[R: Reader](
     @always_inline
     fn read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
         """
-        Read exactly `size` bytes. Raises if EOF is reached before that many bytes.
+        Read exactly `size` bytes. Caller must ensure size >= 0 and that enough
+        data is available (or the returned span may be invalid / undefined behavior).
         Returns a span over the buffer; valid only until the next mutating call on this reader.
         """
-        if size < 0:
-            raise Error(
-                "read_exact size must be non-negative, got " + String(size)
-            )
-        # Ensure buffer is not full and has enough bytes available
         while self.available() < size:
-            if not self._fill_buffer():
-                raise Error(
-                    "Unexpected EOF: needed "
-                    + String(size)
-                    + " bytes, only "
-                    + String(self.available())
-                    + " available"
-                )
+            _ = self._fill_buffer()
         var result = Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=size
         )
-        var consumed = self.consume(size)
-        if consumed != size:
-            raise Error(
-                "Internal error: consume() returned "
-                + String(consumed)
-                + " but expected "
-                + String(size)
-            )
+        _ = self.consume(size)
         return result
 
     @always_inline
@@ -233,8 +212,6 @@ struct BufferedReader[R: Reader](
         Compacts first to maximize usable space and avoid unnecessary growth.
         Use case: Parser encounters line longer than buffer, needs more space.
         """
-        if self.capacity() >= max_capacity:
-            raise Error("Buffer already at max capacity")
         self._compact_from(self._head)
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
@@ -245,8 +222,6 @@ struct BufferedReader[R: Reader](
         Resize buffer by `additional` bytes, not exceeding max_capacity.
         Does nott compact the buffer before resizing.
         """
-        if self.capacity() >= max_capacity:
-            raise Error("Buffer already at max capacity")
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
 
@@ -315,8 +290,6 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     fn _resize_internal(mut self, new_len: Int) raises -> Bool:
-        if new_len < self._len:
-            raise Error("New length must be greater than current length")
         var new_ptr = alloc[Byte](new_len)
         memcpy(dest=new_ptr, src=self._ptr, count=self._len)
         self._ptr.free()
@@ -335,15 +308,14 @@ struct BufferedReader[R: Reader](
         return x
 
     @always_inline
-    fn __getitem__(self, index: Int) raises -> Byte:
+    fn __getitem__(self, index: Int) -> Byte:
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
+        Indices are not validated; out-of-bounds access is undefined behavior.
         """
-        if index < 0 or index >= self.available():
-            raise Error("Out of bounds")
         return self._ptr[self._head + index]
 
     @always_inline
-    fn __getitem__(ref self, sl: Slice) raises -> Span[Byte, MutExternalOrigin]:
+    fn __getitem__(ref self, sl: ContiguousSlice) -> Span[Byte, MutExternalOrigin]:
         """
         Slice unconsumed bytes. Indices are relative to current position:
         buf[0] = first unconsumed byte, buf[:] = all unconsumed, buf[0:n] = first n unconsumed.
@@ -351,40 +323,11 @@ struct BufferedReader[R: Reader](
         var avail = self.available()
         var start_offset = sl.start.or_else(0)
         var end_offset = sl.end.or_else(avail)
-        var step = sl.step.or_else(1)
-
-        if step != 1:
-            raise Error("Step loading is not supported")
-
-        if start_offset < 0 or start_offset > avail:
-            raise Error(
-                "Slice start "
-                + String(start_offset)
-                + " out of valid range [0, "
-                + String(avail)
-                + "]"
-            )
-        if end_offset < start_offset or end_offset > avail:
-            raise Error(
-                "Out of bounds: slice end "
-                + String(end_offset)
-                + " not in valid range ["
-                + String(start_offset)
-                + ", "
-                + String(avail)
-                + "]"
-            )
-
         var start = self._head + start_offset
         var end = self._head + end_offset
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + start, length=end - start
         )
-
-    fn __del__(deinit self):
-        if self._ptr:
-            self._ptr.free()
-
 
 struct BufferedWriter[W: WriterBackend](ImplicitlyDestructible, Movable, Writer):
     """Buffered writer for efficient byte writing.
