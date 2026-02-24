@@ -63,6 +63,7 @@ rust = "*"
 benchmark = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
 # Run compressed (gzip) FASTQ benchmark: BlazeSeq vs needletail only
 benchmark-gzip = "bash -c './benchmark/fastq-parser/run_benchmarks_gzip.sh'"
+benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"
 
 [environments]
 benchmark = ["default", "benchmark"]

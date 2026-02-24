@@ -29,6 +29,7 @@ benchmark_results_gzip.json
 
 # Benchmark binaries (fastq-parser)
 benchmark/fastq-parser/kseq_runner/kseq_runner
+benchmark/fastq-parser/kseq_runner/kseq_gzip_runner
 benchmark/fastq-parser/run_blazeseq
 benchmark/fastq-parser/run_blazeseq_gzip
 blazeseq_mojo_sources.txt

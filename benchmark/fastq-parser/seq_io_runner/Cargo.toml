@@ -8,5 +8,10 @@ description = "FASTQ parse benchmark runner using seq_io"
 name = "seq_io_runner"
 path = "src/main.rs"
 
+[[bin]]
+name = "seq_io_gzip_runner"
+path = "src/gzip_main.rs"
+
 [dependencies]
 seq_io = "0.3"
+flate2 = "1.0"

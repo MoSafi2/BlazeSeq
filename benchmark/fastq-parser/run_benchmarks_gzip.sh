@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Compressed FASTQ parser benchmark: BlazeSeq (RapidgzipReader) vs needletail.
+# Compressed FASTQ parser benchmark: kseq, seq_io, FASTX.jl, needletail, BlazeSeq.
 # Generates 3GB synthetic FASTQ, compresses to .fastq.gz, runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks_gzip.sh
-# Requires: pixi, hyperfine, cargo, gzip. On Linux: sudo for ramfs mount/umount.
+# Requires: pixi, hyperfine, cargo, gcc, julia, gzip. On Linux: sudo for ramfs mount/umount.
 
 set -e
 
@@ -27,6 +27,8 @@ check_cmd pixi       || missing+=(pixi)
 check_cmd hyperfine  || missing+=(hyperfine)
 check_cmd cargo      || missing+=(cargo)
 check_cmd rustc      || missing+=(rustc)
+check_cmd gcc        || missing+=(gcc)
+check_cmd julia      || missing+=(julia)
 check_cmd gzip       || missing+=(gzip)
 
 if [ ${#missing[@]} -gt 0 ]; then
@@ -34,6 +36,8 @@ if [ ${#missing[@]} -gt 0 ]; then
     echo "  pixi:        https://pixi.sh"
     echo "  hyperfine:   https://github.com/sharkdp/hyperfine (e.g. cargo install hyperfine -> ~/.cargo/bin)"
     echo "  Rust:        https://rustup.rs (cargo, rustc -> ~/.cargo/bin)"
+    echo "  gcc:         system package (for kseq gzip runner)"
+    echo "  julia:       https://julialang.org (for FASTX.jl runner)"
     echo "  gzip:        system package (e.g. gzip)"
     echo "PATH used: $PATH"
     exit 1
@@ -95,12 +99,33 @@ fi
 rm -f "$BENCH_FILE"
 BENCH_GZ="${BENCH_FILE}.gz"
 
-# --- Build Rust runner (needletail) ---
+# --- Build kseq gzip runner (C + zlib) ---
+KSEQ_GZIP_BIN="$SCRIPT_DIR/kseq_runner/kseq_gzip_runner"
+echo "Building kseq_gzip_runner ..."
+if ! (cd "$SCRIPT_DIR/kseq_runner" && gcc -O3 -o kseq_gzip_runner main_gzip.c -lz); then
+    echo "Failed to build kseq_gzip_runner. Check gcc and zlib-dev."
+    exit 1
+fi
+
+# --- Build Rust runners (needletail, seq_io gzip) ---
 echo "Building needletail_runner ..."
 (cd "$SCRIPT_DIR/needletail_runner" && cargo build --release) || {
     echo "Failed to build needletail_runner. Check Rust toolchain and dependencies."
     exit 1
 }
+echo "Building seq_io_gzip_runner ..."
+(cd "$SCRIPT_DIR/seq_io_runner" && cargo build --release) || {
+    echo "Failed to build seq_io_gzip_runner. Check Rust toolchain and dependencies."
+    exit 1
+}
+
+# --- Julia project (FASTX.jl + CodecZlib for gzip) ---
+JULIA_PROJECT="$SCRIPT_DIR"
+echo "Ensuring Julia deps (FASTX, CodecZlib) ..."
+if ! julia --project="$JULIA_PROJECT" -e 'using Pkg; Pkg.instantiate()' 2>/dev/null; then
+    echo "Failed to instantiate Julia project at $JULIA_PROJECT"
+    exit 1
+fi
 
 # --- Build BlazeSeq gzip runner (Mojo binary) ---
 BLAZESEQ_GZIP_BIN="$SCRIPT_DIR/run_blazeseq_gzip"
@@ -110,13 +135,16 @@ if ! pixi run mojo build -I . -o "$BLAZESEQ_GZIP_BIN" "$SCRIPT_DIR/run_blazeseq_
     exit 1
 fi
 
-# --- Verify both parsers agree on record/base count ---
+# --- Verify all parsers agree on record/base count ---
 echo "Verifying parser outputs on $BENCH_GZ ..."
 ref=""
-for cmd_label in "BlazeSeq" "needletail"; do
+for cmd_label in "kseq" "seq_io" "FASTX.jl" "needletail" "BlazeSeq"; do
     case "$cmd_label" in
-        BlazeSeq)   out=$("$BLAZESEQ_GZIP_BIN" "$BENCH_GZ" 2>/dev/null) || out="" ;;
+        kseq)      out=$("$KSEQ_GZIP_BIN" "$BENCH_GZ" 2>/dev/null) || out="" ;;
+        seq_io)    out=$("$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner" "$BENCH_GZ" 2>/dev/null) || out="" ;;
+        FASTX.jl)  out=$(julia --project="$JULIA_PROJECT" "$SCRIPT_DIR/run_fastx.jl" "$BENCH_GZ" 2>/dev/null) || out="" ;;
         needletail) out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_GZ" 2>/dev/null) || out="" ;;
+        BlazeSeq)  out=$("$BLAZESEQ_GZIP_BIN" "$BENCH_GZ" 2>/dev/null) || out="" ;;
     esac
     out=$(echo "$out" | tail -1)
     if [ -z "$out" ]; then
@@ -140,8 +168,10 @@ hyperfine \
     --runs 5 \
     --export-markdown "$REPO_ROOT/benchmark_results_gzip.md" \
     --export-json "$REPO_ROOT/benchmark_results_gzip.json" \
+    -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
+    -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
+    -n "FASTX.jl" "julia --project=$JULIA_PROJECT $SCRIPT_DIR/run_fastx.jl $BENCH_GZ" \
     -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
-    -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ" 
-    
+    -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ"
 
 echo "Results written to benchmark_results_gzip.md and benchmark_results_gzip.json"
