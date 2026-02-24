@@ -116,9 +116,9 @@ struct BufferedReader[R: Reader](
     enabled in LineIterator.
 
     Unsafe, low-level building block: callers must uphold preconditions.
-    Misuse (e.g. capacity <= 0, negative read_exact size, out-of-bounds index,
-    or reading past EOF) can lead to undefined behavior.
-    """
+    Misuse (e.g. capacity <= 0, out-of-bounds index, or reading past EOF)
+    can lead to undefined behavior.
+o    """
 
     var source: Self.R
     var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
@@ -165,21 +165,6 @@ struct BufferedReader[R: Reader](
         """
         debug_assert(size <= self._head, "unconsume exceeds head position")
         self._head -= size
-
-    @always_inline
-    fn read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
-        """
-        Read exactly `size` bytes. Caller must ensure size >= 0 and that enough
-        data is available (or the returned span may be invalid / undefined behavior).
-        Returns a span over the buffer; valid only until the next mutating call on this reader.
-        """
-        while self.available() < size:
-            _ = self._fill_buffer()
-        var result = Span[Byte, MutExternalOrigin](
-            ptr=self._ptr + self._head, length=size
-        )
-        _ = self.consume(size)
-        return result
 
     @always_inline
     fn stream_position(self) -> Int:
@@ -289,7 +274,7 @@ struct BufferedReader[R: Reader](
         return amt
 
     @always_inline
-    fn _resize_internal(mut self, new_len: Int) raises -> Bool:
+    fn _resize_internal(mut self, new_len: Int) -> Bool:
         var new_ptr = alloc[Byte](new_len)
         memcpy(dest=new_ptr, src=self._ptr, count=self._len)
         self._ptr.free()
@@ -664,6 +649,26 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         return self.buffer.peek(amt)
 
+    # Does not support buffer growth yet.
+    @always_inline
+    fn read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
+        """
+        Read exactly `size` bytes. Refills and compacts the buffer as needed.
+        Raises EOFError if the stream ends before `size` bytes are available.
+        Returns a span over the buffer; valid only until the next mutating call.
+        """
+        if size == 0:
+            return self.buffer.view()[0:0]
+        
+        if self.buffer.available() < size:
+            if self.buffer.is_eof():
+                raise EOFError()
+            if self.buffer.available() >= self.buffer.capacity():
+                self.buffer._compact_from(self.buffer.buffer_position())
+            _ = self.buffer._fill_buffer()
+        var result = self.buffer.view()[0:size]
+        _ = self.buffer.consume(size)
+        return result
 
     @always_inline
     fn consume_line_scalar(mut self) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:

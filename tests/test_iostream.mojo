@@ -2,7 +2,7 @@ from testing import assert_equal, assert_raises, assert_true, assert_false, Test
 from pathlib import Path
 from os import remove
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from blazeseq.io.buffered import BufferedReader, BufferedWriter
+from blazeseq.io.buffered import BufferedReader, BufferedWriter, LineIterator
 from blazeseq.io.readers import FileReader, MemoryReader
 from blazeseq.io.writers import FileWriter
 
@@ -244,12 +244,12 @@ fn test_buffered_reader_consume_too_much() raises:
 
 
 fn test_buffered_reader_read_exact() raises:
-    """Test read_exact() method."""
+    """Test read_exact() method (on LineIterator)."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
+    var line_iter = LineIterator(reader^)
 
-    var bytes = buf_reader.read_exact(5)
+    var bytes = line_iter.read_exact(5)
     assert_equal(len(bytes), 5, "Should read exactly 5 bytes")
     var content_bytes = test_content.as_bytes()
     assert_equal(bytes[0], content_bytes[0], "First byte should be '0'")
@@ -257,7 +257,7 @@ fn test_buffered_reader_read_exact() raises:
 
     # Buffer position should have advanced
     assert_equal(
-        buf_reader.buffer_position(), 5, "Buffer position should advance"
+        line_iter.buffer.buffer_position(), 5, "Buffer position should advance"
     )
 
     print("✓ test_buffered_reader_read_exact passed")
@@ -267,9 +267,9 @@ fn test_buffered_reader_read_exact_zero() raises:
     """Test read_exact(0) returns empty span."""
     var test_content = "Test\n"
     var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^)
+    var line_iter = LineIterator(reader^)
 
-    var bytes = buf_reader.read_exact(0)
+    var bytes = line_iter.read_exact(0)
     assert_equal(len(bytes), 0, "Should return empty span for size 0")
 
     print("✓ test_buffered_reader_read_exact_zero passed")
@@ -282,23 +282,23 @@ fn test_buffered_reader_read_exact_large() raises:
         test_content += "Line " + String(i) + "\n"
 
     var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^, capacity=100)
+    var line_iter = LineIterator(reader^, capacity=100)
 
     # Consume most of buffer, but leave some room
-    var initial_available = buf_reader.available()
+    var initial_available = line_iter.buffer.available()
     var consume_amount = min(90, initial_available - 10)
-    var consumed = buf_reader.consume(consume_amount)
+    var consumed = line_iter.buffer.consume(consume_amount)
     assert_equal(consumed, consume_amount, "Should consume requested amount")
 
     # Read available bytes (may be less than 50 if content is smaller)
-    var read_amount = min(50, buf_reader.available())
+    var read_amount = min(50, line_iter.buffer.available())
     if read_amount > 0:
-        var bytes = buf_reader.read_exact(read_amount)
+        var bytes = line_iter.read_exact(read_amount)
         assert_equal(
             len(bytes), read_amount, "Should read exactly requested bytes"
         )
 
-    _ = buf_reader
+    _ = line_iter
     print("✓ test_buffered_reader_read_exact_large passed")
 
 
@@ -622,13 +622,13 @@ fn test_buffered_reader_large_multiple_refills() raises:
         test_content += "Line " + String(i) + "\n"
 
     var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^, capacity=100)
+    var line_iter = LineIterator(reader^, capacity=100)
 
     # Initially should not be at EOF
-    assert_false(buf_reader.is_eof(), "Should not be at EOF initially")
+    assert_false(line_iter.buffer.is_eof(), "Should not be at EOF initially")
 
     # Track stream position to verify it's accurate across refills
-    var initial_stream_pos = buf_reader.stream_position()
+    var initial_stream_pos = line_iter.position()
     assert_equal(initial_stream_pos, 0, "Stream position should start at 0")
 
     # Read all content using read_exact, tracking position
@@ -636,15 +636,15 @@ fn test_buffered_reader_large_multiple_refills() raises:
     var last_stream_pos = 0
     var refill_count = 0
 
-    while not buf_reader.is_eof() or buf_reader.available() > 0:
-        var stream_pos_before = buf_reader.stream_position()
+    while not line_iter.buffer.is_eof() or line_iter.buffer.available() > 0:
+        var stream_pos_before = line_iter.position()
 
-        if buf_reader.available() > 0:
-            var bytes = buf_reader.read_exact(min(50, buf_reader.available()))
+        if line_iter.buffer.available() > 0:
+            var bytes = line_iter.read_exact(min(50, line_iter.buffer.available()))
             total_read += len(bytes)
 
             # Verify stream position advances correctly
-            var stream_pos_after = buf_reader.stream_position()
+            var stream_pos_after = line_iter.position()
             assert_equal(
                 stream_pos_after,
                 stream_pos_before + len(bytes),
@@ -653,12 +653,12 @@ fn test_buffered_reader_large_multiple_refills() raises:
             last_stream_pos = stream_pos_after
         else:
             # Buffer full with no bytes available - compact to make room then refill
-            buf_reader._compact_from(buf_reader.buffer_position())
-            var filled = buf_reader._fill_buffer()
+            line_iter.buffer._compact_from(line_iter.buffer.buffer_position())
+            var filled = line_iter.buffer._fill_buffer()
             if filled == 0:
                 break
             refill_count += 1  # Count each successful refill
-            if buf_reader.available() == 0:
+            if line_iter.buffer.available() == 0:
                 break
 
     assert_true(total_read > 0, "Should read content from large buffer")
@@ -694,9 +694,11 @@ fn test_buffered_reader_init_zero_capacity() raises:
     var buf_reader1 = BufferedReader(reader2^, capacity=1)
     assert_equal(buf_reader1.capacity(), 1, "Should use capacity=1")
 
-    # Actually try to read with capacity=1 to verify it works
-    if buf_reader1.available() > 0:
-        var byte = buf_reader1.read_exact(1)
+    # Actually try to read with capacity=1 to verify it works (via LineIterator.read_exact)
+    var reader3 = create_memory_reader(test_content)
+    var line_iter = LineIterator(reader3^, capacity=1)
+    if line_iter.buffer.available() > 0:
+        var byte = line_iter.read_exact(1)
         assert_equal(len(byte), 1, "Should read 1 byte with capacity=1")
 
     print("✓ test_buffered_reader_init_zero_capacity passed")
@@ -770,23 +772,23 @@ fn test_buffered_reader_stream_position_across_refills() raises:
         test_content += "Line " + String(i) + "\n"
 
     var reader = create_memory_reader(test_content)
-    var buf_reader = BufferedReader(reader^, capacity=50)
+    var line_iter = LineIterator(reader^, capacity=50)
 
     var total_consumed = 0
     var positions = List[Int]()
 
     # Read through multiple refills
-    while buf_reader.available() > 0 or not buf_reader.is_eof():
-        if buf_reader.available() > 0:
-            var stream_pos = buf_reader.stream_position()
+    while line_iter.buffer.available() > 0 or not line_iter.buffer.is_eof():
+        if line_iter.buffer.available() > 0:
+            var stream_pos = line_iter.position()
             positions.append(stream_pos)
 
-            var chunk_size = min(20, buf_reader.available())
-            var bytes = buf_reader.read_exact(chunk_size)
+            var chunk_size = min(20, line_iter.buffer.available())
+            var bytes = line_iter.read_exact(chunk_size)
             total_consumed += len(bytes)
 
             # Verify position advanced correctly
-            var new_stream_pos = buf_reader.stream_position()
+            var new_stream_pos = line_iter.position()
             assert_equal(
                 new_stream_pos,
                 stream_pos + len(bytes),
@@ -794,14 +796,14 @@ fn test_buffered_reader_stream_position_across_refills() raises:
             )
         else:
             # Buffer full - compact to make room then refill
-            buf_reader._compact_from(buf_reader.buffer_position())
-            if not buf_reader._fill_buffer():
+            line_iter.buffer._compact_from(line_iter.buffer.buffer_position())
+            if not line_iter.buffer._fill_buffer():
                 break
-            if buf_reader.available() == 0:
+            if line_iter.buffer.available() == 0:
                 break
 
     # Final position should match total consumed
-    var final_pos = buf_reader.stream_position()
+    var final_pos = line_iter.position()
     assert_equal(
         final_pos,
         total_consumed,
@@ -855,13 +857,13 @@ fn test_file_reader_alignment_basic() raises:
     var test_file = Path("test_alignment_basic.txt")
     test_file = create_test_file(test_file, content)
     var file_reader = FileReader(test_file)
-    var file_buf_reader = BufferedReader(file_reader^)
-    var file_bytes = file_buf_reader.read_exact(len(content))
+    var file_line_iter = LineIterator(file_reader^)
+    var file_bytes = file_line_iter.read_exact(len(content))
 
     # Test with MemoryReader
     var mem_reader = create_memory_reader(content)
-    var mem_buf_reader = BufferedReader(mem_reader^)
-    var mem_bytes = mem_buf_reader.read_exact(len(content))
+    var mem_line_iter = LineIterator(mem_reader^)
+    var mem_bytes = mem_line_iter.read_exact(len(content))
 
     # Compare results
     assert_equal(
@@ -888,11 +890,11 @@ fn test_file_reader_alignment_large() raises:
     var test_file = Path("test_alignment_large.txt")
     test_file = create_test_file(test_file, content)
     var file_reader = FileReader(test_file)
-    var file_buf_reader = BufferedReader(file_reader^, capacity=100)
+    var file_line_iter = LineIterator(file_reader^, capacity=100)
 
     # Test with MemoryReader
     var mem_reader = create_memory_reader(content)
-    var mem_buf_reader = BufferedReader(mem_reader^, capacity=100)
+    var mem_line_iter = LineIterator(mem_reader^, capacity=100)
 
     # Read all content and compare
     var file_total = 0
@@ -900,44 +902,44 @@ fn test_file_reader_alignment_large() raises:
 
     var expected_total = len(content)
     while file_total < expected_total:
-        if file_buf_reader.available() > 0:
+        if file_line_iter.buffer.available() > 0:
             var to_read = min(
-                50, file_buf_reader.available(), expected_total - file_total
+                50, file_line_iter.buffer.available(), expected_total - file_total
             )
-            var chunk = file_buf_reader.read_exact(to_read)
+            var chunk = file_line_iter.read_exact(to_read)
             file_total += len(chunk)
-        elif file_buf_reader.is_eof() and file_buf_reader.available() == 0:
+        elif file_line_iter.buffer.is_eof() and file_line_iter.buffer.available() == 0:
             break
         else:
             # Buffer full - compact from current position to make room then refill
-            file_buf_reader._compact_from(file_buf_reader.buffer_position())
-            if not file_buf_reader._fill_buffer():
+            file_line_iter.buffer._compact_from(file_line_iter.buffer.buffer_position())
+            if not file_line_iter.buffer._fill_buffer():
                 break
-            if file_buf_reader.available() == 0:
+            if file_line_iter.buffer.available() == 0:
                 break
 
     while mem_total < expected_total:
-        if mem_buf_reader.available() > 0:
+        if mem_line_iter.buffer.available() > 0:
             var to_read = min(
-                50, mem_buf_reader.available(), expected_total - mem_total
+                50, mem_line_iter.buffer.available(), expected_total - mem_total
             )
-            var chunk = mem_buf_reader.read_exact(to_read)
+            var chunk = mem_line_iter.read_exact(to_read)
             mem_total += len(chunk)
-        elif mem_buf_reader.is_eof() and mem_buf_reader.available() == 0:
+        elif mem_line_iter.buffer.is_eof() and mem_line_iter.buffer.available() == 0:
             break
         else:
             # Buffer full - compact from current position to make room then refill
-            mem_buf_reader._compact_from(mem_buf_reader.buffer_position())
-            if not mem_buf_reader._fill_buffer():
+            mem_line_iter.buffer._compact_from(mem_line_iter.buffer.buffer_position())
+            if not mem_line_iter.buffer._fill_buffer():
                 break
-            if mem_buf_reader.available() == 0:
+            if mem_line_iter.buffer.available() == 0:
                 break
 
     assert_equal(file_total, mem_total, "Should read same total bytes")
     assert_equal(file_total, len(content), "Should read all content")
 
-    _ = file_buf_reader
-    _ = mem_buf_reader
+    _ = file_line_iter
+    _ = mem_line_iter
 
     print("✓ test_file_reader_alignment_large passed")
 

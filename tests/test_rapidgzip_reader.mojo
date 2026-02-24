@@ -6,7 +6,7 @@ from os import remove
 from memory import alloc, Span, memcpy
 from blazeseq.io.readers import RapidgzipReader
 from blazeseq.io.writers import GZWriter
-from blazeseq.io.buffered import BufferedReader, buffered_writer_for_gzip
+from blazeseq.io.buffered import LineIterator, buffered_writer_for_gzip
 from blazeseq.parser import FastqParser
 from blazeseq.record import FastqRecord
 
@@ -156,12 +156,12 @@ fn test_rapidgzip_reader_with_buffered_reader() raises:
     create_gz_file("tests/test_data/test_rapidgzip_buffered.gz", content_bytes)
 
     var reader = RapidgzipReader("tests/test_data/test_rapidgzip_buffered.gz")
-    var buf_reader = BufferedReader(reader^)
-    var bytes_read = buf_reader.read_exact(18)
+    var line_iter = LineIterator(reader^)
+    var bytes_read = line_iter.read_exact(18)
     assert_equal(len(bytes_read), 18, "Should read 18 bytes")
     assert_equal(bytes_read[0], 72, "First byte should be 'H'")
     assert_equal(bytes_read[12], 76, "Byte 13 (L) should be 'L'")
-    _ = buf_reader
+    _ = line_iter
 
     print("✓ test_rapidgzip_reader_with_buffered_reader passed")
 
