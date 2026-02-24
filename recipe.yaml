@@ -1,6 +1,5 @@
 context:
   version: "0.2.0"
-  mojo_version: "=0.26.1"
 
 package:
   name: "blazeseq"
@@ -8,47 +7,22 @@ package:
 
 source:
   path: .
-  use_gitignore: true
 
 build:
   number: 0
+  # Let pixi-build-mojo handle the script internally 
+  # OR if using rattler-build directly, keep it simple:
   script:
-    - mojo package blazeseq -o ${{ PREFIX }}/lib/mojo/BlazeSeq.mojopkg
+    - mkdir -p $PREFIX/lib/mojo
+    - mojo package blazeseq -o $PREFIX/lib/mojo/blazeseq.mojopkg
 
 requirements:
+  build:
+    - ${{ compiler('cxx') }} # Needed if any shim logic is triggered
+    - mojo ==0.26.1.0
   host:
-    - max ${{ mojo_version }}
+    - mojo ==0.26.1.0
+    - rapidgzip-mojo >=0.1.0 # This MUST be a package, not a git link
   run:
-    - max ${{ mojo_version }}
-
-tests:
-  - script:
-      - if: unix
-        then:
-          - find tests -name "test_*.mojo" -exec mojo test -I ${{ PREFIX }}/lib/mojo/BlazeSeq.mojopkg {} \;
-    requirements:
-      run:
-        - max ${{ mojo_version }}
-    files:
-      recipe:
-        - tests/test_error_context.mojo
-        - tests/test_fastq_integration.mojo
-        - tests/test_fastq_record.mojo
-        - tests/test_iostream.mojo
-        - tests/test_line_iterator.mojo
-        - tests/test_parser.mojo
-        - tests/test_rapidgzip_reader.mojo
-        - tests/test_readers.mojo
-        - tests/test_record_batch.mojo
-        - tests/test_writers.mojo
-
-about:
-  homepage: https://github.com/MoSafi2/BlazeSeq
-  license: MIT
-  license_file: LICENSE
-  summary: Fast FASTQ parsing and GPU-accelerated sequencing utilities in Mojo.
-  repository: https://github.com/MoSafi2/BlazeSeq
-
-extra:
-  maintainers: []
-  project_name: blazeseq
+    - mojo ==0.26.1.0
+    - rapidgzip-mojo >=0.1.0

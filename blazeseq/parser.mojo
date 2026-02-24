@@ -341,7 +341,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             except e:
                 if String(e) == EOF or String(e).startswith(EOF):
                     break
-                raise
+                raise e^
         return batch^
 
     fn ref_records(
