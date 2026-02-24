@@ -21,6 +21,9 @@ comptime DEFAULT_CAPACITY = 64 * KB
 comptime MAX_SHIFT = 30
 comptime MAX_CAPACITY = 2**MAX_SHIFT
 
+# Default max records per batch for parser.batched() / next_batch() and FastqBatch preallocation.
+comptime DEFAULT_BATCH_SIZE = 4096
+
 
 # Values for schemas are derived from
 # https://github.com/BioJulia/FASTX.jl/blob/master/src/fastq/quality.jl

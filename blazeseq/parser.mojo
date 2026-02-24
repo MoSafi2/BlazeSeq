@@ -138,7 +138,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """Initialize FastqParser from config.
         
         Uses quality_schema from config if set; otherwise generic schema.
-        Default batch size for batched() is 1024.
+        Default batch size for batched() is DEFAULT_BATCH_SIZE from CONSTS.
         
         Args:
             reader: Source implementing the Reader trait (e.g. FileReader(Path(...))).
@@ -163,7 +163,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.config.check_quality,
             self.quality_schema.copy(),
         )
-        self._batch_size = 1024
+        self._batch_size = DEFAULT_BATCH_SIZE
         self._record_number = 0
 
     fn __init__(
@@ -193,7 +193,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.config.check_quality,
             self.quality_schema.copy(),
         )
-        self._batch_size = 1024
+        self._batch_size = DEFAULT_BATCH_SIZE
         self._record_number = 0
 
     fn __init__(
@@ -314,14 +314,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
         return record^
 
-    fn next_batch(mut self, max_records: Int = 1024) raises -> FastqBatch:
+    fn next_batch(mut self, max_records: Int = DEFAULT_BATCH_SIZE) raises -> FastqBatch:
         """Extract a batch of records in Structure-of-Arrays (SoA) format.
         
         Intended for GPU upload or batch processing. Stops at EOF and returns
         a partial batch instead of raising.
         
         Args:
-            max_records: Maximum number of records to include (default 1024).
+            max_records: Maximum number of records to include (default DEFAULT_BATCH_SIZE from CONSTS).
         
         Returns:
             FastqBatch: SoA batch with 0 to max_records records. Use num_records()
@@ -331,12 +331,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Error: On parse or validation failure (with context); does not
                 raise EOFError, returns partial batch instead.
         """
-        var actual_max = max_records
-        var batch = FastqBatch(batch_size=actual_max)
-        while len(batch) < actual_max and self.line_iter.has_more():
+        var limit = max_records if max_records else self._batch_size
+        var batch = FastqBatch(batch_size=limit)
+        while len(batch) < limit and self.line_iter.has_more():
             try:
-                var ref_record = self.next_ref()
-                batch.add(ref_record)
+                batch.add(self.next_ref())
             except e:
                 if String(e) == EOF or String(e).startswith(EOF):
                     break

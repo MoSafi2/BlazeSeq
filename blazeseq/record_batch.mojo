@@ -2,6 +2,7 @@
 
 from blazeseq.record import FastqRecord, RefRecord
 from blazeseq.ascii_string import ASCIIString
+from blazeseq.CONSTS import DEFAULT_BATCH_SIZE
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from gpu import block_idx, thread_idx
@@ -59,14 +60,14 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
 
     fn __init__(
         out self,
-        batch_size: Int = 4096,
+        batch_size: Int = DEFAULT_BATCH_SIZE,
         avg_record_size: Int = 150,
         quality_offset: UInt8 = 33,
     ):
         """Create an empty batch with preallocated capacity.
         
         Args:
-            batch_size: Expected number of records (capacity for offset arrays).
+            batch_size: Expected number of records (capacity for offset arrays); default from CONSTS.
             avg_record_size: Estimated bytes per record for buffer preallocation.
             quality_offset: Phred offset (33 or 64) for the batch.
         """
