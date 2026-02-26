@@ -15,6 +15,7 @@ from blazeseq.utils import (
     format_parse_error,
     _check_end_qual,
     _scan_record,
+    _strip_spaces,
     RecordOffsets,
     SearchPhase,
     BufferedReader,
@@ -278,13 +279,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         try:
             record = self._parse_record_line()
         except e:
-            raise(e^)
-            #raise Error(format_parse_error(String(e), self, ""))
+            raise Error(format_parse_error(String(e), self, ""))
         try:
             self.validator.validate(record, self._record_number, self.line_iter.get_line_number())
         except e:
-            raise(e^)
-            #raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
+            raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
         return record^
 
     fn next_batch(mut self, max_records: Int = DEFAULT_BATCH_SIZE) raises -> FastqBatch:
@@ -409,17 +408,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             base = 0
             if not complete:
                 raise EOFError()
-        var id_end   = offsets.seq_start - 1        
-        var seq_nl   = offsets.sep_start - 1
 
         id_span = Span[Byte, MutExternalOrigin](
             ptr    = self.line_iter.buffer._ptr + base + offsets.header_start,
-            length = id_end - (offsets.header_start),
+            length = offsets.seq_start - offsets.header_start - 1,
         )
 
         seq_span = Span[Byte, MutExternalOrigin](
             ptr    = self.line_iter.buffer._ptr + base + offsets.seq_start,
-            length = seq_nl - offsets.seq_start,
+            length = offsets.sep_start - offsets.seq_start - 1,
         )
         qual_span = Span[Byte, MutExternalOrigin](
             ptr    = self.line_iter.buffer._ptr + base + offsets.qual_start,
@@ -427,9 +424,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
 
         var ref_rec = RefRecord[origin=MutExternalOrigin](
-            id_span,
-            seq_span,
-            qual_span,
+            _strip_spaces(id_span),
+            _strip_spaces(seq_span),
+            _strip_spaces(qual_span),
             self.quality_schema.OFFSET,
         )
 
@@ -449,12 +446,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 self.line_iter.get_line_number(),
             )
         except e:
-            raise(e^)
-            #raise Error(
-            #    format_parse_error(
-            #        String(e), self, self._get_record_snippet(ref_rec)
-            #    )
-            #)
+            raise Error(
+               format_parse_error(
+                   String(e), self, self._get_record_snippet(ref_rec)
+               )
+            )
         return ref_rec^
 
 
@@ -513,26 +509,26 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
-                # # Record starts at position 0 already; buffer is too small → grow
-                # # Mirrors Rust grow(): double capacity
-                # var current_cap = self.line_iter.buffer.capacity()
-                # var max_cap = self.line_iter._max_capacity
-                # if current_cap >= max_cap:
-                    max_cap = self.line_iter.buffer.capacity()
+                @parameter
+                if not self.config.buffer_growth_enabled:
+                    raise Error(
+                        "FASTQ record exceeds buffer capacity ("
+                        + String(self.line_iter.buffer.capacity())
+                        + " bytes). Enable buffer growth or increase buffer_capacity."
+                    )
+                var current_cap = self.line_iter.buffer.capacity()
+                var max_cap = self.line_iter._max_capacity
+                if current_cap >= max_cap:
                     raise Error(
                         "FASTQ record exceeds maximum buffer capacity ("
                         + String(max_cap)
                         + " bytes). Enable buffer growth or increase max_capacity."
                     )
-                # var growth = min(current_cap, max_cap - current_cap)
-                # self.line_iter.buffer.resize_buffer(growth, max_cap)
+                var growth = min(current_cap, max_cap - current_cap)
+                self.line_iter.buffer.resize_buffer(growth, max_cap)
             else:
-                # There are consumed records before new_base — discard them
-                # After this: the byte at new_base moves to offset 0; new_base = 0
                 self.line_iter.buffer._compact_from(new_base)
                 new_base = 0
-                # All relative offsets in `o` are still valid (they were relative
-                # to old new_base, which is now 0)
 
             # ── Refill ────────────────────────────────────────────────────────────
             var filled = self.line_iter.buffer._fill_buffer()
