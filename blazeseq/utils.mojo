@@ -390,7 +390,7 @@ fn _find_newline_from(
         ptr = buf._ptr + abs_start,
         length = avail,
     )
-    var pos = memchr(haystack=view, chr=new_line)
+    var pos = memchr_scalar(haystack=view, chr=new_line)
     if pos < 0:
         return -1
     return _from + pos + 1   # relative to base; +1 skips past the '\n'
