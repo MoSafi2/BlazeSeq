@@ -12,13 +12,12 @@ from std.iter import Iterator
 from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import (
     _parse_schema,
-    SearchState,
-    SearchResults,
-    #_parse_record_fast_path,
-    # _handle_incomplete_line_with_buffer_growth,  # Buffer growth disabled until stable
-    _handle_incomplete_line,
     format_parse_error,
-    _scan_record_indices,
+    _check_end_qual,
+    _scan_record,
+    RecordOffsets,
+    SearchPhase,
+    BufferedReader,
 )
 
 
@@ -258,37 +257,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """
         return self.line_iter.has_more()
 
-    # @always_inline
-    # fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-    #     """Return the next record as a zero-copy RefRecord.
-        
-    #     Returns:
-    #         RefRecord: A view into the parser's buffer; valid only until the next
-    #             call that mutates the parser or buffer.
-        
-    #     Raises:
-    #         Error: On parse or validation failure (message includes record number,
-    #             line number, file position, and snippet when available).
-    #         EOFError: When there are no more records.
-        
-    #     Note:
-    #         Zero-copy; do not store in collections or use after the next
-    #         next_ref/next_record/next_batch or buffer mutation. Consume promptly.
-    #     """
-    #     self._record_number += 1
-    #     var ref_record: RefRecord[origin=MutExternalOrigin]
-    #     try:
-    #         ref_record = self._parse_record_ref()
-    #     except e:
-    #         if String(e) == EOF:
-    #             raise EOFError()
-    #         raise Error(format_parse_error(String(e), self, ""))
-    #     try:
-    #         self.validator.validate(ref_record, self._record_number, self.line_iter.get_line_number())
-    #     except e:
-    #         raise Error(format_parse_error(String(e), self, self._get_record_snippet(ref_record)))
-    #     return ref_record^
-
     @always_inline
     fn next_record(mut self) raises -> FastqRecord:
         """Return the next record as an owned FastqRecord.
@@ -310,11 +278,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         try:
             record = self._parse_record_line()
         except e:
-            raise Error(format_parse_error(String(e), self, ""))
+            raise(e^)
+            #raise Error(format_parse_error(String(e), self, ""))
         try:
             self.validator.validate(record, self._record_number, self.line_iter.get_line_number())
         except e:
-            raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
+            raise(e^)
+            #raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
         return record^
 
     fn next_batch(mut self, max_records: Int = DEFAULT_BATCH_SIZE) raises -> FastqBatch:
@@ -400,6 +370,95 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Pointer(to=self), limit
         )
 
+    
+
+    @always_inline
+    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
+        if not self.line_iter.has_more():
+            raise EOFError()
+
+        self._record_number += 1
+
+        # ── 1. Fill buffer if empty ───────────────────────────────────────────────
+        if self.line_iter.buffer.available() == 0:
+            if self.line_iter.buffer.is_eof():
+                raise EOFError()
+            _ = self.line_iter.buffer._fill_buffer()
+            if self.line_iter.buffer.available() == 0:
+                raise EOFError()
+
+        # ── 2. Set scan anchor: all relative offsets are from here ────────────────
+        #    base = absolute index of view()[0] = buf._head (before any compact)
+        var base = self.line_iter.buffer._head
+        var offsets = RecordOffsets(
+            header_start=0,   # relative to base; '@' is always at offset 0
+            seq_start=0,
+            sep_start=0,
+            qual_start=0,
+            record_end=0,
+        )
+        var phase = SearchPhase.HEADER
+
+        # ── 3. Fast-path scan ─────────────────────────────────────────────────────
+        var complete: Bool
+        complete, offsets, phase = _scan_record(self.line_iter.buffer, base, offsets, phase)
+
+        # ── 4. Slow path: incomplete record, need more data ───────────────────────
+        if not complete:
+            complete, offsets, _ = self._next_ref_complete(base, offsets, phase)
+            base = 0
+            if not complete:
+                raise EOFError()
+        var id_end   = offsets.seq_start - 1        
+        var seq_nl   = offsets.sep_start - 1
+
+        id_span = Span[Byte, MutExternalOrigin](
+            ptr    = self.line_iter.buffer._ptr + base + offsets.header_start,
+            length = id_end - (offsets.header_start),
+        )
+
+        seq_span = Span[Byte, MutExternalOrigin](
+            ptr    = self.line_iter.buffer._ptr + base + offsets.seq_start,
+            length = seq_nl - offsets.seq_start,
+        )
+        qual_span = Span[Byte, MutExternalOrigin](
+            ptr    = self.line_iter.buffer._ptr + base + offsets.qual_start,
+            length = offsets.record_end - offsets.qual_start,
+        )
+
+        var ref_rec = RefRecord[origin=MutExternalOrigin](
+            id_span,
+            seq_span,
+            qual_span,
+            self.quality_schema.OFFSET,
+        )
+
+        # ── 7. Consume the record bytes ───────────────────────────────────────────
+        var to_consume = offsets.record_end + 1   # +1 for the '\n'
+        # Clamp to available in case record_end == buf._end (EOF, no trailing \n)
+        _ = self.line_iter.buffer.consume(min(to_consume, self.line_iter.buffer._end - base))
+
+        # ── 8. Update line counter (4 lines per FASTQ record) ────────────────────
+        self.line_iter._current_line_number += 4
+
+        # ── 9. Optional user-level validation (quality scores, ASCII check) ───────
+        try:
+            self.validator.validate(
+                ref_rec,
+                self._record_number,
+                self.line_iter.get_line_number(),
+            )
+        except e:
+            raise(e^)
+            #raise Error(
+            #    format_parse_error(
+            #        String(e), self, self._get_record_snippet(ref_rec)
+            #    )
+            #)
+        return ref_rec^
+
+
+
     @always_inline
     fn _parse_record_line(mut self) raises -> FastqRecord:
         var line1 = ASCIIString(self.line_iter.next_line())
@@ -409,87 +468,86 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line4^, schema)
 
-    # @always_inline
-    # fn _parse_record_ref(
-    #     mut self,
-    # ) raises -> RefRecord[origin=MutExternalOrigin]:
-    #     if not self.line_iter.has_more():
-    #         raise EOFError()
-    #     var state = SearchState.START
-    #     var interim = SearchResults.DEFAULT
-    #     try:
-    #         return _parse_record_fast_path(
-    #             self.line_iter, interim, state, self.quality_schema
-    #         )
-    #     except e:
-    #         if e.value == LineIteratorError.EOF.value:
-    #             raise EOFError()
-            
-    #         if e == LineIteratorError.BUFFER_TOO_SMALL:
-    #             raise Error(
-    #                 buffer_capacity_error(
-    #                     self.line_iter.buffer.capacity(),
-    #                     self.config.buffer_max_capacity,
-    #                     growth_hint=self.config.buffer_growth_enabled,
-    #                 )
-    #             )
-    #         # if e != LineIteratorError.INCOMPLETE_LINE:
-    #         #     raise 
 
-    #         # Buffer growth disabled until more stable.
-    #         # if self.config.buffer_growth_enabled:
-    #         #     return _handle_incomplete_line_with_buffer_growth(
-    #         #         self.line_iter,
-    #         #         interim,
-    #         #         state,
-    #         #         self.quality_schema,
-    #         #         self.config.buffer_max_capacity,
-    #         #     )
-    #         return _handle_incomplete_line(
-    #             self.line_iter,
-    #             interim,
-    #             state,
-    #             self.quality_schema,
-    #             self.config.buffer_capacity,
-    #         )
 
-    @always_inline
-    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-        if not self.line_iter.has_more():
-            raise EOFError()
-
-        self._record_number += 1
-        var state = SearchState()
-        var results = SearchResults()
-
-            # Attempt 1: Fast path (everything in current buffer)
-        code = _scan_record_indices(self.line_iter, results, state)
-        if code != LineIteratorError.SUCCESS:
-                code = _handle_incomplete_line(self.line_iter, results, state)
-                if code != LineIteratorError.SUCCESS:
-                    raise Error(format_parse_error("Invalid FASTQ format", self, ""))
-
-        # Finalize: Extract Spans and consume bytes
-        var view = self.line_iter.buffer.view()
-        var ref_rec = RefRecord[origin=MutExternalOrigin](
-            view[results.id_start : results.id_end],
-            view[results.seq_start : results.seq_end],
-            view[results.qual_start : results.qual_end],
-            self.quality_schema.OFFSET,
-        )
     
-        # Move buffer head and line count only after success
-        _ = self.line_iter.buffer.consume(results.total_bytes)
-        self.line_iter._current_line_number += 4
+    @always_inline
+    fn _next_ref_complete(
+        mut self,
+        base        : Int,           # original scan anchor before compaction
+        mut offsets     : RecordOffsets,
+        phase       : SearchPhase,
+    ) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
+        """
+        Refill/grow loop for records that span more than what is currently in
+        the buffer.  Mirrors Rust next_complete().
 
-        # Validation
-        try:
-            self.validator.validate(ref_rec, self._record_number, self.line_iter.get_line_number())
-        except e:
-            raise Error(format_parse_error(String(e), self, self._get_record_snippet(ref_rec)))
+        State preservation across iterations
+        ─────────────────────────────────────
+        After _compact_from(base) the buffer is shifted: the byte that was at
+        absolute offset `base` is now at absolute offset 0 (buf._head == 0).
+        All relative offsets in `offsets` remain valid because they are relative
+        to `base`, and base becomes 0 after compaction — so no adjustment needed.
+        """
 
 
-        return ref_rec^
+        var new_base = base
+
+        while True:
+            var buf_available = self.line_iter.buffer.available()
+            var buf_capacity  = self.line_iter.buffer.capacity()
+
+            # ── Is EOF the reason we can't complete? ─────────────────────────────
+            if buf_available < buf_capacity and self.line_iter.buffer.is_eof():
+                # Mirrors Rust check_end()
+                if phase == SearchPhase.QUAL:
+                    # No trailing newline on last record — still valid
+                    var got_record: Bool
+                    got_record, offsets = _check_end_qual(self.line_iter.buffer, new_base, offsets)
+                    return (got_record, offsets, SearchPhase(new_base))
+                else:
+                    # Incomplete record at EOF → error
+                    raise Error(
+                        "Unexpected end of file in FASTQ record at phase "
+                        + String(phase.value)
+                    )
+
+            if new_base == 0:
+                # # Record starts at position 0 already; buffer is too small → grow
+                # # Mirrors Rust grow(): double capacity
+                # var current_cap = self.line_iter.buffer.capacity()
+                # var max_cap = self.line_iter._max_capacity
+                # if current_cap >= max_cap:
+                    max_cap = self.line_iter.buffer.capacity()
+                    raise Error(
+                        "FASTQ record exceeds maximum buffer capacity ("
+                        + String(max_cap)
+                        + " bytes). Enable buffer growth or increase max_capacity."
+                    )
+                # var growth = min(current_cap, max_cap - current_cap)
+                # self.line_iter.buffer.resize_buffer(growth, max_cap)
+            else:
+                # There are consumed records before new_base — discard them
+                # After this: the byte at new_base moves to offset 0; new_base = 0
+                self.line_iter.buffer._compact_from(new_base)
+                new_base = 0
+                # All relative offsets in `o` are still valid (they were relative
+                # to old new_base, which is now 0)
+
+            # ── Refill ────────────────────────────────────────────────────────────
+            var filled = self.line_iter.buffer._fill_buffer()
+            if filled == 0 and self.line_iter.buffer.available() == 0:
+                raise EOFError()
+
+            # ── Resume scan from saved phase ──────────────────────────────────────
+            # Mirrors Rust find_incomplete() which skips already-found positions
+            var complete: Bool
+            complete, offsets, new_phase = _scan_record(self.line_iter.buffer, new_base, offsets, phase)
+            if complete:
+                return (True, offsets, new_phase)
+
+            # Not yet complete → loop and try to refill more
+
 
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""

@@ -15,12 +15,84 @@ import math
 from sys.info import simd_width_of
 import math
 from blazeseq.CONSTS import *
-from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, _trim_trailing_cr
+from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
 from blazeseq.io.readers import Reader
 from blazeseq.errors import ParseError, buffer_capacity_error
 from blazeseq.parser import FastqParser
 
 
+
+
+
+comptime NEW_LINE = 10
+comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
+
+
+@doc_private
+@register_passable("trivial")
+@fieldwise_init
+struct RecordOffsets(Copyable, Movable, Writable):
+    """
+    Byte offsets into the buffer for one FASTQ record, all **relative to
+    view()[0]** (i.e. relative to buf._ptr + buf._head) at the moment
+    _scan_record was first called for this record.
+
+    Mirrors Rust BufferPosition fields:
+        header_start  ↔  start      first byte of '@'
+        seq_start     ↔  seq        first byte of sequence line
+        sep_start     ↔  sep        first byte of '+' separator
+        qual_start    ↔  qual       first byte of quality line
+        record_end    ↔  end        one past last quality byte (excl. newline)
+
+    Zero-initialised; record_end == 0 means "not yet complete".
+    """
+    var header_start : Int   # always 0 for the first record; non-zero after
+                             # make_room shifts don't apply here (we re-anchor
+                             # to view()[0] each time)
+    var seq_start    : Int   # set after HEADER phase newline is found
+    var sep_start    : Int   # set after SEQ phase newline is found
+    var qual_start   : Int   # set after SEP phase newline is found
+    var record_end   : Int   # set after QUAL phase newline is found (or EOF)
+
+    @always_inline
+    fn is_complete(self) -> Bool:
+        return self.record_end != 0
+
+    
+
+
+@doc_private
+@register_passable("trivial")
+@fieldwise_init
+struct SearchPhase(Copyable, Equatable, Movable, Writable):
+    """
+    Tracks which line boundary we are currently looking for within a 4-line
+    FASTQ record.  Values are ordered so that `<=` comparisons work correctly
+    in the resume-scan logic (mirrors Rust's PartialOrd on SearchPosition).
+
+    HEADER   (0) – seeking the '\\n' that ends the '@id...' line
+    SEQ      (1) – seeking the '\\n' that ends the sequence line
+    SEP      (2) – seeking the '\\n' that ends the '+' separator line
+    QUAL     (3) – seeking the '\\n' that ends the quality line
+    """
+    var value: Int8
+
+    comptime HEADER = Self(0)
+    comptime SEQ    = Self(1)
+    comptime SEP    = Self(2)
+    comptime QUAL   = Self(3)
+
+    @always_inline
+    fn __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    @always_inline
+    fn __le__(self, other: Self) -> Bool:
+        return self.value <= other.value
+    
+    fn write_to(self, mut writer: Some[Writer]):
+        writer.write(self.value)
+    
 
 
 @doc_private
@@ -40,106 +112,6 @@ fn format_parse_error(
     return parse_err.__str__()
 
 
-comptime NEW_LINE = 10
-comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
-
-@doc_private
-@register_passable("trivial")
-struct SearchResults(Copyable, ImplicitlyDestructible, Movable, Writable):
-    var id_start: Int
-    var id_end: Int
-    var seq_start: Int
-    var seq_end: Int
-    var qual_start: Int
-    var qual_end: Int
-    var total_bytes: Int # The offset of the byte after the 4th newline
-
-    fn __init__(out self):
-        self.id_start = -1
-        self.id_end = -1
-        self.seq_start = -1
-        self.seq_end = -1
-        self.qual_start = -1
-        self.qual_end = -1
-        self.total_bytes = 0
-    
-    fn write_to[w: Writer](self, mut writer: w) -> None:
-        writer.write(
-            String("SearchResults(id_start=") + String(self.id_start),
-            ", id_end=", String(self.id_end),
-            ", seq_start=", String(self.seq_start),
-            ", seq_end=", String(self.seq_end),
-            ", qual_start=", String(self.qual_start),
-            ", qual_end=", String(self.qual_end),
-        )
-
-@doc_private
-@register_passable("trivial")
-struct SearchState:
-    var state: Int8
-    comptime START = 0
-    comptime SEQ = 1
-    comptime PLUS = 2
-    comptime QUAL = 3
-    comptime DONE = 4
-
-    fn __init__(out self, state: Int8 = 0):
-        self.state = state
-
-
-@doc_private
-@always_inline
-fn _scan_record_indices[R: Reader](
-    mut stream: LineIterator[R],
-    mut results: SearchResults,
-    mut state: SearchState,
-) -> LineIteratorError:
-    var view = stream.buffer.view()
-    var pos: Int = results.total_bytes
-    while state.state < SearchState.DONE:
-        var found = memchr(haystack=view, chr=new_line, start=pos)
-        if found == -1:
-            if stream.buffer.is_eof() and pos < len(view):
-                found = len(view) # Treat EOF as a newline for the last line
-            else:
-                results.total_bytes = pos # Save progress
-                return LineIteratorError.INCOMPLETE_LINE
-        
-        if state.state == SearchState.START:
-            results.id_start = pos  # Include '@' so validator and id_slice() match line-based parser
-            results.id_end = _trim_trailing_cr(view, found)
-        elif state.state == SearchState.SEQ:
-            results.seq_start = pos
-            results.seq_end = _trim_trailing_cr(view, found)
-        elif state.state == SearchState.QUAL:
-            results.qual_start = pos
-            results.qual_end = _trim_trailing_cr(view, found)
-
-        pos = found + 1
-        state.state += 1
-
-    results.total_bytes = pos
-    return LineIteratorError.SUCCESS
-
-
-@doc_private
-@always_inline
-fn _handle_incomplete_line[R: Reader](
-    mut stream: LineIterator[R],
-    mut results: SearchResults,
-    mut state: SearchState,
-)  raises-> LineIteratorError:
-    # Compact to the start of the current record to maximize refill space
-    stream.buffer._compact_from(stream.buffer.buffer_position())
-    # We must reset progress because _compact_from shifts memory to index 0
-    results = SearchResults()
-    state = SearchState()
-    var bytes_read = stream.buffer._fill_buffer()
-    if bytes_read == 0 and stream.buffer.available() == 0:
-        raise EOFError()
-
-    # Retry the scan now that the buffer is refilled
-    return _scan_record_indices(stream, results, state)
 
 
 # From extramojo pacakge, skipping version problems
@@ -285,32 +257,143 @@ fn _check_ascii[
             raise Error("Non ASCII letters found")
 
 
-# Ported from the is_posix_space() in Mojo Stdlib
+
+# Optimized posix_space check using bitmask lookup
 @doc_private
 @always_inline
-fn is_posix_space(c: Byte) -> Bool:
-    comptime SPACE = Byte(ord(" "))
-    comptime HORIZONTAL_TAB = Byte(ord("\t"))
-    comptime NEW_LINE = Byte(ord("\n"))
-    comptime CARRIAGE_RETURN = Byte(ord("\r"))
-    comptime FORM_FEED = Byte(ord("\f"))
-    comptime VERTICAL_TAB = Byte(ord("\v"))
-    comptime FILE_SEP = Byte(ord("\x1c"))
-    comptime GROUP_SEP = Byte(ord("\x1d"))
-    comptime RECORD_SEP = Byte(ord("\x1e"))
+fn is_posix_space(c: UInt8) -> Bool:
+    # Precomputed bitmask for ASCII 0-63.
+    # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
+    comptime MASK: UInt64 = (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13) | 
+                         (1 << 28) | (1 << 29) | (1 << 30) | (1 << 32)
 
-    # This compiles to something very clever that's even faster than a LUT.
-    return (
-        c == SPACE
-        or c == HORIZONTAL_TAB
-        or c == NEW_LINE
-        or c == CARRIAGE_RETURN
-        or c == FORM_FEED
-        or c == VERTICAL_TAB
-        or c == FILE_SEP
-        or c == GROUP_SEP
-        or c == RECORD_SEP
+    # If c > 63, it's definitely not one of our space characters.
+    if c > 63:
+        return False
+
+    # Check if the 'c-th' bit is set in our mask
+    return ((MASK >> c.cast[DType.uint64]()) & 1) != 0
+
+
+@always_inline
+fn _check_end_qual(
+    buf     : BufferedReader,
+    base    : Int,
+    mut offsets : RecordOffsets,
+) raises -> Tuple[Bool, RecordOffsets]:
+    """
+    Handle EOF with no trailing newline on quality line.
+    If there is non-whitespace data from qual_start to buf._end, treat
+    buf._end - base as record_end (no newline = last byte of file).
+    Mirrors Rust check_end() QUAL branch: end = self.get_buf().len()
+    """
+    var rest_start = base + offsets.qual_start
+    var rest = Span[Byte, MutExternalOrigin](
+        ptr=buf._ptr + rest_start,
+        length=buf._end - rest_start,
     )
+
+    # Allow file to end with blank lines (mirrors Rust check_end blank-line check)
+    var all_blank = True
+    for i in range(len(rest)):
+        var b = rest[i]
+        if b != new_line and b != carriage_return and b != ord(' ') and b != ord('\t'):
+            all_blank = False
+            break
+
+    if all_blank:
+        return (False, offsets)   # EOF with only whitespace → no more records
+
+    # Non-blank quality data with no trailing newline → valid last record
+    offsets.record_end = buf._end - base
+    return (True, offsets)
+
+
+@always_inline
+fn _scan_record(
+    buf     : BufferedReader,
+    base    : Int,           # absolute offset of view()[0] at scan start
+    mut offsets : RecordOffsets,
+    phase   : SearchPhase,
+) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
+    """
+    Attempt to locate all four newlines for the record whose first byte is at
+    absolute offset `base` in the buffer.
+
+    `phase` and `offsets` carry state from a previous incomplete scan so we
+    never re-scan bytes already processed (mirrors Rust find_incomplete).
+
+    Returns
+    ───────
+    (complete, offsets, phase)
+      complete=True  → offsets fully populated; call _validate then build RefRecord
+      complete=False → offsets partially populated; phase says where we stopped
+    """
+
+    # ── Phase 0: HEADER ──────────────────────────────────────────────────────
+    # Validate '@' start byte (only check once, on first entry to HEADER phase)
+    if phase == SearchPhase.HEADER:
+        var p = _find_newline_from(buf, base, offsets.header_start)
+        if p < 0:
+            return (False, offsets, SearchPhase.HEADER)
+        offsets.seq_start = p   # first byte of sequence line
+
+    # ── Phase 1: SEQ ─────────────────────────────────────────────────────────
+    if phase <= SearchPhase.SEQ:
+        var p = _find_newline_from(buf, base, offsets.seq_start)
+        if p < 0:
+            return (False, offsets, SearchPhase.SEQ)
+        offsets.sep_start = p   # first byte of separator line
+
+    # ── Phase 2: SEP ─────────────────────────────────────────────────────────
+    if phase <= SearchPhase.SEP:
+        # Validate '+' separator byte
+        var p = _find_newline_from(buf, base, offsets.sep_start)
+        if p < 0:
+            return (False, offsets, SearchPhase.SEP)
+        offsets.qual_start = p  # first byte of quality line
+
+    # ── Phase 3: QUAL ────────────────────────────────────────────────────────
+    if phase <= SearchPhase.QUAL:
+        var p = _find_newline_from(buf, base, offsets.qual_start)
+        if p < 0:
+            # No trailing newline — may be EOF (handled by caller via check_end)
+            return (False, offsets, SearchPhase.QUAL)
+        offsets.record_end = p - 1
+
+    return (True, offsets, SearchPhase.HEADER)   # reset phase for next record
+
+
+
+
+
+
+
+@always_inline
+fn _find_newline_from(
+    buf     : BufferedReader,
+    base : Int,      # absolute _ptr offset of view()[0] (buf._head at scan start)
+    _from : Int,      # relative offset from base to start searching
+) -> Int:
+    """
+    Search for '\\n' in buffer starting at absolute offset (base + from).
+    Returns relative offset of the byte AFTER the '\\n' (i.e. start of next
+    line), or -1 if no '\\n' found before buf._end.
+
+    Mirrors Rust's find_line() which returns `search_start + pos + 1`.
+    """
+    var abs_start = base + _from
+    var avail = buf._end - abs_start
+    if avail <= 0:
+        return -1
+    var view = Span[Byte, MutExternalOrigin](
+        ptr = buf._ptr + abs_start,
+        length = avail,
+    )
+    var pos = memchr(haystack=view, chr=new_line)
+    if pos < 0:
+        return -1
+    return _from + pos + 1   # relative to base; +1 skips past the '\n'
 
 
 @doc_private
@@ -480,130 +563,3 @@ fn generate_synthetic_fastq_buffer(
     return out^
 
 
-
-
-# Buffer growth disabled until more stable. BUG: when the buffer is grown, the record is not parsed correctly.
-# @doc_private
-# @always_inline
-# fn _handle_incomplete_line_with_buffer_growth[
-#     R: Reader
-# ](
-#     mut stream: LineIterator[R],
-#     mut interim: SearchResults,
-#     mut state: SearchState,
-#     quality_schema: QualitySchema,
-#     max_capacity: Int,
-# ) raises -> RefRecord[origin=MutExternalOrigin]:
-#     while True:
-#         if not stream.has_more():
-#             raise EOFError()
-#         if interim.start == 0:
-#             stream.buffer.resize_buffer(stream.buffer.capacity(), max_capacity)
-#         stream.buffer._compact_from(interim.start)
-#         _ = stream.buffer._fill_buffer()
-#         interim = SearchResults.DEFAULT
-#         interim.start = 0
-#         state = SearchState.START
-#         try:
-#             var line = stream.next_complete_line()
-#             interim[state.state] = line
-#             state = state + 1
-#         except e:
-#             if e == LineIteratorError.INCOMPLETE_LINE or e == LineIteratorError.EOF:
-#                 continue
-#             if e == LineIteratorError.BUFFER_TOO_SMALL:
-#                 raise Error(
-#                     buffer_capacity_error(
-#                         stream.buffer.capacity(),
-#                         max_capacity,
-#                         growth_hint=True,
-#                         at_max=(stream.buffer.capacity() >= max_capacity),
-#                     )
-#                 )
-#             raise Error(String(e))
-#         interim.end = stream.buffer.buffer_position()
-#         break
-#     return RefRecord[origin=MutExternalOrigin](
-#         interim[0],
-#         interim[1],
-#         interim[3],
-#         quality_schema.OFFSET,
-#     )
-
-
-# @doc_private
-# @always_inline
-# fn _handle_incomplete_line[
-#     R: Reader
-# ](
-#     mut stream: LineIterator[R],
-#     mut interim: SearchResults,
-#     mut state: SearchState,
-#     quality_schema: QualitySchema,
-#     buffer_capacity: Int,
-# ) raises -> RefRecord[origin=MutExternalOrigin]:
-#     if not stream.has_more():
-#         raise EOFError()
-
-#     stream.buffer._compact_from(interim.start)
-#     _ = stream.buffer._fill_buffer()
-#     interim = interim - interim.start
-#     for i in range(state.state, 4):
-#         try:
-#             var line = stream.next_complete_line()
-#             interim[i] = line
-#             state = state + 1
-#         except e:
-#             if e == LineIteratorError.EOF:
-#                 raise EOFError()
-#             elif e == LineIteratorError.INCOMPLETE_LINE and not stream.has_more():
-#                 raise EOFError()
-#             elif e == LineIteratorError.INCOMPLETE_LINE:
-#                 raise Error(
-#                     buffer_capacity_error(buffer_capacity, growth_hint=True)
-#                 )
-#             raise Error(String(e))
-#     interim.end = stream.buffer.buffer_position()
-
-#     return RefRecord[origin=MutExternalOrigin](
-#         interim[0],
-#         interim[1],
-#         interim[3],
-#         quality_schema.OFFSET,
-#     )
-
-
-# @doc_private
-# @always_inline
-# fn _parse_record_fast_path[
-#     R: Reader
-# ](
-#     mut stream: LineIterator[R],
-#     mut interim: SearchResults,
-#     mut state: SearchState,
-#     quality_schema: QualitySchema,
-# ) raises LineIteratorError -> RefRecord[origin=MutExternalOrigin]:
-#     interim.start = stream.buffer.buffer_position()
-
-#     @parameter    
-#     for i in range(4):
-#         @parameter
-#         if i == 2:
-#             line3 = stream.consume_line_scalar()
-#             if len(line3) == 0 or line3[0] != quality_header:
-#                 raise LineIteratorError.OTHER
-#             interim[2] = line3
-#             state = state + 1
-#             continue
-
-#         interim[i] = stream.next_complete_line()
-#         state = state + 1
-#     interim.end = stream.buffer.buffer_position()
-
-
-#     return RefRecord[origin=MutExternalOrigin](
-#         interim[0],
-#         interim[1],
-#         interim[3],
-#         quality_schema.OFFSET,
-#     )

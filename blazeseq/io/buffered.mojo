@@ -607,6 +607,10 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
             self.buffer._compact_from(self.buffer.buffer_position())
 
+
+
+
+
     # BUG: in some cases return INCOMPLETE_LINE at last line or EOF
     @always_inline
     fn next_complete_line(
