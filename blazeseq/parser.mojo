@@ -383,6 +383,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if self.line_iter.buffer.available() == 0:
             if self.line_iter.buffer.is_eof():
                 raise EOFError()
+            self.line_iter.buffer._compact_from(self.line_iter.buffer.buffer_position())
             _ = self.line_iter.buffer._fill_buffer()
             if self.line_iter.buffer.available() == 0:
                 raise EOFError()
@@ -400,7 +401,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var phase = SearchPhase.HEADER
 
         # ── 3. Fast-path scan ─────────────────────────────────────────────────────
-        var complete: Bool
         complete, offsets, phase = _scan_record(self.line_iter.buffer, base, offsets, phase)
 
         # ── 4. Slow path: incomplete record, need more data ───────────────────────

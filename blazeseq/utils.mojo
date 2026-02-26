@@ -117,9 +117,7 @@ fn format_parse_error(
 # From extramojo pacakge, skipping version problems
 @always_inline("nodebug")
 @doc_private
-fn memchr[
-    do_alignment: Bool = False
-](haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
+fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     """
     Function to find the next occurrence of character.
     Args:
@@ -127,16 +125,12 @@ fn memchr[
         chr: The byte to search for.
         start: The starting point to begin the search in `haystack`.
 
-    Parameters:
-        do_alignment: If True this will do an aligning read at the very start of the haystack.
-                      If your haystack is very long, this may provide a marginal benefit. If the haystack is short,
-                      or the needle is frequently in the first `SIMD_U8_WIDTH * 2` bytes, then skipping the
-                      aligning read can be very beneficial since the aligning read check will overlap some
-                      amount with the subsequent aligned read that happens next.
-
     Returns:
         The index of the found character, or -1 if not found.
     """
+
+    comptime CASCADE = build_cascade[SIMD_U8_WIDTH]()
+
     if (len(haystack) - start) < SIMD_U8_WIDTH:
         for i in range(start, len(haystack)):
             if haystack[i] == chr:
@@ -146,27 +140,12 @@ fn memchr[
     # Do an unaligned initial read, it doesn't matter that this will overlap the next portion
     var ptr = haystack[start:].unsafe_ptr()
 
-    var offset = 0
-
-    @parameter
-    if do_alignment:
-        var v = ptr.load[width=SIMD_U8_WIDTH]()
-        var mask: SIMD[DType.bool, SIMD_U8_WIDTH] = v.eq(chr)
-        var packed = pack_bits(mask)
-        if packed:
-            var index = Int(count_trailing_zeros(packed))
-            return index + start
-
-        # Now get the alignment
-        offset = SIMD_U8_WIDTH - (ptr.__int__() & (SIMD_U8_WIDTH - 1))
-        # var aligned_ptr = ptr.offset(offset)
-        ptr = ptr + offset
 
     # Find the last aligned end
-    var haystack_len = len(haystack) - (start + offset)
+    var haystack_len = len(haystack) - start
     var aligned_end = math.align_down(
         haystack_len, SIMD_U8_WIDTH
-    )  # relative to start + offset
+    )  
 
     # Now do aligned reads all through
     for s in range(0, aligned_end, SIMD_U8_WIDTH):
@@ -175,10 +154,10 @@ fn memchr[
         var packed = pack_bits(mask)
         if packed:
             var index = Int(count_trailing_zeros(packed))
-            return s + index + offset + start
+            return s + index + start
 
     
-    var tail_start = aligned_end + offset  # relative to ptr base (haystack[start:])
+    var tail_start = aligned_end  # relative to ptr base (haystack[start:])
     var tail_len = len(haystack) - (start + tail_start)
 
     # Finish and last bytes
@@ -193,22 +172,33 @@ fn memchr[
         return -1
 
     var tail_ptr = ptr + tail_start
-    var tail_off = tail_start + offset  # absolute offset from haystack.unsafe_ptr()
+    var tail_off = tail_start 
 
     @parameter
-    for w in [SIMD_U8_WIDTH // 2, SIMD_U8_WIDTH // 4, SIMD_U8_WIDTH // 8, 1]:
+    for i in range(len(CASCADE)):
+        comptime w = CASCADE[i]
         @parameter
-        if w >= 1:
-            if tail_len >= w:
+        if w >= 1:                    # compile-time: elides dead branches
+            if tail_len >= w:         # runtime check
                 var result = check_tail[w](tail_ptr, tail_off)
                 if result != -1:
                     return result
-                tail_ptr  = tail_ptr + w
-                tail_off  = tail_off + w
+                tail_ptr = tail_ptr + w
+                tail_off = tail_off + w
                 tail_len -= w
 
-
     return -1
+
+
+@parameter
+fn build_cascade[W: Int]() -> List[Int]:
+    """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
+    var result = List[Int]()
+    var w = W // 2
+    while w >= 1:
+        result.append(w)
+        w = w // 2
+    return result^
 
 
 @doc_private
@@ -390,7 +380,7 @@ fn _find_newline_from(
         ptr = buf._ptr + abs_start,
         length = avail,
     )
-    var pos = memchr_scalar(haystack=view, chr=new_line)
+    var pos = memchr(haystack=view, chr=new_line)
     if pos < 0:
         return -1
     return _from + pos + 1   # relative to base; +1 skips past the '\n'
