@@ -498,7 +498,7 @@ fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
 struct LineIterator[R: Reader](Iterable, Movable):
     """
     Iterates over newline-separated lines from a `BufferedReader`.
-    Owns the buffer; parsers hold `LineIterator` and use `next_line` / `next_n_lines`.
+    Owns the buffer; parsers hold `LineIterator` and use `next_line`.
 
     Supports the Mojo Iterator protocol: `for line in line_iterator` works.
     Each `line` is a `Span[Byte, MutExternalOrigin]` invalidated by the

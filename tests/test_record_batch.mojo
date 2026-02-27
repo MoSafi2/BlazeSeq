@@ -12,8 +12,7 @@ from blazeseq.record_batch import (
     move_staged_to_device,
 )
 from gpu.host import DeviceContext
-from os import getenv
-from sys import has_accelerator
+from sys import has_accelerator, is_defined
 from testing import (
     assert_equal,
     assert_true,
@@ -21,11 +20,6 @@ from testing import (
     assert_raises,
     TestSuite,
 )
-
-
-fn _is_github_actions() -> Bool:
-    """True when running inside a GitHub Actions workflow (no GPU)."""
-    return len(getenv("GITHUB_ACTIONS", "")) > 0
 
 
 fn test_device_fastq_batch_add_and_layout() raises:
@@ -143,7 +137,7 @@ fn test_stage_batch_to_host_always_full() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
 
     var batch = FastqBatch()
@@ -164,7 +158,7 @@ fn test_stage_batch_to_host_full_content() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@h1", "ACGT", "!!!!"))
@@ -184,7 +178,7 @@ fn test_move_staged_to_device() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@a", "AC", "!!"))
@@ -208,7 +202,7 @@ fn test_upload_batch_to_device_always_full() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@x", "AA", "!!"))
@@ -230,7 +224,7 @@ fn test_upload_batch_to_device_single_record() raises:
     """When GPU is available: upload single record has all buffers set."""
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@a", "ACGT", "!!!!"))
@@ -248,7 +242,7 @@ fn test_device_fastq_batch_shape_after_upload() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@a", "AC", "!!"))
@@ -269,7 +263,7 @@ fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var records = List[FastqRecord]()
     records.append(FastqRecord("@h1", "ACGT", "!!!!"))
@@ -302,7 +296,7 @@ fn test_device_fastq_batch_empty_roundtrip() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var records = List[FastqRecord]()
     with assert_raises(contains="FastqBatch cannot be empty"):
@@ -315,7 +309,7 @@ fn test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var records = List[FastqRecord]()
     records.append(FastqRecord("@r", "AB", "!!"))
@@ -337,7 +331,7 @@ fn test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() rai
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var records = List[FastqRecord]()
     records.append(FastqRecord("@h1", "ACGT", "!!!!"))
@@ -364,7 +358,7 @@ fn test_device_fastq_batch_copy_to_host_succeeds() raises:
     """
 
     @parameter
-    if not has_accelerator() or _is_github_actions():
+    if not has_accelerator() or is_defined["GITHUB_ACTIONS"]():
         return
     var batch = FastqBatch()
     batch.add(FastqRecord("@a", "AC", "!!"))

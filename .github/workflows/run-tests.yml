@@ -26,4 +26,4 @@ jobs:
       run: pixi run docs
 
     - name: Run tests
-      run: pixi run test
+      run: find ./tests -name "test_*.mojo" | xargs -I % pixi run mojo run -I . -D ASSERT=all -D GITHUB_ACTIONS=1 %
