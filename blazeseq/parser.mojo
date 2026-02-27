@@ -379,18 +379,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-        self._record_number += 1
-
         # ── 1. Fill buffer if empty ───────────────────────────────────────────────
         if self.line_iter.buffer.available() == 0:
-            self.line_iter.buffer._compact_from(
-                self.line_iter.buffer.buffer_position()
-            )
-            _ = self.line_iter.buffer._fill_buffer()
-
+            _ = self.line_iter.buffer.compact_and_fill()
         if not self.line_iter.has_more():
             raise EOFError()
 
+        self._record_number += 1
         # ── 2. Set scan anchor: all relative offsets are from here ────────────────
         #    base = absolute index of view()[0] = buf._head (before any compact)
         var base = self.line_iter.buffer_position()

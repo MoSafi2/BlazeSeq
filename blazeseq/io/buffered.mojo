@@ -278,6 +278,15 @@ struct BufferedReader[R: Reader](
 
         return amt
 
+    fn compact_and_fill(mut self) raises -> UInt64:
+        """
+        Compact the buffer by discarding consumed bytes and shifting remaining data
+        to the start, then fill the buffer with more data from the source.
+        Returns the number of bytes read from the source.
+        """
+        self._compact_from(self._head)
+        return self._fill_buffer()
+
     @always_inline
     fn _resize_internal(mut self, new_len: Int) -> Bool:
         var new_ptr = alloc[Byte](new_len)
