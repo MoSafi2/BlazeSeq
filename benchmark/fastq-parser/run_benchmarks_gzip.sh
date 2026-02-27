@@ -45,6 +45,12 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
+# --- Hyperfine configuration ---
+# Number of warmup runs and measured runs; override via env:
+#   WARMUP_RUNS=1 HYPERFINE_RUNS=10 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+WARMUP_RUNS="${WARMUP_RUNS:-3}"
+HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
+
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/blazeseq_bench_3g.fastq"
@@ -155,14 +161,14 @@ for cmd_label in "kseq" "seq_io" "needletail" "BlazeSeq"; do
 done
 echo "Reference counts: $ref"
 
-# --- CPU benchmark environment (Linux: governor, turbo, pin to BENCH_CPUS) ---
+# --- CPU benchmark environment (Linux: governor, turbo; no taskset so rapidgzip can use multiple cores) ---
 cpu_bench_setup
 
-# --- Hyperfine ---
-echo "Running hyperfine (warmup=2, runs=5) ..."
-hyperfine_cmd \
-    --warmup 2 \
-    --runs 15 \
+# --- Hyperfine (plain hyperfine, no core pinning: BlazeSeq uses rapidgzip which is multi-core) ---
+echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
+hyperfine \
+    --warmup "${WARMUP_RUNS}" \
+    --runs "${HYPERFINE_RUNS}" \
     --export-markdown "$REPO_ROOT/benchmark_results_gzip.md" \
     --export-json "$REPO_ROOT/benchmark_results_gzip.json" \
     -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
@@ -172,7 +178,8 @@ hyperfine_cmd \
 
 echo "Results written to benchmark_results_gzip.md and benchmark_results_gzip.json"
 
-# Plot results to assets/
+# Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
 if command -v python >/dev/null 2>&1; then
-    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results_gzip.json" 2>/dev/null || true
+    RECORDS="${ref%% *}"
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results_gzip.json" --runs "${HYPERFINE_RUNS}" --size-gb 3 --reads "${RECORDS:-0}" 2>/dev/null || true
 fi

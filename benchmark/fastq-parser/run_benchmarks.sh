@@ -45,6 +45,12 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
+# --- Hyperfine configuration ---
+# Number of warmup runs and measured runs; override via env:
+#   WARMUP_RUNS=1 HYPERFINE_RUNS=10 ./benchmark/fastq-parser/run_benchmarks.sh
+WARMUP_RUNS="${WARMUP_RUNS:-3}"
+HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
+
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/blazeseq_bench_1g.fastq"
@@ -153,10 +159,10 @@ echo "Reference counts: ${ref:- (none; one or more runners failed)}"
 cpu_bench_setup
 
 # --- Hyperfine ---
-echo "Running hyperfine (warmup=2, runs=5) ..."
+echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
 hyperfine_cmd \
-    --warmup 2 \
-    --runs 15 \
+    --warmup "${WARMUP_RUNS}" \
+    --runs "${HYPERFINE_RUNS}" \
     --export-markdown "$REPO_ROOT/benchmark_results.md" \
     --export-json "$REPO_ROOT/benchmark_results.json" \
     -n BlazeSeq    "$BLAZESEQ_BIN $BENCH_FILE" \
@@ -166,7 +172,8 @@ hyperfine_cmd \
 
 echo "Results written to benchmark_results.md and benchmark_results.json"
 
-# Plot results to assets/
+# Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
 if command -v python >/dev/null 2>&1; then
-    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results.json" 2>/dev/null || true
+    RECORDS="${ref%% *}"
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results.json" --runs "${HYPERFINE_RUNS}" --size-gb 3 --reads "${RECORDS:-0}" 2>/dev/null || true
 fi

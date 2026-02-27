@@ -81,8 +81,41 @@ def format_time(seconds: float) -> str:
     return f"{seconds * 1e6:.0f}µs"
 
 
+def reads_to_millions_str(reads: int) -> str:
+    """Format read count as millions with one decimal (e.g. 14758000 -> '14.8M')."""
+    if reads <= 0:
+        return "0M"
+    millions = reads / 1e6
+    if millions >= 1000:
+        return f"{millions / 1000:.1f}B"
+    if millions >= 1:
+        return f"{millions:.1f}M"
+    return f"{millions:.1f}M"
+
+
+def build_setup_text(
+    basename: str,
+    *,
+    runs: int | None = None,
+    size_gb: float | None = None,
+    reads: int | None = None,
+    ramfs: bool = True,
+) -> str:
+    """Build setup description for the graph from optional runs, size_gb, reads."""
+    parts = []
+    if size_gb is not None:
+        parts.append(f"{size_gb:.0f} GB FASTQ")
+    if reads is not None:
+        parts.append(f"{reads_to_millions_str(reads)} reads")
+    if runs is not None:
+        parts.append(f"{runs} runs")
+    if ramfs and basename in ("parser_plain", "parser_gzip"):
+        parts.append("ramfs")
+    return ", ".join(parts) if parts else ""
+
+
 def setup_text_for_basename(basename: str) -> str:
-    """Short (3–5 word) test setup description for the graph."""
+    """Short (3–5 word) test setup description for the graph (fallback when no args)."""
     if basename in ("parser_plain", "parser_gzip"):
         return "3 GB FASTQ, 5 runs, ramfs"
     if basename == "throughput":
@@ -101,6 +134,9 @@ def plot_one(
     setup_text: str = "",
 ) -> None:
     """Plot one benchmark result set as a column chart with error bars and annotations."""
+    # Sort by mean time (fastest on the left)
+    results = sorted(results, key=lambda r: r["mean"])
+
     names = [r["command"] for r in results]
     means = np.array([r["mean"] for r in results])
     stddevs = np.array([r.get("stddev", 0.0) for r in results])
@@ -125,11 +161,15 @@ def plot_one(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    # Annotate each bar with mean ± stddev
-    for i, (mean, std) in enumerate(zip(means, stddevs)):
-        label = format_time(mean)
-        if std > 0:
-            label += f"\n± {format_time(std)}"
+    # Annotate each bar with relative speedup vs slowest (largest mean time)
+    slowest = float(max(means)) if len(means) else 0.0
+    for i, mean in enumerate(means):
+        if slowest > 0:
+            factor = slowest / float(mean)
+            label = f"{factor:.2f}x"
+        else:
+            label = "1.00x"
+        std = float(stddevs[i]) if i < len(stddevs) else 0.0
         ax.annotate(
             label,
             xy=(i, mean + std),
@@ -157,6 +197,9 @@ def plot_throughput_gbps(
     setup_text: str = "",
 ) -> None:
     """Plot throughput in GB/s (data_size_gb / time_s) with error bars from time stddev."""
+    # Sort by mean time so highest throughput (smallest time) appears on the left
+    results = sorted(results, key=lambda r: r["mean"])
+
     names = [r["command"] for r in results]
     means_s = np.array([r["mean"] for r in results])
     stddevs_s = np.array([r.get("stddev", 0.0) for r in results])
@@ -185,10 +228,9 @@ def plot_throughput_gbps(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
+    # Annotate each bar with throughput ± stddev (GB/s) on top
     for i, (rate, err) in enumerate(zip(rates, rate_errs)):
-        label = f"{rate:.2f}"
-        if err > 0:
-            label += f"\n± {err:.2f}"
+        label = f"{rate:.2f} ± {err:.2f}"
         ax.annotate(
             label,
             xy=(i, rate + err),
@@ -235,6 +277,9 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, default=Path.cwd(), help="Repository root (default: cwd)")
     parser.add_argument("--assets-dir", type=Path, default=None, help="Output directory for plots (default: repo_root/assets)")
     parser.add_argument("--json", type=Path, action="append", dest="json_paths", help="Path(s) to hyperfine JSON (default: standard files)")
+    parser.add_argument("--runs", type=int, default=None, help="Number of hyperfine runs (displayed on plot)")
+    parser.add_argument("--size-gb", type=float, default=None, help="Data size in GB (displayed on plot)")
+    parser.add_argument("--reads", type=int, default=None, help="Number of reads/records (displayed as millions to 1 sig digit)")
     args = parser.parse_args()
 
     repo_root = args.repo_root.resolve()
@@ -256,7 +301,16 @@ def main() -> int:
             continue
         basename = output_basename(json_path)
         title = title_for_basename(basename)
-        setup_text = setup_text_for_basename(basename)
+        if args.runs is not None or args.size_gb is not None or args.reads is not None:
+            setup_text = build_setup_text(
+                basename,
+                runs=args.runs,
+                size_gb=args.size_gb,
+                reads=args.reads,
+                ramfs=basename in ("parser_plain", "parser_gzip"),
+            )
+        else:
+            setup_text = setup_text_for_basename(basename)
         out_path = assets_dir / f"{basename}.png"
         plot_one(results, title, out_path, version=version, setup_text=setup_text)
         print(f"Wrote {out_path}")
@@ -264,9 +318,10 @@ def main() -> int:
         # Throughput benchmark: also generate GB/s figure
         if basename == "throughput":
             gbps_path = assets_dir / "throughput_gbps.png"
+            data_size_gb = args.size_gb if args.size_gb is not None else DATA_SIZE_GB
             plot_throughput_gbps(
                 results,
-                DATA_SIZE_GB,
+                data_size_gb,
                 gbps_path,
                 version=version,
                 setup_text=setup_text,

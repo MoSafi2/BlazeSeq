@@ -10,10 +10,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Source CPU benchmark setup (performance governor, disable turbo, taskset) on Linux
-# shellcheck source=../scripts/cpu_bench_setup.sh
-source "$SCRIPT_DIR/../scripts/cpu_bench_setup.sh"
-
 # Ensure common tool install locations are on PATH
 export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:${PATH}"
 if [ -n "${CONDA_PREFIX}" ] && [ -d "${CONDA_PREFIX}/bin" ]; then
@@ -37,6 +33,24 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
+# --- Hyperfine configuration ---
+# Number of warmup runs and measured runs; override via env:
+#   WARMUP_RUNS=1 HYPERFINE_RUNS=10 ./benchmark/throughput/run_throughput_benchmarks.sh
+WARMUP_RUNS="${WARMUP_RUNS:-3}"
+HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
+
+# --- CPU pinning configuration (Linux only, optional) ---
+# Default: pin benchmarks to core 0; override with BENCH_CPUS=0-3,1,3, etc.
+BENCH_CPUS="${BENCH_CPUS:-0}"
+
+hyperfine_cmd() {
+    if [ "$(uname -s)" = "Linux" ] && command -v taskset >/dev/null 2>&1; then
+        taskset -c "$BENCH_CPUS" hyperfine "$@"
+    else
+        hyperfine "$@"
+    fi
+}
+
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/throughput_bench_3g.fastq"
@@ -53,7 +67,7 @@ cleanup_mount() {
         rm -rf "$BENCH_DIR"
     fi
 }
-trap 'cleanup_mount; cpu_bench_teardown' EXIT
+trap cleanup_mount EXIT
 
 case "$(uname -s)" in
     Linux)
@@ -108,14 +122,11 @@ for mode in batched records ref_records; do
 done
 echo "Reference counts: ${ref:- (none; one or more runs failed)}"
 
-# --- CPU benchmark environment (Linux: governor, turbo, pin to BENCH_CPUS) ---
-cpu_bench_setup
-
 # --- Hyperfine ---
-echo "Running hyperfine (warmup=2, runs=5) ..."
+echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
 hyperfine_cmd \
-    --warmup 2 \
-    --runs 15 \
+    --warmup "${WARMUP_RUNS}" \
+    --runs "${HYPERFINE_RUNS}" \
     --export-markdown "$REPO_ROOT/throughput_benchmark_results.md" \
     --export-json "$REPO_ROOT/throughput_benchmark_results.json" \
     -n batched     "$RUNNER_BIN $BENCH_FILE batched" \
@@ -125,8 +136,9 @@ hyperfine_cmd \
 echo ""
 echo "Results written to throughput_benchmark_results.md and throughput_benchmark_results.json"
 
-# Plot results to assets/ (repo root is parent of benchmark/)
+# Plot results to assets/ (repo root is parent of benchmark/); inject runs, size-gb, reads
 REPO_ROOT_FOR_PLOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 if command -v python >/dev/null 2>&1; then
-    python "$REPO_ROOT_FOR_PLOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT_FOR_PLOT" --assets-dir "$REPO_ROOT_FOR_PLOT/assets" --json "$REPO_ROOT_FOR_PLOT/benchmark/throughput_benchmark_results.json" 2>/dev/null || true
+    RECORDS="${ref%% *}"
+    python "$REPO_ROOT_FOR_PLOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT_FOR_PLOT" --assets-dir "$REPO_ROOT_FOR_PLOT/assets" --json "$REPO_ROOT_FOR_PLOT/benchmark/throughput_benchmark_results.json" --runs "${HYPERFINE_RUNS}" --size-gb 3 --reads "${RECORDS:-0}" 2>/dev/null || true
 fi

@@ -618,9 +618,11 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
     fn __iter__(ref self) -> Self:
         return Self(self._src)
 
+    @always_inline
     fn __has_next__(self) -> Bool:
-        return self._src[].has_more()
-
+        return True
+    
+    @always_inline
     fn __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
