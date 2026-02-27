@@ -10,6 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# Source CPU benchmark setup (performance governor, disable turbo, taskset) on Linux
+# shellcheck source=../scripts/cpu_bench_setup.sh
+source "$SCRIPT_DIR/../scripts/cpu_bench_setup.sh"
+
 # Ensure common tool install locations are on PATH (e.g. when script runs non-interactively)
 export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:${PATH}"
 # If CONDA_PREFIX or MAMBA_ROOT_PREFIX is set (e.g. from pixi shell), prefer that env's bin
@@ -57,7 +61,7 @@ cleanup_mount() {
         rm -rf "$BENCH_DIR"
     fi
 }
-trap cleanup_mount EXIT
+trap 'cleanup_mount; cpu_bench_teardown' EXIT
 
 case "$(uname -s)" in
     Linux)
@@ -88,7 +92,8 @@ if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_
     exit 1
 fi
 
-# --- Build Rust runners ---
+# --- Build Rust runners (native CPU for consistent benchmarks) ---
+export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
 echo "Building needletail_runner ..."
 (cd "$SCRIPT_DIR/needletail_runner" && cargo build --release) || {
     echo "Failed to build needletail_runner. Check Rust toolchain and dependencies."
@@ -144,11 +149,14 @@ for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq"; do
 done
 echo "Reference counts: ${ref:- (none; one or more runners failed)}"
 
+# --- CPU benchmark environment (Linux: governor, turbo, pin to BENCH_CPUS) ---
+cpu_bench_setup
+
 # --- Hyperfine ---
 echo "Running hyperfine (warmup=2, runs=5) ..."
-hyperfine \
+hyperfine_cmd \
     --warmup 2 \
-    --runs 5 \
+    --runs 15 \
     --export-markdown "$REPO_ROOT/benchmark_results.md" \
     --export-json "$REPO_ROOT/benchmark_results.json" \
     -n BlazeSeq    "$BLAZESEQ_BIN $BENCH_FILE" \

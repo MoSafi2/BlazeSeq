@@ -37,7 +37,7 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 | Read length     | 100 bp (min=max=100) |
 | Quality schema  | generic (Sanger-like) |
 | hyperfine warmup| 2     |
-| hyperfine runs  | 5     |
+| hyperfine runs  | 15     |
 | hyperfine output| Markdown and JSON in repo root |
 
 ## Prerequisites
@@ -49,7 +49,7 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 
 The pixi **benchmark** environment supplies Mojo, hyperfine, and Rust. You must install a C compiler yourself if you want to run the kseq benchmark.
 
-For the tmpfs workflow on Linux, **sudo** is needed for mount/umount (or use the `/dev/shm` fallback).
+For the tmpfs workflow on Linux, **sudo** is needed for mount/umount (or use the `/dev/shm` fallback). For rigorous CPU timing, the scripts also set the **performance** governor and disable turbo (Linux only); **sudo** may be required for `cpupower` and for writing to `/sys/.../intel_pstate/no_turbo`.
 
 ## Install pixi
 
@@ -108,6 +108,23 @@ Record the versions you use when reporting results, for example:
 
 All parsers are run on the same file; the script checks that they report the same `records` and `base_pairs` before running hyperfine, so any difference in time is attributable to parsing and iteration rather than I/O or correctness.
 
+## CPU benchmark environment (Linux)
+
+On **Linux**, the benchmark scripts apply stricter CPU settings to reduce timing variation (frequency scaling and turbo can otherwise cause roughly 5–15% variation):
+
+1. **Performance governor** — Set via `cpupower frequency-set -g performance` (requires `cpupower`, often from `linux-tools-common` or `linux-tools-$(uname -r)`).
+2. **Disable turbo** — On Intel (intel_pstate), turbo is disabled by writing to `/sys/devices/system/cpu/intel_pstate/no_turbo`. Not applied on AMD or if the sysfs path is missing.
+3. **Pin to CPU cores** — Hyperfine is run under `taskset -c "$BENCH_CPUS"` so all runs use the same core(s). Default is core `0`. Override with `BENCH_CPUS=0-3` (or another list) to use multiple cores.
+
+Previous governor and turbo state are **restored on exit** (when the script finishes or is interrupted). If `cpupower` or `taskset` is missing, the scripts still run but print a warning and skip the corresponding step.
+
+To apply the same settings manually before running any benchmark:
+
+```bash
+sudo cpupower frequency-set -g performance
+# Intel: echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
+```
+
 ## Plotting benchmark results
 
 After running any benchmark, you can generate **column plots with error bars** from the hyperfine JSON output. Plots are written to the `assets/` directory at the repository root.
@@ -136,7 +153,7 @@ A separate benchmark compares **compressed file parsing** (decompress + parse) a
 - **Purpose**: Compare throughput when reading a **gzip-compressed** FASTQ file (`.fastq.gz`). Each tool decompresses on the fly and parses; the benchmark measures combined decompression and parsing time.
 - **Data**: The same 3 GB synthetic FASTQ is generated, then compressed with `gzip` to a single `.fastq.gz` file. The plain file is removed after compression to save space; only the compressed file is used during hyperfine.
 - **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
-- **Hyperfine**: Same defaults as the plain benchmark: warmup 2, runs 5. Results are written to **separate** files so they do not overwrite the plain benchmark results.
+- **Hyperfine**: Same defaults as the plain benchmark: warmup 2, runs 15. Results are written to **separate** files so they do not overwrite the plain benchmark results.
 
 ### Output files
 

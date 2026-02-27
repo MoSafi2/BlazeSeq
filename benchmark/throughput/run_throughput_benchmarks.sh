@@ -10,6 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Source CPU benchmark setup (performance governor, disable turbo, taskset) on Linux
+# shellcheck source=../scripts/cpu_bench_setup.sh
+source "$SCRIPT_DIR/../scripts/cpu_bench_setup.sh"
+
 # Ensure common tool install locations are on PATH
 export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:${PATH}"
 if [ -n "${CONDA_PREFIX}" ] && [ -d "${CONDA_PREFIX}/bin" ]; then
@@ -49,7 +53,7 @@ cleanup_mount() {
         rm -rf "$BENCH_DIR"
     fi
 }
-trap cleanup_mount EXIT
+trap 'cleanup_mount; cpu_bench_teardown' EXIT
 
 case "$(uname -s)" in
     Linux)
@@ -104,11 +108,14 @@ for mode in batched records ref_records; do
 done
 echo "Reference counts: ${ref:- (none; one or more runs failed)}"
 
+# --- CPU benchmark environment (Linux: governor, turbo, pin to BENCH_CPUS) ---
+cpu_bench_setup
+
 # --- Hyperfine ---
 echo "Running hyperfine (warmup=2, runs=5) ..."
-hyperfine \
+hyperfine_cmd \
     --warmup 2 \
-    --runs 5 \
+    --runs 15 \
     --export-markdown "$REPO_ROOT/throughput_benchmark_results.md" \
     --export-json "$REPO_ROOT/throughput_benchmark_results.json" \
     -n batched     "$RUNNER_BIN $BENCH_FILE batched" \
