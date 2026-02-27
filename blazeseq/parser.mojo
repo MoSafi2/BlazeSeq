@@ -223,6 +223,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn get_record_number(ref self) -> Int:
+        """Return the 1-based index of the last record that was parsed."""
         return self._record_number
 
     @always_inline
@@ -461,6 +462,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             _strip_spaces(seq_span),
             _strip_spaces(qual_span),
             self.quality_schema.OFFSET,
+
         )
 
         var to_consume = offsets.record_end + 1
@@ -478,16 +480,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         mut offsets: RecordOffsets,
         phase: SearchPhase,
     ) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
-        """
-        Refill/grow loop for records that span more than what is currently in
-        the buffer.  Mirrors Rust next_complete().
+        """Finish scanning a record that did not fit in the current buffer view.
 
-        State preservation across iterations
-        ─────────────────────────────────────
-        After _compact_from(base) the buffer is shifted: the byte that was at
-        absolute offset `base` is now at absolute offset 0 (buf._head == 0).
-        All relative offsets in `offsets` remain valid because they are relative
-        to `base`, and base becomes 0 after compaction — so no adjustment needed.
+        Repeatedly refills or grows the buffer until all four FASTQ lines are
+        found or EOF/validation errors occur. Mirrors the Rust `next_complete`
+        implementation while preserving scan state via `base`, `offsets`, and
+        `phase`.
         """
 
         var new_base = base

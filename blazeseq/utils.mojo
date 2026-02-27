@@ -223,6 +223,13 @@ fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 fn _strip_spaces[
     mut: Bool, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
+    """Trim leading and trailing POSIX whitespace from a byte span."""
+    if len(in_slice) == 0:
+        return in_slice
+
+    if not is_posix_space(in_slice[0]) and not is_posix_space(in_slice[len(in_slice) - 1]):
+        return in_slice
+
     var start = 0
     while start < len(in_slice) and is_posix_space(in_slice[start]):
         start += 1
@@ -238,6 +245,7 @@ fn _strip_spaces[
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
 ](buffer: Span[Byte, o]) raises:
+    """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set)."""
     var aligned_end = math.align_down(len(buffer), simd_width)
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 
@@ -256,6 +264,7 @@ fn _check_ascii[
 @doc_private
 @always_inline
 fn is_posix_space(c: UInt8) -> Bool:
+    """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
     # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
     comptime MASK: UInt64 = (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13) | 
