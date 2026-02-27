@@ -113,7 +113,7 @@ All parsers are run on the same file; the script checks that they report the sam
 After running any benchmark, you can generate **column plots with error bars** from the hyperfine JSON output. Plots are written to the `assets/` directory at the repository root.
 
 - **Script**: `benchmark/scripts/plot_benchmark_results.py`
-- **Output**: PNG files in `assets/` (e.g. `parser_plain.png`, `parser_gzip.png`, `throughput.png`)
+- **Output**: PNG files in `assets/` (e.g. `parser_plain.png`, `parser_gzip.png`, `throughput.png`, and for the throughput benchmark also `throughput_gbps.png` with parsing speed in GB/s). Plots include version (from `pixi.toml`), per-bar colors, and a short test-setup note.
 
 When you run the benchmark scripts (plain, gzip, or throughput) with the pixi benchmark environment, plotting is run automatically after hyperfine if Python and matplotlib are available. You can also plot existing results without re-running benchmarks:
 
