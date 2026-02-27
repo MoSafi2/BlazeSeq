@@ -155,6 +155,31 @@ A separate benchmark compares **compressed file parsing** (decompress + parse) a
 - **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
 - **Hyperfine**: Same defaults as the plain benchmark: warmup 3, runs 15. Results are written to **separate** files so they do not overwrite the plain benchmark results.
 
+### Decompression concurrency: single-threaded vs multi-threaded
+
+The gzip benchmark compares **wall-clock time** (elapsed time) for decompress-and-parse. The four parsers differ in how many CPU cores they use for decompression. This is important when interpreting results.
+
+| Parser    | Decompression backend | Concurrency |
+|-----------|------------------------|-------------|
+| **kseq**  | zlib                   | Single-threaded. One thread reads the gzip stream and decompresses sequentially. |
+| **needletail** | flate2 (or equivalent) | Single-threaded. Decompression runs on one thread. |
+| **seq_io** | flate2                 | Single-threaded. One thread for decompression. |
+| **BlazeSeq** | rapidgzip (via rapidgzip-mojo) | **Multi-threaded.** Parallel decompression across available cores (e.g. 12 cores on a 12-core processor). |
+
+**Why this matters**
+
+- **kseq, needletail, and seq_io** use classic DEFLATE/zlib-style decompression. The gzip format is inherently sequential in the sense that the standard library APIs (zlib, flate2) decompress one block after another on a single thread. So regardless of how many cores the machine has, these three tools use **one core** for decompression. Their wall-clock time is limited by single-core decompression throughput plus parsing on that same thread.
+
+- **BlazeSeq** is integrated with **rapidgzip**, which performs **parallel gzip decompression**. The compressed stream is split into chunks; multiple threads decompress different chunks concurrently (with dependency handling where the format requires it). On a machine with many cores (e.g. a 12-core processor), BlazeSeq can use all 12 cores for decompression while the other parsers still use only one. So BlazeSeq’s **elapsed time** can be much lower simply because it uses more CPU in parallel—not because the algorithm is “faster per core.”
+
+**How to interpret the numbers**
+
+- The benchmark reports **seconds per run** (wall-clock). A lower time for BlazeSeq often reflects **higher total CPU usage** (more cores busy), not necessarily higher single-thread efficiency.
+- For a **fair single-threaded comparison**, you would run BlazeSeq with rapidgzip restricted to one thread.
+- For **throughput in practice** (e.g. “how quickly can I process this `.fastq.gz` on modern hardware?”), the benchmark as run is relevant: BlazeSeq’s multi-threaded decompression is a feature that reduces wall-clock time when multiple cores are available.
+
+In short: kseq, needletail, and seq_io are single-threaded decompressors; BlazeSeq uses rapidgzip and can run on many cores (e.g. 12). The gzip benchmark is therefore a **multi-threaded (BlazeSeq) vs single-threaded (others)** comparison in terms of decompression, and results should be read with that in mind.
+
 ### Output files
 
 - `benchmark_results_gzip.md` (summary table)
