@@ -228,17 +228,17 @@ fn test_invalid() raises:
     invalid_file_test_fun("error_qual_escape.fastq", corrput_qu_score)
     invalid_file_test_fun("solexa-invalid-description.fastq", cor_seq_hed)
     # Currently can detect those 
-    # invalid_file_test_fun(
-    #     "solexa-invalid-repeat-description.fastq", EOF
-    # )
-    # invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
-    # invalid_file_test_fun(
-    #     "sanger-invalid-repeat-description.fastq", EOF
-    # )
-    # invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
-    # invalid_file_test_fun(
-    #     "illumina-invalid-repeat-description.fastq", EOF
-    # )
+    invalid_file_test_fun(
+        "solexa-invalid-repeat-description.fastq", EOF
+    )
+    invalid_file_test_fun("sanger-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun(
+        "sanger-invalid-repeat-description.fastq", EOF
+    )
+    invalid_file_test_fun("illumina-invalid-description.fastq", cor_seq_hed)
+    invalid_file_test_fun(
+        "illumina-invalid-repeat-description.fastq", EOF
+    )
     invalid_file_test_fun("error_qual_unit_sep.fastq", corrput_qu_score)
     invalid_file_test_fun("error_short_qual.fastq", cor_len)
     invalid_file_test_fun("error_trunc_in_qual.fastq", cor_len)
@@ -721,25 +721,25 @@ fn _ref_parser_long_record_content() -> String:
 
 
 # Disabled for now
-# fn test_ref_parser_long_line_with_growth() raises:
-#     """FastqParser: one record with line longer than buffer, buffer_growth_enabled=True.
-#     """
-#     var content = _ref_parser_long_record_content()
-#     var reader = MemoryReader(content.as_bytes())
-#     var parser = FastqParser[MemoryReader, ref_parser_growth_config](reader^)
+fn test_ref_parser_long_line_with_growth() raises:
+    """FastqParser: one record with line longer than buffer, buffer_growth_enabled=True.
+    """
+    var content = _ref_parser_long_record_content()
+    var reader = MemoryReader(content.as_bytes())
+    var parser = FastqParser[MemoryReader, ref_parser_growth_config](reader^)
 
-#     var r = parser.next_ref()
-#     assert_equal(String(r.id_slice()), "@id", "Id should match")
-#     assert_equal(r.len_record(), 20, "Sequence length 20")
-#     assert_equal(r.len_quality(), 20, "Quality length 20")
-#     assert_equal(
-#         String(r.sequence_slice()), "AAAAAAAAAAAAAAAAAAAA", "Sequence content"
-#     )
-#     assert_equal(
-#         String(r.quality_slice()), "!!!!!!!!!!!!!!!!!!!!", "Quality content"
-#     )
-#     with assert_raises(contains="EOF"):
-#         _ = parser.next_ref()
+    var r = parser.next_ref()
+    assert_equal(String(r.id_slice()), "@id", "Id should match")
+    assert_equal(len(r.sequence_slice()), 20, "Sequence length 20")
+    assert_equal(len(r.quality_slice()), 20, "Quality length 20")
+    assert_equal(
+        String(r.sequence_slice()), "AAAAAAAAAAAAAAAAAAAA", "Sequence content"
+    )
+    assert_equal(
+        String(r.quality_slice()), "!!!!!!!!!!!!!!!!!!!!", "Quality content"
+    )
+    with assert_raises(contains="EOF"):
+        _ = parser.next_ref()
 
 
 fn test_ref_parser_long_line_without_growth() raises:
@@ -753,7 +753,7 @@ fn test_ref_parser_long_line_without_growth() raises:
     )
     var parser = FastqParser[MemoryReader, no_growth_config](reader^)
 
-    with assert_raises(contains="Line exceeds buffer capacity"):
+    with assert_raises(contains="record exceeds buffer capacity"):
         _ = parser.next_ref()
 
 

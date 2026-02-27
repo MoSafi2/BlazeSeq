@@ -530,15 +530,15 @@ fn test_next_line_exceeds_capacity() raises:
 #     for i in range(100):
 #         long_line += "A"
 #     var content = long_line + "\n"
-#
+
 #     var reader = create_memory_reader(content)
 #     var line_iter = LineIterator(
 #         reader^, capacity=64, growth_enabled=True, max_capacity=200
 #     )
-#
+
 #     var line = line_iter.next_line()
 #     assert_equal(len(line), 100, "Line should have 100 chars")
-#
+
 #     print("✓ test_next_line_exceeds_capacity_with_growth passed")
 
 

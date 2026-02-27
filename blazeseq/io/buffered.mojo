@@ -611,25 +611,31 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
 
 
-    # BUG: in some cases return INCOMPLETE_LINE at last line or EOF
     @always_inline
     fn next_complete_line(
         mut self,
     ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
         Return the next line only if a complete line (ending with newline) is in
-        the current buffer. Does not refill or compact.
+        the current buffer. Does not compact. When the buffer is empty, refills
+        once to distinguish EOF from EMPTY_BUFFER.
         If no newline is found, raise LineIteratorError.INCOMPLETE_LINE and do not consume;
-        if the buffer is empty, raise LineIteratorError.EMPTY_BUFFER.
-        caller can fall back to `next_line()` to refill. Invalidated by next
+        if the buffer is empty after a refill, raise LineIteratorError.EMPTY_BUFFER.
+        Caller can fall back to `next_line()` to refill. Invalidated by next
         `next_line` or any buffer grow/compact/resize.
         """
         if self.buffer.available() == 0:
             if self.buffer.is_eof():
                 raise LineIteratorError.EOF
-            else:
+            try:
+                _ = self.buffer._fill_buffer()
+            except Error:
+                raise LineIteratorError.OTHER
+            if self.buffer.available() == 0:
+                if self.buffer.is_eof():
+                    raise LineIteratorError.EOF
                 raise LineIteratorError.EMPTY_BUFFER
-    
+
         view = self.buffer.view()
         var newline_at = memchr(haystack=view, chr=new_line)
     
