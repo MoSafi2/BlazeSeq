@@ -31,6 +31,7 @@ comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 @doc_private
 @register_passable("trivial")
 @fieldwise_init
+@align(64)
 struct RecordOffsets(Copyable, Movable, Writable):
     """
     Byte offsets into the buffer for one FASTQ record, all **relative to
@@ -191,6 +192,7 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 
 
 @parameter
+@doc_private
 fn build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
     var result = List[Int]()
@@ -411,7 +413,7 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
             Parsing with generic schema."""
         )
         return materialize[generic_schema]()
-    return schema^
+    return schema
 
 
 fn compute_num_reads_for_size(

@@ -451,7 +451,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                    String(e), self, self._get_record_snippet(ref_rec)
                )
             )
-        return ref_rec^
+        return ref_rec
 
 
 

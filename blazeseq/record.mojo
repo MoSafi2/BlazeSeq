@@ -447,6 +447,8 @@ struct Validator(Copyable):
                 raise Error(String(e))
 
 
+@align(64)
+@register_passable("trivial")
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     ImplicitlyDestructible, Movable, Sized, Writable
 ):
