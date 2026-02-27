@@ -285,12 +285,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if not self.has_more():
             raise EOFError()
         self._record_number += 1
+        var ref_rec = self._find_and_consume_ref_record()
         var record: FastqRecord
         try:
             record = FastqRecord(
-                self._find_and_consume_ref_record().id,
-                self._find_and_consume_ref_record().sequence,
-                self._find_and_consume_ref_record().quality,
+                ref_rec.id,
+                ref_rec.sequence,
+                ref_rec.quality,
                 Int8(self.quality_schema.OFFSET),
             )
         except e:

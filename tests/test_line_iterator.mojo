@@ -5,7 +5,7 @@ from blazeseq.CONSTS import (
     new_line,
     carriage_return,
 )
-from blazeseq.parser import LineIterator
+from blazeseq.io.buffered import LineIterator
 from blazeseq.io.readers import MemoryReader
 from memory import Span
 from collections.string import StringSlice
