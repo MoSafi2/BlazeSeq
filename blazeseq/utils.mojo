@@ -301,64 +301,6 @@ fn _check_end_qual(
     return (True, offsets)
 
 
-# @always_inline
-# fn _scan_record(
-#     buf     : BufferedReader,
-#     base    : Int,           # absolute offset of view()[0] at scan start
-#     mut offsets : RecordOffsets,
-#     phase   : SearchPhase,
-# ) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
-#     """
-#     Attempt to locate all four newlines for the record whose first byte is at
-#     absolute offset `base` in the buffer.
-
-#     `phase` and `offsets` carry state from a previous incomplete scan so we
-#     never re-scan bytes already processed (mirrors Rust find_incomplete).
-
-#     Returns
-#     ───────
-#     (complete, offsets, phase)
-#       complete=True  → offsets fully populated; call _validate then build RefRecord
-#       complete=False → offsets partially populated; phase says where we stopped
-#     """
-
-#     # ── Phase 0: HEADER ──────────────────────────────────────────────────────
-#     # Validate '@' start byte (only check once, on first entry to HEADER phase)
-#     if phase == SearchPhase.HEADER:
-#         var p = _find_newline_from(buf, base, offsets.header_start)
-#         if p < 0:
-#             return (False, offsets, SearchPhase.HEADER)
-#         offsets.seq_start = p   # first byte of sequence line
-
-#     # ── Phase 1: SEQ ─────────────────────────────────────────────────────────
-#     if phase <= SearchPhase.SEQ:
-#         var p = _find_newline_from(buf, base, offsets.seq_start)
-#         if p < 0:
-#             return (False, offsets, SearchPhase.SEQ)
-#         offsets.sep_start = p   # first byte of separator line
-
-#     # ── Phase 2: SEP ─────────────────────────────────────────────────────────
-#     if phase <= SearchPhase.SEP:
-#         # Validate '+' separator byte
-#         var p = _find_newline_from(buf, base, offsets.sep_start)
-#         if p < 0:
-#             return (False, offsets, SearchPhase.SEP)
-#         offsets.qual_start = p  # first byte of quality line
-
-#     # ── Phase 3: QUAL ────────────────────────────────────────────────────────
-#     if phase <= SearchPhase.QUAL:
-#         var p = _find_newline_from(buf, base, offsets.qual_start)
-#         if p < 0:
-#             # No trailing newline — may be EOF (handled by caller via check_end)
-#             return (False, offsets, SearchPhase.QUAL)
-#         offsets.record_end = p - 1
-
-#     return (True, offsets, SearchPhase.HEADER)   # reset phase for next record
-
-# ---------------------------------------------------------------------------
-# Helper: _phase_start_offset
-# ---------------------------------------------------------------------------
-
 @always_inline
 fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
     """Return the relative-to-base offset at which to resume scanning.
@@ -535,10 +477,6 @@ fn _scan_record(
         i += 1
 
     return (found == 4, offsets, _count_to_phase(found))
-
-
-
-
 
 
 @always_inline
