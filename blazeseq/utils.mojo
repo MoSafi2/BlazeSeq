@@ -99,15 +99,17 @@ struct SearchPhase(Copyable, Equatable, Movable, Writable):
 @doc_private
 fn format_parse_error(
     message: String,
-    parser: FastqParser,
+    record_number: Int,
+    line_number: Int,
+    file_position: Int64,
     record_snippet: String,
 ) -> String:
     """Build ParseError from message and parser context; return formatted string for raising Error."""
     var parse_err = ParseError(
         message,
-        record_number=parser.get_record_number(),
-        line_number=parser.get_line_number(),
-        file_position=parser.get_file_position(),
+        record_number=record_number,
+        line_number=line_number,
+        file_position=file_position,
         record_snippet=record_snippet,
     )
     return parse_err.__str__()

@@ -1,10 +1,6 @@
 from blazeseq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
-from blazeseq.io.buffered import (
-    LineIterator,
-    EOFError,
-    LineIteratorError,
-)
+from blazeseq.io.buffered import EOFError, BufferedReader
 from blazeseq.io.readers import Reader
 from blazeseq import FastqBatch
 from blazeseq.errors import ParseError, ValidationError, buffer_capacity_error
@@ -18,7 +14,6 @@ from blazeseq.utils import (
     _strip_spaces,
     RecordOffsets,
     SearchPhase,
-    BufferedReader,
 )
 
 
@@ -126,11 +121,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         ```
     """
 
-    var line_iter: LineIterator[Self.R]
+    var buffer: BufferedReader[Self.R]
     var quality_schema: QualitySchema
     var validator: Validator
     var _batch_size: Int
     var _record_number: Int  # Track current record number (1-indexed)
+    var _max_capacity: Int
+    var _current_line_number: Int  # Track current line number (1-indexed)
 
     fn __init__(
         out self,
@@ -147,12 +144,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         Raises:
             Error: If reader or schema setup fails.
         """
-        self.line_iter = LineIterator(
-            reader^,
-            self.config.buffer_capacity,
-            self.config.buffer_growth_enabled,
-            self.config.buffer_max_capacity,
-        )
+        self.buffer = BufferedReader(reader^, self.config.buffer_capacity)
+        self._max_capacity = self.config.buffer_max_capacity
+        self._current_line_number = 0
         if self.config.quality_schema:
             self.quality_schema = _parse_schema(
                 self.config.quality_schema.value()
@@ -182,12 +176,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         Raises:
             Error: If reader or schema parsing fails.
         """
-        self.line_iter = LineIterator(
-            reader^,
-            self.config.buffer_capacity,
-            self.config.buffer_growth_enabled,
-            self.config.buffer_max_capacity,
-        )
+        self.buffer = BufferedReader(reader^, self.config.buffer_capacity)
+        self._max_capacity = self.config.buffer_max_capacity
+        self._current_line_number = 0
         self.quality_schema = _parse_schema(quality_schema)
         self.validator = Validator(
             self.config.check_ascii,
@@ -213,12 +204,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         Raises:
             Error: If reader or schema parsing fails.
         """
-        self.line_iter = LineIterator(
-            reader^,
-            self.config.buffer_capacity,
-            self.config.buffer_growth_enabled,
-            self.config.buffer_max_capacity,
-        )
+        self.buffer = BufferedReader(reader^, self.config.buffer_capacity)
+        self._max_capacity = self.config.buffer_max_capacity
+        self._current_line_number = 0
         if self.config.quality_schema:
             self.quality_schema = _parse_schema(
                 self.config.quality_schema.value()
@@ -239,11 +227,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn get_line_number(ref self) -> Int:
-        return self.line_iter.get_line_number()
+        return self._current_line_number
 
     @always_inline
     fn get_file_position(ref self) -> Int64:
-        return self.line_iter.get_file_position()
+        return Int64(self.buffer.stream_position())
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -256,7 +244,29 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         Note:
             A return of True does not guarantee a full record is available.
         """
-        return self.line_iter.has_more()
+        return self.buffer.available() > 0 or not self.buffer.is_eof()
+
+    @always_inline
+    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
+        self._record_number += 1
+        var ref_rec = self._find_and_consume_ref_record()
+        try:
+            self.validator.validate(
+                ref_rec,
+                self._record_number,
+                self._current_line_number,
+            )
+        except e:
+            raise Error(
+                format_parse_error(
+                    String(e),
+                    self.get_record_number(),
+                    self.get_line_number(),
+                    self.get_file_position(),
+                    self._get_record_snippet(ref_rec),
+                )
+            )
+        return ref_rec
 
     @always_inline
     fn next_record(mut self) raises -> FastqRecord:
@@ -272,22 +282,39 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         See also:
             next_ref: Zero-copy variant when you consume immediately.
         """
-        if not self.line_iter.has_more():
+        if not self.has_more():
             raise EOFError()
         self._record_number += 1
         var record: FastqRecord
         try:
-            record = self._parse_record_line()
-        except e:
-            raise Error(format_parse_error(String(e), self, ""))
-        try:
-            self.validator.validate(
-                record, self._record_number, self.line_iter.get_line_number()
+            record = FastqRecord(
+                self._find_and_consume_ref_record().id,
+                self._find_and_consume_ref_record().sequence,
+                self._find_and_consume_ref_record().quality,
+                Int8(self.quality_schema.OFFSET),
             )
         except e:
             raise Error(
                 format_parse_error(
-                    String(e), self, self._get_record_snippet_from_fastq(record)
+                    String(e),
+                    self.get_record_number(),
+                    self.get_line_number(),
+                    self.get_file_position(),
+                    "",
+                )
+            )
+        try:
+            self.validator.validate(
+                record, self._record_number, self._current_line_number
+            )
+        except e:
+            raise Error(
+                format_parse_error(
+                    String(e),
+                    self.get_record_number(),
+                    self.get_line_number(),
+                    self.get_file_position(),
+                    self._get_record_snippet_from_fastq(record),
                 )
             )
         return record^
@@ -313,7 +340,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """
         var limit = max_records if max_records else self._batch_size
         var batch = FastqBatch(batch_size=limit)
-        while len(batch) < limit and self.line_iter.has_more():
+        while len(batch) < limit and self.has_more():
             try:
                 batch.add(self.next_ref())
             except e:
@@ -377,20 +404,23 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Pointer(to=self), limit
         )
 
-    @always_inline
-    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-        # ── 1. Fill buffer if empty ───────────────────────────────────────────────
-        if self.line_iter.buffer.available() == 0:
-            _ = self.line_iter.buffer.compact_and_fill()
-        if not self.line_iter.has_more():
+    fn _find_and_consume_ref_record(
+        mut self,
+    ) raises -> RefRecord[origin=MutExternalOrigin]:
+        """
+        Find the next FASTQ record in the buffer (scan + optional refill/grow),
+        build a RefRecord, consume the record bytes, and return the ref.
+        Does not increment _record_number or validate; callers do that.
+        Raises EOFError when no more data.
+        """
+        if self.buffer.available() == 0:
+            _ = self.buffer.compact_and_fill()
+        if not self.has_more():
             raise EOFError()
 
-        self._record_number += 1
-        # ── 2. Set scan anchor: all relative offsets are from here ────────────────
-        #    base = absolute index of view()[0] = buf._head (before any compact)
-        var base = self.line_iter.buffer_position()
+        var base = self.buffer.buffer_position()
         var offsets = RecordOffsets(
-            header_start=0,  # relative to base; '@' is always at offset 0
+            header_start=0,
             seq_start=0,
             sep_start=0,
             qual_start=0,
@@ -398,23 +428,32 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
         var phase = SearchPhase.HEADER
 
-        # ── 3. Fast-path scan ─────────────────────────────────────────────────────
-        var scan_view = self.line_iter.buffer.view()
+        var scan_view = Span[Byte, MutExternalOrigin](
+            ptr=self.buffer._ptr + base,
+            length=self.buffer._end - base,
+        )
+        var complete: Bool
         complete, offsets, phase = _scan_record(scan_view, offsets, phase)
-
-        # ── 4. Slow path: incomplete record, need more data ───────────────────────
         if not complete:
             complete, offsets, _ = self._next_ref_complete(base, offsets, phase)
             base = 0
             if not complete:
                 raise EOFError()
 
-        # ── 5. Create RefRecord ────────────────────────────────────────────────────
-        # We have to create a new view of the buffer as it may have been compacted
-        var buffer_view = self.line_iter.buffer.view()
-        id_span = buffer_view[offsets.header_start : offsets.seq_start - 1]
-        seq_span = buffer_view[offsets.seq_start : offsets.sep_start - 1]
-        qual_span = buffer_view[offsets.qual_start : offsets.record_end]
+        var buffer_view = self.buffer.view().unsafe_ptr()
+
+        var id_span = Span[Byte, MutExternalOrigin](
+            ptr=buffer_view + offsets.header_start,
+            length=(offsets.seq_start - offsets.header_start - 1),
+        )
+        var seq_span = Span[Byte, MutExternalOrigin](
+            ptr=buffer_view + offsets.seq_start,
+            length=(offsets.sep_start - offsets.seq_start - 1),
+        )
+        var qual_span = Span[Byte, MutExternalOrigin](
+            ptr=buffer_view + offsets.qual_start,
+            length=(offsets.record_end - offsets.qual_start),
+        )
 
         var ref_rec = RefRecord[origin=MutExternalOrigin](
             _strip_spaces(id_span),
@@ -423,35 +462,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             self.quality_schema.OFFSET,
         )
 
-        # ── 7. Consume the record bytes ───────────────────────────────────────────
-        var to_consume = offsets.record_end + 1  # +1 for the '\n'
-        _ = self.line_iter.buffer.consume(
-            min(to_consume, self.line_iter.buffer._end - base)
+        var to_consume = offsets.record_end + 1
+        _ = self.buffer.consume(
+            min(to_consume, self.buffer._end - base)
         )
-        self.line_iter._current_line_number += 4
+        self._current_line_number += 4
 
-        try:
-            self.validator.validate(
-                ref_rec,
-                self._record_number,
-                self.line_iter.get_line_number(),
-            )
-        except e:
-            raise Error(
-                format_parse_error(
-                    String(e), self, self._get_record_snippet(ref_rec)
-                )
-            )
         return ref_rec
-
-    @always_inline
-    fn _parse_record_line(mut self) raises -> FastqRecord:
-        var line1 = ASCIIString(self.line_iter.next_line())
-        var line2 = ASCIIString(self.line_iter.next_line())
-        var line3 = self.line_iter.next_line()
-        var line4 = ASCIIString(self.line_iter.next_line())
-        schema = self.quality_schema.copy()
-        return FastqRecord(line1^, line2^, line4^, schema)
 
     @always_inline
     fn _next_ref_complete(
@@ -475,17 +492,17 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var new_base = base
 
         while True:
-            var buf_available = self.line_iter.buffer.available()
-            var buf_capacity = self.line_iter.buffer.capacity()
+            var buf_available = self.buffer.available()
+            var buf_capacity = self.buffer.capacity()
 
             # ── Is EOF the reason we can't complete? ─────────────────────────────
-            if buf_available < buf_capacity and self.line_iter.buffer.is_eof():
+            if buf_available < buf_capacity and self.buffer.is_eof():
                 # Mirrors Rust check_end()
                 if phase == SearchPhase.QUAL:
                     # No trailing newline on last record — still valid
                     var got_record: Bool
                     got_record, offsets = _check_end_qual(
-                        self.line_iter.buffer, new_base, offsets
+                        self.buffer, new_base, offsets
                     )
                     return (got_record, offsets, SearchPhase(new_base))
                 else:
@@ -501,12 +518,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 if not self.config.buffer_growth_enabled:
                     raise Error(
                         "FASTQ record exceeds buffer capacity ("
-                        + String(self.line_iter.buffer.capacity())
+                        + String(self.buffer.capacity())
                         + " bytes). Enable buffer growth or increase"
                         " buffer_capacity."
                     )
-                var current_cap = self.line_iter.buffer.capacity()
-                var max_cap = self.line_iter._max_capacity
+                var current_cap = self.buffer.capacity()
+                var max_cap = self._max_capacity
                 if current_cap >= max_cap:
                     raise Error(
                         "FASTQ record exceeds maximum buffer capacity ("
@@ -515,21 +532,21 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                         " max_capacity."
                     )
                 var growth = min(current_cap, max_cap - current_cap)
-                self.line_iter.buffer.resize_buffer(growth, max_cap)
+                self.buffer.resize_buffer(growth, max_cap)
             else:
-                self.line_iter.buffer._compact_from(new_base)
+                self.buffer._compact_from(new_base)
                 new_base = 0
 
             # ── Refill ────────────────────────────────────────────────────────────
-            var filled = self.line_iter.buffer._fill_buffer()
-            if filled == 0 and self.line_iter.buffer.available() == 0:
+            var filled = self.buffer._fill_buffer()
+            if filled == 0 and self.buffer.available() == 0:
                 raise EOFError()
 
             # ── Resume scan from saved phase ──────────────────────────────────────
             # Mirrors Rust find_incomplete() which skips already-found positions
             var scan_view = Span[Byte, MutExternalOrigin](
-                ptr=self.line_iter.buffer._ptr + new_base,
-                length=self.line_iter.buffer._end - new_base,
+                ptr=self.buffer._ptr + new_base,
+                length=self.buffer._end - new_base,
             )
             var complete: Bool
             complete, offsets, new_phase = _scan_record(
