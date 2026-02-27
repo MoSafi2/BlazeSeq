@@ -30,11 +30,11 @@ from blazeseq.utils import (
 struct ParserConfig(Copyable):
     """
     Configuration struct for FASTQ parser options.
-    
+
     Centralizes buffer capacity, growth policy, validation flags, and quality
     schema settings. Pass as a comptime parameter to `FastqParser`, e.g.
     `FastqParser[FileReader, ParserConfig(check_ascii=False)]`.
-    
+
     Attributes:
         buffer_capacity: Size in bytes of the internal read buffer. Larger
             values can improve throughput for large files but use more memory.
@@ -74,7 +74,7 @@ struct ParserConfig(Copyable):
         quality_schema: Optional[String] = None,
     ):
         """Initialize ParserConfig with default or custom values.
-        
+
         Args:
             buffer_capacity: Read buffer size in bytes (default from CONSTS).
             buffer_max_capacity: Max buffer size when growth is enabled.
@@ -99,23 +99,23 @@ struct ParserConfig(Copyable):
 struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     """
     Unified FASTQ parser over a `Reader`.
-    
+
     Exposes three parsing modes:
     - `next_ref()` -> `RefRecord` (zero-copy; consume promptly, do not store in collections).
     - `next_record()` -> `FastqRecord` (owned; safe to store and reuse).
     - `next_batch(max_records)` -> `FastqBatch` (Structure-of-Arrays for GPU or batch processing).
-    
+
     For iteration use `ref_records()`, `records()`, or `batched()`. Direct methods
     raise `EOFError` at end of input; iterators raise `StopIteration` and print
     parse/validation errors with context before stopping.
-    
+
     Type parameters:
         R: Reader type (e.g. `FileReader`, `MemoryReader`, `GZFile`).
         config: `ParserConfig` (optional); controls buffer size and validation.
-    
+
     See also:
         `ParserConfig`, `RefRecord`, `FastqRecord`, `FastqBatch`.
-    
+
     Example:
         ```mojo
         from blazeseq import FastqParser, FileReader
@@ -137,13 +137,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var reader: Self.R,
     ) raises:
         """Initialize FastqParser from config.
-        
+
         Uses quality_schema from config if set; otherwise generic schema.
         Default batch size for batched() is DEFAULT_BATCH_SIZE from CONSTS.
-        
+
         Args:
             reader: Source implementing the Reader trait (e.g. FileReader(Path(...))).
-        
+
         Raises:
             Error: If reader or schema setup fails.
         """
@@ -173,12 +173,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         quality_schema: String,
     ) raises:
         """Initialize FastqParser with quality schema string.
-        
+
         Args:
             reader: Source implementing the Reader trait.
             quality_schema: One of "generic", "sanger", "solexa", "illumina_1.3",
                 "illumina_1.5", "illumina_1.8". Affects validation when check_quality is True.
-        
+
         Raises:
             Error: If reader or schema parsing fails.
         """
@@ -204,12 +204,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         schema: String = "generic",
     ) raises:
         """Initialize FastqParser with schema and batch size.
-        
+
         Args:
             reader: Source implementing the Reader trait.
             batch_size: Max records per batch for next_batch()/batched().
             schema: Quality schema name (default "generic").
-        
+
         Raises:
             Error: If reader or schema parsing fails.
         """
@@ -248,11 +248,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     @always_inline
     fn has_more(self) -> Bool:
         """Return True if there may be more records to read.
-        
+
         Returns:
             True when there is data in the buffer or the stream can still be read.
             Use this before calling next_ref() or next_record() to avoid EOFError.
-        
+
         Note:
             A return of True does not guarantee a full record is available.
         """
@@ -261,14 +261,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     @always_inline
     fn next_record(mut self) raises -> FastqRecord:
         """Return the next record as an owned FastqRecord.
-        
+
         Returns:
             FastqRecord: An owned record; safe to store in collections and reuse.
-        
+
         Raises:
             Error: On parse or validation failure (with context).
             EOFError: When there are no more records.
-        
+
         See also:
             next_ref: Zero-copy variant when you consume immediately.
         """
@@ -281,24 +281,32 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         except e:
             raise Error(format_parse_error(String(e), self, ""))
         try:
-            self.validator.validate(record, self._record_number, self.line_iter.get_line_number())
+            self.validator.validate(
+                record, self._record_number, self.line_iter.get_line_number()
+            )
         except e:
-            raise Error(format_parse_error(String(e), self, self._get_record_snippet_from_fastq(record)))
+            raise Error(
+                format_parse_error(
+                    String(e), self, self._get_record_snippet_from_fastq(record)
+                )
+            )
         return record^
 
-    fn next_batch(mut self, max_records: Int = DEFAULT_BATCH_SIZE) raises -> FastqBatch:
+    fn next_batch(
+        mut self, max_records: Int = DEFAULT_BATCH_SIZE
+    ) raises -> FastqBatch:
         """Extract a batch of records in Structure-of-Arrays (SoA) format.
-        
+
         Intended for GPU upload or batch processing. Stops at EOF and returns
         a partial batch instead of raising.
-        
+
         Args:
             max_records: Maximum number of records to include (default DEFAULT_BATCH_SIZE from CONSTS).
-        
+
         Returns:
             FastqBatch: SoA batch with 0 to max_records records. Use num_records()
                 or len() to get the actual count.
-        
+
         Raises:
             Error: On parse or validation failure (with context); does not
                 raise EOFError, returns partial batch instead.
@@ -318,11 +326,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         ref self,
     ) -> _FastqParserRefIter[Self.R, Self.config, origin_of(self)]:
         """Return an iterator over RefRecords (zero-copy).
-        
+
         Returns:
             Iterator yielding RefRecord; each ref is invalidated by the next
             iteration. Consume or copy each ref before advancing.
-        
+
         Note:
             On parse/validation error the error is printed with context and
             iteration stops (StopIteration).
@@ -335,10 +343,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         ref self,
     ) -> _FastqParserRecordIter[Self.R, Self.config, origin_of(self)]:
         """Return an iterator over owned FastqRecords.
-        
+
         Returns:
             Iterator yielding FastqRecord; each record is owned and safe to store.
-        
+
         Note:
             On parse/validation error the error is printed with context and
             iteration stops (StopIteration).
@@ -352,14 +360,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         max_records: Optional[Int] = None,
     ) -> _FastqParserBatchIter[Self.R, Self.config, origin_of(self)]:
         """Return an iterator over FastqBatch (SoA) batches.
-        
+
         Args:
             max_records: Max records per batch; if None, uses parser default (from init).
-        
+
         Returns:
             Iterator yielding FastqBatch; each batch has up to max_records records.
             Use for GPU upload or batch processing.
-        
+
         Note:
             On parse/validation error the error is printed with context and
             iteration stops. Last batch may be partial at EOF.
@@ -369,29 +377,25 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Pointer(to=self), limit
         )
 
-    
-
     @always_inline
     fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
-        if not self.line_iter.has_more():
-            raise EOFError()
-
         self._record_number += 1
 
         # ── 1. Fill buffer if empty ───────────────────────────────────────────────
         if self.line_iter.buffer.available() == 0:
-            if self.line_iter.buffer.is_eof():
-                raise EOFError()
-            self.line_iter.buffer._compact_from(self.line_iter.buffer.buffer_position())
+            self.line_iter.buffer._compact_from(
+                self.line_iter.buffer.buffer_position()
+            )
             _ = self.line_iter.buffer._fill_buffer()
-            if self.line_iter.buffer.available() == 0:
-                raise EOFError()
+
+        if not self.line_iter.has_more():
+            raise EOFError()
 
         # ── 2. Set scan anchor: all relative offsets are from here ────────────────
         #    base = absolute index of view()[0] = buf._head (before any compact)
-        var base = self.line_iter.buffer._head
+        var base = self.line_iter.buffer_position()
         var offsets = RecordOffsets(
-            header_start=0,   # relative to base; '@' is always at offset 0
+            header_start=0,  # relative to base; '@' is always at offset 0
             seq_start=0,
             sep_start=0,
             qual_start=0,
@@ -400,7 +404,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var phase = SearchPhase.HEADER
 
         # ── 3. Fast-path scan ─────────────────────────────────────────────────────
-        complete, offsets, phase = _scan_record(self.line_iter.buffer, base, offsets, phase)
+        var scan_view = self.line_iter.buffer.view()
+        complete, offsets, phase = _scan_record(scan_view, offsets, phase)
 
         # ── 4. Slow path: incomplete record, need more data ───────────────────────
         if not complete:
@@ -409,19 +414,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if not complete:
                 raise EOFError()
 
-        id_span = Span[Byte, MutExternalOrigin](
-            ptr    = self.line_iter.buffer._ptr + base + offsets.header_start,
-            length = offsets.seq_start - offsets.header_start - 1,
-        )
-
-        seq_span = Span[Byte, MutExternalOrigin](
-            ptr    = self.line_iter.buffer._ptr + base + offsets.seq_start,
-            length = offsets.sep_start - offsets.seq_start - 1,
-        )
-        qual_span = Span[Byte, MutExternalOrigin](
-            ptr    = self.line_iter.buffer._ptr + base + offsets.qual_start,
-            length = offsets.record_end - offsets.qual_start,
-        )
+        # ── 5. Create RefRecord ────────────────────────────────────────────────────
+        # We have to create a new view of the buffer as it may have been compacted
+        var buffer_view = self.line_iter.buffer.view()
+        id_span = buffer_view[offsets.header_start : offsets.seq_start - 1]
+        seq_span = buffer_view[offsets.seq_start : offsets.sep_start - 1]
+        qual_span = buffer_view[offsets.qual_start : offsets.record_end]
 
         var ref_rec = RefRecord[origin=MutExternalOrigin](
             _strip_spaces(id_span),
@@ -431,14 +429,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
 
         # ── 7. Consume the record bytes ───────────────────────────────────────────
-        var to_consume = offsets.record_end + 1   # +1 for the '\n'
-        # Clamp to available in case record_end == buf._end (EOF, no trailing \n)
-        _ = self.line_iter.buffer.consume(min(to_consume, self.line_iter.buffer._end - base))
-
-        # ── 8. Update line counter (4 lines per FASTQ record) ────────────────────
+        var to_consume = offsets.record_end + 1  # +1 for the '\n'
+        _ = self.line_iter.buffer.consume(
+            min(to_consume, self.line_iter.buffer._end - base)
+        )
         self.line_iter._current_line_number += 4
 
-        # ── 9. Optional user-level validation (quality scores, ASCII check) ───────
         try:
             self.validator.validate(
                 ref_rec,
@@ -447,13 +443,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             )
         except e:
             raise Error(
-               format_parse_error(
-                   String(e), self, self._get_record_snippet(ref_rec)
-               )
+                format_parse_error(
+                    String(e), self, self._get_record_snippet(ref_rec)
+                )
             )
         return ref_rec
-
-
 
     @always_inline
     fn _parse_record_line(mut self) raises -> FastqRecord:
@@ -464,15 +458,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         schema = self.quality_schema.copy()
         return FastqRecord(line1^, line2^, line4^, schema)
 
-
-
-    
     @always_inline
     fn _next_ref_complete(
         mut self,
-        base        : Int,           # original scan anchor before compaction
-        mut offsets     : RecordOffsets,
-        phase       : SearchPhase,
+        base: Int,  # original scan anchor before compaction
+        mut offsets: RecordOffsets,
+        phase: SearchPhase,
     ) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
         """
         Refill/grow loop for records that span more than what is currently in
@@ -486,12 +477,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         to `base`, and base becomes 0 after compaction — so no adjustment needed.
         """
 
-
         var new_base = base
 
         while True:
             var buf_available = self.line_iter.buffer.available()
-            var buf_capacity  = self.line_iter.buffer.capacity()
+            var buf_capacity = self.line_iter.buffer.capacity()
 
             # ── Is EOF the reason we can't complete? ─────────────────────────────
             if buf_available < buf_capacity and self.line_iter.buffer.is_eof():
@@ -499,7 +489,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 if phase == SearchPhase.QUAL:
                     # No trailing newline on last record — still valid
                     var got_record: Bool
-                    got_record, offsets = _check_end_qual(self.line_iter.buffer, new_base, offsets)
+                    got_record, offsets = _check_end_qual(
+                        self.line_iter.buffer, new_base, offsets
+                    )
                     return (got_record, offsets, SearchPhase(new_base))
                 else:
                     # Incomplete record at EOF → error
@@ -509,12 +501,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
+
                 @parameter
                 if not self.config.buffer_growth_enabled:
                     raise Error(
                         "FASTQ record exceeds buffer capacity ("
                         + String(self.line_iter.buffer.capacity())
-                        + " bytes). Enable buffer growth or increase buffer_capacity."
+                        + " bytes). Enable buffer growth or increase"
+                        " buffer_capacity."
                     )
                 var current_cap = self.line_iter.buffer.capacity()
                 var max_cap = self.line_iter._max_capacity
@@ -522,7 +516,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     raise Error(
                         "FASTQ record exceeds maximum buffer capacity ("
                         + String(max_cap)
-                        + " bytes). Enable buffer growth or increase max_capacity."
+                        + " bytes). Enable buffer growth or increase"
+                        " max_capacity."
                     )
                 var growth = min(current_cap, max_cap - current_cap)
                 self.line_iter.buffer.resize_buffer(growth, max_cap)
@@ -537,13 +532,18 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
             # ── Resume scan from saved phase ──────────────────────────────────────
             # Mirrors Rust find_incomplete() which skips already-found positions
+            var scan_view = Span[Byte, MutExternalOrigin](
+                ptr=self.line_iter.buffer._ptr + new_base,
+                length=self.line_iter.buffer._end - new_base,
+            )
             var complete: Bool
-            complete, offsets, new_phase = _scan_record(self.line_iter.buffer, new_base, offsets, phase)
+            complete, offsets, new_phase = _scan_record(
+                scan_view, offsets, phase
+            )
             if complete:
                 return (True, offsets, new_phase)
 
             # Not yet complete → loop and try to refill more
-
 
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""
@@ -560,7 +560,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if len(snippet) > 200:
             snippet = snippet[:197] + "..."
         return snippet
-    
+
     fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
         """Get first 200 characters of FastqRecord for error context."""
         var snippet = String(capacity=200)
@@ -587,7 +587,7 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
     """Iterator over `RefRecord`s (zero-copy); use `parser.ref_records()`.
-    
+
     Lifetime: Each yielded `RefRecord` is a view into the parser's buffer and is
     invalidated by the next `__next__` call or any parser mutation. Do not store
     refs in collections; consume or copy to owned buffer before advancing. On parse/validation
@@ -631,7 +631,7 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
     """Iterator over owned `FastqRecord`s; use `parser.records()`.
-    
+
     Each yielded `FastqRecord` is owned and safe to store. On parse/validation
     error the error is printed with context and iteration stops (`StopIteration`).
     """
@@ -677,7 +677,7 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
     """Iterator over `FastqBatch` (SoA); use `parser.batched()` or `parser.batched(max_records)`.
-    
+
     Yields batches of up to the given max_records. Last batch may be
     partial at EOF. On parse/validation error the error is printed with
     context and iteration stops.

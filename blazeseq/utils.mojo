@@ -400,9 +400,8 @@ fn _store_newline_offset(
 # ---------------------------------------------------------------------------
 
 @always_inline
-fn _scan_record(
-    buf: BufferedReader,
-    base: Int,
+fn _scan_record[o: Origin](
+    view: Span[Byte, o],
     mut offsets: RecordOffsets,
     phase: SearchPhase,
 ) -> Tuple[Bool, RecordOffsets, SearchPhase]:
@@ -417,9 +416,9 @@ fn _scan_record(
     re-examined (mirrors the resume semantics of the original `_scan_record`).
 
     Args:
-        buf:     The BufferedReader whose backing store holds the record bytes.
-        base:    Absolute offset of the logical view start inside buf._ptr
-                 (equals buf._head at the moment next_ref anchored the scan).
+        view:    The byte span to scan (e.g. buffer view from BufferedReader
+                 or any other contiguous byte slice). Offsets are relative to
+                 view[0].
         offsets: Partially-populated offsets; fields for already-found newlines
                  are preserved and only the remaining fields are written.
         phase:   Which newline we are currently seeking.
@@ -435,8 +434,9 @@ fn _scan_record(
 
     # ── Determine where to start scanning ────────────────────────────────────
     var start_rel = _phase_start_offset(offsets, phase)
-    var ptr       = buf._ptr + base + start_rel
-    var avail     = buf._end - (base + start_rel)
+    var scan_span = view[start_rel:]
+    var ptr       = scan_span.unsafe_ptr()
+    var avail     = len(scan_span)
 
     if avail <= 0:
         return (False, offsets, phase)
