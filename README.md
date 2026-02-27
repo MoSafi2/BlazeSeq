@@ -125,7 +125,7 @@ pixi run mojo run -I . benchmark/throughput_benchmark.mojo
 
 ### Comparison with other tools
 
-Generates ~3GB in `ramfs` and compares parsing against `needletail` (Rust), `seq_io` (Rust), `KSeq` (C) and `Fastx.jl` (Julia).
+Generates ~3GB in `ramfs` and compares parsing against `needletail` (Rust), `seq_io` (Rust), and `kseq` (C).
 Ensure that you have enough ram capacity (min ~5GB).
 
 ```bash

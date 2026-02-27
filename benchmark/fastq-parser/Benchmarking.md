@@ -1,6 +1,6 @@
 # FASTQ Parser Benchmarking
 
-This document describes the benchmarking harness that compares BlazeSeq to other FASTQ parsers: **needletail** (Rust), **seq_io** (Rust), **kseq** (C), and **FASTX.jl** (Julia).
+This document describes the benchmarking harness that compares BlazeSeq to other FASTQ parsers: **needletail** (Rust), **seq_io** (Rust), and **kseq** (C).
 
 ## Purpose
 
@@ -46,9 +46,8 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 |------------|----------------------|--------|
 | pixi       | Mojo, hyperfine, Rust | See [Install pixi](#install-pixi) below |
 | C compiler | kseq (plain C)       | gcc or clang (system; not in pixi) |
-| Julia      | FASTX.jl             | [julialang.org](https://julialang.org) (system; not in pixi) |
 
-The pixi **benchmark** environment supplies Mojo, hyperfine, and Rust. You must install a C compiler and Julia yourself if you want to run the kseq and FASTX.jl benchmarks.
+The pixi **benchmark** environment supplies Mojo, hyperfine, and Rust. You must install a C compiler yourself if you want to run the kseq benchmark.
 
 For the tmpfs workflow on Linux, **sudo** is needed for mount/umount (or use the `/dev/shm` fallback).
 
@@ -80,7 +79,7 @@ Or use the pixi task:
 pixi run -e benchmark benchmark
 ```
 
-If all tools (pixi, hyperfine, cargo, rustc, gcc or clang, julia) are already on your PATH, you can run the script directly:
+If all tools (pixi, hyperfine, cargo, rustc, gcc or clang) are already on your PATH, you can run the script directly:
 
 ```bash
 ./benchmark/fastq-parser/run_benchmarks.sh
@@ -101,7 +100,6 @@ Record the versions you use when reporting results, for example:
 - **needletail**: `benchmark/fastq-parser/needletail_runner/Cargo.toml` (e.g. 0.6.x)
 - **seq_io**: `benchmark/fastq-parser/seq_io_runner/Cargo.toml` (e.g. 0.3.x)
 - **kseq**: vendored from [lh3/seqtk](https://github.com/lh3/seqtk) (kseq.h)
-- **FASTX.jl**: `benchmark/fastq-parser/Project.toml` (FASTX dependency)
 
 ## Interpreting Results
 
@@ -137,7 +135,7 @@ A separate benchmark compares **compressed file parsing** (decompress + parse) a
 
 - **Purpose**: Compare throughput when reading a **gzip-compressed** FASTQ file (`.fastq.gz`). Each tool decompresses on the fly and parses; the benchmark measures combined decompression and parsing time.
 - **Data**: The same 3 GB synthetic FASTQ is generated, then compressed with `gzip` to a single `.fastq.gz` file. The plain file is removed after compression to save space; only the compressed file is used during hyperfine.
-- **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **FASTX.jl** (Julia, CodecZlib), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
+- **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
 - **Hyperfine**: Same defaults as the plain benchmark: warmup 2, runs 5. Results are written to **separate** files so they do not overwrite the plain benchmark results.
 
 ### Output files
@@ -159,4 +157,4 @@ Or use the pixi task:
 pixi run -e benchmark benchmark-gzip
 ```
 
-**Requirements**: pixi, hyperfine, cargo, rustc, **gcc** (for kseq gzip runner), **julia** (for FASTX.jl), and **gzip** (system). Same ramfs/tmpfs setup as the plain benchmark on Linux (sudo for mount/umount, or `/dev/shm` fallback).
+**Requirements**: pixi, hyperfine, cargo, rustc, **gcc** (for kseq gzip runner), and **gzip** (system). Same ramfs/tmpfs setup as the plain benchmark on Linux (sudo for mount/umount, or `/dev/shm` fallback).

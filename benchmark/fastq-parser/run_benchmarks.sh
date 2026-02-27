@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq, FASTX.jl.
+# FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq.
 # Generates 3GB synthetic FASTQ on a ramfs mount, runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh
-# Requires: pixi, hyperfine, cargo, gcc or clang, julia. On Linux: sudo for ramfs mount/umount.
+# Requires: pixi, hyperfine, cargo, gcc or clang. On Linux: sudo for ramfs mount/umount.
 
 set -e
 
@@ -30,7 +30,6 @@ check_cmd rustc      || missing+=(rustc)
 if ! check_cmd gcc && ! check_cmd clang; then
     missing+=(gcc or clang)
 fi
-check_cmd julia      || missing+=(julia)
 
 if [ ${#missing[@]} -gt 0 ]; then
     echo "Missing required tool(s): ${missing[*]}"
@@ -38,7 +37,6 @@ if [ ${#missing[@]} -gt 0 ]; then
     echo "  hyperfine:   https://github.com/sharkdp/hyperfine (e.g. cargo install hyperfine -> ~/.cargo/bin)"
     echo "  Rust:        https://rustup.rs (cargo, rustc -> ~/.cargo/bin)"
     echo "  C compiler:  gcc or clang"
-    echo "  Julia:       https://julialang.org"
     echo "PATH used: $PATH"
     exit 1
 fi
@@ -124,23 +122,15 @@ if ! pixi run mojo build -I . -o "$BLAZESEQ_BIN" "$SCRIPT_DIR/run_blazeseq.mojo"
     exit 1
 fi
 
-# --- Ensure Julia (FASTX.jl) dependencies are installed ---
-echo "Ensuring Julia benchmark deps (FASTX.jl) ..."
-if ! julia --project="$SCRIPT_DIR" -e 'using Pkg; Pkg.instantiate()'; then
-    echo "Failed to install Julia dependencies. Run: julia --project=benchmark/fastq-parser -e 'using Pkg; Pkg.instantiate()'"
-    exit 1
-fi
-
 # --- Optional: verify all parsers agree on record/base count (non-fatal) ---
 echo "Verifying parser outputs..."
 ref=""
-for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq" "FASTX.jl"; do
+for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq"; do
     case "$cmd_label" in
         BlazeSeq)     out=$("$BLAZESEQ_BIN" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         needletail)   out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         seq_io)       out=$("$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         kseq)         out=$("$SCRIPT_DIR/kseq_runner/kseq_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
-        FASTX.jl)     out=$(julia --project="$SCRIPT_DIR" "$SCRIPT_DIR/run_fastx.jl" "$BENCH_FILE" 2>/dev/null) || out="" ;;
     esac
     out=$(echo "$out" | tail -1)
     if [ -z "$out" ]; then
@@ -164,8 +154,7 @@ hyperfine \
     -n BlazeSeq    "$BLAZESEQ_BIN $BENCH_FILE" \
     -n needletail  "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
     -n seq_io      "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
-    -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE" \
-    -n FASTX.jl    "julia --project=$SCRIPT_DIR $SCRIPT_DIR/run_fastx.jl $BENCH_FILE"
+    -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE"
 
 echo "Results written to benchmark_results.md and benchmark_results.json"
 
