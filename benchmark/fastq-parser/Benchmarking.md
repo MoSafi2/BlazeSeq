@@ -110,6 +110,25 @@ Record the versions you use when reporting results, for example:
 
 All parsers are run on the same file; the script checks that they report the same `records` and `base_pairs` before running hyperfine, so any difference in time is attributable to parsing and iteration rather than I/O or correctness.
 
+## Plotting benchmark results
+
+After running any benchmark, you can generate **column plots with error bars** from the hyperfine JSON output. Plots are written to the `assets/` directory at the repository root.
+
+- **Script**: `benchmark/scripts/plot_benchmark_results.py`
+- **Output**: PNG files in `assets/` (e.g. `parser_plain.png`, `parser_gzip.png`, `throughput.png`)
+
+When you run the benchmark scripts (plain, gzip, or throughput) with the pixi benchmark environment, plotting is run automatically after hyperfine if Python and matplotlib are available. You can also plot existing results without re-running benchmarks:
+
+```bash
+pixi run -e benchmark benchmark-plot
+```
+
+This reads the standard JSON result files (`benchmark_results.json`, `benchmark_results_gzip.json`, `benchmark/throughput_benchmark_results.json`) and writes the corresponding plots to `assets/`. To plot only specific files:
+
+```bash
+pixi run -e benchmark python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets --json benchmark_results.json
+```
+
 ---
 
 ## Compressed (gzip) FASTQ benchmark

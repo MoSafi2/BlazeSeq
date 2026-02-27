@@ -52,11 +52,15 @@ pymodo = ">=0.11.12, <0.12"
 [feature.benchmark.dependencies]
 hyperfine = "*"
 rust = "*"
+python = "*"
+matplotlib = "*"
+numpy = "*"
 
 [feature.benchmark.tasks]
 benchmark = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
 benchmark-gzip = "bash -c './benchmark/fastq-parser/run_benchmarks_gzip.sh'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"
+benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets'"
 
 [environments]
 benchmark = ["default", "benchmark"]

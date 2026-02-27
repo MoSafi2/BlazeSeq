@@ -175,3 +175,8 @@ hyperfine \
     -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ"
 
 echo "Results written to benchmark_results_gzip.md and benchmark_results_gzip.json"
+
+# Plot results to assets/
+if command -v python >/dev/null 2>&1; then
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results_gzip.json" 2>/dev/null || true
+fi

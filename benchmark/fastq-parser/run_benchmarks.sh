@@ -168,3 +168,8 @@ hyperfine \
     -n FASTX.jl    "julia --project=$SCRIPT_DIR $SCRIPT_DIR/run_fastx.jl $BENCH_FILE"
 
 echo "Results written to benchmark_results.md and benchmark_results.json"
+
+# Plot results to assets/
+if command -v python >/dev/null 2>&1; then
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results.json" 2>/dev/null || true
+fi

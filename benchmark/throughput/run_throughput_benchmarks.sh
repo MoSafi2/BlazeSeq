@@ -117,3 +117,9 @@ hyperfine \
 
 echo ""
 echo "Results written to throughput_benchmark_results.md and throughput_benchmark_results.json"
+
+# Plot results to assets/ (repo root is parent of benchmark/)
+REPO_ROOT_FOR_PLOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if command -v python >/dev/null 2>&1; then
+    python "$REPO_ROOT_FOR_PLOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT_FOR_PLOT" --assets-dir "$REPO_ROOT_FOR_PLOT/assets" --json "$REPO_ROOT_FOR_PLOT/benchmark/throughput_benchmark_results.json" 2>/dev/null || true
+fi
