@@ -49,18 +49,12 @@ rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq
 [pypi-dependencies]
 pymodo = ">=0.11.12, <0.12"
 
-# Benchmark environment: tools for run_benchmarks.sh (hyperfine, Rust).
-# Julia is not in conda-forge for all platforms; install from https://julialang.org and ensure it is on PATH.
-# Install with: pixi install -e benchmark
-# Run benchmarks with: pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
 [feature.benchmark.dependencies]
 hyperfine = "*"
 rust = "*"
 
 [feature.benchmark.tasks]
-# Run the full benchmark suite (run ./benchmark/fastq-parser/install_toolchains.sh first)
 benchmark = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
-# Run compressed (gzip) FASTQ benchmark: BlazeSeq vs needletail only
 benchmark-gzip = "bash -c './benchmark/fastq-parser/run_benchmarks_gzip.sh'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"
 

@@ -301,60 +301,240 @@ fn _check_end_qual(
     return (True, offsets)
 
 
+# @always_inline
+# fn _scan_record(
+#     buf     : BufferedReader,
+#     base    : Int,           # absolute offset of view()[0] at scan start
+#     mut offsets : RecordOffsets,
+#     phase   : SearchPhase,
+# ) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
+#     """
+#     Attempt to locate all four newlines for the record whose first byte is at
+#     absolute offset `base` in the buffer.
+
+#     `phase` and `offsets` carry state from a previous incomplete scan so we
+#     never re-scan bytes already processed (mirrors Rust find_incomplete).
+
+#     Returns
+#     ───────
+#     (complete, offsets, phase)
+#       complete=True  → offsets fully populated; call _validate then build RefRecord
+#       complete=False → offsets partially populated; phase says where we stopped
+#     """
+
+#     # ── Phase 0: HEADER ──────────────────────────────────────────────────────
+#     # Validate '@' start byte (only check once, on first entry to HEADER phase)
+#     if phase == SearchPhase.HEADER:
+#         var p = _find_newline_from(buf, base, offsets.header_start)
+#         if p < 0:
+#             return (False, offsets, SearchPhase.HEADER)
+#         offsets.seq_start = p   # first byte of sequence line
+
+#     # ── Phase 1: SEQ ─────────────────────────────────────────────────────────
+#     if phase <= SearchPhase.SEQ:
+#         var p = _find_newline_from(buf, base, offsets.seq_start)
+#         if p < 0:
+#             return (False, offsets, SearchPhase.SEQ)
+#         offsets.sep_start = p   # first byte of separator line
+
+#     # ── Phase 2: SEP ─────────────────────────────────────────────────────────
+#     if phase <= SearchPhase.SEP:
+#         # Validate '+' separator byte
+#         var p = _find_newline_from(buf, base, offsets.sep_start)
+#         if p < 0:
+#             return (False, offsets, SearchPhase.SEP)
+#         offsets.qual_start = p  # first byte of quality line
+
+#     # ── Phase 3: QUAL ────────────────────────────────────────────────────────
+#     if phase <= SearchPhase.QUAL:
+#         var p = _find_newline_from(buf, base, offsets.qual_start)
+#         if p < 0:
+#             # No trailing newline — may be EOF (handled by caller via check_end)
+#             return (False, offsets, SearchPhase.QUAL)
+#         offsets.record_end = p - 1
+
+#     return (True, offsets, SearchPhase.HEADER)   # reset phase for next record
+
+# ---------------------------------------------------------------------------
+# Helper: _phase_start_offset
+# ---------------------------------------------------------------------------
+
+@always_inline
+fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
+    """Return the relative-to-base offset at which to resume scanning.
+
+    When resuming a partially-scanned record (phase > HEADER), we start from
+    the field that the current phase is *seeking the end of*, not from the
+    beginning of the record. This avoids re-scanning already-processed bytes.
+
+    HEADER → scan from header_start (always 0 for a fresh record)
+    SEQ    → scan from seq_start    (header newline already found)
+    SEP    → scan from sep_start    (sequence newline already found)
+    QUAL   → scan from qual_start   (separator newline already found)
+    """
+    if phase == SearchPhase.HEADER:
+        return offsets.header_start
+    elif phase == SearchPhase.SEQ:
+        return offsets.seq_start
+    elif phase == SearchPhase.SEP:
+        return offsets.sep_start
+    else:  # QUAL
+        return offsets.qual_start
+
+
+# ---------------------------------------------------------------------------
+# Helper: _phase_to_count
+# ---------------------------------------------------------------------------
+
+@always_inline
+fn _phase_to_count(phase: SearchPhase) -> Int:
+    """Return how many newlines have already been found given the current phase.
+
+    The phase describes which newline we are *currently seeking*:
+      HEADER → 0 found so far (seeking 1st newline: end of @id line)
+      SEQ    → 1 found so far (seeking 2nd newline: end of sequence line)
+      SEP    → 2 found so far (seeking 3rd newline: end of + separator line)
+      QUAL   → 3 found so far (seeking 4th newline: end of quality line)
+    """
+    return Int(phase.value)
+
+
+# ---------------------------------------------------------------------------
+# Helper: _count_to_phase
+# ---------------------------------------------------------------------------
+
+@always_inline
+fn _count_to_phase(found: Int) -> SearchPhase:
+    """Convert a found-newlines count back to the SearchPhase we are now in.
+
+    After finding `found` newlines we are seeking the (found+1)-th newline,
+    which corresponds to the phase with value `found` (clamped to QUAL=3
+    in case found >= 4, though the caller should not call this when
+    found == 4 since the record is complete).
+
+      0 found → HEADER  (still seeking end of @id line)
+      1 found → SEQ     (still seeking end of sequence line)
+      2 found → SEP     (still seeking end of + line)
+      3 found → QUAL    (still seeking end of quality line)
+      4 found → HEADER  (record complete; reset for next record)
+    """
+    if found >= 4:
+        return SearchPhase.HEADER   # record complete; caller checks Bool
+    return SearchPhase(Int8(found))
+
+
+# ---------------------------------------------------------------------------
+# Helper: _record_offsets_from_phase
+# Returns a mutated copy of offsets with abs_pos written to the right field.
+# Kept out of the hot loop body to keep the loop tight.
+# ---------------------------------------------------------------------------
+
+@always_inline
+fn _store_newline_offset(
+    mut offsets: RecordOffsets,
+    found: Int,        # 1-indexed: which newline this is (1..4)
+    abs_pos: Int,      # relative-to-base position AFTER the '\n'
+):
+    """Write the abs_pos (first byte of the *next* line) into the correct
+    RecordOffsets field based on which newline was just found.
+
+    found == 1 → seq_start   (byte after end-of-header newline)
+    found == 2 → sep_start   (byte after end-of-sequence newline)
+    found == 3 → qual_start  (byte after end-of-separator newline)
+    found == 4 → record_end  (last byte of quality, i.e. abs_pos - 1)
+    """
+    if found == 1:
+        offsets.seq_start  = abs_pos
+    elif found == 2:
+        offsets.sep_start  = abs_pos
+    elif found == 3:
+        offsets.qual_start = abs_pos
+    else:  # found == 4
+        offsets.record_end = abs_pos - 1   # record_end is inclusive last qual byte
+
+
+# ---------------------------------------------------------------------------
+# _scan_record_fused: single-pass SIMD scan for all four FASTQ newlines
+# ---------------------------------------------------------------------------
+
 @always_inline
 fn _scan_record(
-    buf     : BufferedReader,
-    base    : Int,           # absolute offset of view()[0] at scan start
-    mut offsets : RecordOffsets,
-    phase   : SearchPhase,
-) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
+    buf: BufferedReader,
+    base: Int,
+    mut offsets: RecordOffsets,
+    phase: SearchPhase,
+) -> Tuple[Bool, RecordOffsets, SearchPhase]:
+    """Locate all four record-bounding newlines in a single forward pass.
+
+    Replaces four sequential `_find_newline_from` / `memchr` calls with one
+    SIMD sweep. On a typical 150 bp Illumina record (~200 bytes total) this
+    reduces the number of SIMD iterations from 4 × ⌈200/W⌉ to ⌈200/W⌉.
+
+    Resumable: `phase` and `offsets` carry state from a previous incomplete
+    scan so bytes before `_phase_start_offset(offsets, phase)` are never
+    re-examined (mirrors the resume semantics of the original `_scan_record`).
+
+    Args:
+        buf:     The BufferedReader whose backing store holds the record bytes.
+        base:    Absolute offset of the logical view start inside buf._ptr
+                 (equals buf._head at the moment next_ref anchored the scan).
+        offsets: Partially-populated offsets; fields for already-found newlines
+                 are preserved and only the remaining fields are written.
+        phase:   Which newline we are currently seeking.
+
+    Returns:
+        (complete, offsets, phase)
+        complete=True  → all four newlines found; offsets fully populated.
+        complete=False → ran out of buffer; offsets partially populated;
+                         phase indicates where to resume on the next call.
     """
-    Attempt to locate all four newlines for the record whose first byte is at
-    absolute offset `base` in the buffer.
+    comptime W = SIMD_U8_WIDTH
+    comptime nl_splat = SIMD[DType.uint8, W](new_line)
 
-    `phase` and `offsets` carry state from a previous incomplete scan so we
-    never re-scan bytes already processed (mirrors Rust find_incomplete).
+    # ── Determine where to start scanning ────────────────────────────────────
+    var start_rel = _phase_start_offset(offsets, phase)
+    var ptr       = buf._ptr + base + start_rel
+    var avail     = buf._end - (base + start_rel)
 
-    Returns
-    ───────
-    (complete, offsets, phase)
-      complete=True  → offsets fully populated; call _validate then build RefRecord
-      complete=False → offsets partially populated; phase says where we stopped
-    """
+    if avail <= 0:
+        return (False, offsets, phase)
 
-    # ── Phase 0: HEADER ──────────────────────────────────────────────────────
-    # Validate '@' start byte (only check once, on first entry to HEADER phase)
-    if phase == SearchPhase.HEADER:
-        var p = _find_newline_from(buf, base, offsets.header_start)
-        if p < 0:
-            return (False, offsets, SearchPhase.HEADER)
-        offsets.seq_start = p   # first byte of sequence line
+    # How many newlines already found (= how many offsets fields are set)
+    var found = _phase_to_count(phase)
 
-    # ── Phase 1: SEQ ─────────────────────────────────────────────────────────
-    if phase <= SearchPhase.SEQ:
-        var p = _find_newline_from(buf, base, offsets.seq_start)
-        if p < 0:
-            return (False, offsets, SearchPhase.SEQ)
-        offsets.sep_start = p   # first byte of separator line
+    # ── SIMD aligned section ──────────────────────────────────────────────────
+    var i       = 0
+    var aligned = math.align_down(avail, W)
 
-    # ── Phase 2: SEP ─────────────────────────────────────────────────────────
-    if phase <= SearchPhase.SEP:
-        # Validate '+' separator byte
-        var p = _find_newline_from(buf, base, offsets.sep_start)
-        if p < 0:
-            return (False, offsets, SearchPhase.SEP)
-        offsets.qual_start = p  # first byte of quality line
+    while i < aligned and found < 4:
+        var v    = ptr.load[width=W](i)
+        var mask = pack_bits(v.eq(nl_splat))
 
-    # ── Phase 3: QUAL ────────────────────────────────────────────────────────
-    if phase <= SearchPhase.QUAL:
-        var p = _find_newline_from(buf, base, offsets.qual_start)
-        if p < 0:
-            # No trailing newline — may be EOF (handled by caller via check_end)
-            return (False, offsets, SearchPhase.QUAL)
-        offsets.record_end = p - 1
+        # Drain all set bits from this SIMD word before moving to the next.
+        # Inner loop is ≤ 4 iterations total across the whole outer loop.
+        while mask != 0 and found < 4:
+            var bit     = Int(count_trailing_zeros(mask))
+            var abs_pos = start_rel + i + bit + 1   # first byte of next line
+            found      += 1
+            _store_newline_offset(offsets, found, abs_pos)
+            mask        &= mask - 1                  # clear lowest set bit
+        i += W
 
-    return (True, offsets, SearchPhase.HEADER)   # reset phase for next record
+    if found == 4:
+        return (True, offsets, SearchPhase.HEADER)
 
+    # ── Scalar tail: bytes [aligned, avail) ──────────────────────────────────
+    # Handles the final < W bytes that the SIMD loop could not process, and
+    # also the case where the entire record is smaller than one SIMD word.
+    i = aligned
+    while i < avail and found < 4:
+        if ptr[i] == new_line:
+            var abs_pos = start_rel + i + 1
+            found      += 1
+            _store_newline_offset(offsets, found, abs_pos)
+        i += 1
+
+    return (found == 4, offsets, _count_to_phase(found))
 
 
 
