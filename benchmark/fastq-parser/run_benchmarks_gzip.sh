@@ -99,11 +99,15 @@ if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_
 fi
 
 # --- Compress to gzip and remove plain file to free space ---
+# Compression level 1; default `bclconvert` compression level.
+# https://knowledge.illumina.com/software/general/software-general-reference_material-list/000003710
 echo "Compressing to $BENCH_FILE.gz ..."
-if ! gzip -c "$BENCH_FILE" > "${BENCH_FILE}.gz"; then
-    echo "Failed to gzip $BENCH_FILE"
+if ! gzip -1 -c "$BENCH_FILE" > "${BENCH_FILE}.gz.tmp"; then
+    rm -f "${BENCH_FILE}.gz.tmp"
+    echo "gzip failed" >&2
     exit 1
 fi
+mv "${BENCH_FILE}.gz.tmp" "${BENCH_FILE}.gz"
 rm -f "$BENCH_FILE"
 BENCH_GZ="${BENCH_FILE}.gz"
 
@@ -181,5 +185,13 @@ echo "Results written to benchmark_results_gzip.md and benchmark_results_gzip.js
 # Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
 if command -v python >/dev/null 2>&1; then
     RECORDS="${ref%% *}"
-    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results_gzip.json" --runs "${HYPERFINE_RUNS}" --size-gb 3 --reads "${RECORDS:-0}" 2>/dev/null || true
+    PLOT_JSON="$REPO_ROOT/benchmark_results_gzip.json"
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" \
+        --repo-root "$REPO_ROOT" \
+        --assets-dir "$REPO_ROOT/assets" \
+        --json "$PLOT_JSON" \
+        --runs "${HYPERFINE_RUNS}" \
+        --size-gb 3 \
+        --reads "${RECORDS:-0}" \
+        2>/dev/null || true
 fi

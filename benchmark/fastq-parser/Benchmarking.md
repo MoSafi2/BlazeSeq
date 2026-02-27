@@ -36,8 +36,8 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 | File size       | 3 GB  |
 | Read length     | 100 bp (min=max=100) |
 | Quality schema  | generic (Sanger-like) |
-| hyperfine warmup| 2     |
-| hyperfine runs  | 15     |
+| hyperfine warmup| 3     |
+| hyperfine runs  | 15    |
 | hyperfine output| Markdown and JSON in repo root |
 
 ## Prerequisites
@@ -148,12 +148,12 @@ pixi run -e benchmark python benchmark/scripts/plot_benchmark_results.py --repo-
 
 ## Compressed (gzip) FASTQ benchmark
 
-A separate benchmark compares **compressed file parsing** (decompress + parse) across five parsers.
+A separate benchmark compares **compressed file parsing** (decompress + parse) across four parsers.
 
 - **Purpose**: Compare throughput when reading a **gzip-compressed** FASTQ file (`.fastq.gz`). Each tool decompresses on the fly and parses; the benchmark measures combined decompression and parsing time.
 - **Data**: The same 3 GB synthetic FASTQ is generated, then compressed with `gzip` to a single `.fastq.gz` file. The plain file is removed after compression to save space; only the compressed file is used during hyperfine.
 - **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
-- **Hyperfine**: Same defaults as the plain benchmark: warmup 2, runs 15. Results are written to **separate** files so they do not overwrite the plain benchmark results.
+- **Hyperfine**: Same defaults as the plain benchmark: warmup 3, runs 15. Results are written to **separate** files so they do not overwrite the plain benchmark results.
 
 ### Output files
 

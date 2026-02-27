@@ -585,7 +585,6 @@ fn compute_num_reads_for_size(
     var bytes_per_record = header_size + 2 * avg_read_length + 4
     return target_size_bytes // bytes_per_record
 
-
 fn generate_synthetic_fastq_buffer(
     num_reads: Int,
     min_length: Int,
@@ -593,20 +592,24 @@ fn generate_synthetic_fastq_buffer(
     min_phred: Int,
     max_phred: Int,
     quality_schema: String,
+    gc_bias: Float32 = 0.5,
 ) raises -> List[Byte]:
     """Generate a contiguous in-memory FASTQ buffer with configurable read length and quality distribution.
 
     Read lengths are chosen deterministically in [min_length, max_length] (inclusive).
-    Per-base Phred scores are chosen deterministically in [min_phred, max_phred], then converted
-    to ASCII using the given quality schema and clamped to the schema's valid range.
+    Per-base Phred scores follow a positional decay model (high quality at 5' end, degrading
+    toward 3' end), mimicking real Illumina quality profiles. Base composition follows a
+    configurable GC content model with pseudorandom distribution.
 
     Args:
         num_reads: Number of FASTQ records to generate.
         min_length: Minimum sequence length per read (inclusive).
         max_length: Maximum sequence length per read (inclusive).
-        min_phred: Minimum Phred score per base (inclusive).
-        max_phred: Maximum Phred score per base (inclusive).
+        min_phred: Minimum Phred score per base (inclusive) — used as the floor for 3' end quality.
+        max_phred: Maximum Phred score per base (inclusive) — used as the ceiling for 5' end quality.
         quality_schema: Schema name (e.g. "sanger", "solexa", "illumina_1.8", "generic").
+        gc_bias: Target GC fraction in [0.0, 1.0]. Default 0.5 (50% GC).
+                 Values above 0.5 increase G/C frequency; below 0.5 increase A/T frequency.
 
     Returns:
         List[Byte] containing valid 4-line FASTQ data; pass to MemoryReader for parsing.
@@ -631,48 +634,110 @@ fn generate_synthetic_fastq_buffer(
         capacity_estimate = 4096
     var out = List[Byte](capacity=capacity_estimate)
 
-    var bases = [Byte(ord("A")), Byte(ord("C")), Byte(ord("G")), Byte(ord("T"))]
+    # Base LUT: 8 entries so index selects bases with configurable GC probability.
+    # With gc_bias = 0.5: 2 G, 2 C, 2 A, 2 T (equal). Bias shifts the G/C vs A/T split.
+    # We use 8 slots: floor(gc_bias * 8) slots get G/C, rest get A/T.
+    # Slots alternate G/C and A/T to spread selection evenly across the LUT.
+    var gc_slots = Int(gc_bias * 8.0 + 0.5)  # round to nearest
+    if gc_slots < 0:
+        gc_slots = 0
+    if gc_slots > 8:
+        gc_slots = 8
+    var at_slots = 8 - gc_slots
+
+    var base_lut = List[Byte](capacity=8)
+    # Fill GC slots alternating G and C
+    for k in range(gc_slots):
+        if k % 2 == 0:
+            base_lut.append(Byte(ord("G")))
+        else:
+            base_lut.append(Byte(ord("C")))
+    # Fill AT slots alternating A and T
+    for k in range(at_slots):
+        if k % 2 == 0:
+            base_lut.append(Byte(ord("A")))
+        else:
+            base_lut.append(Byte(ord("T")))
+
     var newline = Byte(ord("\n"))
     var plus = Byte(ord("+"))
 
-    # Constant header size: @read_<zero_padded_i>\n
+    # Header zero-padding width
     var num_digits: Int = 1
     if num_reads > 1:
         num_digits = len(String(num_reads - 1))
 
+    # Quality model parameters.
+    # We model mean Phred as a linear decay from q_start (5' end) to q_end (3' end),
+    # with per-base noise added on top. This matches the classic Illumina "ski slope" profile.
+    #
+    # q_start = max_phred (caller controls the 5' quality ceiling)
+    # q_end   = min_phred (caller controls the 3' quality floor)
+    # noise   = small jitter so consecutive bases aren't identical
+    var q_start = max_phred  # Phred at position 0
+    var q_end   = min_phred  # Phred at last position
+    var q_range = q_start - q_end  # total drop across the read (>= 0)
+
+    # Noise amplitude: +/- noise_amp Phred units around the decayed mean.
+    # We cap it so it can't push scores outside [min_phred, max_phred].
+    var noise_amp = (q_range // 6) + 1  # ~15% of range, minimum 1
+
     for i in range(num_reads):
-        # Deterministic read length in [min_length, max_length]
+        # --- Read length ---
         var read_len: Int
         if max_length == min_length:
             read_len = min_length
         else:
             read_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
 
-        # Header: @read_<zero_padded_i>\n (constant size per record)
+        # --- Header ---
         var index_str = String(i)
         while len(index_str) < num_digits:
             index_str = "0" + index_str
         var header_str = "@read_" + index_str + "\n"
-        var header_bytes = header_str.as_bytes()
-        out.extend(header_bytes)
+        out.extend(header_str.as_bytes())
 
-        # Sequence line (same base per read: ACGT pattern by read index)
+        # --- Sequence line ---
+        # We use a fast LCG per read seeded from i to get pseudorandom base indices.
+        # Multiplier/increment from Knuth MMIX; state is 64-bit truncated to Int.
+        var lcg_state: Int = (i * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
         for p in range(read_len):
-            out.append(bases[i % 4])
+            lcg_state = (lcg_state * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
+            var slot = (lcg_state >> 33) % 8  # use upper bits for better distribution
+            out.append(base_lut[slot])
         out.append(newline)
 
-        # +\n
+        # --- +\n ---
         out.append(plus)
         out.append(newline)
 
-        # Quality line: Phred in [min_phred, max_phred], then ASCII = OFFSET + phred clamped to [LOWER, UPPER]
-        var phred_range = max_phred - min_phred + 1
+        # --- Quality line: positional decay + noise ---
+        # At position p in [0, read_len-1]:
+        #   mean_phred(p) = q_start - round(q_range * p / (read_len - 1))
+        # For reads of length 1, mean = q_start throughout.
+        # Noise: deterministic jitter via a second LCG stream (read + position mixed).
+        var qrng: Int = (i * 2654435761 + 1013904223) & 0x7FFFFFFFFFFFFFFF
+        var len_minus_1 = read_len - 1
         for p in range(read_len):
-            var phred: Int
-            if phred_range == 1:
-                phred = min_phred
+            # Mean quality at this position (linear decay)
+            var mean_phred: Int
+            if len_minus_1 == 0:
+                mean_phred = q_start
             else:
-                phred = min_phred + ((i + p) * 31 + 7) % phred_range
+                mean_phred = q_start - (q_range * p + len_minus_1 // 2) // len_minus_1  # integer rounding
+
+            # Deterministic noise in [-noise_amp, +noise_amp]
+            qrng = (qrng * 1664525 + 1013904223) & 0x7FFFFFFFFFFFFFFF
+            var noise_raw = Int((qrng >> 17) % (2 * noise_amp + 1))  # [0, 2*noise_amp]
+            var phred = mean_phred + noise_raw - noise_amp
+
+            # Clamp to caller's [min_phred, max_phred]
+            if phred < min_phred:
+                phred = min_phred
+            elif phred > max_phred:
+                phred = max_phred
+
+            # Convert to ASCII and clamp to schema range
             var ascii_int = offset_int + phred
             if ascii_int < lower_int:
                 ascii_int = lower_int
@@ -682,5 +747,3 @@ fn generate_synthetic_fastq_buffer(
         out.append(newline)
 
     return out^
-
-
