@@ -20,13 +20,13 @@ backend = { name = "pixi-build-mojo", version = "0.*", channels = [
 
 [package.host-dependencies]
 mojo-compiler = "=0.26.1.0"
-#rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
 
 
 [package.build-dependencies]
 mojo-compiler = "=0.26.1.0"
 rattler-build = "*"
-#rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
 
 [package.run-dependencies]
 mojo-compiler = "=0.26.1.0"
@@ -34,7 +34,7 @@ mojo-compiler = "=0.26.1.0"
 [dependencies]
 mojo = "=0.26.1.0"
 nodejs = ">=20"
-#rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo", branch = "main" }
 
 
 [tasks]
