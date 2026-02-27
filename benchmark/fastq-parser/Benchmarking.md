@@ -180,10 +180,26 @@ The gzip benchmark compares **wall-clock time** (elapsed time) for decompress-an
 
 In short: kseq, needletail, and seq_io are single-threaded decompressors; BlazeSeq uses rapidgzip and can run on many cores (e.g. 12). The gzip benchmark is therefore a **multi-threaded (BlazeSeq) vs single-threaded (others)** comparison in terms of decompression, and results should be read with that in mind.
 
+### Single-threaded gzip benchmark (fair comparison)
+
+To compare all four parsers with **one core** (BlazeSeq rapidgzip restricted to a single thread, all tools pinned to one CPU), set `GZIP_BENCH_PARALLELISM=1` (or `single`) or use the pixi task:
+
+```bash
+GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+```
+
+Or:
+
+```bash
+pixi run -e benchmark benchmark-gzip-single
+```
+
+Results are written to `benchmark_results_gzip_single.md` and `benchmark_results_gzip_single.json`; the plot script produces `assets/parser_gzip_single.png`.
+
 ### Output files
 
-- `benchmark_results_gzip.md` (summary table)
-- `benchmark_results_gzip.json` (full hyperfine output)
+- **Multi-threaded (default):** `benchmark_results_gzip.md`, `benchmark_results_gzip.json`
+- **Single-threaded:** `benchmark_results_gzip_single.md`, `benchmark_results_gzip_single.json`
 
 ### How to run the gzip benchmark
 

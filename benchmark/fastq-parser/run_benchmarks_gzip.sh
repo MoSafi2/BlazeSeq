@@ -51,6 +51,23 @@ fi
 WARMUP_RUNS="${WARMUP_RUNS:-3}"
 HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
 
+# --- Gzip benchmark parallelism (BlazeSeq rapidgzip only) ---
+# GZIP_BENCH_PARALLELISM=1 or "single": single-threaded decompression for BlazeSeq, and pin all tools to one core for fair comparison.
+# Unset or any other value: multi-threaded BlazeSeq (default), no core pinning.
+#   GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+#   pixi run -e benchmark benchmark-gzip-single
+if [ "${GZIP_BENCH_PARALLELISM}" = "1" ] || [ "${GZIP_BENCH_PARALLELISM}" = "single" ]; then
+    GZIP_SINGLE_THREAD=1
+    BENCH_GZIP_SUFFIX="_single"
+    BENCH_GZIP_MD="$REPO_ROOT/benchmark_results_gzip_single.md"
+    BENCH_GZIP_JSON="$REPO_ROOT/benchmark_results_gzip_single.json"
+else
+    GZIP_SINGLE_THREAD=0
+    BENCH_GZIP_SUFFIX=""
+    BENCH_GZIP_MD="$REPO_ROOT/benchmark_results_gzip.md"
+    BENCH_GZIP_JSON="$REPO_ROOT/benchmark_results_gzip.json"
+fi
+
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/blazeseq_bench_3g.fastq"
@@ -143,12 +160,14 @@ fi
 # --- Verify all parsers agree on record/base count ---
 echo "Verifying parser outputs on $BENCH_GZ ..."
 ref=""
+_blazeseq_args="$BENCH_GZ"
+[ "$GZIP_SINGLE_THREAD" = "1" ] && _blazeseq_args="$BENCH_GZ 1"
 for cmd_label in "kseq" "seq_io" "needletail" "BlazeSeq"; do
     case "$cmd_label" in
         kseq)       out=$("$KSEQ_GZIP_BIN" "$BENCH_GZ" 2>/dev/null) || out="" ;;
         seq_io)     out=$("$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner" "$BENCH_GZ" 2>/dev/null) || out="" ;;
         needletail) out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_GZ" 2>/dev/null) || out="" ;;
-        BlazeSeq)   out=$("$BLAZESEQ_GZIP_BIN" "$BENCH_GZ" 2>/dev/null) || out="" ;;
+        BlazeSeq)   out=$("$BLAZESEQ_GZIP_BIN" $_blazeseq_args 2>/dev/null) || out="" ;;
     esac
     out=$(echo "$out" | tail -1)
     if [ -z "$out" ]; then
@@ -165,31 +184,43 @@ for cmd_label in "kseq" "seq_io" "needletail" "BlazeSeq"; do
 done
 echo "Reference counts: $ref"
 
-# --- CPU benchmark environment (Linux: governor, turbo; no taskset so rapidgzip can use multiple cores) ---
+# --- CPU benchmark environment (Linux: governor, turbo; taskset only when single-threaded) ---
 cpu_bench_setup
 
-# --- Hyperfine (plain hyperfine, no core pinning: BlazeSeq uses rapidgzip which is multi-core) ---
-echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
-hyperfine \
-    --warmup "${WARMUP_RUNS}" \
-    --runs "${HYPERFINE_RUNS}" \
-    --export-markdown "$REPO_ROOT/benchmark_results_gzip.md" \
-    --export-json "$REPO_ROOT/benchmark_results_gzip.json" \
-    -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
-    -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
-    -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
-    -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ"
+# --- Hyperfine: single-threaded run uses taskset to pin to one core; multi-threaded uses plain hyperfine ---
+if [ "$GZIP_SINGLE_THREAD" = "1" ]; then
+    echo "Running hyperfine (single-threaded, warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
+    hyperfine_cmd \
+        --warmup "${WARMUP_RUNS}" \
+        --runs "${HYPERFINE_RUNS}" \
+        --export-markdown "$BENCH_GZIP_MD" \
+        --export-json "$BENCH_GZIP_JSON" \
+        -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
+        -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
+        -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
+        -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ 1"
+else
+    echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
+    hyperfine \
+        --warmup "${WARMUP_RUNS}" \
+        --runs "${HYPERFINE_RUNS}" \
+        --export-markdown "$BENCH_GZIP_MD" \
+        --export-json "$BENCH_GZIP_JSON" \
+        -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
+        -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
+        -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
+        -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ"
+fi
 
-echo "Results written to benchmark_results_gzip.md and benchmark_results_gzip.json"
+echo "Results written to $BENCH_GZIP_MD and $BENCH_GZIP_JSON"
 
 # Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
 if command -v python >/dev/null 2>&1; then
     RECORDS="${ref%% *}"
-    PLOT_JSON="$REPO_ROOT/benchmark_results_gzip.json"
     python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" \
         --repo-root "$REPO_ROOT" \
         --assets-dir "$REPO_ROOT/assets" \
-        --json "$PLOT_JSON" \
+        --json "$BENCH_GZIP_JSON" \
         --runs "${HYPERFINE_RUNS}" \
         --size-gb 3 \
         --reads "${RECORDS:-0}" \

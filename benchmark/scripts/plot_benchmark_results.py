@@ -29,6 +29,7 @@ except ImportError as e:
 DEFAULT_JSON_PATHS = [
     "benchmark_results.json",
     "benchmark_results_gzip.json",
+    "benchmark_results_gzip_single.json",
     "benchmark/throughput_benchmark_results.json",
 ]
 
@@ -109,14 +110,14 @@ def build_setup_text(
         parts.append(f"{reads_to_millions_str(reads)} reads")
     if runs is not None:
         parts.append(f"{runs} runs")
-    if ramfs and basename in ("parser_plain", "parser_gzip"):
+    if ramfs and basename in ("parser_plain", "parser_gzip", "parser_gzip_single"):
         parts.append("ramfs")
     return ", ".join(parts) if parts else ""
 
 
 def setup_text_for_basename(basename: str) -> str:
     """Short (3–5 word) test setup description for the graph (fallback when no args)."""
-    if basename in ("parser_plain", "parser_gzip"):
+    if basename in ("parser_plain", "parser_gzip", "parser_gzip_single"):
         return "3 GB FASTQ, 5 runs, ramfs"
     if basename == "throughput":
         return "3 GB synthetic FASTQ, 5 runs"
@@ -256,6 +257,8 @@ def output_basename(json_path: Path) -> str:
         return "parser_plain"
     if stem == "benchmark_results_gzip":
         return "parser_gzip"
+    if stem == "benchmark_results_gzip_single":
+        return "parser_gzip_single"
     if stem == "throughput_benchmark_results":
         return "throughput"
     return stem
@@ -267,6 +270,8 @@ def title_for_basename(basename: str) -> str:
         return "FASTQ parser benchmark (plain)"
     if basename == "parser_gzip":
         return "FASTQ parser benchmark (gzip)"
+    if basename == "parser_gzip_single":
+        return "FASTQ parser benchmark (gzip, single-threaded)"
     if basename == "throughput":
         return "BlazeSeq throughput: batched vs records vs ref_records"
     return basename.replace("_", " ").title()
@@ -307,7 +312,7 @@ def main() -> int:
                 runs=args.runs,
                 size_gb=args.size_gb,
                 reads=args.reads,
-                ramfs=basename in ("parser_plain", "parser_gzip"),
+                ramfs=basename in ("parser_plain", "parser_gzip", "parser_gzip_single"),
             )
         else:
             setup_text = setup_text_for_basename(basename)
