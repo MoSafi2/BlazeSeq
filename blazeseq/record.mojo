@@ -5,7 +5,7 @@ from blazeseq.quality_schema import (
 )
 from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import _check_ascii
-from blazeseq.errors import ValidationError
+from blazeseq.errors import ValidationError, FastqErrorCode, format_validation_error_from_code
 
 comptime read_header = ord("@")
 comptime quality_header = ord("+")
@@ -30,7 +30,7 @@ struct FastqRecord(
     Phred offset (33 or 64) used to decode quality scores.
 
     Attributes:
-        id: Line starting with '@' (read identifier).
+        id: Read identifier (id line content after the '@'; stored without leading '@').
         sequence: Sequence line.
         quality: Quality line (same length as sequence).
         phred_offset: Phred offset for `phred_scores()` (e.g. 33 for Sanger).
@@ -39,7 +39,7 @@ struct FastqRecord(
         ```mojo
         from blazeseq import FastqRecord
         from blazeseq.quality_schema import generic_schema
-        var rec = FastqRecord("@read1", "ACGT", "IIII", generic_schema)
+        var rec = FastqRecord("read1", "ACGT", "IIII", generic_schema)
         print(rec.id_slice())
         var scores = rec.phred_scores()
         ```
@@ -143,21 +143,22 @@ struct FastqRecord(
 
     @always_inline
     fn id_slice(self) -> StringSlice[MutExternalOrigin]:
-        """Return the @-line (read identifier) as a string slice."""
+        """Return the read identifier (id without leading '@') as a string slice."""
         return self.id.as_string_slice()
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written (id + sequence + quality + \"+\\n\").
+        """Return total byte length when written (\"@\" + id + sequence + quality + \"+\\n\").
         """
-        return len(self.id) + len(self.sequence) + len(self.quality) + 5
+        return 1 + len(self.id) + len(self.sequence) + len(self.quality) + 5
 
     @always_inline
     fn __str__(self) -> String:
         return String.write(self)
 
     fn write[w: Writer](self, mut writer: w):
-        """Write the record in standard four-line FASTQ format to writer (emits \"+\" for the plus line)."""
+        """Write the record in standard four-line FASTQ format to writer (emits \"@\" before id and \"+\" for the plus line)."""
+        writer.write("@")
         writer.write(
             self.id.to_string(),
             "\n",
@@ -200,15 +201,16 @@ struct FastqRecord(
 
 struct Validator(Copyable):
     """
-    Validator for FASTQ record structure and optional ASCII/quality checks.
+    Validator for optional ASCII and quality checks on FASTQ records.
 
-    Used by FastqParser when check_ascii/check_quality are True. Can also be
-    used standalone to validate FastqRecord or RefRecord. validate() runs
-    structure checks plus optional ASCII and quality-range checks.
+    Structure (@, +, seq/qual length) is validated in the parser hot loop; this
+    validator only runs optional ASCII and quality-range checks when enabled via
+    ParserConfig (check_ascii, check_quality). Used by FastqParser when those flags
+    are True; can also be used standalone on FastqRecord or RefRecord.
 
     Attributes:
-        check_ascii: If True, validate_structure and validate() also require ASCII bytes.
-        check_quality: If True, validate() also checks quality bytes against quality_schema.
+        check_ascii: If True, validate() requires all record bytes to be ASCII.
+        check_quality: If True, validate() checks quality bytes against quality_schema.
         quality_schema: Bounds (LOWER, UPPER) and OFFSET for quality validation.
     """
 
@@ -233,44 +235,6 @@ struct Validator(Copyable):
         self.check_quality = check_quality
         self.quality_schema = quality_schema.copy()
 
-    @always_inline
-    fn validate_structure(
-        self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
-    ) raises:
-        """Validate record structure: @ id, seq/qual length.
-
-        Args:
-            record: The `FastqRecord` to validate.
-            record_number: Optional 1-indexed record number for error context (0 if unknown).
-            line_number: Optional 1-indexed line number for error context (0 if unknown).
-        """
-        if len(record.id) == 0 or record.id[0] != UInt8(read_header):
-            raise Error("Sequence id does not start with '@'")
-
-        if len(record.sequence) != len(record.quality):
-            raise Error(
-                "Quality and sequence string do not match in length"
-            )
-
-    @always_inline
-    fn validate_structure(
-        self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
-    ) raises:
-        """Validate record structure: @ id, seq/qual length.
-
-        Args:
-            record: The `RefRecord` to validate.
-            record_number: Optional 1-indexed record number for error context (0 if unknown).
-            line_number: Optional 1-indexed line number for error context (0 if unknown).
-        """
-        if len(record.id) == 0 or record.id[0] != UInt8(read_header):
-            raise Error("Sequence id does not start with '@'")
-
-        if len(record.sequence) != len(record.quality):
-            raise Error(
-                "Quality and sequence string do not match in length"
-            )
-
     fn id_snippet(self, record: FastqRecord) -> String:
         """Extract id snippet from record for error messages."""
         var snippet = String(capacity=100)
@@ -292,161 +256,116 @@ struct Validator(Copyable):
         return snippet
 
     @always_inline
-    fn validate_quality_range(self, record: RefRecord) raises:
-        """Validate each quality byte is within schema LOWER..UPPER.
-
-        Raises:
-            Error: If any quality byte is outside the schema range.
-        """
+    fn _validate_quality_range(self, record: RefRecord) -> FastqErrorCode:
+        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE."""
         for i in range(len(record.quality)):
             if (
                 record.quality[i] > self.quality_schema.UPPER
                 or record.quality[i] < self.quality_schema.LOWER
             ):
-                raise Error(
-                    "Corrupt quality score according to provided schema"
-                )
+                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+        return FastqErrorCode.OK
 
     @always_inline
-    fn validate_ascii(self, record: RefRecord) raises:
-        """Validate all record lines contain only ASCII bytes (0x20-0x7E).
+    fn _validate_ascii(self, record: RefRecord) -> FastqErrorCode:
+        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID."""
+        var c = _check_ascii(record.id)
+        if c != FastqErrorCode.OK:
+            return c
+        c = _check_ascii(record.sequence)
+        if c != FastqErrorCode.OK:
+            return c
+        return _check_ascii(record.quality)
 
-        Raises:
-            Error: If any non-ASCII byte is found.
-        """
-        _check_ascii(record.id)
-        _check_ascii(record.sequence)
-        _check_ascii(record.quality)
-
-    # TODO: Convert to SIMD accelerated version
     @always_inline
-    fn validate_quality_range(self, record: FastqRecord) raises:
-        """Validate each quality byte is within schema LOWER..UPPER.
-
-        Raises:
-            Error: If any quality byte is outside the schema range.
-        """
+    fn _validate_quality_range(self, record: FastqRecord) -> FastqErrorCode:
+        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE."""
         for i in range(len(record.quality)):
             if (
                 record.quality[i] > self.quality_schema.UPPER
                 or record.quality[i] < self.quality_schema.LOWER
             ):
-                raise Error(
-                    "Corrupt quality score according to provided schema"
-                )
+                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+        return FastqErrorCode.OK
 
     @always_inline
-    fn validate_ascii(self, record: FastqRecord) raises:
-        """Validate all record lines contain only ASCII bytes (0x20-0x7E).
+    fn _validate_ascii(self, record: FastqRecord) -> FastqErrorCode:
+        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID."""
+        var c = _check_ascii(record.id.as_span())
+        if c != FastqErrorCode.OK:
+            return c
+        c = _check_ascii(record.sequence.as_span())
+        if c != FastqErrorCode.OK:
+            return c
+        return _check_ascii(record.quality.as_span())
 
-        Raises:
-            Error: If any non-ASCII byte is found.
-        """
-        _check_ascii(record.id.as_span())
-        _check_ascii(record.sequence.as_span())
-        _check_ascii(record.quality.as_span())
-    
     @always_inline
+    fn _validate(self, record: RefRecord) -> FastqErrorCode:
+        """Run configured validations; returns error code. Used by parser hot path."""
+        if self.check_ascii:
+            var code = self._validate_ascii(record)
+            if code != FastqErrorCode.OK:
+                return code
+        if self.check_quality:
+            return self._validate_quality_range(record)
+        return FastqErrorCode.OK
+
+    @always_inline
+    fn _validate(self, record: FastqRecord) -> FastqErrorCode:
+        """Run configured validations; returns error code. Used by parser hot path."""
+        if self.check_ascii:
+            var code = self._validate_ascii(record)
+            if code != FastqErrorCode.OK:
+                return code
+        if self.check_quality:
+            return self._validate_quality_range(record)
+        return FastqErrorCode.OK
+
     fn validate(
         self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
     ) raises:
-        """Run configured validations for a parsed FASTQ record.
+        """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
+
+        Structure is validated in the parser hot loop; here only check_ascii and
+        check_quality are applied when enabled.
 
         Args:
             record: The FastqRecord to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
-        try:
-            self.validate_structure(record, record_number, line_number)
-        except e:
-            if record_number > 0:
-                var val_err = ValidationError(
-                    String(e),
-                    record_number=record_number,
-                    field="record",
-                    record_snippet=self.id_snippet(record),
+        var code = self._validate(record)
+        if code != FastqErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code, record_number, "", self.id_snippet(record)
                 )
-                raise Error(val_err.__str__())
-            raise Error(String(e))
-        if self.check_ascii:
-            try:
-                self.validate_ascii(record)
-            except e:
-                if record_number > 0:
-                    var val_err = ValidationError(
-                        String(e),
-                        record_number=record_number,
-                        field="ascii",
-                        record_snippet=self.id_snippet(record),
-                    )
-                    raise Error(val_err.__str__())
-                raise Error(String(e))
-        if self.check_quality:
-            try:
-                self.validate_quality_range(record)
-            except e:
-                if record_number > 0:
-                    var val_err = ValidationError(
-                        String(e),
-                        record_number=record_number,
-                        field="quality",
-                        record_snippet=self.id_snippet(record),
-                    )
-                    raise Error(val_err.__str__())
-                raise Error(String(e))
+            )
 
-    @always_inline
     fn validate(
         self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
     ) raises:
-        """Run configured validations for a parsed FASTQ record.
+        """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
+
+        Structure is validated in the parser hot loop; here only check_ascii and
+        check_quality are applied when enabled.
 
         Args:
             record: The RefRecord to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
-        try:
-            self.validate_structure(record, record_number, line_number)
-        except e:
-            if record_number > 0:
-                var val_err = ValidationError(
-                    String(e),
-                    record_number=record_number,
-                    field="record",
-                    record_snippet=self.id_snippet(record),
+        var code = self._validate(record)
+        if code != FastqErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code, record_number, "", self.id_snippet(record)
                 )
-                raise Error(val_err.__str__())
-            raise Error(String(e))
-        if self.check_ascii:
-            try:
-                self.validate_ascii(record)
-            except e:
-                if record_number > 0:
-                    var val_err = ValidationError(
-                        String(e),
-                        record_number=record_number,
-                        field="ascii",
-                        record_snippet=self.id_snippet(record),
-                    )
-                    raise Error(val_err.__str__())
-                raise Error(String(e))
-        if self.check_quality:
-            try:
-                self.validate_quality_range(record)
-            except e:
-                if record_number > 0:
-                    var val_err = ValidationError(
-                        String(e),
-                        record_number=record_number,
-                        field="quality",
-                        record_snippet=self.id_snippet(record),
-                    )
-                    raise Error(val_err.__str__())
-                raise Error(String(e))
+            )
 
 
+@align(64)
+@register_passable("trivial")
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     ImplicitlyDestructible, Movable, Sized, Writable
 ):
@@ -458,7 +377,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     immediately; use `FastqRecord` when you need to store or reuse records.
 
     Attributes:
-        id, sequence, quality: Spans into the parser buffer.
+        id, sequence, quality: Spans into the parser buffer (id is identifier without leading '@').
         phred_offset: Phred offset (33 or 64) for quality decoding.
 
     Example:
@@ -503,7 +422,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn id_slice(self) -> StringSlice[origin = Self.origin]:
-        """Return the @-line (read id) as a string slice (valid only while ref is valid).
+        """Return the read identifier (id without leading '@') as a string slice (valid only while ref is valid).
         """
         return StringSlice[origin = Self.origin](
             unsafe_from_utf8=self.id
@@ -516,8 +435,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written (id + sequence + quality + newlines and \"+\\n\")."""
-        return len(self.id) + len(self.sequence) + len(self.quality) + 5
+        """Return total byte length when written (\"@\" + id + sequence + quality + newlines and \"+\\n\")."""
+        return 1 + len(self.id) + len(self.sequence) + len(self.quality) + 5
 
     @always_inline
     fn phred_scores(self) -> List[Byte]:
@@ -537,7 +456,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         return output^
 
     fn write[w: Writer](self, mut writer: w):
-        """Write the record in standard four-line FASTQ format to writer (emits \"+\" for the plus line)."""
+        """Write the record in standard four-line FASTQ format to writer (emits \"@\" before id and \"+\" for the plus line)."""
+        writer.write("@")
         writer.write_string(StringSlice(unsafe_from_utf8=self.id))
         writer.write("\n")
         writer.write_string(StringSlice(unsafe_from_utf8=self.sequence))

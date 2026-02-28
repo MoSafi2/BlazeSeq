@@ -56,8 +56,8 @@ fn test_fastq_record_getters_and_length() raises:
     assert_equal(String(record.id_slice()), "@test_seq")
 
     assert_equal(len(record), 9)
-    # byte_len = len(id) + len(sequence) + len(quality) + 5 (four newlines and "+\n")
-    assert_equal(record.byte_len(), 9 + 9 + 9 + 5)
+    # byte_len = 1 + len(id) + len(sequence) + len(quality) + 5 ("@" + id + four newlines and "+\n")
+    assert_equal(record.byte_len(), 1 + 9 + 9 + 9 + 5)
 
 
 fn test_fastq_record_equality() raises:
@@ -72,50 +72,33 @@ fn test_fastq_record_equality() raises:
 
 
 fn test_fastq_record_string_representation() raises:
-    """__str__ produces four lines (id, seq, +, qual)."""
-    var record = FastqRecord("@id", "ACGT", "!!!!")
+    """__str__ produces four lines (\"@\" + id, seq, +, qual)."""
+    var record = FastqRecord("id", "ACGT", "!!!!")
     var s = record.__str__()
     assert_equal(s.count("\n"), 4)
     assert_true(s.startswith(String("@id")))
 
 
 fn test_fastq_record_from_file_data() raises:
-    """Record built from file lines has expected shape and passes external validation."""
+    """Record built from file lines has expected shape; validate() (ASCII/quality only when disabled) passes."""
     var lines = get_fastq_records()
     var read = FastqRecord(lines[0], lines[1], lines[3], materialize[generic_schema]())
 
     assert_false(len(read) == 0)
     assert_equal(len(read.sequence), len(read.quality))
-    assert_true(read.id.as_string_slice().startswith(String("@")))
 
     _validator_structure_only().validate(read)
 
 
 # ---------------------------------------------------------------------------
-# Validator: structure validation (validate_structure)
+# Validator: no structure (structure is validated in parser hot loop)
 # ---------------------------------------------------------------------------
 
 fn test_validator_structure_valid_passes() raises:
-    """Validator.validate() does not raise for a well-formed record (structure only)."""
+    """Validator.validate() does not raise when no optional checks (ASCII/quality) are enabled."""
     var v = _validator_structure_only()
     var record = FastqRecord("@id", "ACGT", "!!!!")
     v.validate(record)
-
-
-fn test_validator_structure_invalid_seq_id_raises() raises:
-    """Sequence id not starting with '@' causes validate() to raise."""
-    var v = _validator_structure_only()
-    var record = FastqRecord("INVALID", "ATCG", "!!!!")
-    with assert_raises(contains="Sequence id does not start with '@'"):
-        v.validate(record)
-
-
-fn test_validator_structure_mismatched_lengths_raises() raises:
-    """Seq/quality length mismatch causes validate() to raise."""
-    var v = _validator_structure_only()
-    var record = FastqRecord("@test", "ATCG", "!!")
-    with assert_raises(contains="Quality and sequence string do not match in length"):
-        v.validate(record)
 
 
 # ---------------------------------------------------------------------------

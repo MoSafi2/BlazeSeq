@@ -1,6 +1,6 @@
 # FASTQ Parser Benchmarking
 
-This document describes the benchmarking harness that compares BlazeSeq to other FASTQ parsers: **needletail** (Rust), **seq_io** (Rust), **kseq** (C), and **FASTX.jl** (Julia).
+This document describes the benchmarking harness that compares BlazeSeq to other FASTQ parsers: **needletail** (Rust), **seq_io** (Rust), and **kseq** (C).
 
 ## Purpose
 
@@ -36,8 +36,8 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 | File size       | 3 GB  |
 | Read length     | 100 bp (min=max=100) |
 | Quality schema  | generic (Sanger-like) |
-| hyperfine warmup| 2     |
-| hyperfine runs  | 5     |
+| hyperfine warmup| 3     |
+| hyperfine runs  | 15    |
 | hyperfine output| Markdown and JSON in repo root |
 
 ## Prerequisites
@@ -46,11 +46,10 @@ Hard drives and SSDs introduce variable latency and throughput limits. To measur
 |------------|----------------------|--------|
 | pixi       | Mojo, hyperfine, Rust | See [Install pixi](#install-pixi) below |
 | C compiler | kseq (plain C)       | gcc or clang (system; not in pixi) |
-| Julia      | FASTX.jl             | [julialang.org](https://julialang.org) (system; not in pixi) |
 
-The pixi **benchmark** environment supplies Mojo, hyperfine, and Rust. You must install a C compiler and Julia yourself if you want to run the kseq and FASTX.jl benchmarks.
+The pixi **benchmark** environment supplies Mojo, hyperfine, and Rust. You must install a C compiler yourself if you want to run the kseq benchmark.
 
-For the tmpfs workflow on Linux, **sudo** is needed for mount/umount (or use the `/dev/shm` fallback).
+For the tmpfs workflow on Linux, **sudo** is needed for mount/umount (or use the `/dev/shm` fallback). For rigorous CPU timing, the scripts also set the **performance** governor and disable turbo (Linux only); **sudo** may be required for `cpupower` and for writing to `/sys/.../intel_pstate/no_turbo`.
 
 ## Install pixi
 
@@ -77,10 +76,10 @@ pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
 Or use the pixi task:
 
 ```bash
-pixi run -e benchmark benchmark
+pixi run -e benchmark benchmark-plain
 ```
 
-If all tools (pixi, hyperfine, cargo, rustc, gcc or clang, julia) are already on your PATH, you can run the script directly:
+If all tools (pixi, hyperfine, cargo, rustc, gcc or clang) are already on your PATH, you can run the script directly:
 
 ```bash
 ./benchmark/fastq-parser/run_benchmarks.sh
@@ -101,7 +100,6 @@ Record the versions you use when reporting results, for example:
 - **needletail**: `benchmark/fastq-parser/needletail_runner/Cargo.toml` (e.g. 0.6.x)
 - **seq_io**: `benchmark/fastq-parser/seq_io_runner/Cargo.toml` (e.g. 0.3.x)
 - **kseq**: vendored from [lh3/seqtk](https://github.com/lh3/seqtk) (kseq.h)
-- **FASTX.jl**: `benchmark/fastq-parser/Project.toml` (FASTX dependency)
 
 ## Interpreting Results
 
@@ -110,34 +108,137 @@ Record the versions you use when reporting results, for example:
 
 All parsers are run on the same file; the script checks that they report the same `records` and `base_pairs` before running hyperfine, so any difference in time is attributable to parsing and iteration rather than I/O or correctness.
 
+## CPU benchmark environment (Linux)
+
+On **Linux**, the benchmark scripts apply stricter CPU settings to reduce timing variation (frequency scaling and turbo can otherwise cause roughly 5–15% variation):
+
+1. **Performance governor** — Set via `cpupower frequency-set -g performance` (requires `cpupower`, often from `linux-tools-common` or `linux-tools-$(uname -r)`).
+2. **Disable turbo** — On Intel (intel_pstate), turbo is disabled by writing to `/sys/devices/system/cpu/intel_pstate/no_turbo`. Not applied on AMD or if the sysfs path is missing.
+3. **Pin to CPU cores** — Hyperfine is run under `taskset -c "$BENCH_CPUS"` so all runs use the same core(s). Default is core `0`. Override with `BENCH_CPUS=0-3` (or another list) to use multiple cores.
+
+Previous governor and turbo state are **restored on exit** (when the script finishes or is interrupted). If `cpupower` or `taskset` is missing, the scripts still run but print a warning and skip the corresponding step.
+
+To apply the same settings manually before running any benchmark:
+
+```bash
+sudo cpupower frequency-set -g performance
+# Intel: echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
+```
+
+## Plotting benchmark results
+
+After running any benchmark, you can generate **column plots with error bars** from the hyperfine JSON output. Plots are written to the `assets/` directory at the repository root.
+
+- **Script**: `benchmark/scripts/plot_benchmark_results.py`
+- **Output**: PNG files in `assets/` (e.g. `parser_plain.png`, `parser_gzip.png`, `throughput.png`, and for the throughput benchmark also `throughput_gbps.png` with parsing speed in GB/s). Plots include version (from `pixi.toml`), per-bar colors, and a short test-setup note.
+
+When you run the benchmark scripts (plain, gzip, or throughput) with the pixi benchmark environment, plotting is run automatically after hyperfine if Python and matplotlib are available. You can also plot existing results without re-running benchmarks:
+
+```bash
+pixi run -e benchmark benchmark-plot
+```
+
+This reads the standard JSON result files (`benchmark_results.json`, `benchmark_results_gzip.json`, `benchmark/throughput_benchmark_results.json`) and writes the corresponding plots to `assets/`. To plot only specific files. Optional args for the setup subtitle: `--runs`, `--size-gb`, `--reads`, and for gzip benchmarks `--threads` (BlazeSeq decompression thread count):
+
+```bash
+pixi run -e benchmark python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets --json benchmark_results.json
+```
+
 ---
 
 ## Compressed (gzip) FASTQ benchmark
 
-A separate benchmark compares **compressed file parsing** (decompress + parse) across five parsers.
+A separate benchmark compares **compressed file parsing** (decompress + parse) across four parsers.
 
 - **Purpose**: Compare throughput when reading a **gzip-compressed** FASTQ file (`.fastq.gz`). Each tool decompresses on the fly and parses; the benchmark measures combined decompression and parsing time.
 - **Data**: The same 3 GB synthetic FASTQ is generated, then compressed with `gzip` to a single `.fastq.gz` file. The plain file is removed after compression to save space; only the compressed file is used during hyperfine.
-- **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **FASTX.jl** (Julia, CodecZlib), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
-- **Hyperfine**: Same defaults as the plain benchmark: warmup 2, runs 5. Results are written to **separate** files so they do not overwrite the plain benchmark results.
+- **Parsers**: **kseq** (C + zlib), **seq_io** (Rust, flate2), **needletail** (Rust, auto-detects gzip), **BlazeSeq** (Mojo, `RapidgzipReader`).
+- **Hyperfine**: Same defaults as the plain benchmark: warmup 3, runs 15. Results are written to **separate** files so they do not overwrite the plain benchmark results.
+
+### Decompression concurrency: single-threaded vs multi-threaded
+
+The gzip benchmark compares **wall-clock time** (elapsed time) for decompress-and-parse. The four parsers differ in how many CPU cores they use for decompression. This is important when interpreting results.
+
+| Parser    | Decompression backend | Concurrency |
+|-----------|------------------------|-------------|
+| **kseq**  | zlib                   | Single-threaded. One thread reads the gzip stream and decompresses sequentially. |
+| **needletail** | flate2 (or equivalent) | Single-threaded. Decompression runs on one thread. |
+| **seq_io** | flate2                 | Single-threaded. One thread for decompression. |
+| **BlazeSeq** | rapidgzip (via rapidgzip-mojo) | **Multi-threaded.** Parallel decompression; default **4 threads** (override with script arg or `GZIP_BLAZESEQ_THREADS`). |
+
+**Why this matters**
+
+- **kseq, needletail, and seq_io** use classic DEFLATE/zlib-style decompression. The gzip format is inherently sequential in the sense that the standard library APIs (zlib, flate2) decompress one block after another on a single thread. So regardless of how many cores the machine has, these three tools use **one core** for decompression. Their wall-clock time is limited by single-core decompression throughput plus parsing on that same thread.
+
+- **BlazeSeq** is integrated with **rapidgzip**, which performs **parallel gzip decompression**. The compressed stream is split into chunks; multiple threads decompress different chunks concurrently (with dependency handling where the format requires it). On a machine with many cores (e.g. a 12-core processor), BlazeSeq can use all 12 cores for decompression while the other parsers still use only one. So BlazeSeq’s **elapsed time** can be much lower simply because it uses more CPU in parallel—not because the algorithm is “faster per core.”
+
+**How to interpret the numbers**
+
+- The benchmark reports **seconds per run** (wall-clock). A lower time for BlazeSeq often reflects **higher total CPU usage** (more cores busy), not necessarily higher single-thread efficiency.
+- For a **fair single-threaded comparison**, you would run BlazeSeq with rapidgzip restricted to one thread.
+- For **throughput in practice** (e.g. “how quickly can I process this `.fastq.gz` on modern hardware?”), the benchmark as run is relevant: BlazeSeq’s multi-threaded decompression is a feature that reduces wall-clock time when multiple cores are available.
+
+In short: kseq, needletail, and seq_io are single-threaded decompressors; BlazeSeq uses rapidgzip and can run on many cores (e.g. 12). The gzip benchmark is therefore a **multi-threaded (BlazeSeq) vs single-threaded (others)** comparison in terms of decompression, and results should be read with that in mind.
+
+### Single-threaded gzip benchmark (fair comparison)
+
+To compare all four parsers with **one core** (BlazeSeq rapidgzip restricted to a single thread, all tools pinned to one CPU), set `GZIP_BENCH_PARALLELISM=1` (or `single`) or use the pixi task:
+
+```bash
+GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+```
+
+Or:
+
+```bash
+pixi run -e benchmark benchmark-gzip-single
+```
+
+Results are written to `benchmark_results_gzip_single.md` and `benchmark_results_gzip_single.json`; the plot script produces `assets/parser_gzip_single.png`.
+
+### BlazeSeq thread count (multi-threaded only)
+
+The **multi-threaded** gzip benchmark caps BlazeSeq’s rapidgzip decompression at **4 threads by default**. You can override this with the first script argument or the `GZIP_BLAZESEQ_THREADS` environment variable. The single-threaded benchmark always uses 1 thread.
 
 ### Output files
 
-- `benchmark_results_gzip.md` (summary table)
-- `benchmark_results_gzip.json` (full hyperfine output)
+- **Multi-threaded (default):** `benchmark_results_gzip.md`, `benchmark_results_gzip.json`
+- **Single-threaded:** `benchmark_results_gzip_single.md`, `benchmark_results_gzip_single.json`
 
 ### How to run the gzip benchmark
 
 From the **repository root**, with the benchmark environment installed:
 
-```bash
-pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks_gzip.sh
-```
-
-Or use the pixi task:
+**Multi-threaded** (BlazeSeq uses 4 threads by default):
 
 ```bash
 pixi run -e benchmark benchmark-gzip
 ```
 
-**Requirements**: pixi, hyperfine, cargo, rustc, **gcc** (for kseq gzip runner), **julia** (for FASTX.jl), and **gzip** (system). Same ramfs/tmpfs setup as the plain benchmark on Linux (sudo for mount/umount, or `/dev/shm` fallback).
+Use a different thread count by passing it as the first argument (e.g. 8 threads):
+
+```bash
+pixi run -e benchmark benchmark-gzip 8
+pixi run -e benchmark benchmark-gzip 0 # To use all available threads
+```
+
+Or run the script directly (with optional thread count):
+
+```bash
+./benchmark/fastq-parser/run_benchmarks_gzip.sh 0 # Will use all available threads
+./benchmark/fastq-parser/run_benchmarks_gzip.sh 8
+```
+
+**Single-threaded** (BlazeSeq uses 1 thread; all tools pinned to one core):
+
+```bash
+pixi run -e benchmark benchmark-gzip-single
+```
+
+Or:
+
+```bash
+GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+```
+
+**Requirements**: pixi, hyperfine, cargo, rustc, **gcc** (for kseq gzip runner), and **gzip** (system). Same ramfs/tmpfs setup as the plain benchmark on Linux (sudo for mount/umount, or `/dev/shm` fallback).

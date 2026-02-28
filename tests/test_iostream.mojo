@@ -628,7 +628,7 @@ fn test_buffered_reader_large_multiple_refills() raises:
     assert_false(line_iter.buffer.is_eof(), "Should not be at EOF initially")
 
     # Track stream position to verify it's accurate across refills
-    var initial_stream_pos = line_iter.position()
+    var initial_stream_pos = line_iter.stream_position()
     assert_equal(initial_stream_pos, 0, "Stream position should start at 0")
 
     # Read all content using read_exact, tracking position
@@ -637,14 +637,14 @@ fn test_buffered_reader_large_multiple_refills() raises:
     var refill_count = 0
 
     while not line_iter.buffer.is_eof() or line_iter.buffer.available() > 0:
-        var stream_pos_before = line_iter.position()
+        var stream_pos_before = line_iter.stream_position()
 
         if line_iter.buffer.available() > 0:
             var bytes = line_iter.read_exact(min(50, line_iter.buffer.available()))
             total_read += len(bytes)
 
             # Verify stream position advances correctly
-            var stream_pos_after = line_iter.position()
+            var stream_pos_after = line_iter.stream_position()
             assert_equal(
                 stream_pos_after,
                 stream_pos_before + len(bytes),
@@ -780,7 +780,7 @@ fn test_buffered_reader_stream_position_across_refills() raises:
     # Read through multiple refills
     while line_iter.buffer.available() > 0 or not line_iter.buffer.is_eof():
         if line_iter.buffer.available() > 0:
-            var stream_pos = line_iter.position()
+            var stream_pos = line_iter.stream_position()
             positions.append(stream_pos)
 
             var chunk_size = min(20, line_iter.buffer.available())
@@ -788,7 +788,7 @@ fn test_buffered_reader_stream_position_across_refills() raises:
             total_consumed += len(bytes)
 
             # Verify position advanced correctly
-            var new_stream_pos = line_iter.position()
+            var new_stream_pos = line_iter.stream_position()
             assert_equal(
                 new_stream_pos,
                 stream_pos + len(bytes),
@@ -803,7 +803,7 @@ fn test_buffered_reader_stream_position_across_refills() raises:
                 break
 
     # Final position should match total consumed
-    var final_pos = line_iter.position()
+    var final_pos = line_iter.stream_position()
     assert_equal(
         final_pos,
         total_consumed,

@@ -17,7 +17,7 @@ import math
 from blazeseq.CONSTS import *
 from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
 from blazeseq.io.readers import Reader
-from blazeseq.errors import ParseError, buffer_capacity_error
+from blazeseq.errors import ParseError, FastqErrorCode
 from blazeseq.parser import FastqParser
 
 
@@ -25,12 +25,14 @@ from blazeseq.parser import FastqParser
 
 
 comptime NEW_LINE = 10
+comptime AT_SIGN = ord("@")
+comptime PLUS_SIGN = ord("+")
 comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 
 @doc_private
 @register_passable("trivial")
-@fieldwise_init
+@align(64)
 struct RecordOffsets(Copyable, Movable, Writable):
     """
     Byte offsets into the buffer for one FASTQ record, all **relative to
@@ -53,6 +55,34 @@ struct RecordOffsets(Copyable, Movable, Writable):
     var sep_start    : Int   # set after SEQ phase newline is found
     var qual_start   : Int   # set after SEP phase newline is found
     var record_end   : Int   # set after QUAL phase newline is found (or EOF)
+
+    @always_inline
+    fn __init__(
+        out self,
+        header_start: Int = 0,
+        seq_start: Int = 0,
+        sep_start: Int = 0,
+        qual_start: Int = 0,
+        record_end: Int = 0,
+    ):
+        """
+        Initializes a RecordOffsets instance with the given byte offsets for each line
+        in a FASTQ record.
+
+        Arguments:
+            header_start (Int): Offset to the header ("@...") line start. Default is 0.
+            seq_start    (Int): Offset to the sequence line start. Default is 0.
+            sep_start    (Int): Offset to the '+' separator line start. Default is 0.
+            qual_start   (Int): Offset to the quality line start. Default is 0.
+            record_end   (Int): Offset to one past the last quality byte (end of record). Default is 0.
+
+        All offsets are relative to buf._ptr + buf._head at the time of scan.
+        """
+        self.header_start = header_start
+        self.seq_start = seq_start
+        self.sep_start = sep_start
+        self.qual_start = qual_start
+        self.record_end = record_end
 
     @always_inline
     fn is_complete(self) -> Bool:
@@ -98,15 +128,17 @@ struct SearchPhase(Copyable, Equatable, Movable, Writable):
 @doc_private
 fn format_parse_error(
     message: String,
-    parser: FastqParser,
+    record_number: Int,
+    line_number: Int,
+    file_position: Int64,
     record_snippet: String,
 ) -> String:
     """Build ParseError from message and parser context; return formatted string for raising Error."""
     var parse_err = ParseError(
         message,
-        record_number=parser.get_record_number(),
-        line_number=parser.get_line_number(),
-        file_position=parser.get_file_position(),
+        record_number=record_number,
+        line_number=line_number,
+        file_position=file_position,
         record_snippet=record_snippet,
     )
     return parse_err.__str__()
@@ -191,6 +223,7 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 
 
 @parameter
+@doc_private
 fn build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
     var result = List[Int]()
@@ -219,6 +252,13 @@ fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 fn _strip_spaces[
     mut: Bool, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
+    """Trim leading and trailing POSIX whitespace from a byte span."""
+    if len(in_slice) == 0:
+        return in_slice
+
+    if not is_posix_space(in_slice[0]) and not is_posix_space(in_slice[len(in_slice) - 1]):
+        return in_slice
+
     var start = 0
     while start < len(in_slice) and is_posix_space(in_slice[start]):
         start += 1
@@ -233,18 +273,20 @@ fn _strip_spaces[
 @always_inline
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
-](buffer: Span[Byte, o]) raises:
+](buffer: Span[Byte, o]) -> FastqErrorCode:
+    """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set). Returns OK or ASCII_INVALID."""
     var aligned_end = math.align_down(len(buffer), simd_width)
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 
     for i in range(0, aligned_end, simd_width):
         var vec = buffer.unsafe_ptr().load[width=simd_width](i)
         if (vec & bit_mask).reduce_or():
-            raise Error("Non ASCII letters found")
+            return FastqErrorCode.ASCII_INVALID
 
     for i in range(aligned_end, len(buffer)):
         if buffer.unsafe_ptr()[i] & bit_mask != 0:
-            raise Error("Non ASCII letters found")
+            return FastqErrorCode.ASCII_INVALID
+    return FastqErrorCode.OK
 
 
 
@@ -252,6 +294,7 @@ fn _check_ascii[
 @doc_private
 @always_inline
 fn is_posix_space(c: UInt8) -> Bool:
+    """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
     # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
     comptime MASK: UInt64 = (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13) | 
@@ -266,6 +309,7 @@ fn is_posix_space(c: UInt8) -> Bool:
 
 
 @always_inline
+@doc_private
 fn _check_end_qual(
     buf     : BufferedReader,
     base    : Int,
@@ -300,63 +344,219 @@ fn _check_end_qual(
 
 
 @always_inline
-fn _scan_record(
-    buf     : BufferedReader,
-    base    : Int,           # absolute offset of view()[0] at scan start
-    mut offsets : RecordOffsets,
-    phase   : SearchPhase,
-) raises -> Tuple[Bool, RecordOffsets, SearchPhase]:
+@doc_private
+fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
+    """Return the relative-to-base offset at which to resume scanning.
+
+    When resuming a partially-scanned record (phase > HEADER), we start from
+    the field that the current phase is *seeking the end of*, not from the
+    beginning of the record. This avoids re-scanning already-processed bytes.
+
+    HEADER → scan from header_start (always 0 for a fresh record)
+    SEQ    → scan from seq_start    (header newline already found)
+    SEP    → scan from sep_start    (sequence newline already found)
+    QUAL   → scan from qual_start   (separator newline already found)
     """
-    Attempt to locate all four newlines for the record whose first byte is at
-    absolute offset `base` in the buffer.
-
-    `phase` and `offsets` carry state from a previous incomplete scan so we
-    never re-scan bytes already processed (mirrors Rust find_incomplete).
-
-    Returns
-    ───────
-    (complete, offsets, phase)
-      complete=True  → offsets fully populated; call _validate then build RefRecord
-      complete=False → offsets partially populated; phase says where we stopped
-    """
-
-    # ── Phase 0: HEADER ──────────────────────────────────────────────────────
-    # Validate '@' start byte (only check once, on first entry to HEADER phase)
     if phase == SearchPhase.HEADER:
-        var p = _find_newline_from(buf, base, offsets.header_start)
-        if p < 0:
-            return (False, offsets, SearchPhase.HEADER)
-        offsets.seq_start = p   # first byte of sequence line
-
-    # ── Phase 1: SEQ ─────────────────────────────────────────────────────────
-    if phase <= SearchPhase.SEQ:
-        var p = _find_newline_from(buf, base, offsets.seq_start)
-        if p < 0:
-            return (False, offsets, SearchPhase.SEQ)
-        offsets.sep_start = p   # first byte of separator line
-
-    # ── Phase 2: SEP ─────────────────────────────────────────────────────────
-    if phase <= SearchPhase.SEP:
-        # Validate '+' separator byte
-        var p = _find_newline_from(buf, base, offsets.sep_start)
-        if p < 0:
-            return (False, offsets, SearchPhase.SEP)
-        offsets.qual_start = p  # first byte of quality line
-
-    # ── Phase 3: QUAL ────────────────────────────────────────────────────────
-    if phase <= SearchPhase.QUAL:
-        var p = _find_newline_from(buf, base, offsets.qual_start)
-        if p < 0:
-            # No trailing newline — may be EOF (handled by caller via check_end)
-            return (False, offsets, SearchPhase.QUAL)
-        offsets.record_end = p - 1
-
-    return (True, offsets, SearchPhase.HEADER)   # reset phase for next record
+        return offsets.header_start
+    elif phase == SearchPhase.SEQ:
+        return offsets.seq_start
+    elif phase == SearchPhase.SEP:
+        return offsets.sep_start
+    else:  # QUAL
+        return offsets.qual_start
 
 
+# ---------------------------------------------------------------------------
+# Helper: _phase_to_count
+# ---------------------------------------------------------------------------
+
+@always_inline
+@doc_private
+fn _phase_to_count(phase: SearchPhase) -> Int:
+    """Return how many newlines have already been found given the current phase.
+
+    The phase describes which newline we are *currently seeking*:
+      HEADER → 0 found so far (seeking 1st newline: end of @id line)
+      SEQ    → 1 found so far (seeking 2nd newline: end of sequence line)
+      SEP    → 2 found so far (seeking 3rd newline: end of + separator line)
+      QUAL   → 3 found so far (seeking 4th newline: end of quality line)
+    """
+    return Int(phase.value)
 
 
+# ---------------------------------------------------------------------------
+# Helper: _count_to_phase
+# ---------------------------------------------------------------------------
 
+@always_inline
+@doc_private
+fn _count_to_phase(found: Int) -> SearchPhase:
+    """Convert a found-newlines count back to the SearchPhase we are now in.
+
+    After finding `found` newlines we are seeking the (found+1)-th newline,
+    which corresponds to the phase with value `found` (clamped to QUAL=3
+    in case found >= 4, though the caller should not call this when
+    found == 4 since the record is complete).
+
+      0 found → HEADER  (still seeking end of @id line)
+      1 found → SEQ     (still seeking end of sequence line)
+      2 found → SEP     (still seeking end of + line)
+      3 found → QUAL    (still seeking end of quality line)
+      4 found → HEADER  (record complete; reset for next record)
+    """
+    if found >= 4:
+        return SearchPhase.HEADER   # record complete; caller checks Bool
+    return SearchPhase(Int8(found))
+
+
+# ---------------------------------------------------------------------------
+# Helper: _record_offsets_from_phase
+# Returns a mutated copy of offsets with abs_pos written to the right field.
+# Kept out of the hot loop body to keep the loop tight.
+# ---------------------------------------------------------------------------
+
+@always_inline
+@doc_private
+fn _store_newline_offset(
+    mut offsets: RecordOffsets,
+    found: Int,        # 1-indexed: which newline this is (1..4)
+    abs_pos: Int,      # relative-to-base position AFTER the '\n'
+):
+    """Write the abs_pos (first byte of the *next* line) into the correct
+    RecordOffsets field based on which newline was just found.
+
+    found == 1 → seq_start   (byte after end-of-header newline)
+    found == 2 → sep_start   (byte after end-of-sequence newline)
+    found == 3 → qual_start  (byte after end-of-separator newline)
+    found == 4 → record_end  (last byte of quality, i.e. abs_pos - 1)
+    """
+    if found == 1:
+        offsets.seq_start  = abs_pos
+    elif found == 2:
+        offsets.sep_start  = abs_pos
+    elif found == 3:
+        offsets.qual_start = abs_pos
+    else:  # found == 4
+        offsets.record_end = abs_pos - 1   # record_end is inclusive last qual byte
+
+
+@doc_private
+fn _record_snippet[o: Origin](view: Span[Byte, o], offsets: RecordOffsets) -> String:
+    """First 200 bytes of the record for ParseError snippet."""
+    var end = min(offsets.record_end + 1, len(view))
+    end = min(end, 200)
+    if end <= 0:
+        return ""
+    var sp = view[0:end]
+    return String(StringSlice(unsafe_from_utf8=sp))
+
+
+@doc_private
+fn _validate_fastq_structure[o: Origin](
+    view: Span[Byte, o],
+    offsets: RecordOffsets,
+) -> FastqErrorCode:
+    """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code."""
+    if view[offsets.header_start] != Byte(AT_SIGN):
+        return FastqErrorCode.ID_NO_AT
+    if view[offsets.sep_start] != Byte(PLUS_SIGN):
+        return FastqErrorCode.SEP_NO_PLUS
+    var seq_len = offsets.sep_start - offsets.seq_start - 1
+    var qual_len = offsets.record_end - offsets.qual_start
+    if seq_len != qual_len:
+        return FastqErrorCode.SEQ_QUAL_LEN_MISMATCH
+    return FastqErrorCode.OK
+
+
+# ---------------------------------------------------------------------------
+# _scan_record_fused: single-pass SIMD scan for all four FASTQ newlines
+# ---------------------------------------------------------------------------
+
+@always_inline
+@doc_private
+fn _scan_record[o: Origin](
+    view: Span[Byte, o],
+    mut offsets: RecordOffsets,
+    phase: SearchPhase,
+) -> Tuple[Bool, RecordOffsets, SearchPhase, FastqErrorCode]:
+    """Locate all four record-bounding newlines in a single forward pass.
+
+    Replaces four sequential `_find_newline_from` / `memchr` calls with one
+    SIMD sweep. On a typical 150 bp Illumina record (~200 bytes total) this
+    reduces the number of SIMD iterations from 4 × ⌈200/W⌉ to ⌈200/W⌉.
+
+    Resumable: `phase` and `offsets` carry state from a previous incomplete
+    scan so bytes before `_phase_start_offset(offsets, phase)` are never
+    re-examined (mirrors the resume semantics of the original `_scan_record`).
+
+    Args:
+        view:    The byte span to scan (e.g. buffer view from BufferedReader
+                 or any other contiguous byte slice). Offsets are relative to
+                 view[0].
+        offsets: Partially-populated offsets; fields for already-found newlines
+                 are preserved and only the remaining fields are written.
+        phase:   Which newline we are currently seeking.
+
+    Returns:
+        (complete, offsets, phase, parse_code)
+        complete=True and parse_code=OK → all four newlines found and structure valid.
+        complete=True and parse_code!=OK → structure check failed; caller builds error.
+        complete=False → ran out of buffer; offsets partially populated;
+                         phase indicates where to resume on the next call; parse_code=OK.
+    """
+    comptime W = SIMD_U8_WIDTH
+    comptime nl_splat = SIMD[DType.uint8, W](new_line)
+
+    # ── Determine where to start scanning ────────────────────────────────────
+    var start_rel = _phase_start_offset(offsets, phase)
+    var scan_span = view[start_rel:]
+    var ptr       = scan_span.unsafe_ptr()
+    var avail     = len(scan_span)
+
+    if avail <= 0:
+        return (False, offsets, phase, FastqErrorCode.OK)
+
+    # How many newlines already found (= how many offsets fields are set)
+    var found = _phase_to_count(phase)
+
+    # ── SIMD aligned section ──────────────────────────────────────────────────
+    var i       = 0
+    var aligned = math.align_down(avail, W)
+
+    while i < aligned and found < 4:
+        var v    = ptr.load[width=W](i)
+        var mask = pack_bits(v.eq(nl_splat))
+
+        # Drain all set bits from this SIMD word before moving to the next.
+        # Inner loop is ≤ 4 iterations total across the whole outer loop.
+        while mask != 0 and found < 4:
+            var bit     = Int(count_trailing_zeros(mask))
+            var abs_pos = start_rel + i + bit + 1   # first byte of next line
+            found      += 1
+            _store_newline_offset(offsets, found, abs_pos)
+            mask        &= mask - 1                  # clear lowest set bit
+        i += W
+
+    if found == 4:
+        var code = _validate_fastq_structure(view, offsets)
+        return (True, offsets, SearchPhase.HEADER, code)
+
+    # ── Scalar tail: bytes [aligned, avail) ──────────────────────────────────
+    # Handles the final < W bytes that the SIMD loop could not process, and
+    # also the case where the entire record is smaller than one SIMD word.
+    i = aligned
+    while i < avail and found < 4:
+        if ptr[i] == new_line:
+            var abs_pos = start_rel + i + 1
+            found      += 1
+            _store_newline_offset(offsets, found, abs_pos)
+        i += 1
+
+    if found == 4:
+        var code = _validate_fastq_structure(view, offsets)
+        return (True, offsets, _count_to_phase(found), code)
+    return (False, offsets, _count_to_phase(found), FastqErrorCode.OK)
 
 
 @always_inline
@@ -411,7 +611,7 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
             Parsing with generic schema."""
         )
         return materialize[generic_schema]()
-    return schema^
+    return schema
 
 
 fn compute_num_reads_for_size(
@@ -454,7 +654,6 @@ fn compute_num_reads_for_size(
     var bytes_per_record = header_size + 2 * avg_read_length + 4
     return target_size_bytes // bytes_per_record
 
-
 fn generate_synthetic_fastq_buffer(
     num_reads: Int,
     min_length: Int,
@@ -462,20 +661,24 @@ fn generate_synthetic_fastq_buffer(
     min_phred: Int,
     max_phred: Int,
     quality_schema: String,
+    gc_bias: Float32 = 0.5,
 ) raises -> List[Byte]:
     """Generate a contiguous in-memory FASTQ buffer with configurable read length and quality distribution.
 
     Read lengths are chosen deterministically in [min_length, max_length] (inclusive).
-    Per-base Phred scores are chosen deterministically in [min_phred, max_phred], then converted
-    to ASCII using the given quality schema and clamped to the schema's valid range.
+    Per-base Phred scores follow a positional decay model (high quality at 5' end, degrading
+    toward 3' end), mimicking real Illumina quality profiles. Base composition follows a
+    configurable GC content model with pseudorandom distribution.
 
     Args:
         num_reads: Number of FASTQ records to generate.
         min_length: Minimum sequence length per read (inclusive).
         max_length: Maximum sequence length per read (inclusive).
-        min_phred: Minimum Phred score per base (inclusive).
-        max_phred: Maximum Phred score per base (inclusive).
+        min_phred: Minimum Phred score per base (inclusive) — used as the floor for 3' end quality.
+        max_phred: Maximum Phred score per base (inclusive) — used as the ceiling for 5' end quality.
         quality_schema: Schema name (e.g. "sanger", "solexa", "illumina_1.8", "generic").
+        gc_bias: Target GC fraction in [0.0, 1.0]. Default 0.5 (50% GC).
+                 Values above 0.5 increase G/C frequency; below 0.5 increase A/T frequency.
 
     Returns:
         List[Byte] containing valid 4-line FASTQ data; pass to MemoryReader for parsing.
@@ -485,6 +688,8 @@ fn generate_synthetic_fastq_buffer(
     """
     if num_reads <= 0:
         return List[Byte]()
+    if num_reads < 0 or min_length < 0 or max_length < 0 or min_phred < 0 or max_phred < 0:
+        raise Error("generate_synthetic_fastq_buffer: invalid arguments")
     if min_length > max_length:
         raise Error("generate_synthetic_fastq_buffer: min_length must be <= max_length")
     if min_phred > max_phred:
@@ -496,52 +701,112 @@ fn generate_synthetic_fastq_buffer(
     var upper_int = Int(schema.UPPER)
 
     var capacity_estimate = num_reads * (max_length + 50)
-    if capacity_estimate < 0:
-        capacity_estimate = 4096
     var out = List[Byte](capacity=capacity_estimate)
 
-    var bases = [Byte(ord("A")), Byte(ord("C")), Byte(ord("G")), Byte(ord("T"))]
+    # Base LUT: 8 entries so index selects bases with configurable GC probability.
+    # With gc_bias = 0.5: 2 G, 2 C, 2 A, 2 T (equal). Bias shifts the G/C vs A/T split.
+    # We use 8 slots: floor(gc_bias * 8) slots get G/C, rest get A/T.
+    # Slots alternate G/C and A/T to spread selection evenly across the LUT.
+    var gc_slots = Int(gc_bias * 8.0 + 0.5)  # round to nearest
+    if gc_slots < 0:
+        gc_slots = 0
+    if gc_slots > 8:
+        gc_slots = 8
+    var at_slots = 8 - gc_slots
+
+    var base_lut = List[Byte](capacity=8)
+    # Fill GC slots alternating G and C
+    for k in range(gc_slots):
+        if k % 2 == 0:
+            base_lut.append(Byte(ord("G")))
+        else:
+            base_lut.append(Byte(ord("C")))
+    # Fill AT slots alternating A and T
+    for k in range(at_slots):
+        if k % 2 == 0:
+            base_lut.append(Byte(ord("A")))
+        else:
+            base_lut.append(Byte(ord("T")))
+
     var newline = Byte(ord("\n"))
     var plus = Byte(ord("+"))
 
-    # Constant header size: @read_<zero_padded_i>\n
+    # Header zero-padding width
     var num_digits: Int = 1
     if num_reads > 1:
         num_digits = len(String(num_reads - 1))
 
+    # Quality model parameters.
+    # We model mean Phred as a linear decay from q_start (5' end) to q_end (3' end),
+    # with per-base noise added on top. This matches the classic Illumina "ski slope" profile.
+    #
+    # q_start = max_phred (caller controls the 5' quality ceiling)
+    # q_end   = min_phred (caller controls the 3' quality floor)
+    # noise   = small jitter so consecutive bases aren't identical
+    var q_start = max_phred  # Phred at position 0
+    var q_end   = min_phred  # Phred at last position
+    var q_range = q_start - q_end  # total drop across the read (>= 0)
+
+    # Noise amplitude: +/- noise_amp Phred units around the decayed mean.
+    # We cap it so it can't push scores outside [min_phred, max_phred].
+    var noise_amp = (q_range // 6) + 1  # ~15% of range, minimum 1
+
     for i in range(num_reads):
-        # Deterministic read length in [min_length, max_length]
+        # --- Read length ---
         var read_len: Int
         if max_length == min_length:
             read_len = min_length
         else:
             read_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
 
-        # Header: @read_<zero_padded_i>\n (constant size per record)
+        # --- Header ---
         var index_str = String(i)
         while len(index_str) < num_digits:
             index_str = "0" + index_str
         var header_str = "@read_" + index_str + "\n"
-        var header_bytes = header_str.as_bytes()
-        out.extend(header_bytes)
+        out.extend(header_str.as_bytes())
 
-        # Sequence line (same base per read: ACGT pattern by read index)
+        # --- Sequence line ---
+        # We use a fast LCG per read seeded from i to get pseudorandom base indices.
+        # Multiplier/increment from Knuth MMIX; state is 64-bit truncated to Int.
+        var lcg_state: Int = (i * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
         for p in range(read_len):
-            out.append(bases[i % 4])
+            lcg_state = (lcg_state * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
+            var slot = (lcg_state >> 33) % 8  # use upper bits for better distribution
+            out.append(base_lut[slot])
         out.append(newline)
 
-        # +\n
+        # --- +\n ---
         out.append(plus)
         out.append(newline)
 
-        # Quality line: Phred in [min_phred, max_phred], then ASCII = OFFSET + phred clamped to [LOWER, UPPER]
-        var phred_range = max_phred - min_phred + 1
+        # --- Quality line: positional decay + noise ---
+        # At position p in [0, read_len-1]:
+        #   mean_phred(p) = q_start - round(q_range * p / (read_len - 1))
+        # For reads of length 1, mean = q_start throughout.
+        # Noise: deterministic jitter via a second LCG stream (read + position mixed).
+        var qrng: Int = (i * 2654435761 + 1013904223) & 0x7FFFFFFFFFFFFFFF
+        var len_minus_1 = read_len - 1
         for p in range(read_len):
-            var phred: Int
-            if phred_range == 1:
-                phred = min_phred
+            # Mean quality at this position (linear decay)
+            var mean_phred: Int
+            if len_minus_1 == 0:
+                mean_phred = q_start
             else:
-                phred = min_phred + ((i + p) * 31 + 7) % phred_range
+                mean_phred = q_start - (q_range * p + len_minus_1 // 2) // len_minus_1  # integer rounding
+
+            # Deterministic noise in [-noise_amp, +noise_amp]
+            qrng = (qrng * 1664525 + 1013904223) & 0x7FFFFFFFFFFFFFFF
+            var noise_raw = Int((qrng >> 17) % (2 * noise_amp + 1))  # [0, 2*noise_amp]
+            var phred = mean_phred + noise_raw - noise_amp
+
+            # Clamp to caller's [min_phred, max_phred]
+            if phred < min_phred:
+                phred = min_phred
+            elif phred > max_phred:
+                phred = max_phred
+
+            # Convert to ASCII and clamp to schema range
             var ascii_int = offset_int + phred
             if ascii_int < lower_int:
                 ascii_int = lower_int
@@ -551,5 +816,3 @@ fn generate_synthetic_fastq_buffer(
         out.append(newline)
 
     return out^
-
-

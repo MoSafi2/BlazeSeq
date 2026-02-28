@@ -1,4 +1,108 @@
-"""Custom error types for BlazeSeq with contextual information."""
+"""Custom error types for BlazeSeq with contextual information.
+
+Public API:
+- FastqErrorCode: trivial enum for hot-path returns (no raise)
+- ParseError, ValidationError: structs with message and context
+- format_parse_error_from_code, format_validation_error_from_code: build error strings from codes
+- buffer_capacity_error: build buffer-capacity message for callers that raise Error(...)
+"""
+
+# ---------------------------------------------------------------------------
+# FastqErrorCode: trivial enum for hot-path error returns (no raise)
+# ---------------------------------------------------------------------------
+
+@register_passable("trivial")
+struct FastqErrorCode(Copyable, Equatable):
+    """Trivial error code returned by low-level parsing/validation; caller builds and raises."""
+
+    var value: Int8
+
+    @always_inline
+    fn __init__(out self, value: Int8):
+        self.value = value
+
+    comptime OK = Self(0)
+    # Parse structure (_validate_fastq_structure)
+    comptime ID_NO_AT = Self(1)
+    comptime SEP_NO_PLUS = Self(2)
+    comptime SEQ_QUAL_LEN_MISMATCH = Self(3)
+    # Validation
+    comptime ASCII_INVALID = Self(4)
+    comptime QUALITY_OUT_OF_RANGE = Self(5)
+    # Refill / EOF
+    comptime EOF = Self(6)
+    comptime UNEXPECTED_EOF = Self(7)
+    comptime BUFFER_EXCEEDED = Self(8)
+    comptime BUFFER_AT_MAX = Self(9)
+
+    @always_inline
+    fn __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    @always_inline
+    fn __ne__(self, other: Self) -> Bool:
+        return self.value != other.value
+
+
+fn _message_for_code(code: FastqErrorCode) -> String:
+    """Internal: return default message for a FastqErrorCode. Used when building ParseError/ValidationError."""
+    if code == FastqErrorCode.ID_NO_AT:
+        return "Sequence id line does not start with '@'"
+    if code == FastqErrorCode.SEP_NO_PLUS:
+        return "Separator line does not start with '+'"
+    if code == FastqErrorCode.SEQ_QUAL_LEN_MISMATCH:
+        return "Quality and sequence line do not match in length"
+    if code == FastqErrorCode.ASCII_INVALID:
+        return "Non ASCII letters found"
+    if code == FastqErrorCode.QUALITY_OUT_OF_RANGE:
+        return "Corrupt quality score according to provided schema"
+    if code == FastqErrorCode.UNEXPECTED_EOF:
+        return "Unexpected end of file in FASTQ record"
+    if code == FastqErrorCode.BUFFER_EXCEEDED:
+        return "FASTQ record exceeds buffer capacity"
+    if code == FastqErrorCode.BUFFER_AT_MAX:
+        return "FASTQ record exceeds maximum buffer capacity"
+    return "Parse or validation error"
+
+
+fn format_parse_error_from_code(
+    code: FastqErrorCode,
+    record_number: Int,
+    line_number: Int,
+    file_position: Int64,
+    record_snippet: String = "",
+) -> String:
+    """Build full ParseError string from error code and context (cold path)."""
+    var parse_err = ParseError(
+        _message_for_code(code),
+        record_number=record_number,
+        line_number=line_number,
+        file_position=file_position,
+        record_snippet=record_snippet,
+    )
+    return parse_err.__str__()
+
+
+fn format_validation_error_from_code(
+    code: FastqErrorCode,
+    record_number: Int,
+    field: String = "",
+    record_snippet: String = "",
+) -> String:
+    """Build full ValidationError string from error code and context (cold path)."""
+    var field_name = field
+    if len(field_name) == 0 and code == FastqErrorCode.ASCII_INVALID:
+        field_name = "ascii"
+    elif len(field_name) == 0 and code == FastqErrorCode.QUALITY_OUT_OF_RANGE:
+        field_name = "quality"
+    var val_err = ValidationError(
+        _message_for_code(code),
+        record_number=record_number,
+        field=field_name,
+        record_snippet=record_snippet,
+    )
+    return val_err.__str__()
+
 
 struct ParseError(Writable):
     """Error raised during FASTQ parsing with contextual information."""

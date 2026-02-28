@@ -10,3 +10,9 @@ path = "src/main.rs"
 
 [dependencies]
 needletail = "0.6.3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"

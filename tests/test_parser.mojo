@@ -16,10 +16,11 @@ from testing import assert_equal, assert_raises, assert_true, TestSuite
 comptime test_dir = "tests/test_data/fastq_parser/"
 
 comptime corrput_qu_score = "Corrupt quality score according to provided schema"
-comptime cor_len = "Quality and sequence string do not match in length"
-comptime cor_seq_hed = "Sequence id does not start with '@'"
+comptime cor_len = "Quality and sequence line do not match in length"
+comptime cor_seq_hed = "Sequence id line does not start with '@'"
 comptime cor_qu_hed = "Plus line does not start with '+'"
 comptime plus_line_start = "Plus line does not start with '+'"
+comptime sep_line_start = "Separator line does not start with '+'"
 comptime non_mat_hed = "Plus line is not the same as the header"
 comptime len_mismatch = "Plus line is not the same length as the header"
 
@@ -38,12 +39,24 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
     except e:
         raised = True
         err_msg = String(e)
-        if err_msg.find(msg) < 0 and err_msg.find("EOF") < 0 and err_msg.find(cor_len) < 0 and err_msg.find(cor_seq_hed) < 0 and err_msg.find(plus_line_start) < 0:
+        if (
+            err_msg.find(msg) < 0
+            and err_msg.find("EOF") < 0
+            and err_msg.find(cor_len) < 0
+            and err_msg.find(cor_seq_hed) < 0
+            and err_msg.find(plus_line_start) < 0
+            and err_msg.find(sep_line_start) < 0
+        ):
             print(err_msg)
             raise
     assert_true(raised, "invalid file should raise: " + file)
     assert_true(
-        err_msg.find(msg) >= 0 or err_msg.find("EOF") >= 0 or err_msg.find(cor_len) >= 0 or err_msg.find(cor_seq_hed) >= 0 or err_msg.find(plus_line_start) >= 0,
+        err_msg.find(msg) >= 0
+        or err_msg.find("EOF") >= 0
+        or err_msg.find(cor_len) >= 0
+        or err_msg.find(cor_seq_hed) >= 0
+        or err_msg.find(plus_line_start) >= 0
+        or err_msg.find(sep_line_start) >= 0,
         "expected error containing '" + msg + "', EOF, or length mismatch, got: " + err_msg,
     )
 
@@ -96,9 +109,12 @@ fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
         or err_msg.find("EOF") >= 0
         or err_msg.find(cor_len) >= 0
         or err_msg.find(cor_seq_hed) >= 0
-        or err_msg.find(plus_line_start) >= 0,
-        "expected error containing '" + msg + "' or parse/buffer error, got: "
-        + err_msg,
+        or err_msg.find(plus_line_start) >= 0
+        or err_msg.find(sep_line_start) >= 0,
+        "expected error containing '"
+            + msg
+            + "' or parse/buffer error, got: "
+            + err_msg,
     )
 
 
@@ -296,7 +312,7 @@ fn test_record_parser_for_loop() raises:
     assert_equal(len(records), 2, "Should iterate over 2 records")
     assert_equal(
         records[0].id.to_string(),
-        "@r1",
+        "r1",
         "First record header should match",
     )
     assert_equal(
@@ -306,7 +322,7 @@ fn test_record_parser_for_loop() raises:
     )
     assert_equal(
         records[1].id.to_string(),
-        "@r2",
+        "r2",
         "Second record header should match",
     )
 
@@ -353,7 +369,7 @@ fn test_record_parser_ascii_validation_disabled() raises:
     var record = parser.next_record()
     assert_equal(
         record.id.to_string(),
-        "@r1",
+        "r1",
         "Parser should yield record when ASCII validation is disabled",
     )
 
@@ -416,7 +432,7 @@ fn test_batched_parser_single_batch_content() raises:
     var batch = parser.next_batch(4)
     assert_equal(len(batch), 1, "One record in batch")
     var rec = batch.get_record(0)
-    assert_equal(rec.id.to_string(), "@seq1", "Id should match")
+    assert_equal(rec.id.to_string(), "seq1", "Id should match")
     assert_equal(rec.sequence.to_string(), "ACGT", "Sequence should match")
     assert_equal(rec.quality.to_string(), "!!!!", "Quality should match")
 
@@ -508,11 +524,11 @@ fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r1 = parser.next_ref()
-    assert_equal(String(r1.id_slice()), "@r1", "First record id")
+    assert_equal(String(r1.id_slice()), "r1", "First record id")
     assert_equal(String(r1.sequence_slice()), "ACGT", "First record seq")
     assert_equal(String(r1.quality_slice()), "!!!!", "First record quality")
     var r2 = parser.next_ref()
-    assert_equal(String(r2.id_slice()), "@r2", "Second record id")
+    assert_equal(String(r2.id_slice()), "r2", "Second record id")
     assert_equal(String(r2.sequence_slice()), "TGCA", "Second record seq")
     with assert_raises(contains="EOF"):
         _ = parser.next_ref()
@@ -541,7 +557,7 @@ fn test_ref_parser_fallback_record_span_chunks() raises:
     var parser = FastqParser[MemoryReader, ref_parser_small_config](reader^)
 
     var r = parser.next_ref()
-    assert_equal(String(r.id_slice()), "@r1", "Id should match")
+    assert_equal(String(r.id_slice()), "r1", "Id should match")
     assert_equal(String(r.sequence_slice()), "ACGT", "Sequence should match")
     assert_equal(String(r.quality_slice()), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
@@ -563,7 +579,7 @@ fn test_record_parser_fallback_record_span_chunks() raises:
     var parser = FastqParser[MemoryReader, record_parser_small_config](reader^)
 
     var r = parser.next_record()
-    assert_equal(r.id.to_string(), "@r1", "Id should match")
+    assert_equal(r.id.to_string(), "r1", "Id should match")
     assert_equal(r.sequence.to_string(), "ACGT", "Sequence should match")
     assert_equal(r.quality.to_string(), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
@@ -578,14 +594,14 @@ fn test_record_parser_multiple_records_span_chunks() raises:
     var parser = FastqParser[MemoryReader, record_parser_small_config](reader^)
 
     var r1 = parser.next_record()
-    assert_equal(r1.id.to_string(), "@r1", "First record id")
+    assert_equal(r1.id.to_string(), "r1", "First record id")
     assert_equal(r1.sequence.to_string(), "A", "First record seq")
     assert_equal(r1.quality.to_string(), "!", "First record quality")
     var r2 = parser.next_record()
-    assert_equal(r2.id.to_string(), "@r2", "Second record id")
+    assert_equal(r2.id.to_string(), "r2", "Second record id")
     assert_equal(r2.sequence.to_string(), "B", "Second record seq")
     var r3 = parser.next_record()
-    assert_equal(r3.id.to_string(), "@r3", "Third record id")
+    assert_equal(r3.id.to_string(), "r3", "Third record id")
     assert_equal(r3.sequence.to_string(), "C", "Third record seq")
     assert_equal(r3.quality.to_string(), "!", "Third record quality")
     with assert_raises(contains="EOF"):
@@ -604,10 +620,10 @@ fn test_record_parser_records_iterator_span_chunks() raises:
         records.append(record^)
 
     assert_equal(len(records), 2, "Should yield two records")
-    assert_equal(records[0].id.to_string(), "@a", "First record id")
+    assert_equal(records[0].id.to_string(), "a", "First record id")
     assert_equal(records[0].sequence.to_string(), "AC", "First record seq")
     assert_equal(records[0].quality.to_string(), "!!", "First record quality")
-    assert_equal(records[1].id.to_string(), "@b", "Second record id")
+    assert_equal(records[1].id.to_string(), "b", "Second record id")
     assert_equal(records[1].sequence.to_string(), "TG", "Second record seq")
     assert_equal(records[1].quality.to_string(), "##", "Second record quality")
 
@@ -620,11 +636,11 @@ fn test_ref_parser_multiple_records_next_loop() raises:
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r1 = parser.next_ref()
-    assert_equal(String(r1.id_slice()), "@r1", "First record id")
+    assert_equal(String(r1.id_slice()), "r1", "First record id")
     assert_equal(String(r1.sequence_slice()), "ACGT", "First record seq")
     assert_equal(String(r1.quality_slice()), "!!!!", "First record quality")
     var r2 = parser.next_ref()
-    assert_equal(String(r2.id_slice()), "@r2", "Second record id")
+    assert_equal(String(r2.id_slice()), "r2", "Second record id")
     assert_equal(String(r2.sequence_slice()), "TGCA", "Second record seq")
     assert_equal(String(r2.quality_slice()), "####", "Second record quality")
     with assert_raises(contains="EOF"):
@@ -648,7 +664,7 @@ fn test_ref_parser_for_loop_iteration() raises:
         count += 1
 
     assert_equal(count, 2, "Should yield two records")
-    assert_equal(first_id, "@r1", "First record id")
+    assert_equal(first_id, "r1", "First record id")
     assert_equal(last_seq, "TGCA", "Last record sequence")
 
 
@@ -659,7 +675,7 @@ fn test_ref_parser_eof_after_one_record() raises:
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
     var r = parser.next_ref()
-    assert_equal(String(r.id_slice()), "@r1", "Id should match")
+    assert_equal(String(r.id_slice()), "r1", "Id should match")
     assert_equal(String(r.sequence_slice()), "ACGT", "Sequence should match")
     assert_equal(String(r.quality_slice()), "!!!!", "Quality should match")
     with assert_raises(contains="EOF"):
@@ -682,7 +698,17 @@ fn test_ref_parser_invalid_header() raises:
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
 
-    with assert_raises(contains="Sequence id does not start with '@'"):
+    with assert_raises(contains="Sequence id line does not start with '@'"):
+        _ = parser.next_ref()
+
+
+fn test_ref_parser_mismatched_seq_qual_length() raises:
+    """FastqParser: seq and qual line length mismatch raises in hot loop."""
+    var content = "@r1\nACGT\n+\n!!!\n"
+    var reader = MemoryReader(content.as_bytes())
+    var parser = FastqParser[MemoryReader, ref_parser_large_config](reader^)
+
+    with assert_raises(contains="Quality and sequence line do not match in length"):
         _ = parser.next_ref()
 
 
@@ -694,14 +720,14 @@ fn test_ref_parser_multiple_records_span_chunks() raises:
     var parser = FastqParser[MemoryReader, ref_parser_small_config](reader^)
 
     var r1 = parser.next_ref()
-    assert_equal(String(r1.id_slice()), "@r1", "First record id")
+    assert_equal(String(r1.id_slice()), "r1", "First record id")
     assert_equal(String(r1.sequence_slice()), "A", "First record seq")
     assert_equal(String(r1.quality_slice()), "!", "First record quality")
     var r2 = parser.next_ref()
-    assert_equal(String(r2.id_slice()), "@r2", "Second record id")
+    assert_equal(String(r2.id_slice()), "r2", "Second record id")
     assert_equal(String(r2.sequence_slice()), "B", "Second record seq")
     var r3 = parser.next_ref()
-    assert_equal(String(r3.id_slice()), "@r3", "Third record header")
+    assert_equal(String(r3.id_slice()), "r3", "Third record header")
     assert_equal(String(r3.sequence_slice()), "C", "Third record seq")
     assert_equal(String(r3.quality_slice()), "!", "Third record quality")
     with assert_raises(contains="EOF"):
@@ -729,7 +755,7 @@ fn test_ref_parser_long_line_with_growth() raises:
     var parser = FastqParser[MemoryReader, ref_parser_growth_config](reader^)
 
     var r = parser.next_ref()
-    assert_equal(String(r.id_slice()), "@id", "Id should match")
+    assert_equal(String(r.id_slice()), "id", "Id should match")
     assert_equal(len(r.sequence_slice()), 20, "Sequence length 20")
     assert_equal(len(r.quality_slice()), 20, "Quality length 20")
     assert_equal(

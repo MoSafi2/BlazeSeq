@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq, FASTX.jl.
-# Generates 3GB synthetic FASTQ on a ramfs mount, runs each parser with hyperfine.
+# FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq.
+# Generates synthetic FASTQ on a ramfs mount (default 3GB; set FASTQ_SIZE_GB), runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh
-# Requires: pixi, hyperfine, cargo, gcc or clang, julia. On Linux: sudo for ramfs mount/umount.
+# Requires: pixi, hyperfine, cargo, gcc or clang. On Linux: sudo for ramfs mount/umount.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
+
+# Source CPU benchmark setup (performance governor, disable turbo, taskset) on Linux
+# shellcheck source=../scripts/cpu_bench_setup.sh
+source "$SCRIPT_DIR/../scripts/cpu_bench_setup.sh"
 
 # Ensure common tool install locations are on PATH (e.g. when script runs non-interactively)
 export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:${PATH}"
@@ -30,7 +34,6 @@ check_cmd rustc      || missing+=(rustc)
 if ! check_cmd gcc && ! check_cmd clang; then
     missing+=(gcc or clang)
 fi
-check_cmd julia      || missing+=(julia)
 
 if [ ${#missing[@]} -gt 0 ]; then
     echo "Missing required tool(s): ${missing[*]}"
@@ -38,14 +41,23 @@ if [ ${#missing[@]} -gt 0 ]; then
     echo "  hyperfine:   https://github.com/sharkdp/hyperfine (e.g. cargo install hyperfine -> ~/.cargo/bin)"
     echo "  Rust:        https://rustup.rs (cargo, rustc -> ~/.cargo/bin)"
     echo "  C compiler:  gcc or clang"
-    echo "  Julia:       https://julialang.org"
     echo "PATH used: $PATH"
     exit 1
 fi
 
+# --- Hyperfine configuration ---
+# Number of warmup runs and measured runs; override via env:
+#   WARMUP_RUNS=1 HYPERFINE_RUNS=10 ./benchmark/fastq-parser/run_benchmarks.sh
+WARMUP_RUNS="${WARMUP_RUNS:-3}"
+HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
+
+# --- FASTQ size (GB) ---
+# Override via env: FASTQ_SIZE_GB=1 ./benchmark/fastq-parser/run_benchmarks.sh
+FASTQ_SIZE_GB="${FASTQ_SIZE_GB:-3}"
+
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
-BENCH_FILE="${BENCH_DIR}/blazeseq_bench_1g.fastq"
+BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
 MOUNTED=0
 
 cleanup_mount() {
@@ -59,7 +71,7 @@ cleanup_mount() {
         rm -rf "$BENCH_DIR"
     fi
 }
-trap cleanup_mount EXIT
+trap 'cleanup_mount; cpu_bench_teardown' EXIT
 
 case "$(uname -s)" in
     Linux)
@@ -72,7 +84,7 @@ case "$(uname -s)" in
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_bench_$$"
             mkdir -p "$BENCH_DIR"
-            BENCH_FILE="${BENCH_DIR}/blazeseq_bench_1g.fastq"
+            BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
         fi
         ;;
     Darwin)
@@ -83,14 +95,15 @@ case "$(uname -s)" in
         ;;
 esac
 
-# --- Generate 3GB synthetic FASTQ ---
-echo "Generating 3GB synthetic FASTQ at $BENCH_FILE ..."
-if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 3; then
-    echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
+# --- Generate synthetic FASTQ ---
+echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
+if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
+    echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
     exit 1
 fi
 
-# --- Build Rust runners ---
+# --- Build Rust runners (native CPU for consistent benchmarks) ---
+export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
 echo "Building needletail_runner ..."
 (cd "$SCRIPT_DIR/needletail_runner" && cargo build --release) || {
     echo "Failed to build needletail_runner. Check Rust toolchain and dependencies."
@@ -124,23 +137,15 @@ if ! pixi run mojo build -I . -o "$BLAZESEQ_BIN" "$SCRIPT_DIR/run_blazeseq.mojo"
     exit 1
 fi
 
-# --- Ensure Julia (FASTX.jl) dependencies are installed ---
-echo "Ensuring Julia benchmark deps (FASTX.jl) ..."
-if ! julia --project="$SCRIPT_DIR" -e 'using Pkg; Pkg.instantiate()'; then
-    echo "Failed to install Julia dependencies. Run: julia --project=benchmark/fastq-parser -e 'using Pkg; Pkg.instantiate()'"
-    exit 1
-fi
-
 # --- Optional: verify all parsers agree on record/base count (non-fatal) ---
 echo "Verifying parser outputs..."
 ref=""
-for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq" "FASTX.jl"; do
+for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq"; do
     case "$cmd_label" in
         BlazeSeq)     out=$("$BLAZESEQ_BIN" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         needletail)   out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         seq_io)       out=$("$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         kseq)         out=$("$SCRIPT_DIR/kseq_runner/kseq_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
-        FASTX.jl)     out=$(julia --project="$SCRIPT_DIR" "$SCRIPT_DIR/run_fastx.jl" "$BENCH_FILE" 2>/dev/null) || out="" ;;
     esac
     out=$(echo "$out" | tail -1)
     if [ -z "$out" ]; then
@@ -154,17 +159,25 @@ for cmd_label in "BlazeSeq" "needletail" "seq_io" "kseq" "FASTX.jl"; do
 done
 echo "Reference counts: ${ref:- (none; one or more runners failed)}"
 
+# --- CPU benchmark environment (Linux: governor, turbo, pin to BENCH_CPUS) ---
+cpu_bench_setup
+
 # --- Hyperfine ---
-echo "Running hyperfine (warmup=2, runs=5) ..."
-hyperfine \
-    --warmup 2 \
-    --runs 5 \
+echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
+hyperfine_cmd \
+    --warmup "${WARMUP_RUNS}" \
+    --runs "${HYPERFINE_RUNS}" \
     --export-markdown "$REPO_ROOT/benchmark_results.md" \
     --export-json "$REPO_ROOT/benchmark_results.json" \
     -n BlazeSeq    "$BLAZESEQ_BIN $BENCH_FILE" \
     -n needletail  "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
     -n seq_io      "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
-    -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE" \
-    -n FASTX.jl    "julia --project=$SCRIPT_DIR $SCRIPT_DIR/run_fastx.jl $BENCH_FILE"
+    -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE"
 
 echo "Results written to benchmark_results.md and benchmark_results.json"
+
+# Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
+if command -v python >/dev/null 2>&1; then
+    RECORDS="${ref%% *}"
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results.json" --runs "${HYPERFINE_RUNS}" --size-gb "$FASTQ_SIZE_GB" --reads "${RECORDS:-0}" 2>/dev/null || true
+fi
