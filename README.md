@@ -21,7 +21,29 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
 
 ## Quick Start
 
-### Installation (Pixi)
+### Python package (PyPI, wheels only)
+
+Install the Python bindings from PyPI. Only pre-built wheels are published; the extension is not built from source on install.
+
+```bash
+# With uv (recommended)
+uv pip install blazeseq
+
+# Or with pip
+pip install blazeseq
+```
+
+```python
+import blazeseq
+parser = blazeseq.create_parser("file.fastq", "sanger")
+while blazeseq.has_more(parser):
+    rec = blazeseq.next_record(parser)
+    print(rec.id(), rec.sequence())
+```
+
+Requires the Mojo runtime (provided by the `pymodo` dependency). Supported platforms: Linux x86_64, macOS (x86_64 and arm64).
+
+### Installation (Pixi, Mojo package)
 
 If you don't have pixi already, install it first:
 
@@ -143,7 +165,7 @@ pixi run -e benchmark benchmark-plain
 - No multi-line FASTQ support — Records must fit four lines (standard Illumina/ONT format)
 - No current support for Paired-end reads, or FASTA files (in progress)
 - No index/seek — Streaming parser only; use MemoryReader for repeated scans
-- Mojo-only — No Python interop (python binding in progress)
+- Python package is wheel-only (no source build of the extension on install)
 
 ## Testing
 

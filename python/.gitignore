@@ -1,1 +1,7 @@
 blazeseq_parser.so
+blazeseq/_extension/*.so
+.venv/
+__pycache__/
+*.egg-info
+dist/
+build/

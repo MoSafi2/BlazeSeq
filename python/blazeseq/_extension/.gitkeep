@@ -1,0 +1,2 @@
+# Pre-built .so files are placed here during wheel build in CI.
+# Each platform wheel contains one blazeseq_parser.so for that platform.

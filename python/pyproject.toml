@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blazeseq"
+version = "0.2.0"
+description = "High-performance FASTQ parsing with Mojo-backed Python bindings"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "pymodo>=0.11.12",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+urls = { Repository = "https://github.com/MoSafi2/BlazeSeq" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["blazeseq*"]
+
+[tool.setuptools.package-data]
+blazeseq = ["_extension/*.so"]
