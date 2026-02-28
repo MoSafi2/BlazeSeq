@@ -110,7 +110,7 @@ esac
 
 # --- Generate 3GB synthetic FASTQ ---
 echo "Generating 3GB synthetic FASTQ at $BENCH_FILE ..."
-if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 3; then
+if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 1; then
     echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
     exit 1
 fi
