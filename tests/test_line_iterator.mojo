@@ -692,7 +692,7 @@ fn test_position_initial() raises:
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
 
-    assert_equal(line_iter.position(), 0, "Initial position should be 0")
+    assert_equal(line_iter.stream_position(), 0, "Initial position should be 0")
 
     print("✓ test_position_initial passed")
 
@@ -703,11 +703,11 @@ fn test_position_advances() raises:
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
 
-    var pos1 = line_iter.position()
+    var pos1 = line_iter.stream_position()
     assert_equal(pos1, 0, "Initial position should be 0")
 
     _ = line_iter.next_line()
-    var pos2 = line_iter.position()
+    var pos2 = line_iter.stream_position()
     assert_true(pos2 > pos1, "Position should advance after reading line")
 
     print("✓ test_position_advances passed")
@@ -719,13 +719,13 @@ fn test_position_after_multiple_lines() raises:
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
 
-    var pos0 = line_iter.position()
+    var pos0 = line_iter.stream_position()
     _ = line_iter.next_line()
-    var pos1 = line_iter.position()
+    var pos1 = line_iter.stream_position()
     _ = line_iter.next_line()
-    var pos2 = line_iter.position()
+    var pos2 = line_iter.stream_position()
     _ = line_iter.next_line()
-    var pos3 = line_iter.position()
+    var pos3 = line_iter.stream_position()
 
     assert_equal(pos0, 0, "Initial position should be 0")
     assert_true(pos1 > pos0, "Position should advance after first line")
@@ -748,16 +748,16 @@ fn test_next_line_position_after_boundary_cross() raises:
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
 
-    var pos0 = line_iter.position()
+    var pos0 = line_iter.stream_position()
     assert_equal(pos0, 0, "Initial position should be 0")
 
     _ = line_iter.next_line()
-    var pos1 = line_iter.position()
+    var pos1 = line_iter.stream_position()
     assert_true(pos1 > pos0, "Position should advance after first line")
     assert_equal(pos1, 51, "Position after first line should be 51 (50 chars + newline)")
 
     _ = line_iter.next_line()
-    var pos2 = line_iter.position()
+    var pos2 = line_iter.stream_position()
     assert_true(pos2 > pos1, "Position should advance after second line")
     assert_equal(pos2, 82, "Position after second line should be 82 (51 + 30 + newline)")
 

@@ -421,13 +421,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             raise EOFError()
 
         var base = self.buffer.buffer_position()
-        var offsets = RecordOffsets(
-            header_start=0,
-            seq_start=0,
-            sep_start=0,
-            qual_start=0,
-            record_end=0,
-        )
+        var offsets = RecordOffsets()
         var phase = SearchPhase.HEADER
 
         var scan_view = Span[Byte, MutExternalOrigin](
@@ -459,10 +453,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         var ref_rec = RefRecord[origin=MutExternalOrigin](
             _strip_spaces(id_span),
-            _strip_spaces(seq_span),
-            _strip_spaces(qual_span),
+            seq_span,
+            qual_span,
             self.quality_schema.OFFSET,
-
         )
 
         var to_consume = offsets.record_end + 1

@@ -30,7 +30,6 @@ comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 @doc_private
 @register_passable("trivial")
-@fieldwise_init
 @align(64)
 struct RecordOffsets(Copyable, Movable, Writable):
     """
@@ -54,6 +53,34 @@ struct RecordOffsets(Copyable, Movable, Writable):
     var sep_start    : Int   # set after SEQ phase newline is found
     var qual_start   : Int   # set after SEP phase newline is found
     var record_end   : Int   # set after QUAL phase newline is found (or EOF)
+
+    @always_inline
+    fn __init__(
+        out self,
+        header_start: Int = 0,
+        seq_start: Int = 0,
+        sep_start: Int = 0,
+        qual_start: Int = 0,
+        record_end: Int = 0,
+    ):
+        """
+        Initializes a RecordOffsets instance with the given byte offsets for each line
+        in a FASTQ record.
+
+        Arguments:
+            header_start (Int): Offset to the header ("@...") line start. Default is 0.
+            seq_start    (Int): Offset to the sequence line start. Default is 0.
+            sep_start    (Int): Offset to the '+' separator line start. Default is 0.
+            qual_start   (Int): Offset to the quality line start. Default is 0.
+            record_end   (Int): Offset to one past the last quality byte (end of record). Default is 0.
+
+        All offsets are relative to buf._ptr + buf._head at the time of scan.
+        """
+        self.header_start = header_start
+        self.seq_start = seq_start
+        self.sep_start = sep_start
+        self.qual_start = qual_start
+        self.record_end = record_end
 
     @always_inline
     fn is_complete(self) -> Bool:
