@@ -100,9 +100,10 @@ def build_setup_text(
     runs: int | None = None,
     size_gb: float | None = None,
     reads: int | None = None,
+    threads: int | None = None,
     ramfs: bool = True,
 ) -> str:
-    """Build setup description for the graph from optional runs, size_gb, reads."""
+    """Build setup description for the graph from optional runs, size_gb, reads, threads."""
     parts = []
     if size_gb is not None:
         parts.append(f"{size_gb:.0f} GB FASTQ")
@@ -110,6 +111,8 @@ def build_setup_text(
         parts.append(f"{reads_to_millions_str(reads)} reads")
     if runs is not None:
         parts.append(f"{runs} runs")
+    if threads is not None:
+        parts.append(f"{threads} thread{'s' if threads != 1 else ''}")
     if ramfs and basename in ("parser_plain", "parser_gzip", "parser_gzip_single"):
         parts.append("ramfs")
     return ", ".join(parts) if parts else ""
@@ -285,6 +288,7 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=None, help="Number of hyperfine runs (displayed on plot)")
     parser.add_argument("--size-gb", type=float, default=None, help="Data size in GB (displayed on plot)")
     parser.add_argument("--reads", type=int, default=None, help="Number of reads/records (displayed as millions to 1 sig digit)")
+    parser.add_argument("--threads", type=int, default=None, help="Number of cores/threads used (e.g. BlazeSeq rapidgzip; displayed on plot for gzip benchmarks)")
     args = parser.parse_args()
 
     repo_root = args.repo_root.resolve()
@@ -306,12 +310,13 @@ def main() -> int:
             continue
         basename = output_basename(json_path)
         title = title_for_basename(basename)
-        if args.runs is not None or args.size_gb is not None or args.reads is not None:
+        if args.runs is not None or args.size_gb is not None or args.reads is not None or args.threads is not None:
             setup_text = build_setup_text(
                 basename,
                 runs=args.runs,
                 size_gb=args.size_gb,
                 reads=args.reads,
+                threads=args.threads,
                 ramfs=basename in ("parser_plain", "parser_gzip", "parser_gzip_single"),
             )
         else:

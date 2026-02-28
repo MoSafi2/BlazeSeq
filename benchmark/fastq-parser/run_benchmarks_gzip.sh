@@ -235,15 +235,21 @@ fi
 
 echo "Results written to $BENCH_GZIP_MD and $BENCH_GZIP_JSON"
 
-# Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
+# Plot results to assets/ (inject runs, size-gb, reads, threads for plot subtitle)
 if command -v python >/dev/null 2>&1; then
     RECORDS="${ref%% *}"
-    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" \
-        --repo-root "$REPO_ROOT" \
-        --assets-dir "$REPO_ROOT/assets" \
-        --json "$BENCH_GZIP_JSON" \
-        --runs "${HYPERFINE_RUNS}" \
-        --size-gb "$FASTQ_SIZE_GB" \
-        --reads "${RECORDS:-0}" \
-        2>/dev/null || true
+    PLOT_ARGS=(
+        --repo-root "$REPO_ROOT"
+        --assets-dir "$REPO_ROOT/assets"
+        --json "$BENCH_GZIP_JSON"
+        --runs "${HYPERFINE_RUNS}"
+        --size-gb "$FASTQ_SIZE_GB"
+        --reads "${RECORDS:-0}"
+    )
+    if [ "$GZIP_SINGLE_THREAD" = "1" ]; then
+        PLOT_ARGS+=(--threads 1)
+    else
+        [ -n "${GZIP_BLAZESEQ_THREADS}" ] && [ "${GZIP_BLAZESEQ_THREADS}" -ge 0 ] 2>/dev/null && PLOT_ARGS+=(--threads "$GZIP_BLAZESEQ_THREADS")
+    fi
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" "${PLOT_ARGS[@]}" 2>/dev/null || true
 fi

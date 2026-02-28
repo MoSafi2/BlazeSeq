@@ -138,7 +138,7 @@ When you run the benchmark scripts (plain, gzip, or throughput) with the pixi be
 pixi run -e benchmark benchmark-plot
 ```
 
-This reads the standard JSON result files (`benchmark_results.json`, `benchmark_results_gzip.json`, `benchmark/throughput_benchmark_results.json`) and writes the corresponding plots to `assets/`. To plot only specific files:
+This reads the standard JSON result files (`benchmark_results.json`, `benchmark_results_gzip.json`, `benchmark/throughput_benchmark_results.json`) and writes the corresponding plots to `assets/`. To plot only specific files. Optional args for the setup subtitle: `--runs`, `--size-gb`, `--reads`, and for gzip benchmarks `--threads` (BlazeSeq decompression thread count):
 
 ```bash
 pixi run -e benchmark python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets --json benchmark_results.json
