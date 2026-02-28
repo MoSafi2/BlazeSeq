@@ -17,7 +17,7 @@ import math
 from blazeseq.CONSTS import *
 from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
 from blazeseq.io.readers import Reader
-from blazeseq.errors import ParseError, buffer_capacity_error
+from blazeseq.errors import ParseError, FastqErrorCode
 from blazeseq.parser import FastqParser
 
 
@@ -25,6 +25,8 @@ from blazeseq.parser import FastqParser
 
 
 comptime NEW_LINE = 10
+comptime AT_SIGN = ord("@")
+comptime PLUS_SIGN = ord("+")
 comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 
@@ -271,19 +273,20 @@ fn _strip_spaces[
 @always_inline
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
-](buffer: Span[Byte, o]) raises:
-    """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set)."""
+](buffer: Span[Byte, o]) -> FastqErrorCode:
+    """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set). Returns OK or ASCII_INVALID."""
     var aligned_end = math.align_down(len(buffer), simd_width)
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 
     for i in range(0, aligned_end, simd_width):
         var vec = buffer.unsafe_ptr().load[width=simd_width](i)
         if (vec & bit_mask).reduce_or():
-            raise Error("Non ASCII letters found")
+            return FastqErrorCode.ASCII_INVALID
 
     for i in range(aligned_end, len(buffer)):
         if buffer.unsafe_ptr()[i] & bit_mask != 0:
-            raise Error("Non ASCII letters found")
+            return FastqErrorCode.ASCII_INVALID
+    return FastqErrorCode.OK
 
 
 
@@ -438,6 +441,34 @@ fn _store_newline_offset(
         offsets.record_end = abs_pos - 1   # record_end is inclusive last qual byte
 
 
+@doc_private
+fn _record_snippet[o: Origin](view: Span[Byte, o], offsets: RecordOffsets) -> String:
+    """First 200 bytes of the record for ParseError snippet."""
+    var end = min(offsets.record_end + 1, len(view))
+    end = min(end, 200)
+    if end <= 0:
+        return ""
+    var sp = view[0:end]
+    return String(StringSlice(unsafe_from_utf8=sp))
+
+
+@doc_private
+fn _validate_fastq_structure[o: Origin](
+    view: Span[Byte, o],
+    offsets: RecordOffsets,
+) -> FastqErrorCode:
+    """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code."""
+    if view[offsets.header_start] != Byte(AT_SIGN):
+        return FastqErrorCode.ID_NO_AT
+    if view[offsets.sep_start] != Byte(PLUS_SIGN):
+        return FastqErrorCode.SEP_NO_PLUS
+    var seq_len = offsets.sep_start - offsets.seq_start - 1
+    var qual_len = offsets.record_end - offsets.qual_start
+    if seq_len != qual_len:
+        return FastqErrorCode.SEQ_QUAL_LEN_MISMATCH
+    return FastqErrorCode.OK
+
+
 # ---------------------------------------------------------------------------
 # _scan_record_fused: single-pass SIMD scan for all four FASTQ newlines
 # ---------------------------------------------------------------------------
@@ -448,7 +479,7 @@ fn _scan_record[o: Origin](
     view: Span[Byte, o],
     mut offsets: RecordOffsets,
     phase: SearchPhase,
-) -> Tuple[Bool, RecordOffsets, SearchPhase]:
+) -> Tuple[Bool, RecordOffsets, SearchPhase, FastqErrorCode]:
     """Locate all four record-bounding newlines in a single forward pass.
 
     Replaces four sequential `_find_newline_from` / `memchr` calls with one
@@ -468,10 +499,11 @@ fn _scan_record[o: Origin](
         phase:   Which newline we are currently seeking.
 
     Returns:
-        (complete, offsets, phase)
-        complete=True  → all four newlines found; offsets fully populated.
+        (complete, offsets, phase, parse_code)
+        complete=True and parse_code=OK → all four newlines found and structure valid.
+        complete=True and parse_code!=OK → structure check failed; caller builds error.
         complete=False → ran out of buffer; offsets partially populated;
-                         phase indicates where to resume on the next call.
+                         phase indicates where to resume on the next call; parse_code=OK.
     """
     comptime W = SIMD_U8_WIDTH
     comptime nl_splat = SIMD[DType.uint8, W](new_line)
@@ -483,7 +515,7 @@ fn _scan_record[o: Origin](
     var avail     = len(scan_span)
 
     if avail <= 0:
-        return (False, offsets, phase)
+        return (False, offsets, phase, FastqErrorCode.OK)
 
     # How many newlines already found (= how many offsets fields are set)
     var found = _phase_to_count(phase)
@@ -507,7 +539,8 @@ fn _scan_record[o: Origin](
         i += W
 
     if found == 4:
-        return (True, offsets, SearchPhase.HEADER)
+        var code = _validate_fastq_structure(view, offsets)
+        return (True, offsets, SearchPhase.HEADER, code)
 
     # ── Scalar tail: bytes [aligned, avail) ──────────────────────────────────
     # Handles the final < W bytes that the SIMD loop could not process, and
@@ -520,7 +553,10 @@ fn _scan_record[o: Origin](
             _store_newline_offset(offsets, found, abs_pos)
         i += 1
 
-    return (found == 4, offsets, _count_to_phase(found))
+    if found == 4:
+        var code = _validate_fastq_structure(view, offsets)
+        return (True, offsets, _count_to_phase(found), code)
+    return (False, offsets, _count_to_phase(found), FastqErrorCode.OK)
 
 
 @always_inline

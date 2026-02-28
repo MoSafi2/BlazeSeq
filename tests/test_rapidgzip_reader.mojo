@@ -178,9 +178,9 @@ fn test_rapidgzip_reader_fastq_parser() raises:
         records.append(record^)
 
     assert_equal(len(records), 2, "Should parse 2 records")
-    assert_equal(records[0].id.to_string(), "@r1", "First record id should match")
+    assert_equal(records[0].id.to_string(), "r1", "First record id should match")
     assert_equal(records[0].sequence.to_string(), "ACGT", "First record sequence should match")
-    assert_equal(records[1].id.to_string(), "@r2", "Second record id should match")
+    assert_equal(records[1].id.to_string(), "r2", "Second record id should match")
     assert_equal(records[1].sequence.to_string(), "TGCA", "Second record sequence should match")
 
     print("✓ test_rapidgzip_reader_fastq_parser passed")

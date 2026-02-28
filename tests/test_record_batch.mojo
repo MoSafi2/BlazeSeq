@@ -40,8 +40,8 @@ fn test_device_fastq_batch_add_and_layout() raises:
 fn test_fastq_batch_write_to() raises:
     """FastqBatch.write_to writes each record in FASTQ format (4 lines per record)."""
     var records = List[FastqRecord]()
-    records.append(FastqRecord("@r1", "ACGT", "!!!!"))
-    records.append(FastqRecord("@r2", "TGCA", "####"))
+    records.append(FastqRecord("r1", "ACGT", "!!!!"))
+    records.append(FastqRecord("r2", "TGCA", "####"))
     var batch = FastqBatch(records)
     var out = String()
     batch.write_to(out)
