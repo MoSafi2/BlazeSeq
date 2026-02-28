@@ -61,6 +61,7 @@ benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
 benchmark-gzip = "bash ./benchmark/fastq-parser/run_benchmarks_gzip.sh"
 benchmark-gzip-single = "bash -c 'GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"
+benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_benchmarks.sh"
 benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets'"
 
 [environments]

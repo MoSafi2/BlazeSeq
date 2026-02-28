@@ -139,11 +139,21 @@ Benchmark numbers are hardware- and Mojo-version-dependent.
 
 ### Throughput benchmark
 
-The throughput (`benchmark/throughput_benchmark.mojo`) generates ~3 GB of synthetic FASTQ in memory and times all three parsing modes. Run it yourself:
+**File-based**: Generates ~3 GB synthetic FASTQ on ramfs, then runs batched / records / ref_records with hyperfine:
 
 ```bash
-pixi run mojo run -I . benchmark/throughput_benchmark.mojo
+pixi run -e benchmark benchmark-throughput
 ```
+
+**In-memory (MemoryReader)**: Generates ~3 GB FASTQ in process (no disk I/O), reads via `MemoryReader`. Timing is measured inside Mojo (parse-only); the script runs each mode multiple times, captures `parse_seconds` from the Mojo output, and writes JSON + plots (no hyperfine):
+
+```bash
+pixi run -e benchmark benchmark-throughput-memory
+```
+
+Override size and runs: `SIZE_GB=1 BENCH_RUNS=3 ./benchmark/throughput/run_throughput_memory_benchmarks.sh`
+
+Or run the runner once (default 3 GB): `pixi run mojo run -I . benchmark/throughput/run_throughput_memory_blazeseq.mojo [size_gb] <mode>` (mode: batched | records | ref_records).
 
 ### Comparison with other tools
 
