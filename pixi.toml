@@ -57,7 +57,7 @@ matplotlib = "*"
 numpy = "*"
 
 [feature.benchmark.tasks]
-benchmark = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
+benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
 benchmark-gzip = "bash ./benchmark/fastq-parser/run_benchmarks_gzip.sh"
 benchmark-gzip-single = "bash -c 'GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"

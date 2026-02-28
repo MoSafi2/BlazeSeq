@@ -129,7 +129,7 @@ Generates ~3GB in `ramfs` and compares parsing against `needletail` (Rust), `seq
 Ensure that you have enough ram capacity (min ~5GB).
 
 ```bash
-pixi run -e benchmark benchmark
+pixi run -e benchmark benchmark-plain
 ```
 
 ## Documentation

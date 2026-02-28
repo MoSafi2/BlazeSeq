@@ -76,7 +76,7 @@ pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
 Or use the pixi task:
 
 ```bash
-pixi run -e benchmark benchmark
+pixi run -e benchmark benchmark-plain
 ```
 
 If all tools (pixi, hyperfine, cargo, rustc, gcc or clang) are already on your PATH, you can run the script directly:
