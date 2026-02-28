@@ -619,6 +619,8 @@ fn generate_synthetic_fastq_buffer(
     """
     if num_reads <= 0:
         return List[Byte]()
+    if num_reads < 0 or min_length < 0 or max_length < 0 or min_phred < 0 or max_phred < 0:
+        raise Error("generate_synthetic_fastq_buffer: invalid arguments")
     if min_length > max_length:
         raise Error("generate_synthetic_fastq_buffer: min_length must be <= max_length")
     if min_phred > max_phred:
@@ -630,8 +632,6 @@ fn generate_synthetic_fastq_buffer(
     var upper_int = Int(schema.UPPER)
 
     var capacity_estimate = num_reads * (max_length + 50)
-    if capacity_estimate < 0:
-        capacity_estimate = 4096
     var out = List[Byte](capacity=capacity_estimate)
 
     # Base LUT: 8 entries so index selects bases with configurable GC probability.

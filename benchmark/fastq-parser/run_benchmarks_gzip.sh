@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compressed FASTQ parser benchmark: kseq, seq_io, needletail, BlazeSeq.
-# Generates 3GB synthetic FASTQ, compresses to .fastq.gz, runs each parser with hyperfine.
+# Generates synthetic FASTQ (default 1GB; set FASTQ_SIZE_GB), compresses to .fastq.gz, runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks_gzip.sh
 # Requires: pixi, hyperfine, cargo, gcc, gzip. On Linux: sudo for ramfs mount/umount.
 
@@ -53,9 +53,26 @@ HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
 
 # --- Gzip benchmark parallelism (BlazeSeq rapidgzip only) ---
 # GZIP_BENCH_PARALLELISM=1 or "single": single-threaded decompression for BlazeSeq, and pin all tools to one core for fair comparison.
-# Unset or any other value: multi-threaded BlazeSeq (default), no core pinning.
+# Unset or any other value: multi-threaded BlazeSeq (default 4 threads; override with first script arg or GZIP_BLAZESEQ_THREADS).
 #   GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+#   ./benchmark/fastq-parser/run_benchmarks_gzip.sh 8
+#   pixi run -e benchmark benchmark-gzip 8
 #   pixi run -e benchmark benchmark-gzip-single
+#
+# Optional first script argument: BlazeSeq thread count for multi-threaded run (default 4). Ignored when GZIP_BENCH_PARALLELISM=1.
+# Env GZIP_BLAZESEQ_THREADS overrides the script arg if set.
+if [ -n "${GZIP_BLAZESEQ_THREADS}" ] && [ "${GZIP_BLAZESEQ_THREADS}" -gt 0 ] 2>/dev/null; then
+    :
+elif [ -n "$1" ] && [ "$1" -gt 0 ] 2>/dev/null; then
+    GZIP_BLAZESEQ_THREADS="$1"
+else
+    GZIP_BLAZESEQ_THREADS=4
+fi
+
+# --- FASTQ size (GB), before compression ---
+# Override via env: FASTQ_SIZE_GB=3 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
+FASTQ_SIZE_GB="${FASTQ_SIZE_GB:-1}"
+
 if [ "${GZIP_BENCH_PARALLELISM}" = "1" ] || [ "${GZIP_BENCH_PARALLELISM}" = "single" ]; then
     GZIP_SINGLE_THREAD=1
     BENCH_GZIP_SUFFIX="_single"
@@ -70,7 +87,7 @@ fi
 
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
-BENCH_FILE="${BENCH_DIR}/blazeseq_bench_3g.fastq"
+BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
 MOUNTED=0
 
 cleanup_mount() {
@@ -97,7 +114,7 @@ case "$(uname -s)" in
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_bench_gzip_$$"
             mkdir -p "$BENCH_DIR"
-            BENCH_FILE="${BENCH_DIR}/blazeseq_bench_3g.fastq"
+            BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
         fi
         ;;
     Darwin)
@@ -108,10 +125,10 @@ case "$(uname -s)" in
         ;;
 esac
 
-# --- Generate 3GB synthetic FASTQ ---
-echo "Generating 3GB synthetic FASTQ at $BENCH_FILE ..."
-if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 1; then
-    echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
+# --- Generate synthetic FASTQ ---
+echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
+if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
+    echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
     exit 1
 fi
 
@@ -158,10 +175,14 @@ if ! pixi run mojo build -I . -o "$BLAZESEQ_GZIP_BIN" "$SCRIPT_DIR/run_blazeseq_
 fi
 
 # --- Verify all parsers agree on record/base count ---
+# BlazeSeq parallelism: 1 for single-threaded; GZIP_BLAZESEQ_THREADS (default 4) for multi-threaded
+if [ "$GZIP_SINGLE_THREAD" = "1" ]; then
+    _blazeseq_args="$BENCH_GZ 1"
+else
+    _blazeseq_args="$BENCH_GZ $GZIP_BLAZESEQ_THREADS"
+fi
 echo "Verifying parser outputs on $BENCH_GZ ..."
 ref=""
-_blazeseq_args="$BENCH_GZ"
-[ "$GZIP_SINGLE_THREAD" = "1" ] && _blazeseq_args="$BENCH_GZ 1"
 for cmd_label in "kseq" "seq_io" "needletail" "BlazeSeq"; do
     case "$cmd_label" in
         kseq)       out=$("$KSEQ_GZIP_BIN" "$BENCH_GZ" 2>/dev/null) || out="" ;;
@@ -209,7 +230,7 @@ else
         -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
         -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
         -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
-        -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $BENCH_GZ"
+        -n BlazeSeq   "$BLAZESEQ_GZIP_BIN $_blazeseq_args"
 fi
 
 echo "Results written to $BENCH_GZIP_MD and $BENCH_GZIP_JSON"
@@ -222,7 +243,7 @@ if command -v python >/dev/null 2>&1; then
         --assets-dir "$REPO_ROOT/assets" \
         --json "$BENCH_GZIP_JSON" \
         --runs "${HYPERFINE_RUNS}" \
-        --size-gb 3 \
+        --size-gb "$FASTQ_SIZE_GB" \
         --reads "${RECORDS:-0}" \
         2>/dev/null || true
 fi

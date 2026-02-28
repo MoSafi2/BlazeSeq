@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq.
-# Generates 3GB synthetic FASTQ on a ramfs mount, runs each parser with hyperfine.
+# Generates synthetic FASTQ on a ramfs mount (default 3GB; set FASTQ_SIZE_GB), runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh
 # Requires: pixi, hyperfine, cargo, gcc or clang. On Linux: sudo for ramfs mount/umount.
 
@@ -51,9 +51,13 @@ fi
 WARMUP_RUNS="${WARMUP_RUNS:-3}"
 HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
 
+# --- FASTQ size (GB) ---
+# Override via env: FASTQ_SIZE_GB=1 ./benchmark/fastq-parser/run_benchmarks.sh
+FASTQ_SIZE_GB="${FASTQ_SIZE_GB:-3}"
+
 # --- Ramfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
-BENCH_FILE="${BENCH_DIR}/blazeseq_bench_1g.fastq"
+BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
 MOUNTED=0
 
 cleanup_mount() {
@@ -80,7 +84,7 @@ case "$(uname -s)" in
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_bench_$$"
             mkdir -p "$BENCH_DIR"
-            BENCH_FILE="${BENCH_DIR}/blazeseq_bench_1g.fastq"
+            BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
         fi
         ;;
     Darwin)
@@ -91,10 +95,10 @@ case "$(uname -s)" in
         ;;
 esac
 
-# --- Generate 3GB synthetic FASTQ ---
-echo "Generating 3GB synthetic FASTQ at $BENCH_FILE ..."
-if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" 3; then
-    echo "Failed to generate 3GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
+# --- Generate synthetic FASTQ ---
+echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
+if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
+    echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)."
     exit 1
 fi
 
@@ -175,5 +179,5 @@ echo "Results written to benchmark_results.md and benchmark_results.json"
 # Plot results to assets/ (inject runs, size-gb, reads for plot subtitle)
 if command -v python >/dev/null 2>&1; then
     RECORDS="${ref%% *}"
-    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results.json" --runs "${HYPERFINE_RUNS}" --size-gb 3 --reads "${RECORDS:-0}" 2>/dev/null || true
+    python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" --repo-root "$REPO_ROOT" --assets-dir "$REPO_ROOT/assets" --json "$REPO_ROOT/benchmark_results.json" --runs "${HYPERFINE_RUNS}" --size-gb "$FASTQ_SIZE_GB" --reads "${RECORDS:-0}" 2>/dev/null || true
 fi

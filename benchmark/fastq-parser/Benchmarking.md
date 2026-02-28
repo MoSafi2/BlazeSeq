@@ -164,7 +164,7 @@ The gzip benchmark compares **wall-clock time** (elapsed time) for decompress-an
 | **kseq**  | zlib                   | Single-threaded. One thread reads the gzip stream and decompresses sequentially. |
 | **needletail** | flate2 (or equivalent) | Single-threaded. Decompression runs on one thread. |
 | **seq_io** | flate2                 | Single-threaded. One thread for decompression. |
-| **BlazeSeq** | rapidgzip (via rapidgzip-mojo) | **Multi-threaded.** Parallel decompression across available cores (e.g. 12 cores on a 12-core processor). |
+| **BlazeSeq** | rapidgzip (via rapidgzip-mojo) | **Multi-threaded.** Parallel decompression; default **4 threads** (override with script arg or `GZIP_BLAZESEQ_THREADS`). |
 
 **Why this matters**
 
@@ -196,6 +196,10 @@ pixi run -e benchmark benchmark-gzip-single
 
 Results are written to `benchmark_results_gzip_single.md` and `benchmark_results_gzip_single.json`; the plot script produces `assets/parser_gzip_single.png`.
 
+### BlazeSeq thread count (multi-threaded only)
+
+The **multi-threaded** gzip benchmark caps BlazeSeq’s rapidgzip decompression at **4 threads by default**. You can override this with the first script argument or the `GZIP_BLAZESEQ_THREADS` environment variable. The single-threaded benchmark always uses 1 thread.
+
 ### Output files
 
 - **Multi-threaded (default):** `benchmark_results_gzip.md`, `benchmark_results_gzip.json`
@@ -205,14 +209,36 @@ Results are written to `benchmark_results_gzip_single.md` and `benchmark_results
 
 From the **repository root**, with the benchmark environment installed:
 
-```bash
-pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks_gzip.sh
-```
-
-Or use the pixi task:
+**Multi-threaded** (BlazeSeq uses 4 threads by default):
 
 ```bash
 pixi run -e benchmark benchmark-gzip
+```
+
+Use a different thread count by passing it as the first argument (e.g. 8 threads):
+
+```bash
+pixi run -e benchmark benchmark-gzip 8
+pixi run -e benchmark benchmark-gzip 0 # To use all available threads
+```
+
+Or run the script directly (with optional thread count):
+
+```bash
+./benchmark/fastq-parser/run_benchmarks_gzip.sh 0 # Will use all available threads
+./benchmark/fastq-parser/run_benchmarks_gzip.sh 8
+```
+
+**Single-threaded** (BlazeSeq uses 1 thread; all tools pinned to one core):
+
+```bash
+pixi run -e benchmark benchmark-gzip-single
+```
+
+Or:
+
+```bash
+GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh
 ```
 
 **Requirements**: pixi, hyperfine, cargo, rustc, **gcc** (for kseq gzip runner), and **gzip** (system). Same ramfs/tmpfs setup as the plain benchmark on Linux (sudo for mount/umount, or `/dev/shm` fallback).
