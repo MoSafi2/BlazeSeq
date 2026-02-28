@@ -30,7 +30,7 @@ trait GpuMovableBatch:
 # ---------------------------------------------------------------------------
 
 
-struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
+struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized, Representable):
     """
     Structure-of-Arrays (SoA) batch format for multiple FASTQ records.
     
@@ -156,6 +156,10 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized):
     fn __len__(self) -> Int:
         """Return the number of records (same as `num_records()`)."""
         return self.num_records()
+
+    fn __repr__(self) -> String:
+        """Return a string representation for Python/Representable."""
+        return "FastqBatch(records=" + String(self.num_records()) + ", quality_offset=" + String(self._quality_offset) + ")"
 
     fn get_record(self, index: Int) raises -> FastqRecord:
         """
