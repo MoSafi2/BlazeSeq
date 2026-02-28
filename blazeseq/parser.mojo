@@ -428,7 +428,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             ptr=self.buffer._ptr + base,
             length=self.buffer._end - base,
         )
-        var complete: Bool
         complete, offsets, phase = _scan_record(scan_view, offsets, phase)
         if not complete:
             complete, offsets, _ = self._next_ref_complete(base, offsets, phase)
@@ -482,17 +481,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """
 
         var new_base = base
-
         while True:
             var buf_available = self.buffer.available()
             var buf_capacity = self.buffer.capacity()
 
             # ── Is EOF the reason we can't complete? ─────────────────────────────
             if buf_available < buf_capacity and self.buffer.is_eof():
-                # Mirrors Rust check_end()
                 if phase == SearchPhase.QUAL:
-                    # No trailing newline on last record — still valid
-                    var got_record: Bool
                     got_record, offsets = _check_end_qual(
                         self.buffer, new_base, offsets
                     )
@@ -505,7 +500,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
-
                 @parameter
                 if not self.config.buffer_growth_enabled:
                     raise Error(
@@ -546,7 +540,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             )
             if complete:
                 return (True, offsets, new_phase)
-
             # Not yet complete → loop and try to refill more
 
     fn _get_record_snippet(self, record: RefRecord) -> String:

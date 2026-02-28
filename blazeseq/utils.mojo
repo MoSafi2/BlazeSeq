@@ -306,6 +306,7 @@ fn is_posix_space(c: UInt8) -> Bool:
 
 
 @always_inline
+@doc_private
 fn _check_end_qual(
     buf     : BufferedReader,
     base    : Int,
@@ -340,6 +341,7 @@ fn _check_end_qual(
 
 
 @always_inline
+@doc_private
 fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
     """Return the relative-to-base offset at which to resume scanning.
 
@@ -367,6 +369,7 @@ fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
 # ---------------------------------------------------------------------------
 
 @always_inline
+@doc_private
 fn _phase_to_count(phase: SearchPhase) -> Int:
     """Return how many newlines have already been found given the current phase.
 
@@ -384,6 +387,7 @@ fn _phase_to_count(phase: SearchPhase) -> Int:
 # ---------------------------------------------------------------------------
 
 @always_inline
+@doc_private
 fn _count_to_phase(found: Int) -> SearchPhase:
     """Convert a found-newlines count back to the SearchPhase we are now in.
 
@@ -410,6 +414,7 @@ fn _count_to_phase(found: Int) -> SearchPhase:
 # ---------------------------------------------------------------------------
 
 @always_inline
+@doc_private
 fn _store_newline_offset(
     mut offsets: RecordOffsets,
     found: Int,        # 1-indexed: which newline this is (1..4)
@@ -438,6 +443,7 @@ fn _store_newline_offset(
 # ---------------------------------------------------------------------------
 
 @always_inline
+@doc_private
 fn _scan_record[o: Origin](
     view: Span[Byte, o],
     mut offsets: RecordOffsets,
