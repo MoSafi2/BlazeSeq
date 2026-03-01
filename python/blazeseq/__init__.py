@@ -8,7 +8,7 @@ Usage:
     import blazeseq
     p = blazeseq.parser("file.fastq")  # quality_schema defaults to "generic"
     for rec in p.records:
-        print(rec.id(), rec.sequence())
+        print(rec.id, rec.sequence)
     for batch in p.batches:
         for rec in batch:
             ...
@@ -35,24 +35,28 @@ _DEFAULT_BATCH_SIZE = 100
 class FastqRecordProtocol(Protocol):
     """Protocol for a single FASTQ record (read identifier, sequence, quality)."""
 
+    @property
     def id(self) -> str:
-        """Return the read identifier (without the leading '@')."""
+        """Read identifier (without the leading '@')."""
         ...
 
+    @property
     def sequence(self) -> str:
-        """Return the sequence line (bases)."""
+        """Sequence line (bases)."""
         ...
 
+    @property
     def quality(self) -> str:
-        """Return the quality line (encoded quality scores)."""
+        """Quality line (encoded quality scores)."""
         ...
 
     def __len__(self) -> int:
         """Return the sequence length (number of bases)."""
         ...
 
+    @property
     def phred_scores(self) -> list[int]:
-        """Return Phred quality scores as a Python list of integers."""
+        """Phred quality scores as a Python list of integers."""
         ...
 
 

@@ -16,17 +16,19 @@ pip install blazeseq
 
 ```python
 import blazeseq
-parser = blazeseq.parser("file.fastq", "sanger")
+
+# quality_schema defaults to "generic"; use keyword args for clarity
+parser = blazeseq.parser("file.fastq", quality_schema="sanger")
 while parser.has_more():
     rec = parser.next_record()
-    print(rec.id(), rec.sequence())
+    print(rec.id, rec.sequence)
 ```
 
-Or use the iterator protocol:
+Or use the iterator over records:
 
 ```python
 for rec in parser.records:
-    print(rec.id(), rec.sequence())
+    print(rec.id, rec.sequence)
 ```
 
 For batched iteration (default 100 records per batch):
@@ -34,15 +36,23 @@ For batched iteration (default 100 records per batch):
 ```python
 for batch in parser.batches:
     for rec in batch:
-        print(rec.id(), rec.sequence())
+        print(rec.id, rec.sequence)
+```
+
+Custom batch size:
+
+```python
+for batch in parser.batches_with_size(50):
+    for rec in batch:
+        print(rec.id, rec.sequence)
 ```
 
 **Gzip files:** use `.fastq.gz` or `.fq.gz` and set `parallelism` for decompression threads (default 4):
 
 ```python
-parser = blazeseq.parser("reads.fastq.gz", "sanger", parallelism=8)
+parser = blazeseq.parser("reads.fastq.gz", quality_schema="sanger", parallelism=8)
 for rec in parser.records:
-    print(rec.id(), rec.sequence())
+    print(rec.id, rec.sequence)
 ```
 
 ---
@@ -53,8 +63,7 @@ for rec in parser.records:
 
 | Function | Description |
 |----------|-------------|
-| `parser(path, quality_schema="generic", parallelism=4)` | Create a FASTQ parser. Supports `.fastq`, `.fq`, `.fastq.gz`, `.fq.gz`. `quality_schema`: `"generic"`, `"sanger"`, `"solexa"`, `"illumina_1.3"`, `"illumina_1.5"`, `"illumina_1.8"`. `parallelism`: decompression threads for gzip (default 4). Returns a parser object. |
-| `create_parser(path, quality_schema, parallelism)` | Alias for `parser` (backward compatibility). |
+| `parser(path, quality_schema="generic", parallelism=4)` | Create a FASTQ parser. Supports `.fastq`, `.fq`, `.fastq.gz`, `.fq.gz`. **quality_schema:** `"generic"`, `"sanger"`, `"solexa"`, `"illumina_1.3"`, `"illumina_1.5"`, `"illumina_1.8"`. **parallelism:** decompression threads for gzip (default 4). Returns a parser supporting `records`, `batches`, `batches_with_size(n)`, `has_more()`, `next_record()`, `next_batch(n)`. |
 
 ### Parser (returned by `parser` / `create_parser`)
 
@@ -71,13 +80,13 @@ for rec in parser.records:
 
 ### FastqRecord
 
-| Method | Description |
-|--------|-------------|
-| `id()` | Read identifier (without leading `@`). |
-| `sequence()` | Sequence line (bases). |
-| `quality()` | Quality line (raw quality string). |
+| Property / method | Description |
+|-------------------|-------------|
+| `id` | Read identifier (without leading `@`). |
+| `sequence` | Sequence line (bases). |
+| `quality` | Quality line (raw quality string). |
 | `__len__()` | Sequence length (number of bases). |
-| `phred_scores()` | Phred quality scores as a Python list of integers. |
+| `phred_scores` | Phred quality scores as a Python list of integers. |
 
 ### FastqBatch
 

@@ -39,12 +39,12 @@ def test_create_parser_and_next_record():
             rec = parser.next_record()
             count += 1
             if count == 1:
-                assert rec.id() == "EAS54_6_R1_2_1_413_324"
-                assert "CCCTTCTTGTCTTCAGCGTTTCTCC" in rec.sequence()
-                seq_len = len(rec.sequence())
+                assert rec.id == "EAS54_6_R1_2_1_413_324"
+                assert "CCCTTCTTGTCTTCAGCGTTTCTCC" in rec.sequence
+                seq_len = len(rec.sequence)
                 assert seq_len > 0
                 assert int(rec.__len__()) >= seq_len
-                assert len(rec.phred_scores()) >= seq_len
+                assert len(rec.phred_scores) >= seq_len
         except Exception as e:
             if "EOF" in str(e):
                 break
@@ -58,13 +58,13 @@ def test_next_batch_and_get_record():
     batch = parser.next_batch(2)
     assert batch.num_records() == 2
     first = batch.get_record(0)
-    assert first.id() == "EAS54_6_R1_2_1_413_324"
+    assert first.id == "EAS54_6_R1_2_1_413_324"
     second = batch.get_record(1)
-    assert second.id() == "EAS54_6_R1_2_1_540_792"
+    assert second.id == "EAS54_6_R1_2_1_540_792"
 
     batch2 = parser.next_batch(10)
     assert batch2.num_records() == 1
-    assert batch2.get_record(0).id() == "EAS54_6_R1_2_1_443_348"
+    assert batch2.get_record(0).id == "EAS54_6_R1_2_1_443_348"
 
 
 def test_eof_raises():
@@ -95,7 +95,7 @@ def test_parser_iterator_protocol():
                 break
             raise
     assert len(recs) == 3
-    assert recs[0].id() == "EAS54_6_R1_2_1_413_324"
+    assert recs[0].id == "EAS54_6_R1_2_1_413_324"
 
 
 def test_batch_iterator_protocol():
@@ -114,8 +114,8 @@ def test_batch_iterator_protocol():
                 break
             raise
     assert len(recs) == 2
-    assert recs[0].id() == "EAS54_6_R1_2_1_413_324"
-    assert recs[1].id() == "EAS54_6_R1_2_1_540_792"
+    assert recs[0].id == "EAS54_6_R1_2_1_413_324"
+    assert recs[1].id == "EAS54_6_R1_2_1_540_792"
 
 
 def main():
