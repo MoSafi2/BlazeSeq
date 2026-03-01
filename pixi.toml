@@ -40,7 +40,6 @@ rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/dow
 
 [dependencies]
 mojo = "=0.26.1.0"
-nodejs = ">=20"
 
 [target.linux-64.dependencies]
 rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-hb0f4dca_0.conda" }
@@ -61,6 +60,9 @@ rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq
 [pypi-dependencies]
 pymodo = ">=0.11.12, <0.12"
 
+[feature.docs.dependencies]
+nodejs = ">=20"
+
 [feature.benchmark.dependencies]
 hyperfine = "*"
 rust = "*"
@@ -77,4 +79,5 @@ benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_b
 benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets'"
 
 [environments]
+docs = ["default", "docs"]
 benchmark = ["default", "benchmark"]
