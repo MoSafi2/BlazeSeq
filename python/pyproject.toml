@@ -6,21 +6,36 @@ build-backend = "setuptools.build_meta"
 name = "blazeseq"
 version = "0.2.0"
 description = "High-performance FASTQ parsing with Mojo-backed Python bindings"
-readme = "README.md"
-license = "MIT"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = ["pymodo>=0.11.12"]
+keywords = ["fastq", "bioinformatics", "sequencing", "mojo", "parser", "genomics"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-urls = { Repository = "https://github.com/MoSafi2/BlazeSeq" }
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/MoSafi2/BlazeSeq"
+Documentation = "https://mosafi2.github.io/BlazeSeq/"
+Repository = "https://github.com/MoSafi2/BlazeSeq"
+Changelog = "https://github.com/MoSafi2/BlazeSeq/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["blazeseq*"]
 
 [tool.setuptools.package-data]
-blazeseq = ["_extension/*.so", "py.typed", "*.pyi"]
+blazeseq = ["_extension/*.so", "py.typed", "*.pyi", "mojopkg/*.mojopkg", "mojopkg/README.md"]

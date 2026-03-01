@@ -105,6 +105,11 @@ def create_parser(
     ...
 
 
+def mojopkg_path() -> str:
+    """Return the path to the directory containing the pre-built blazeseq.mojopkg for use with mojo build -I."""
+    ...
+
+
 # Concrete types from the extension module (for runtime typing)
 FastqRecord: type[FastqRecordProtocol]  # Single FASTQ record
 FastqBatch: type[FastqBatchProtocol]  # Batch of FASTQ records

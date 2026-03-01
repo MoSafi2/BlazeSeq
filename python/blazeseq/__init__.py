@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Any, Iterator, Protocol, cast
 
 from blazeseq._loader import _get_extension_module
@@ -238,6 +239,18 @@ def parser(
 create_parser = parser  # backward compatibility
 
 
+def mojopkg_path() -> str:
+    """Return the path to the directory containing the pre-built blazeseq.mojopkg.
+
+    Use this from Mojo projects to import the package installed via pip:
+    mojo build -I $(python -c 'import blazeseq; print(blazeseq.mojopkg_path())') your_app.mojo
+
+    The Mojo package depends on rapidgzip; ensure your Mojo environment has
+    rapidgzip available (e.g. via pixi with rapidgzip-mojo, or -I path to rapidgzip).
+    """
+    return str(Path(__file__).resolve().parent / "mojopkg")
+
+
 # Re-export extension types (runtime); for type checkers, use the Protocol types above
 FastqRecord: type[FastqRecordProtocol] = cast(type[FastqRecordProtocol], _mod.FastqRecord)
 FastqBatch: type[FastqBatchProtocol] = cast(type[FastqBatchProtocol], _mod.FastqBatch)
@@ -246,6 +259,8 @@ FastqGZParser = _mod.FastqGZParser
 
 __all__ = [
     "parser",
+    "create_parser",
+    "mojopkg_path",
     "FastqRecord",
     "FastqBatch",
     "FastqParser",
