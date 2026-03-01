@@ -12,13 +12,74 @@ uv pip install blazeseq
 pip install blazeseq
 ```
 
+## Quick start
+
 ```python
 import blazeseq
-parser = blazeseq.create_parser("file.fastq", "sanger")
-while blazeseq.has_more(parser):
-    rec = blazeseq.next_record(parser)
+parser = blazeseq.parser("file.fastq", "sanger")  # or create_parser(...)
+while parser.has_more():
+    rec = parser.next_record()
     print(rec.id(), rec.sequence())
 ```
+
+Or use the iterator protocol:
+
+```python
+for rec in parser.records:
+    print(rec.id(), rec.sequence())
+```
+
+For batched iteration (default 100 records per batch):
+
+```python
+for batch in parser.batches:
+    for rec in batch:
+        print(rec.id(), rec.sequence())
+```
+
+---
+
+## API reference
+
+### Module-level
+
+| Function | Description |
+|----------|-------------|
+| `parser(path, quality_schema="generic", parallelism=4)` | Create a FASTQ parser. Supports `.fastq`, `.fq`, `.fastq.gz`, `.fq.gz`. `quality_schema`: `"generic"`, `"sanger"`, `"solexa"`, `"illumina_1.3"`, `"illumina_1.5"`, `"illumina_1.8"`. `parallelism`: decompression threads for gzip (default 4). Returns a parser object. |
+| `create_parser(path, quality_schema, parallelism)` | Alias for `parser` (backward compatibility). |
+
+### Parser (returned by `parser` / `create_parser`)
+
+| Method / attribute | Description |
+|-------------------|-------------|
+| `has_more()` | Return `True` if there may be more records to read. |
+| `next_record()` | Return the next record as a `FastqRecord`. Raises on EOF or parse error. |
+| `next_ref_as_record()` | Return the next record (from zero-copy ref) as a `FastqRecord`. Raises on EOF or parse error. |
+| `next_batch(max_records)` | Return a batch of up to `max_records` records as a `FastqBatch`. Returns a partial batch at EOF. |
+| `records` | Iterable over records: `for rec in parser.records`. |
+| `batches` | Iterable over batches (default 100 records per batch): `for batch in parser.batches` then `for rec in batch`. |
+| `batches_with_size(batch_size)` | Iterable over batches of the given size. |
+| `__iter__` / `__next__` | Iterator protocol; equivalent to iterating over `records`. |
+
+### FastqRecord
+
+| Method | Description |
+|--------|-------------|
+| `id()` | Read identifier (without leading `@`). |
+| `sequence()` | Sequence line (bases). |
+| `quality()` | Quality line (raw quality string). |
+| `__len__()` | Sequence length (number of bases). |
+| `phred_scores()` | Phred quality scores as a Python list of integers. |
+
+### FastqBatch
+
+| Method | Description |
+|--------|-------------|
+| `num_records()` | Number of records in the batch. |
+| `get_record(index)` | Return the record at the given index as a `FastqRecord`. |
+| `__iter__` | Iterate over records: `for rec in batch`. |
+
+---
 
 ## Local development (uv)
 
