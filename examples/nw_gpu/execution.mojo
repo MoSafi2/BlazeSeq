@@ -2,8 +2,8 @@
 
 This module bridges main.mojo and kernels.mojo. It handles:
   - Synthetic batch generation: build in-memory FASTQ, parse into FastqBatches.
-  - Reference setup: copy the reference string to a host buffer, then to device,
-    and wrap it in a LayoutTensor for the NW kernel.
+  - Reference setup: copy the reference string to a host buffer, then to device
+    and pass as UnsafePointer to the NW kernel.
   - GPU run: compile the NW kernel, then for each batch upload sequences to
     device, allocate score and DP scratch buffers, launch one block per record,
     and copy scores back (timing includes all of this).
@@ -19,7 +19,6 @@ from blazeseq.io.readers import MemoryReader, Reader
 from gpu.host import DeviceContext
 from gpu.host.device_context import DeviceBuffer, HostBuffer
 from pathlib import Path
-from layout import Layout, LayoutTensor
 from time import perf_counter_ns
 
 from examples.nw_gpu.kernels import (
@@ -27,7 +26,6 @@ from examples.nw_gpu.kernels import (
     needleman_wunsch_cpu,
     MAX_REF_LEN,
     ROW_STRIDE,
-    REF_LAYOUT,
 )
 
 # Max records per FastqBatch when reading or generating.
@@ -36,18 +34,9 @@ comptime BATCH_SIZE: Int = 65536
 comptime REF_40BP: String = "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT"
 
 
-fn collect_batches[R: Reader](mut parser: FastqParser[R]) raises -> List[FastqBatch]:
-    """Consume parser and return a list of batches (each up to BATCH_SIZE records)."""
-    var batches = List[FastqBatch]()
-    while True:
-        var batch = parser.next_batch(max_records=BATCH_SIZE)
-        if batch.num_records() == 0:
-            break
-        batches.append(batch^)
-    return batches^
-
-
-fn load_batches_synthetic(num_reads: Int, read_len: Int) raises -> List[FastqBatch]:
+fn load_batches_synthetic(
+    num_reads: Int, read_len: Int
+) raises -> List[FastqBatch]:
     """Generate synthetic FASTQ (num_reads × read_len bp) and return list of batches.
 
     Uses BlazeSeq's generate_synthetic_fastq_buffer, then a MemoryReader and
@@ -58,7 +47,13 @@ fn load_batches_synthetic(num_reads: Int, read_len: Int) raises -> List[FastqBat
     )
     var reader = MemoryReader(data^)
     var parser = FastqParser[MemoryReader](reader^)
-    return collect_batches(parser)
+    var batches = List[FastqBatch]()
+    while True:
+        var batch = parser.next_batch(max_records=BATCH_SIZE)
+        if batch.num_records() == 0:
+            break
+        batches.append(batch^)
+    return batches^
 
 
 fn total_record_count(batches: List[FastqBatch]) -> Int:
@@ -71,14 +66,11 @@ fn total_record_count(batches: List[FastqBatch]) -> Int:
 
 fn setup_reference(
     ctx: DeviceContext, ref_str: String
-) raises -> Tuple[
-    LayoutTensor[DType.uint8, REF_LAYOUT, MutAnyOrigin], Int
-]:
-    """Upload reference to device; return (ref_tensor, ref_len) for kernel calls.
+) raises -> Tuple[DeviceBuffer[DType.uint8], Int]:
+    """Upload reference to device; return (ref_buffer, ref_len) for kernel calls.
 
     Copies ref_str into a host buffer of length MAX_REF_LEN (zero-padded),
-    then copies to device and wraps in REF_LAYOUT tensor. ref_len is the
-    actual reference length used by the kernel.
+    then copies to device. ref_len is the actual reference length used by the kernel.
     """
     var ref_len = len(ref_str)
     var ref_host = ctx.enqueue_create_host_buffer[DType.uint8](MAX_REF_LEN)
@@ -91,13 +83,12 @@ fn setup_reference(
     var ref_buffer = ctx.enqueue_create_buffer[DType.uint8](MAX_REF_LEN)
     ctx.enqueue_copy(src_buf=ref_host, dst_buf=ref_buffer)
     ctx.synchronize()
-    var ref_tensor = LayoutTensor[DType.uint8, REF_LAYOUT](ref_buffer)
-    return (ref_tensor.as_any_origin(), ref_len)
+    return (ref_buffer, ref_len)
 
 
 fn run_gpu_nw(
     batches: List[FastqBatch],
-    ref_tensor: LayoutTensor[DType.uint8, REF_LAYOUT, MutAnyOrigin],
+    ref_buffer: DeviceBuffer[DType.uint8],
     ref_len: Int,
     ctx: DeviceContext,
 ) raises -> Tuple[Float64, List[Int32]]:
@@ -121,7 +112,7 @@ fn run_gpu_nw(
         ctx.synchronize()
         ctx.enqueue_function(
             nw_compiled,
-            ref_tensor,
+            ref_buffer,
             ref_len,
             device_batch.sequence_buffer,
             device_batch.ends,
@@ -131,7 +122,9 @@ fn run_gpu_nw(
             grid_dim=num_records,
             block_dim=1,
         )
-        var host_scores = ctx.enqueue_create_host_buffer[DType.int32](num_records)
+        var host_scores = ctx.enqueue_create_host_buffer[DType.int32](
+            num_records
+        )
         ctx.enqueue_copy(src_buf=scores_buffer, dst_buf=host_scores)
         ctx.synchronize()
         for i in range(num_records):
@@ -140,27 +133,29 @@ fn run_gpu_nw(
     return (Float64(end_ns - start_ns) / 1e9, all_scores^)
 
 
-fn run_cpu_nw(batches: List[FastqBatch], ref_str: String) raises -> Tuple[Float64, List[Int32]]:
-    """Run CPU NW on every record in every batch; return (elapsed seconds, list of scores).
-
-    Uses the same scoring as the GPU kernel (match +1, mismatch -1, gap -1).
-    Returns scores in the same order as run_gpu_nw for validation.
-    """
+fn run_cpu_nw(
+    batches: List[FastqBatch], ref_str: String
+) raises -> Tuple[Float64, List[Int32]]:
     var start_ns = perf_counter_ns()
     var all_scores = List[Int32]()
     for batch in batches:
         var n = batch.num_records()
         for i in range(n):
-            var rec = batch.get_record(i)
-            var query = String(rec.sequence_slice())
-            var score = needleman_wunsch_cpu(reference=ref_str, query=query)
+            var rec = batch.get_ref(i)  # ← zero-copy, no String allocation
+            var score = needleman_wunsch_cpu(
+                reference=ref_str,
+                query_bytes=rec.sequence,  # ← raw Span[Byte], exact length
+            )
             all_scores.append(score)
     var end_ns = perf_counter_ns()
     return (Float64(end_ns - start_ns) / 1e9, all_scores^)
 
 
-fn scores_match(gpu_scores: List[Int32], cpu_scores: List[Int32]) -> Tuple[Bool, Int]:
-    """Return (True, -1) if lists are equal; (False, -1) if length mismatch; else (False, first mismatch index)."""
+fn scores_match(
+    gpu_scores: List[Int32], cpu_scores: List[Int32]
+) -> Tuple[Bool, Int]:
+    """Return (True, -1) if lists are equal; (False, -1) if length mismatch; else (False, first mismatch index).
+    """
     if len(gpu_scores) != len(cpu_scores):
         return (False, -1)
     for i in range(len(gpu_scores)):

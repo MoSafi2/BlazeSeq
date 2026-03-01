@@ -1,8 +1,8 @@
 """GPU and CPU Needleman-Wunsch kernels for the needlemann-wunsh_gpu_alignment example.
 
   - nw_kernel: GPU kernel runs one block per read. Each block computes
-    the global alignment score (Needleman-Wunsch) for one (reference, query) pair
-    using two-row DP and writes the score to scores[block_idx]. Uses ref_tensor
+    the global alignment score (Needleman-Wunsch)     for one (reference, query) pair
+    using two-row DP and writes the score to scores[block_idx]. Uses ref_ptr
     for the reference, and seq_ptr + seq_ends to get the query for this record.
   - needleman_wunsch_cpu: host-side reference implementation with the same
     scoring (match +1, mismatch -1, gap -1) for correctness and CPU benchmarking.
@@ -10,7 +10,6 @@
 
 from gpu import block_idx
 from memory import UnsafePointer
-from layout import Layout, LayoutTensor
 
 # Max reference and query length for the NW kernel (avoids dynamic alloc on device).
 comptime MAX_REF_LEN: Int = 256
@@ -18,12 +17,9 @@ comptime MAX_QUERY_LEN: Int = 256
 # Two rows of (MAX_REF_LEN+1) Int32 per record for DP; each block uses one "slot."
 comptime ROW_STRIDE: Int = 2 * (MAX_REF_LEN + 1)
 
-# Static 1D layout for reference on device (used with LayoutTensor).
-comptime REF_LAYOUT = Layout.row_major(MAX_REF_LEN)
-
 
 fn nw_kernel(
-    ref_tensor: LayoutTensor[DType.uint8, REF_LAYOUT, MutAnyOrigin],
+    ref_ptr: UnsafePointer[UInt8, MutAnyOrigin],
     ref_len: Int,
     seq_ptr: UnsafePointer[UInt8, MutAnyOrigin],
     seq_ends: UnsafePointer[Int64, MutAnyOrigin],
@@ -71,7 +67,7 @@ fn nw_kernel(
         for i in range(1, ref_len + 1):
             var im1 = i - 1
             var diag = (dp_prev.load(im1))[0]
-            var ref_byte = ref_tensor.load_scalar(im1)
+            var ref_byte = (ref_ptr + im1)[]
             var q_byte = (seq_ptr + q_start + j - 1)[]
             if ref_byte == q_byte:
                 diag += match_score
@@ -93,14 +89,10 @@ fn nw_kernel(
     scores[rec_idx] = dp_prev.load(ref_len)[0]
 
 
-fn needleman_wunsch_cpu(reference: String, query: String) -> Int32:
-    """Host-side Needleman-Wunsch; same scoring as GPU: match +1, mismatch -1, gap -1.
-
-    Returns the optimal global alignment score. Logic and indexing are kept
-    identical to nw_kernel for CPU/GPU result parity.
-    """
+fn needleman_wunsch_cpu(reference: String, query_bytes: Span[Byte]) -> Int32:
+    """Host-side NW taking a raw byte span for the query (avoids String null-terminator issues)."""
     var r_len = len(reference)
-    var q_len = len(query)
+    var q_len = len(query_bytes)        # ← exact byte count, no null terminator
     if r_len == 0 or q_len == 0:
         return 0
     var match_score: Int32 = 1
@@ -113,18 +105,13 @@ fn needleman_wunsch_cpu(reference: String, query: String) -> Int32:
     for _ in range(r_len + 1):
         dp_curr.append(Int32(0))
 
-    # Match GPU: same loop structure and row swap; compare bytes as UInt8 like the kernel.
     var ref_bytes = reference.as_bytes()
-    var q_bytes = query.as_bytes()
     for j in range(1, q_len + 1):
         dp_curr[0] = gap_score * Int32(j)
         for i in range(1, r_len + 1):
             var im1 = i - 1
-            var jm1 = j - 1
             var diag: Int32 = dp_prev[im1]
-            var ref_byte: UInt8 = ref_bytes[im1]
-            var q_byte: UInt8 = q_bytes[jm1]
-            if ref_byte == q_byte:
+            if ref_bytes[im1] == query_bytes[j - 1]:
                 diag += match_score
             else:
                 diag += mismatch_score
@@ -136,9 +123,7 @@ fn needleman_wunsch_cpu(reference: String, query: String) -> Int32:
             if ins_score > best:
                 best = ins_score
             dp_curr[i] = best
-        # Same row swap as GPU; result is in the row we just filled, which becomes dp_prev.
-        var tmp = dp_prev.copy()
-        dp_prev = dp_curr.copy()
-        dp_curr = tmp.copy()
-
+        var tmp = dp_prev^
+        dp_prev = dp_curr^
+        dp_curr = tmp^
     return dp_prev[r_len]

@@ -8,7 +8,7 @@
 [![Mojo](https://img.shields.io/badge/Mojo-0.26.1-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)). Configurable validation is available — all through a single unified API.
+A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)).Configurable validation is available — all through a single unified API.
 
 ## ✨ Key Features
 
@@ -19,6 +19,8 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
   - `batches()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
 - **Rapidgzip with parallel decoding** — Gzipped FASTQ (`.fastq.gz`) is decompressed in parallel across multiple threads for high throughput; tune with the `parallelism`.
+
+![Throughput](assets/throughput_gbps.png)
 
 ## Quick Start
 
@@ -32,6 +34,10 @@ blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
 Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `ref_records()`, `batches()`, GPU batching).
+
+## Python bindings (experimental)
+
+Python bindings are available via a wheel-only package on PyPI. They are **experimental** and may change. Install with `pip install blazeseq` or `uv pip install blazeseq`. Usage and API are documented in [python/README.md](python/README.md).
 
 ### 🛠 Usage examples
 
@@ -113,10 +119,6 @@ for record in parser.records():
 
 Throughput (file-based and in-memory) and comparison with needletail, seq_io, and kseq. See [benchmark/README.md](benchmark/README.md) for commands and details.
 
-## Python bindings (experimental)
-
-Python bindings are available via a wheel-only package on PyPI. They are **experimental** and may change. Install with `pip install blazeseq` or `uv pip install blazeseq`. Usage and API are documented in [python/README.md](python/README.md).
-
 ## Documentation
 
 - API Reference: [https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)
@@ -150,7 +152,7 @@ BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [MojoFastTrim](https:/
 
 ## Acknowledgements
 
-The parsing algorithm is inspired by the parsing approach of rust-based [needletai](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
+The parsing algorithm is inspired by the parsing approach of rust-based [needletail](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
 
 ## License
 

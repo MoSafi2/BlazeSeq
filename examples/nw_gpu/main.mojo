@@ -49,12 +49,12 @@ fn main() raises:
     print("Total records: ", total)
     print("Reference (40 bp): ", REF_40BP)
 
-    # Upload reference to device and get tensor + length for kernel calls.
+    # Upload reference to device and get buffer + length for kernel calls.
     var ctx = DeviceContext()
-    var (ref_tensor, ref_len) = setup_reference(ctx, REF_40BP)
+    var (ref_buffer, ref_len) = setup_reference(ctx, REF_40BP)
 
     # Run both backends and measure wall-clock time; collect scores for validation.
-    var gpu_result = run_gpu_nw(batches, ref_tensor, ref_len, ctx)
+    var gpu_result = run_gpu_nw(batches, ref_buffer, ref_len, ctx)
     var gpu_sec = gpu_result[0]
     var gpu_scores = gpu_result[1].copy()
 
@@ -62,8 +62,8 @@ fn main() raises:
     var cpu_sec = cpu_result[0]
     var cpu_scores = cpu_result[1].copy()
 
-    print("GPU scores: ", gpu_scores[1:10].__str__())
-    print("CPU scores: ", cpu_scores[1:10].__str__())
+    # print("GPU scores: ", gpu_scores[1:10].__str__())
+    # print("CPU scores: ", cpu_scores[1:10].__str__())
     print("")
     print("GPU time:  ", gpu_sec, " s")
     print("CPU time:  ", cpu_sec, " s")
@@ -74,11 +74,29 @@ fn main() raises:
     var match_result_bool: Bool = match_result[0]
     var mismatch_idx = match_result[1]
     if match_result_bool:
-        print("Validation: GPU and CPU results match (", len(gpu_scores), " scores).")
+        print(
+            "Validation: GPU and CPU results match (",
+            len(gpu_scores),
+            " scores).",
+        )
     else:
         if mismatch_idx == -1:
-            print("Validation FAILED: length mismatch (GPU: ", len(gpu_scores), ", CPU: ", len(cpu_scores), ")")
+            print(
+                "Validation FAILED: length mismatch (GPU: ",
+                len(gpu_scores),
+                ", CPU: ",
+                len(cpu_scores),
+                ")",
+            )
         else:
-            print("Validation FAILED: first mismatch at record index ", mismatch_idx)
-            print("  GPU score: ", gpu_scores[mismatch_idx], ", CPU score: ", cpu_scores[mismatch_idx])
+            print(
+                "Validation FAILED: first mismatch at record index ",
+                mismatch_idx,
+            )
+            print(
+                "  GPU score: ",
+                gpu_scores[mismatch_idx],
+                ", CPU score: ",
+                cpu_scores[mismatch_idx],
+            )
         exit(1)

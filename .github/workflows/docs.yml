@@ -31,17 +31,8 @@ jobs:
         with:
           cache: true
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: docs/site/package-lock.json
-
       - name: Build docs
-        run: |
-          pixi run modo build
-          cd docs/site && node scripts/add-frontmatter.mjs && npm ci && npm run build
+        run: pixi run -e docs docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4

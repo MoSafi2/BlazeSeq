@@ -97,10 +97,52 @@ class ParserProtocol(Protocol):
         ...
 
 
+def _get_prop(raw: Any, name: str) -> Any:
+    """Get attribute from extension record; call if method (so id/sequence/quality/phred_scores work as properties)."""
+    val = getattr(raw, name)
+    return val() if callable(val) else val
+
+
+def _wrap_record(raw: Any) -> FastqRecordProtocol:
+    """Wrap extension FastqRecord so id, sequence, quality, phred_scores are Python properties."""
+    return _FastqRecordWrapper(raw)
+
+
+class _FastqRecordWrapper:
+    """Wraps extension FastqRecord and exposes id, sequence, quality, phred_scores as properties."""
+
+    __slots__ = ("_raw",)
+
+    def __init__(self, raw: Any) -> None:
+        self._raw = raw
+
+    @property
+    def id(self) -> str:
+        return _get_prop(self._raw, "id")
+
+    @property
+    def sequence(self) -> str:
+        return _get_prop(self._raw, "sequence")
+
+    @property
+    def quality(self) -> str:
+        return _get_prop(self._raw, "quality")
+
+    @property
+    def phred_scores(self) -> list[int]:
+        return _get_prop(self._raw, "phred_scores")
+
+    def __len__(self) -> int:
+        return int(self._raw.__len__())
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._raw, name)
+
+
 def _next_or_stop(mojo_iter: Any) -> FastqRecordProtocol:
     """Call __next__ on a Mojo iterator; raise StopIteration when exhausted."""
     try:
-        return mojo_iter.__next__()
+        return _wrap_record(mojo_iter.__next__())
     except Exception as e:
         if "StopIteration" in str(e):
             raise StopIteration from e
@@ -176,6 +218,10 @@ class _IterableParser:
     def __next__(self) -> FastqRecordProtocol:
         return _next_or_stop(self._parser)
 
+    def next_record(self) -> FastqRecordProtocol:
+        """Return the next record with id, sequence, quality, phred_scores as properties."""
+        return _wrap_record(self._parser.next_record())
+
     def next_batch(self, max_records: int) -> _IterableBatch:
         """Return an iterable batch of up to max_records records."""
         return _IterableBatch(self._parser.next_batch(max_records))
@@ -194,6 +240,10 @@ class _IterableBatch:
 
     def __iter__(self) -> _BatchIterator:
         return _BatchIterator(self._batch.__iter__())
+
+    def get_record(self, index: int) -> FastqRecordProtocol:
+        """Return the record at index with id, sequence, quality, phred_scores as properties."""
+        return _wrap_record(self._batch.get_record(index))
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._batch, name)

@@ -23,7 +23,7 @@ jobs:
         cache: true
 
     - name: Build docs
-      run: pixi run docs
+      run: pixi run -e docs docs
 
     - name: Run tests
       run: find ./tests -name "test_*.mojo" | xargs -I % pixi run mojo run -I . -D ASSERT=all -D GITHUB_ACTIONS=1 %
