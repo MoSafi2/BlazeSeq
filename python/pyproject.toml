@@ -23,4 +23,4 @@ where = ["."]
 include = ["blazeseq*"]
 
 [tool.setuptools.package-data]
-blazeseq = ["_extension/*.so"]
+blazeseq = ["_extension/*.so", "py.typed", "*.pyi"]

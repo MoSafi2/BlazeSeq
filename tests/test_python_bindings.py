@@ -11,22 +11,26 @@ Run from project root:
 Or with pixi (after building the extension and wheel):
   pixi run python tests/test_python_bindings.py
 """
+
 import os
 import sys
 
-# Ensure project root is on path for test data paths
+# Ensure the Python package is found (python/blazeseq), not the repo-root blazeseq/ Mojo package
 _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
+_python_dir = os.path.join(_repo_root, "python")
+if _python_dir not in sys.path:
+    sys.path.insert(0, _python_dir)
 
 import blazeseq
 
-FASTQ_PATH = os.path.join(_repo_root, "tests", "test_data", "fastq_parser", "example.fastq")
+FASTQ_PATH = os.path.join(
+    _repo_root, "tests", "test_data", "fastq_parser", "example.fastq"
+)
 
 
 def test_create_parser_and_next_record():
     """Loop with next_record until EOF; check first record id and sequence."""
-    parser = blazeseq.create_parser(FASTQ_PATH, "generic")
+    parser = blazeseq.parser(FASTQ_PATH, "generic")
     assert parser.has_more()
 
     count = 0
@@ -50,7 +54,7 @@ def test_create_parser_and_next_record():
 
 def test_next_batch_and_get_record():
     """Loop with next_batch; check num_records and get_record(i)."""
-    parser = blazeseq.create_parser(FASTQ_PATH, "generic")
+    parser = blazeseq.parser(FASTQ_PATH, "generic")
     batch = parser.next_batch(2)
     assert batch.num_records() == 2
     first = batch.get_record(0)
@@ -65,7 +69,7 @@ def test_next_batch_and_get_record():
 
 def test_eof_raises():
     """Calling next_record past EOF raises."""
-    parser = blazeseq.create_parser(FASTQ_PATH, "generic")
+    parser = blazeseq.parser(FASTQ_PATH, "generic")
     for _ in range(3):
         parser.next_record()
     try:
@@ -77,7 +81,7 @@ def test_eof_raises():
 
 def test_parser_iterator_protocol():
     """Parser supports __iter__ and __next__; exhaustion raises StopIteration or Exception('StopIteration')."""
-    parser = blazeseq.create_parser(FASTQ_PATH, "generic")
+    parser = blazeseq.parser(FASTQ_PATH, "generic")
     it = parser.__iter__()
     assert it is not None
     recs = []
@@ -96,7 +100,7 @@ def test_parser_iterator_protocol():
 
 def test_batch_iterator_protocol():
     """FastqBatch supports __iter__; iterator yields records and raises at end."""
-    parser = blazeseq.create_parser(FASTQ_PATH, "generic")
+    parser = blazeseq.parser(FASTQ_PATH, "generic")
     batch = parser.next_batch(2)
     it = batch.__iter__()
     recs = []

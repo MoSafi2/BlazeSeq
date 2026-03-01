@@ -16,7 +16,7 @@ pip install blazeseq
 
 ```python
 import blazeseq
-parser = blazeseq.parser("file.fastq", "sanger")  # or create_parser(...)
+parser = blazeseq.parser("file.fastq", "sanger")
 while parser.has_more():
     rec = parser.next_record()
     print(rec.id(), rec.sequence())
@@ -35,6 +35,14 @@ For batched iteration (default 100 records per batch):
 for batch in parser.batches:
     for rec in batch:
         print(rec.id(), rec.sequence())
+```
+
+**Gzip files:** use `.fastq.gz` or `.fq.gz` and set `parallelism` for decompression threads (default 4):
+
+```python
+parser = blazeseq.parser("reads.fastq.gz", "sanger", parallelism=8)
+for rec in parser.records:
+    print(rec.id(), rec.sequence())
 ```
 
 ---
