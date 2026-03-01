@@ -35,6 +35,10 @@ blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 
 Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `ref_records()`, `batches()`, GPU batching).
 
+## Python bindings (experimental)
+
+Python bindings are available via a wheel-only package on PyPI. They are **experimental** and may change. Install with `pip install blazeseq` or `uv pip install blazeseq`. Usage and API are documented in [python/README.md](python/README.md).
+
 ### 🛠 Usage examples
 
 ```sh
@@ -115,10 +119,6 @@ for record in parser.records():
 
 Throughput (file-based and in-memory) and comparison with needletail, seq_io, and kseq. See [benchmark/README.md](benchmark/README.md) for commands and details.
 
-## Python bindings (experimental)
-
-Python bindings are available via a wheel-only package on PyPI. They are **experimental** and may change. Install with `pip install blazeseq` or `uv pip install blazeseq`. Usage and API are documented in [python/README.md](python/README.md).
-
 ## Documentation
 
 - API Reference: [https://mosafi2.github.io/BlazeSeq/](https://mosafi2.github.io/BlazeSeq/)
@@ -152,7 +152,7 @@ BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [MojoFastTrim](https:/
 
 ## Acknowledgements
 
-The parsing algorithm is inspired by the parsing approach of rust-based [needletai](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
+The parsing algorithm is inspired by the parsing approach of rust-based [needletail](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
 
 ## License
 
