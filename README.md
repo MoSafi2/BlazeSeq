@@ -8,7 +8,7 @@
 [![Mojo](https://img.shields.io/badge/Mojo-0.26.1-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)). Configurable validation is available — all through a single unified API.
+A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)).Configurable validation is available — all through a single unified API.
 
 ## ✨ Key Features
 
@@ -19,6 +19,8 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
   - `batches()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
 - **Rapidgzip with parallel decoding** — Gzipped FASTQ (`.fastq.gz`) is decompressed in parallel across multiple threads for high throughput; tune with the `parallelism`.
+
+![Throughput](assets/throughput_gbps.png)
 
 ## Quick Start
 
