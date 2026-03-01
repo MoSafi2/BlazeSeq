@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# In-memory throughput benchmark: BlazeSeq batched vs records vs ref_records.
+# In-memory throughput benchmark: BlazeSeq batches vs records vs ref_records.
 # Generates ~3 GB synthetic FASTQ in process, reads via MemoryReader (no disk I/O).
 # Runs each mode multiple times, captures parse_seconds from Mojo output, writes
 # JSON for plotting (no hyperfine).
@@ -43,7 +43,7 @@ RAW_TIMES=$(mktemp)
 trap 'rm -f "$RAW_TIMES"' EXIT
 
 echo "Running each mode ${BENCH_RUNS} times (size_gb=${SIZE_GB}), capturing parse_seconds from Mojo ..."
-for mode in batched records ref_records; do
+for mode in batches records ref_records; do
     for run in $(seq 1 "$BENCH_RUNS"); do
         out=$("$RUNNER_BIN" "$SIZE_GB" "$mode" 2>/dev/null) || true
         parse_s=$(echo "$out" | grep "^parse_seconds:" | sed 's/parse_seconds: *//')
@@ -82,7 +82,7 @@ with open(raw_path) as f:
         times_by_mode.setdefault(mode, []).append(t)
 
 results = []
-for mode in ("batched", "records", "ref_records"):
+for mode in ("batches", "records", "ref_records"):
     vals = times_by_mode.get(mode, [])
     if not vals:
         mean = stddev = 0.0
@@ -124,7 +124,7 @@ echo "Results: $RESULTS_JSON and $RESULTS_MD"
 
 # Plot using Mojo-derived timing
 ref=""
-for mode in batched records ref_records; do
+for mode in batches records ref_records; do
     out=$("$RUNNER_BIN" "$SIZE_GB" "$mode" 2>/dev/null) || true
     first_line=$(echo "$out" | head -n1)
     [ -n "$first_line" ] && ref="${ref:-$first_line}"

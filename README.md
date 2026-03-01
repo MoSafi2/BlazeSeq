@@ -8,7 +8,7 @@
 [![Mojo](https://img.shields.io/badge/Mojo-0.26.1-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It handles gzip input via `zlib` bindings and offers configurable validation — all through a single unified API.
+A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing (similar to `needletail` and `seq_io`), with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)). Configurable validation is available — all through a single unified API.
 
 ## ✨ Key Features
 
@@ -16,8 +16,9 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
 - **Three parsing modes** — Choose your trade-off between speed and convenience:
   - `ref_records()` — Zero-copy views (fastest, borrow semantics)
   - `records()` — Owned records (thread-safe)
-  - `batched()` — Structure-of-Arrays for GPU upload
+  - `batches()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
+- **Rapidgzip with parallel decoding** — Gzipped FASTQ (`.fastq.gz`) is decompressed in parallel across multiple threads for high throughput; tune with the `parallelism`.
 
 ## Quick Start
 
@@ -30,7 +31,7 @@ Use BlazeSeq as a Mojo dependency in your project. Install [pixi](https://prefix
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
-Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `ref_records()`, `batched()`, GPU batching).
+Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `ref_records()`, `batches()`, GPU batching).
 
 ### 🛠 Usage examples
 
@@ -79,18 +80,21 @@ from gpu.host import DeviceContext
 
 var ctx = DeviceContext()
 var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", batch_size=4096)
-for batch in parser.batched():
+for batch in parser.batches():
     # batch is a FastqBatch (Structure-of-Arrays)
     var device_batch = batch.to_device(ctx)   # GPU upload
     # Your GPU kernel, check examples
 ```
 
-### Reading gzip
+### Reading gzip (rapidgzip, parallel decoding)
+
+BlazeSeq uses **RapidgzipReader** for gzipped FASTQ. It performs **parallel decompression**: the compressed stream is split into chunks and multiple threads decode them concurrently resulting in much higher throughput than single-threaded readers through `zlib` or `libdeflate` .
 
 ```mojo
-from blazeseq import GZFile, FastqParser
+from blazeseq import RapidgzipReader, FastqParser
 
-var parser = FastqParser(GZFile("data.fastq.gz", "rb"), "illumina_1.8")
+var reader = RapidgzipReader("data.fastq.gz", parallelism=4)  # 0 = use all available cores.
+var parser = FastqParser(reader^, "illumina_1.8")
 for record in parser.records():
     _ = record.id_slice()
 ```
@@ -101,40 +105,17 @@ for record in parser.records():
 | ------------------------------ | ------------------ | ------------ | ------------------------------------------------------------------ |
 | `next_ref()` / `ref_records()` | `RefRecord`        | **No**       | Streaming transforms (QC, filtering) where you process and discard. Not thread-safe |
 | `next_record()` / `records()`  | `FastqRecord`      | **Yes**      | Simple scripting, building in-memory collections       |
-| `next_batch()` / `batched()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, parallel CPU operations                |
+| `next_batch()` / `batches()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, parallel CPU operations                |
 
 **Critical**: `RefRecord` spans are only valid untill the next parser operation. Do not store them in collections or use after iteration advances.
 
 ## Benchmarks
 
-Benchmark numbers are hardware- and Mojo-version-dependent.
+Throughput (file-based and in-memory) and comparison with needletail, seq_io, and kseq. See [benchmark/README.md](benchmark/README.md) for commands and details.
 
-### Throughput benchmark
+## Python bindings (experimental)
 
-**File-based**: Generates ~3 GB synthetic FASTQ on ramfs, then runs batched / records / ref_records with hyperfine:
-
-```bash
-pixi run -e benchmark benchmark-throughput
-```
-
-**In-memory (MemoryReader)**: Generates ~3 GB FASTQ in process (no disk I/O), reads via `MemoryReader`. Timing is measured inside Mojo (parse-only); the script runs each mode multiple times, captures `parse_seconds` from the Mojo output, and writes JSON + plots (no hyperfine):
-
-```bash
-pixi run -e benchmark benchmark-throughput-memory
-```
-
-Override size and runs: `SIZE_GB=1 BENCH_RUNS=3 ./benchmark/throughput/run_throughput_memory_benchmarks.sh`
-
-Or run the runner once (default 3 GB): `pixi run mojo run -I . benchmark/throughput/run_throughput_memory_blazeseq.mojo [size_gb] <mode>` (mode: batched | records | ref_records).
-
-### Comparison with other tools
-
-Generates ~3GB in `ramfs` and compares parsing against `needletail` (Rust), `seq_io` (Rust), and `kseq` (C).
-Ensure that you have enough ram capacity (min ~5GB).
-
-```bash
-pixi run -e benchmark benchmark-plain
-```
+Python bindings are available via a wheel-only package on PyPI. They are **experimental** and may change. Install with `pip install blazeseq` or `uv pip install blazeseq`. Usage and API are documented in [python/README.md](python/README.md).
 
 ## Documentation
 
@@ -161,7 +142,7 @@ Tests use the same valid/invalid FASTQ corpus as [BioJava](https://github.com/bi
 
 ## Project History
 
-BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [here](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim)), redesigned for:
+BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [MojoFastTrim](https://github.com/MoSafi2/BlazeSeq/tree/MojoFastTrim)), redesigned for:
 
 - Unified parser architecture (one parser, three modes)
 - GPU-oriented batch types
@@ -169,9 +150,7 @@ BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [here](https://github.
 
 ## Acknowledgements
 
-The parsing algorithm is inspired by the parsing approach taken by the rust-based [needletai](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
-
-
+The parsing algorithm is inspired by the parsing approach of rust-based [needletai](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
 
 ## License
 

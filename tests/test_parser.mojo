@@ -375,12 +375,12 @@ fn test_record_parser_ascii_validation_disabled() raises:
 
 
 # ---------------------------------------------------------------------------
-# FastqParser batched() / next_batch() tests (non-GPU: iteration, batch size, content, empty input)
+# FastqParser batches() / next_batch() tests (non-GPU: iteration, batch size, content, empty input)
 # ---------------------------------------------------------------------------
 
 
 fn test_batched_parser_for_loop() raises:
-    """FastqParser.batched() yields FastqBatch with correct record count."""
+    """FastqParser.batches() yields FastqBatch with correct record count."""
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n@r3\nNNNN\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
     var parser = FastqParser[MemoryReader](
@@ -388,7 +388,7 @@ fn test_batched_parser_for_loop() raises:
     )
 
     var batches = List[FastqBatch]()
-    for batch in parser.batched():
+    for batch in parser.batches():
         batches.append(batch^)
 
     assert_equal(
@@ -446,7 +446,7 @@ fn test_batched_parser_empty_input() raises:
     )
 
     var count = 0
-    for batch in parser.batched():
+    for batch in parser.batches():
         count += 1
     assert_equal(count, 0, "No batches from empty input")
 
@@ -484,7 +484,7 @@ fn test_batched_parser_schema() raises:
 
 
 fn test_generate_synthetic_fastq_buffer() raises:
-    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + FastqParser.batched() yield expected counts and lengths.
+    """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + FastqParser.batches() yield expected counts and lengths.
     """
     var num_reads = 20
     var min_len = 5
@@ -501,7 +501,7 @@ fn test_generate_synthetic_fastq_buffer() raises:
         reader^, schema="generic", batch_size=8
     )
     var total = 0
-    for batch in parser.batched():
+    for batch in parser.batches():
         total += len(batch)
         for i in range(len(batch)):
             var rec = batch.get_record(i)

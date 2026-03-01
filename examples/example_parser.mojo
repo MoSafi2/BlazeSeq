@@ -5,7 +5,7 @@ This example demonstrates:
 2. `FastqParser`: Parsing with validation disabled for maximum speed
 
 Use `parser.records()` for owned `FastqRecord`s, `parser.ref_records()` for zero-copy `RefRecord`s,
-or `parser.batched()` for `FastqBatch` (SoA). Direct methods: `next_record()`, `next_ref()`, `next_batch()`.
+or `parser.batches()` for `FastqBatch` (SoA). Direct methods: `next_record()`, `next_ref()`, `next_batch()`.
 
 Usage:
     pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
@@ -102,7 +102,7 @@ fn example_record_parser_no_validation(file_path: String) raises:
 fn example_batched_parser(file_path: String) raises:
     """
     Example using FastqParser for parsing in batches.
-    Use parser.batched() for FastqBatch (SoA) when you need batch processing.
+    Use parser.batches() for FastqBatch (SoA) when you need batch processing.
     """
     print("=" * 60)
     print("Example 3: FastqParser - Parsing in batches")
@@ -117,7 +117,7 @@ fn example_batched_parser(file_path: String) raises:
     var total_base_pairs = 0
     var batch_no = 0
 
-    for batch in parser.batched():
+    for batch in parser.batches():
         if batch_no == 0:
             for i in range(3):
                 var rec = batch.get_ref(i)

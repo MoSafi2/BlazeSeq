@@ -36,7 +36,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized, Repr
     
     Stores ids, sequences, and qualities in packed byte buffers with
     offset arrays, enabling coalesced GPU access after upload. Use with
-    `parser.batched()` or `next_batch()`, or build from a list of `FastqRecord`s.
+    `parser.batches()` or `next_batch()`, or build from a list of `FastqRecord`s.
     Implements `GpuMovableBatch` for `to_device()`.
     
     Use cases: GPU kernels, batch processing.
@@ -46,7 +46,7 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized, Repr
         from blazeseq import FastqParser, FileReader
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
-        for batch in parser.batched():
+        for batch in parser.batches():
             _ = batch.num_records()
         ```
     """
@@ -497,7 +497,7 @@ fn upload_batch_to_device(
     """Upload a `FastqBatch` to the GPU. Allocates device buffers and copies id, sequence, and quality.
     
     Args:
-        batch: Host-side SoA batch from `parser.batched()` or `next_batch()`.
+        batch: Host-side SoA batch from `parser.batches()` or `next_batch()`.
         ctx: GPU device context for allocation and transfer.
     
     Returns:

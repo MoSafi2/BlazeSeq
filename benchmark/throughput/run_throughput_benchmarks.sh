@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# Throughput benchmark: BlazeSeq batched vs records vs ref_records.
+# Throughput benchmark: BlazeSeq batches vs records vs ref_records.
 # Generates 3GB synthetic FASTQ on a ramfs mount, runs each mode with hyperfine.
-# Run from repository root: ./benchmark/run_throughput_benchmarks.sh
-# Requires: pixi, hyperfine. On Linux: sudo for ramfs mount/umount.
+# Run from repository root: ./benchmark/throughput/run_throughput_benchmarks.sh [--ramfs|--tmpfs]
+# Requires: pixi, hyperfine. On Linux: sudo for ramfs/tmpfs mount/umount.
 
 set -e
+
+# --- Mount type: --ramfs (default) or --tmpfs ---
+BENCH_FS="ramfs"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ramfs) BENCH_FS="ramfs"; shift ;;
+        --tmpfs) BENCH_FS="tmpfs"; shift ;;
+        *) break ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -51,7 +61,7 @@ hyperfine_cmd() {
     fi
 }
 
-# --- Ramfs mount (minimize disk I/O; no swap) ---
+# --- Ramfs/tmpfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/throughput_bench_3g.fastq"
 MOUNTED=0
@@ -71,11 +81,16 @@ trap cleanup_mount EXIT
 
 case "$(uname -s)" in
     Linux)
-        if sudo mount -t ramfs ramfs "$BENCH_DIR" 2>/dev/null; then
+        if [ "$BENCH_FS" = "tmpfs" ]; then
+            _mount_cmd="sudo mount -t tmpfs -o size=5G tmpfs $BENCH_DIR"
+        else
+            _mount_cmd="sudo mount -t ramfs ramfs $BENCH_DIR"
+        fi
+        if $_mount_cmd 2>/dev/null; then
             MOUNTED=1
             sudo chown "$(id -u):$(id -g)" "$BENCH_DIR"
         else
-            echo "Failed to mount ramfs on $BENCH_DIR. Ensure sudo is available and ramfs is supported."
+            echo "Failed to mount $BENCH_FS on $BENCH_DIR. Ensure sudo is available."
             echo "Fallback: using /dev/shm (no mount)."
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_throughput_bench_$$"
@@ -109,7 +124,7 @@ fi
 # --- Optional: verify all modes agree on record/base count (non-fatal) ---
 echo "Verifying mode outputs..."
 ref=""
-for mode in batched records ref_records; do
+for mode in batches records ref_records; do
     out=$("$RUNNER_BIN" "$BENCH_FILE" "$mode" 2>/dev/null) || out=""
     if [ -z "$out" ]; then
         echo "Warning: $mode produced no output"
@@ -129,7 +144,7 @@ hyperfine_cmd \
     --runs "${HYPERFINE_RUNS}" \
     --export-markdown "$REPO_ROOT/throughput_benchmark_results.md" \
     --export-json "$REPO_ROOT/throughput_benchmark_results.json" \
-    -n batched     "$RUNNER_BIN $BENCH_FILE batched" \
+    -n batches     "$RUNNER_BIN $BENCH_FILE batches" \
     -n records     "$RUNNER_BIN $BENCH_FILE records" \
     -n ref_records "$RUNNER_BIN $BENCH_FILE ref_records"
 

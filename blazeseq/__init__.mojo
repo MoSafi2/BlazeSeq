@@ -14,7 +14,7 @@ Key features:
 - Readers: `FileReader`, `MemoryReader`, `GZFile`, `RapidgzipReader`. Writers: `FileWriter`, `MemoryWriter`, `GZWriter`.
 
 Exceptions:
-- The public API (e.g. `FastqParser.next_ref()`, `next_record()`) raises only Mojo `Error` and `EOFError`. Parse and buffer-capacity failures use `Error` with consistent messages; end-of-input uses `EOFError`. Iterators (`records()`, `ref_records()`, `batched()`) catch `EOFError` and raise `StopIteration` instead.
+- The public API (e.g. `FastqParser.next_ref()`, `next_record()`) raises only Mojo `Error` and `EOFError`. Parse and buffer-capacity failures use `Error` with consistent messages; end-of-input uses `EOFError`. Iterators (`records()`, `ref_records()`, `batches()`) catch `EOFError` and raise `StopIteration` instead.
 
 Example:
     ```mojo

@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 # Compressed FASTQ parser benchmark: kseq, seq_io, needletail, BlazeSeq.
 # Generates synthetic FASTQ (default 1GB; set FASTQ_SIZE_GB), compresses to .fastq.gz, runs each parser with hyperfine.
-# Run from repository root: ./benchmark/fastq-parser/run_benchmarks_gzip.sh
-# Requires: pixi, hyperfine, cargo, gcc, gzip. On Linux: sudo for ramfs mount/umount.
+# Run from repository root: ./benchmark/fastq-parser/run_benchmarks_gzip.sh [--ramfs|--tmpfs] [thread_count]
+# Requires: pixi, hyperfine, cargo, gcc, gzip. On Linux: sudo for ramfs/tmpfs mount/umount.
 
 set -e
+
+# --- Mount type: --ramfs (default) or --tmpfs ---
+BENCH_FS="ramfs"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ramfs) BENCH_FS="ramfs"; shift ;;
+        --tmpfs) BENCH_FS="tmpfs"; shift ;;
+        *) break ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -85,7 +95,7 @@ else
     BENCH_GZIP_JSON="$REPO_ROOT/benchmark_results_gzip.json"
 fi
 
-# --- Ramfs mount (minimize disk I/O; no swap) ---
+# --- Ramfs/tmpfs mount (minimize disk I/O; no swap) ---
 BENCH_DIR=$(mktemp -d)
 BENCH_FILE="${BENCH_DIR}/blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
 MOUNTED=0
@@ -105,11 +115,16 @@ trap 'cleanup_mount; cpu_bench_teardown' EXIT
 
 case "$(uname -s)" in
     Linux)
-        if sudo mount -t ramfs ramfs "$BENCH_DIR" 2>/dev/null; then
+        if [ "$BENCH_FS" = "tmpfs" ]; then
+            _mount_cmd="sudo mount -t tmpfs -o size=5G tmpfs $BENCH_DIR"
+        else
+            _mount_cmd="sudo mount -t ramfs ramfs $BENCH_DIR"
+        fi
+        if $_mount_cmd 2>/dev/null; then
             MOUNTED=1
             sudo chown "$(id -u):$(id -g)" "$BENCH_DIR"
         else
-            echo "Failed to mount ramfs on $BENCH_DIR. Ensure sudo is available and ramfs is supported."
+            echo "Failed to mount $BENCH_FS on $BENCH_DIR. Ensure sudo is available."
             echo "Fallback: using /dev/shm (no mount)."
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_bench_gzip_$$"

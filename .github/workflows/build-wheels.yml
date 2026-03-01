@@ -24,9 +24,6 @@ jobs:
           - platform: macos-arm64
             runner: macos-14
             plat-name: macosx_11_0_arm64
-          - platform: macos-x86_64
-            runner: macos-13
-            plat-name: macosx_10_9_x86_64
 
     steps:
       - name: Checkout
@@ -46,11 +43,6 @@ jobs:
             -o python/blazeseq/_extension/blazeseq_parser.so \
             python/blazeseq_parser.mojo
 
-      - name: Build Mojo package (.mojopkg) for Mojo projects
-        run: |
-          mkdir -p python/blazeseq/mojopkg
-          pixi run bash -c 'mojo package -I "$CONDA_PREFIX/lib/mojo" blazeseq -o python/blazeseq/mojopkg/blazeseq.mojopkg'
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
@@ -62,7 +54,7 @@ jobs:
       - name: Test wheel
         run: |
           uv venv .venv
-          uv pip install .venv python/dist/*.whl
+          uv pip install --python .venv/bin/python python/dist/*.whl
           .venv/bin/python tests/test_python_bindings.py
 
       - name: Upload wheel artifact
@@ -71,7 +63,7 @@ jobs:
           name: wheel-${{ matrix.platform }}
           path: python/dist/*.whl
 
-  # Publish to PyPI on tag push (e.g. v0.2.0). Add secret PYPI_API_TOKEN in repo settings.
+  # Publish to PyPI on tag push (e.g. v0.2.0). Uses PYPI_API_TOKEN repo secret.
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
@@ -93,3 +85,4 @@ jobs:
         with:
           skip-existing: true
           packages-dir: python/dist
+          password: ${{ secrets.PYPI_API_TOKEN }}

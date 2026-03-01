@@ -281,7 +281,7 @@ def title_for_basename(basename: str) -> str:
     if basename == "parser_gzip_single":
         return "FASTQ parser benchmark (gzip, single-threaded)"
     if basename == "throughput":
-        return "BlazeSeq throughput: batched vs records vs ref_records"
+        return "BlazeSeq throughput: batches vs records vs ref_records"
     if basename == "throughput_memory":
         return "BlazeSeq in-memory throughput (parse time from Mojo)"
     return basename.replace("_", " ").title()

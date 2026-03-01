@@ -108,7 +108,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     - `next_record()` -> `FastqRecord` (owned; safe to store and reuse).
     - `next_batch(max_records)` -> `FastqBatch` (Structure-of-Arrays for GPU or batch processing).
 
-    For iteration use `ref_records()`, `records()`, or `batched()`. Direct methods
+    For iteration use `ref_records()`, `records()`, or `batches()`. Direct methods
     raise `EOFError` at end of input; iterators raise `StopIteration` and print
     parse/validation errors with context before stopping.
 
@@ -143,7 +143,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         """Initialize FastqParser from config.
 
         Uses quality_schema from config if set; otherwise generic schema.
-        Default batch size for batched() is DEFAULT_BATCH_SIZE from CONSTS.
+        Default batch size for batches() is DEFAULT_BATCH_SIZE from CONSTS.
 
         Args:
             reader: Source implementing the Reader trait (e.g. FileReader(Path(...))).
@@ -203,7 +203,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         Args:
             reader: Source implementing the Reader trait.
-            batch_size: Max records per batch for next_batch()/batched().
+            batch_size: Max records per batch for next_batch()/batches().
             schema: Quality schema name (default "generic").
 
         Raises:
@@ -376,7 +376,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Pointer(to=self)
         )
 
-    fn batched(
+    fn batches(
         ref self,
         max_records: Optional[Int] = None,
     ) -> _FastqParserBatchIter[Self.R, Self.config, origin_of(self)]:
@@ -626,7 +626,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
 
 # ---------------------------------------------------------------------------
-# Iterator adapters for FastqParser: ref_records(), records(), batched()
+# Iterator adapters for FastqParser: ref_records(), records(), batches()
 # ---------------------------------------------------------------------------
 
 
@@ -725,7 +725,7 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
 struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    """Iterator over `FastqBatch` (SoA); use `parser.batched()` or `parser.batched(max_records)`.
+    """Iterator over `FastqBatch` (SoA); use `parser.batches()` or `parser.batches(max_records)`.
 
     Yields batches of up to the given max_records. Last batch may be
     partial at EOF. On parse/validation error the error is printed with

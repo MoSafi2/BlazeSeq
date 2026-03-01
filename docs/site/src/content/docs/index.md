@@ -29,7 +29,7 @@ fn main() raises:
         _ = len(record)
 
     # Batched for GPU pipelines
-    for batch in parser.batched(1024):
+    for batch in parser.batches(1024):
         _ = batch.to_device()  # → DeviceFastqBatch
 ```
 
@@ -39,5 +39,5 @@ See the [API Reference](/api/blazeseq/) for full documentation.
 
 - **Configurable parsing** — Buffer size, validation (ASCII and quality schema), optional batch size.
 - **High throughput** — Targets several GB/s from disk.
-- **Unified API** — `ref_records()`, `records()`, or `batched()`.
+- **Unified API** — `ref_records()`, `records()`, or `batches()`.
 - **GPU support** — `FastqBatch`, `DeviceFastqBatch`, device upload.
