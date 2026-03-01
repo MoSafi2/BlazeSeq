@@ -1,0 +1,9 @@
+# Include docs and metadata for sdist (PyPI)
+include README.md
+include pyproject.toml
+
+# Package data; .so and .mojopkg are built in CI and shipped in wheels only
+recursive-include blazeseq *.py *.pyi
+recursive-include blazeseq py.typed
+recursive-include blazeseq/mojopkg *.mojopkg
+global-exclude *.so __pycache__ *.pyc

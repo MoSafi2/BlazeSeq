@@ -31,6 +31,7 @@ DEFAULT_JSON_PATHS = [
     "benchmark_results_gzip.json",
     "benchmark_results_gzip_single.json",
     "benchmark/throughput_benchmark_results.json",
+    "benchmark/throughput_memory_benchmark_results.json",
 ]
 
 # Distinct colors for each bar (one per benchmark)
@@ -124,6 +125,8 @@ def setup_text_for_basename(basename: str) -> str:
         return "3 GB FASTQ, 5 runs, ramfs"
     if basename == "throughput":
         return "3 GB synthetic FASTQ, 5 runs"
+    if basename == "throughput_memory":
+        return "3 GB in-memory (MemoryReader), 5 runs"
     return ""
 
 
@@ -264,6 +267,8 @@ def output_basename(json_path: Path) -> str:
         return "parser_gzip_single"
     if stem == "throughput_benchmark_results":
         return "throughput"
+    if stem == "throughput_memory_benchmark_results":
+        return "throughput_memory"
     return stem
 
 
@@ -277,6 +282,8 @@ def title_for_basename(basename: str) -> str:
         return "FASTQ parser benchmark (gzip, single-threaded)"
     if basename == "throughput":
         return "BlazeSeq throughput: batched vs records vs ref_records"
+    if basename == "throughput_memory":
+        return "BlazeSeq in-memory throughput (parse time from Mojo)"
     return basename.replace("_", " ").title()
 
 
@@ -325,8 +332,8 @@ def main() -> int:
         plot_one(results, title, out_path, version=version, setup_text=setup_text)
         print(f"Wrote {out_path}")
         plotted += 1
-        # Throughput benchmark: also generate GB/s figure
-        if basename == "throughput":
+        # Throughput benchmarks: also generate GB/s figure
+        if basename in ("throughput", "throughput_memory"):
             gbps_path = assets_dir / "throughput_gbps.png"
             data_size_gb = args.size_gb if args.size_gb is not None else DATA_SIZE_GB
             plot_throughput_gbps(
