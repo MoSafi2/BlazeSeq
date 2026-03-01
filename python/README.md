@@ -106,3 +106,36 @@ From the repo root, after building the Mojo extension into `python/blazeseq/_ext
 uv pip install -e python/
 uv run python tests/test_python_bindings.py
 ```
+
+---
+
+## Build and upload to PyPI
+
+**Prerequisites:** Build the Mojo extension so that `python/blazeseq/_extension/` contains the platform wheel (`.so`). Ensure `version` in `pyproject.toml` is bumped for releases.
+
+1. **Install build tools and twine:**
+
+   ```bash
+   uv pip install build twine
+   ```
+
+2. **Build the package** (from the `python/` directory):
+
+   ```bash
+   cd python
+   uv run python -m build
+   ```
+
+   This produces `dist/blazeseq-<version>.tar.gz` (sdist) and `dist/blazeseq-<version>-*.whl` (wheel).
+
+3. **Upload to PyPI** (use a PyPI API token; create one at [pypi.org](https://pypi.org/manage/account/token/)):
+
+   ```bash
+   uv run twine upload dist/*
+   ```
+
+   For Test PyPI first:
+
+   ```bash
+   uv run twine upload --repository testpypi dist/*
+   ```
