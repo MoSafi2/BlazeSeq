@@ -21,42 +21,7 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
 
 ## Quick Start
 
-BlazeSeq can be used as a **Python package** (from PyPI), as a **Mojo package** (from PyPI, using the pre-built `.mojopkg`), or as a **Mojo package** (from the repo via Pixi). Choose one depending on your workflow.
-
-### Option 1: Python package (PyPI)
-
-Install the Python bindings from PyPI. Only pre-built wheels are published; the extension is not built from source on install.
-
-```bash
-# With uv (recommended)
-uv pip install blazeseq
-
-# Or with pip
-pip install blazeseq
-```
-
-```python
-import blazeseq
-parser = blazeseq.parser("file.fastq", quality_schema="sanger")
-for rec in parser.records:
-    print(rec.id, rec.sequence)
-```
-
-Requires the Mojo runtime (provided by the `pymodo` dependency). Supported platforms: Linux x86_64, macOS (x86_64 and arm64).
-
-### Option 2: Mojo package from PyPI (pre-built .mojopkg)
-
-The same `pip install blazeseq` installs a pre-built **Mojo package** (`blazeseq.mojopkg`) so you can use BlazeSeq from Mojo code without cloning the repo. The package is installed next to the Python module; use `blazeseq.mojopkg_path()` to get its directory and pass it to `mojo build` / `mojo run` with `-I`. You must have the **rapidgzip** Mojo package available in your environment (e.g. via pixi with `rapidgzip-mojo`).
-
-```bash
-pip install blazeseq
-# In a Mojo project that has rapidgzip (e.g. via pixi):
-mojo run -I $(python -c 'import blazeseq; print(blazeseq.mojopkg_path())') -I $CONDA_PREFIX/lib/mojo your_app.mojo
-```
-
-See `blazeseq.mojopkg/README.md` in the installed package for details.
-
-### Option 3: Mojo package from repo (Pixi)
+### Mojo package from repo (Pixi)
 
 Use BlazeSeq as a Mojo dependency in your project. Install [pixi](https://prefix.dev/docs/pixi/) first, then add BlazeSeq to your `pixi.toml`:
 
@@ -202,13 +167,11 @@ BlazeSeq is a ground-up rewrite of MojoFastTrim (archived [here](https://github.
 - GPU-oriented batch types
 - Compile-time configuration
 
-## Publishing to PyPI
+## Acknowledgements
 
-The Python package is published to PyPI from the `python/` directory. To release:
+The parsing algorithm is inspired by the parsing approach taken by the rust-based [needletai](https://github.com/onecodex/needletail). It was further optimized to use first-class SIMD support in mojo.
 
-1. Bump the version in `python/pyproject.toml` and `pixi.toml` (keep in sync).
-2. Create and push a tag (e.g. `v0.2.0`). The [build-wheels](.github/workflows/build-wheels.yml) workflow builds wheels for Linux and macOS, then the `publish` job uploads them to PyPI when the tag is pushed.
-3. Add the `PYPI_API_TOKEN` secret in the repo settings (PyPI → Account → API tokens). The workflow uses trusted publishing (OIDC) or the token for upload.
+
 
 ## License
 
