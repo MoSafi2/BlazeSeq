@@ -7,6 +7,7 @@ This document describes all benchmarking options for BlazeSeq. Benchmark numbers
 | Benchmark | Command | Description |
 |-----------|---------|-------------|
 | **BlazeSeq throughput** (file) | `pixi run -e benchmark benchmark-throughput` | ~3 GB on tmpfs/ramfs, batches/records/ref_records with hyperfine |
+| **BlazeSeq throughput** (validation regimes) | `pixi run -e benchmark benchmark-throughput-validation` | 3x3 comparison: mode (`batches`/`records`/`ref_records`) vs validation (`none`/`ascii`/`ascii_quality`) |
 | **BlazeSeq throughput** (memory) | `pixi run -e benchmark benchmark-throughput-memory` | In-process FASTQ, parse-only timing, JSON + plots |
 | **Parser comparison** (plain) | `pixi run -e benchmark benchmark-plain` | BlazeSeq vs needletail, seq_io, kseq on 3 GB plain FASTQ |
 | **Parser comparison** (gzip) | `pixi run -e benchmark benchmark-gzip` | Decompress + parse; BlazeSeq multi-threaded (default 4 threads) |
@@ -76,6 +77,23 @@ pixi run -e benchmark benchmark-throughput-memory
 
 - Override size and runs: `SIZE_GB=1 BENCH_RUNS=3 ./benchmark/throughput/run_throughput_memory_benchmarks.sh`
 - Run once (default 3 GB): `pixi run mojo run -I . benchmark/throughput/run_throughput_memory_blazeseq.mojo [size_gb] <mode>` (mode: `batches` | `records` | `ref_records`).
+
+### Validation-regime comparison (file-based, hyperfine)
+
+Runs all 9 combinations of parser mode and validation regime:
+
+- Modes: `batches`, `records`, `ref_records`
+- Validation: `none`, `ascii`, `ascii_quality` (quality check with ASCII enabled)
+
+```bash
+pixi run -e benchmark benchmark-throughput-validation
+```
+
+Outputs:
+
+- `throughput_validation_benchmark_results.md`
+- `throughput_validation_benchmark_results.json`
+- Plots: `assets/throughput_validation.png`, `assets/throughput_validation_gbps.png`
 
 ---
 
@@ -180,7 +198,7 @@ Governor and turbo state are **restored on exit**. If `cpupower` or `taskset` is
 After any benchmark, generate **column plots with error bars** from the hyperfine JSON:
 
 - **Script**: `benchmark/scripts/plot_benchmark_results.py`
-- **Output**: PNGs in `assets/` (e.g. `parser_plain.png`, `parser_gzip.png`, `throughput.png`, `throughput_gbps.png`).
+- **Output**: PNGs in `assets/` (e.g. `parser_plain.png`, `parser_gzip.png`, `throughput.png`, `throughput_gbps.png`, `throughput_validation.png`, `throughput_validation_gbps.png`).
 
 Plotting runs automatically after hyperfine when Python and matplotlib are available. To plot existing results without re-running:
 

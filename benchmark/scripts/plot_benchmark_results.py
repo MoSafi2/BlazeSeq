@@ -32,6 +32,7 @@ DEFAULT_JSON_PATHS = [
     "benchmark_results_gzip_single.json",
     "benchmark/throughput_benchmark_results.json",
     "benchmark/throughput_memory_benchmark_results.json",
+    "throughput_validation_benchmark_results.json",
 ]
 
 # Distinct colors for each bar (one per benchmark)
@@ -127,6 +128,8 @@ def setup_text_for_basename(basename: str) -> str:
         return "3 GB synthetic FASTQ, 5 runs"
     if basename == "throughput_memory":
         return "3 GB in-memory (MemoryReader), 5 runs"
+    if basename == "throughput_validation":
+        return "3 GB FASTQ, 9 mode/validation cases"
     return ""
 
 
@@ -256,6 +259,181 @@ def plot_throughput_gbps(
     plt.close(fig)
 
 
+def _parse_mode_validation_results(results: list[dict]) -> tuple[list[str], list[str], dict[tuple[str, str], tuple[float, float]]]:
+    """Parse command names in '<mode>/<validation>' format."""
+    parsed: dict[tuple[str, str], tuple[float, float]] = {}
+    modes: list[str] = []
+    validations: list[str] = []
+
+    for r in results:
+        cmd = r.get("command", "")
+        if "/" not in cmd:
+            continue
+        mode, validation = cmd.split("/", 1)
+        mode = mode.strip()
+        validation = validation.strip()
+        if not mode or not validation:
+            continue
+        if mode not in modes:
+            modes.append(mode)
+        if validation not in validations:
+            validations.append(validation)
+        parsed[(mode, validation)] = (float(r["mean"]), float(r.get("stddev", 0.0)))
+
+    mode_order = [m for m in ("batches", "records", "ref_records") if m in modes]
+    mode_order.extend([m for m in modes if m not in mode_order])
+    validation_order = [v for v in ("none", "ascii", "ascii_quality") if v in validations]
+    validation_order.extend([v for v in validations if v not in validation_order])
+    return mode_order, validation_order, parsed
+
+
+def plot_validation_grouped_time(
+    results: list[dict],
+    out_path: Path,
+    *,
+    version: str = "",
+    setup_text: str = "",
+) -> None:
+    """Grouped bar chart: validation regimes within each parser mode (time)."""
+    modes, validations, parsed = _parse_mode_validation_results(results)
+    if not modes or not validations:
+        return
+
+    x = np.arange(len(modes), dtype=float)
+    group_width = 0.78
+    bar_width = group_width / max(1, len(validations))
+
+    fig, ax = plt.subplots(figsize=(max(8, len(modes) * 2.5), 5))
+    for j, validation in enumerate(validations):
+        offset = (j - (len(validations) - 1) / 2.0) * bar_width
+        means = np.array([parsed.get((mode, validation), (np.nan, 0.0))[0] for mode in modes], dtype=float)
+        errs = np.array([parsed.get((mode, validation), (np.nan, 0.0))[1] for mode in modes], dtype=float)
+        bars = ax.bar(
+            x + offset,
+            means,
+            bar_width * 0.95,
+            yerr=errs,
+            capsize=5,
+            color=BAR_COLORS[j % len(BAR_COLORS)],
+            edgecolor="black",
+            linewidth=0.8,
+            label=validation,
+        )
+        for b, mean, err in zip(bars, means, errs):
+            if np.isnan(mean):
+                continue
+            ax.annotate(
+                format_time(float(mean)),
+                xy=(b.get_x() + b.get_width() / 2, mean + err),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    title_line = "BlazeSeq throughput by validation regime (time)"
+    if version:
+        title_line += f"  (v{version})"
+    ax.set_title(title_line, fontsize=13, fontweight="bold")
+    if setup_text:
+        ax.set_xlabel(setup_text, fontsize=9, color="gray", style="italic")
+    ax.set_ylabel("Time (seconds)", fontsize=11)
+    ax.set_xticks(x)
+    ax.set_xticklabels(modes)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(title="validation", frameon=False)
+
+    ymax = 0.0
+    for mode in modes:
+        for validation in validations:
+            mean, err = parsed.get((mode, validation), (0.0, 0.0))
+            ymax = max(ymax, mean + err)
+    ax.set_ylim(0, ymax * 1.22 if ymax > 0 else 1.0)
+    plt.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_validation_grouped_gbps(
+    results: list[dict],
+    data_size_gb: float,
+    out_path: Path,
+    *,
+    version: str = "",
+    setup_text: str = "",
+) -> None:
+    """Grouped bar chart: validation regimes within each parser mode (GB/s)."""
+    modes, validations, parsed = _parse_mode_validation_results(results)
+    if not modes or not validations:
+        return
+
+    x = np.arange(len(modes), dtype=float)
+    group_width = 0.78
+    bar_width = group_width / max(1, len(validations))
+
+    fig, ax = plt.subplots(figsize=(max(8, len(modes) * 2.5), 5))
+    for j, validation in enumerate(validations):
+        offset = (j - (len(validations) - 1) / 2.0) * bar_width
+        means_s = np.array([parsed.get((mode, validation), (np.nan, 0.0))[0] for mode in modes], dtype=float)
+        stddev_s = np.array([parsed.get((mode, validation), (np.nan, 0.0))[1] for mode in modes], dtype=float)
+        rates = data_size_gb / means_s
+        rate_errs = rates * (stddev_s / means_s)
+
+        bars = ax.bar(
+            x + offset,
+            rates,
+            bar_width * 0.95,
+            yerr=rate_errs,
+            capsize=5,
+            color=BAR_COLORS[j % len(BAR_COLORS)],
+            edgecolor="black",
+            linewidth=0.8,
+            label=validation,
+        )
+        for b, rate, err in zip(bars, rates, rate_errs):
+            if np.isnan(rate):
+                continue
+            ax.annotate(
+                f"{float(rate):.2f}",
+                xy=(b.get_x() + b.get_width() / 2, rate + err),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    title_line = "BlazeSeq throughput by validation regime (GB/s)"
+    if version:
+        title_line += f"  (v{version})"
+    ax.set_title(title_line, fontsize=13, fontweight="bold")
+    if setup_text:
+        ax.set_xlabel(setup_text, fontsize=9, color="gray", style="italic")
+    ax.set_ylabel("Throughput (GB/s)", fontsize=11)
+    ax.set_xticks(x)
+    ax.set_xticklabels(modes)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(title="validation", frameon=False)
+
+    ymax = 0.0
+    for mode in modes:
+        for validation in validations:
+            mean_s, std_s = parsed.get((mode, validation), (0.0, 0.0))
+            if mean_s > 0:
+                rate = data_size_gb / mean_s
+                rate_err = rate * (std_s / mean_s)
+                ymax = max(ymax, rate + rate_err)
+    ax.set_ylim(0, ymax * 1.22 if ymax > 0 else 1.0)
+    plt.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def output_basename(json_path: Path) -> str:
     """Derive output plot basename from JSON path (e.g. benchmark_results -> parser_plain)."""
     stem = json_path.stem
@@ -269,6 +447,8 @@ def output_basename(json_path: Path) -> str:
         return "throughput"
     if stem == "throughput_memory_benchmark_results":
         return "throughput_memory"
+    if stem == "throughput_validation_benchmark_results":
+        return "throughput_validation"
     return stem
 
 
@@ -284,6 +464,8 @@ def title_for_basename(basename: str) -> str:
         return "BlazeSeq throughput: batches vs records vs ref_records"
     if basename == "throughput_memory":
         return "BlazeSeq in-memory throughput (parse time from Mojo)"
+    if basename == "throughput_validation":
+        return "BlazeSeq throughput by validation regime"
     return basename.replace("_", " ").title()
 
 
@@ -329,6 +511,28 @@ def main() -> int:
         else:
             setup_text = setup_text_for_basename(basename)
         out_path = assets_dir / f"{basename}.png"
+        if basename == "throughput_validation":
+            plot_validation_grouped_time(
+                results,
+                out_path,
+                version=version,
+                setup_text=setup_text,
+            )
+            print(f"Wrote {out_path}")
+            plotted += 1
+            gbps_path = assets_dir / "throughput_validation_gbps.png"
+            data_size_gb = args.size_gb if args.size_gb is not None else DATA_SIZE_GB
+            plot_validation_grouped_gbps(
+                results,
+                data_size_gb,
+                gbps_path,
+                version=version,
+                setup_text=setup_text,
+            )
+            print(f"Wrote {gbps_path}")
+            plotted += 1
+            continue
+
         plot_one(results, title, out_path, version=version, setup_text=setup_text)
         print(f"Wrote {out_path}")
         plotted += 1
