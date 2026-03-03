@@ -21,22 +21,19 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
 
     fn __init__(out self, s: String):
         self.ptr = alloc[UInt8](len(s))
-        for i in range(len(s)):
-            self.ptr[i] = s.as_bytes()[i]
+        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 
     fn __init__(out self, s: Span[UInt8, MutExternalOrigin]):
         self.ptr = alloc[UInt8](len(s))
-        for i in range(len(s)):
-            self.ptr[i] = s[i]
+        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 
     fn __init__(out self, s: StringSlice[MutExternalOrigin]):
         self.ptr = alloc[UInt8](len(s))
-        for i in range(len(s)):
-            self.ptr[i] = s.as_bytes()[i]
+        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 

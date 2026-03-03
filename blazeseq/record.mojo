@@ -18,6 +18,177 @@ comptime carriage_return = ord("\r")
 comptime fasta_header = ord(">")
 
 
+struct Validator(Copyable):
+    """
+    Validator for optional ASCII and quality checks on FASTQ records.
+
+    Structure (@, +, seq/qual length) is validated in the parser hot loop; this
+    validator only runs optional ASCII and quality-range checks when enabled via
+    ParserConfig (check_ascii, check_quality). Used by FastqParser when those flags
+    are True; can also be used standalone on FastqRecord or RefRecord.
+
+    Attributes:
+        check_ascii: If True, validate() requires all record bytes to be ASCII.
+        check_quality: If True, validate() checks quality bytes against quality_schema.
+        quality_schema: Bounds (LOWER, UPPER) and OFFSET for quality validation.
+    """
+
+    var check_ascii: Bool
+    var check_quality: Bool
+    var quality_schema: QualitySchema
+
+    fn __init__(
+        out self,
+        check_ascii: Bool,
+        check_quality: Bool,
+        quality_schema: QualitySchema,
+    ):
+        """Initialize Validator with ASCII/quality flags and quality schema.
+
+        Args:
+            check_ascii: If True, validate() will reject non-ASCII bytes in records.
+            check_quality: If True, validate() will check quality bytes against schema.
+            quality_schema: Schema used for quality validation (e.g. from `_parse_schema`).
+        """
+        self.check_ascii = check_ascii
+        self.check_quality = check_quality
+        self.quality_schema = quality_schema.copy()
+
+    fn id_snippet(self, record: FastqRecord) -> String:
+        """Extract id snippet from record for error messages."""
+        var snippet = String(capacity=100)
+        var id_str = record.id()
+        if len(id_str) > 0:
+            snippet += String(StringSlice(unsafe_from_utf8=id_str))
+            if len(snippet) > 100:
+                snippet = snippet[:97] + "..."
+        return snippet
+
+    fn id_snippet(self, record: RefRecord) -> String:
+        """Extract id snippet from RefRecord for error messages."""
+        var snippet = String(capacity=100)
+        var id_str = StringSlice(unsafe_from_utf8=record._id)
+        if len(id_str) > 0:
+            snippet += String(id_str)
+            if len(snippet) > 100:
+                snippet = snippet[:97] + "..."
+        return snippet
+
+    @always_inline
+    fn _validate_quality_range(self, record: RefRecord) -> FastqErrorCode:
+        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
+        """
+        for i in range(len(record._quality)):
+            if (
+                record._quality[i] > self.quality_schema.UPPER
+                or record._quality[i] < self.quality_schema.LOWER
+            ):
+                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+        return FastqErrorCode.OK
+
+    @always_inline
+    fn _validate_ascii(self, record: RefRecord) -> FastqErrorCode:
+        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
+        """
+        var c = _check_ascii(record._id)
+        if c != FastqErrorCode.OK:
+            return c
+        c = _check_ascii(record._sequence)
+        if c != FastqErrorCode.OK:
+            return c
+        return _check_ascii(record._quality)
+
+    @always_inline
+    fn _validate_quality_range(self, record: FastqRecord) -> FastqErrorCode:
+        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
+        """
+        for i in range(len(record._quality)):
+            if (
+                record._quality[i] > self.quality_schema.UPPER
+                or record._quality[i] < self.quality_schema.LOWER
+            ):
+                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+        return FastqErrorCode.OK
+
+    @always_inline
+    fn _validate_ascii(self, record: FastqRecord) -> FastqErrorCode:
+        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
+        """
+        var c = _check_ascii(record._id.as_span())
+        if c != FastqErrorCode.OK:
+            return c
+        c = _check_ascii(record._sequence.as_span())
+        if c != FastqErrorCode.OK:
+            return c
+        return _check_ascii(record._quality.as_span())
+
+    @always_inline
+    fn _validate(self, record: RefRecord) -> FastqErrorCode:
+        """Run configured validations; returns error code. Used by parser hot path.
+        """
+        if self.check_ascii:
+            var code = self._validate_ascii(record)
+            if code != FastqErrorCode.OK:
+                return code
+        if self.check_quality:
+            return self._validate_quality_range(record)
+        return FastqErrorCode.OK
+
+    @always_inline
+    fn _validate(self, record: FastqRecord) -> FastqErrorCode:
+        """Run configured validations; returns error code. Used by parser hot path.
+        """
+        if self.check_ascii:
+            var code = self._validate_ascii(record)
+            if code != FastqErrorCode.OK:
+                return code
+        if self.check_quality:
+            return self._validate_quality_range(record)
+        return FastqErrorCode.OK
+
+    fn validate(
+        self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
+    ) raises:
+        """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
+
+        Structure is validated in the parser hot loop; here only check_ascii and
+        check_quality are applied when enabled.
+
+        Args:
+            record: The FastqRecord to validate.
+            record_number: Optional 1-indexed record number for error context (0 if unknown).
+            line_number: Optional 1-indexed line number for error context (0 if unknown).
+        """
+        var code = self._validate(record)
+        if code != FastqErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code, record_number, "", self.id_snippet(record)
+                )
+            )
+
+    fn validate(
+        self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
+    ) raises:
+        """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
+
+        Structure is validated in the parser hot loop; here only check_ascii and
+        check_quality are applied when enabled.
+
+        Args:
+            record: The RefRecord to validate.
+            record_number: Optional 1-indexed record number for error context (0 if unknown).
+            line_number: Optional 1-indexed line number for error context (0 if unknown).
+        """
+        var code = self._validate(record)
+        if code != FastqErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code, record_number, "", self.id_snippet(record)
+                )
+            )
+
+
 struct FastaRecord(
     Copyable,
     Hashable,
@@ -332,176 +503,6 @@ struct FastqRecord(
 # Validator: FASTQ record validation, instantiable from ParserConfig
 # ---------------------------------------------------------------------------
 
-
-struct Validator(Copyable):
-    """
-    Validator for optional ASCII and quality checks on FASTQ records.
-
-    Structure (@, +, seq/qual length) is validated in the parser hot loop; this
-    validator only runs optional ASCII and quality-range checks when enabled via
-    ParserConfig (check_ascii, check_quality). Used by FastqParser when those flags
-    are True; can also be used standalone on FastqRecord or RefRecord.
-
-    Attributes:
-        check_ascii: If True, validate() requires all record bytes to be ASCII.
-        check_quality: If True, validate() checks quality bytes against quality_schema.
-        quality_schema: Bounds (LOWER, UPPER) and OFFSET for quality validation.
-    """
-
-    var check_ascii: Bool
-    var check_quality: Bool
-    var quality_schema: QualitySchema
-
-    fn __init__(
-        out self,
-        check_ascii: Bool,
-        check_quality: Bool,
-        quality_schema: QualitySchema,
-    ):
-        """Initialize Validator with ASCII/quality flags and quality schema.
-
-        Args:
-            check_ascii: If True, validate() will reject non-ASCII bytes in records.
-            check_quality: If True, validate() will check quality bytes against schema.
-            quality_schema: Schema used for quality validation (e.g. from `_parse_schema`).
-        """
-        self.check_ascii = check_ascii
-        self.check_quality = check_quality
-        self.quality_schema = quality_schema.copy()
-
-    fn id_snippet(self, record: FastqRecord) -> String:
-        """Extract id snippet from record for error messages."""
-        var snippet = String(capacity=100)
-        var id_str = record.id()
-        if len(id_str) > 0:
-            snippet += String(StringSlice(unsafe_from_utf8=id_str))
-            if len(snippet) > 100:
-                snippet = snippet[:97] + "..."
-        return snippet
-
-    fn id_snippet(self, record: RefRecord) -> String:
-        """Extract id snippet from RefRecord for error messages."""
-        var snippet = String(capacity=100)
-        var id_str = StringSlice(unsafe_from_utf8=record._id)
-        if len(id_str) > 0:
-            snippet += String(id_str)
-            if len(snippet) > 100:
-                snippet = snippet[:97] + "..."
-        return snippet
-
-    @always_inline
-    fn _validate_quality_range(self, record: RefRecord) -> FastqErrorCode:
-        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
-        """
-        for i in range(len(record._quality)):
-            if (
-                record._quality[i] > self.quality_schema.UPPER
-                or record._quality[i] < self.quality_schema.LOWER
-            ):
-                return FastqErrorCode.QUALITY_OUT_OF_RANGE
-        return FastqErrorCode.OK
-
-    @always_inline
-    fn _validate_ascii(self, record: RefRecord) -> FastqErrorCode:
-        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
-        """
-        var c = _check_ascii(record._id)
-        if c != FastqErrorCode.OK:
-            return c
-        c = _check_ascii(record._sequence)
-        if c != FastqErrorCode.OK:
-            return c
-        return _check_ascii(record._quality)
-
-    @always_inline
-    fn _validate_quality_range(self, record: FastqRecord) -> FastqErrorCode:
-        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
-        """
-        for i in range(len(record._quality)):
-            if (
-                record._quality[i] > self.quality_schema.UPPER
-                or record._quality[i] < self.quality_schema.LOWER
-            ):
-                return FastqErrorCode.QUALITY_OUT_OF_RANGE
-        return FastqErrorCode.OK
-
-    @always_inline
-    fn _validate_ascii(self, record: FastqRecord) -> FastqErrorCode:
-        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
-        """
-        var c = _check_ascii(record._id.as_span())
-        if c != FastqErrorCode.OK:
-            return c
-        c = _check_ascii(record._sequence.as_span())
-        if c != FastqErrorCode.OK:
-            return c
-        return _check_ascii(record._quality.as_span())
-
-    @always_inline
-    fn _validate(self, record: RefRecord) -> FastqErrorCode:
-        """Run configured validations; returns error code. Used by parser hot path.
-        """
-        if self.check_ascii:
-            var code = self._validate_ascii(record)
-            if code != FastqErrorCode.OK:
-                return code
-        if self.check_quality:
-            return self._validate_quality_range(record)
-        return FastqErrorCode.OK
-
-    @always_inline
-    fn _validate(self, record: FastqRecord) -> FastqErrorCode:
-        """Run configured validations; returns error code. Used by parser hot path.
-        """
-        if self.check_ascii:
-            var code = self._validate_ascii(record)
-            if code != FastqErrorCode.OK:
-                return code
-        if self.check_quality:
-            return self._validate_quality_range(record)
-        return FastqErrorCode.OK
-
-    fn validate(
-        self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
-    ) raises:
-        """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
-
-        Structure is validated in the parser hot loop; here only check_ascii and
-        check_quality are applied when enabled.
-
-        Args:
-            record: The FastqRecord to validate.
-            record_number: Optional 1-indexed record number for error context (0 if unknown).
-            line_number: Optional 1-indexed line number for error context (0 if unknown).
-        """
-        var code = self._validate(record)
-        if code != FastqErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code, record_number, "", self.id_snippet(record)
-                )
-            )
-
-    fn validate(
-        self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
-    ) raises:
-        """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
-
-        Structure is validated in the parser hot loop; here only check_ascii and
-        check_quality are applied when enabled.
-
-        Args:
-            record: The RefRecord to validate.
-            record_number: Optional 1-indexed record number for error context (0 if unknown).
-            line_number: Optional 1-indexed line number for error context (0 if unknown).
-        """
-        var code = self._validate(record)
-        if code != FastqErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code, record_number, "", self.id_snippet(record)
-                )
-            )
 
 
 @align(64)
