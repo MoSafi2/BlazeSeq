@@ -15,6 +15,109 @@ comptime read_header = ord("@")
 comptime quality_header = ord("+")
 comptime new_line = ord("\n")
 comptime carriage_return = ord("\r")
+comptime fasta_header = ord(">")
+
+
+struct FastaRecord(
+    Copyable,
+    Hashable,
+    Movable,
+    Representable,
+    Sized,
+    Writable,
+):
+    """A single FASTA record (two logical parts: >id, sequence).
+    Multi-line sequences are stored as single line.
+    Owned representation; safe to store in collections and reuse.
+
+    Attributes:
+        id: Read identifier (id line content after the '>'; stored without leading '>').
+        sequence: Sequence line.
+    """
+
+    var _id: ASCIIString
+    var _sequence: ASCIIString
+
+    @always_inline
+    fn __init__(
+        out self,
+        id: String,
+        sequence: String,
+    ) raises:
+        """Build from id and sequence strings."""
+        self._id = ASCIIString(id)
+        self._sequence = ASCIIString(sequence)
+
+    @always_inline
+    fn __init__(
+        out self,
+        id: Span[Byte, MutExternalOrigin],
+        sequence: Span[Byte, MutExternalOrigin],
+    ) raises:
+        self._id = ASCIIString(id)
+        self._sequence = ASCIIString(sequence)
+
+    fn __init__(
+        out self,
+        var id: ASCIIString,
+        var sequence: ASCIIString,
+    ):
+        self._id = id^
+        self._sequence = sequence^
+
+    @always_inline
+    fn sequence(self) -> StringSlice[MutExternalOrigin]:
+        """Return the sequence line as a string slice."""
+        return self._sequence.as_string_slice()
+
+    @always_inline
+    fn id(self) -> StringSlice[MutExternalOrigin]:
+        """Return the read identifier (id without leading '>') as a string slice."""
+        return self._id.as_string_slice()
+
+    @always_inline
+    fn byte_len(self) -> Int:
+        """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\")."""
+        return 1 + len(self._id) + 1 + len(self._sequence) + 1
+
+    @always_inline
+    fn __str__(self) -> String:
+        return String.write(self)
+
+    fn write[w: Writer](self, mut writer: w):
+        """Write the record in standard FASTA format."""
+        writer.write(">")
+        writer.write(
+            self._id.to_string(),
+            "\n",
+            self._sequence.to_string(),
+            "\n",
+        )
+
+    @always_inline
+    fn write_to[w: Writer](self, mut writer: w):
+        """Required by Writable trait; delegates to write()."""
+        self.write(writer)
+
+    @always_inline
+    fn __len__(self) -> Int:
+        """Return the sequence length (number of bases)."""
+        return len(self._sequence)
+
+    @always_inline
+    fn __hash__[H: Hasher](self, mut hasher: H):
+        hasher.update(self._sequence.as_string_slice())
+
+    @always_inline
+    fn __eq__(self, other: Self) -> Bool:
+        return self._sequence == other._sequence
+
+    fn __ne__(self, other: Self) -> Bool:
+        return not self.__eq__(other)
+
+    fn __repr__(self) -> String:
+        return self.__str__()
+
 
 
 # Add minimal internal validation, id start and length of quality and sequence.
