@@ -29,8 +29,6 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
     """Invalid file must raise; accept msg, EOF, or length mismatch (plus-line checks removed).
     """
     comptime config_ = ParserConfig(check_ascii=True, check_quality=True)
-    var raised = False
-    var err_msg = String("")
     try:
         var parser = FastqParser[FileReader, config_](
             FileReader(test_dir + file)
@@ -93,8 +91,6 @@ fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
         buffer_growth_enabled=True,
         buffer_max_capacity=1024 * 1024,
     )
-    var raised = False
-    var err_msg = String("")
     try:
         var parser = FastqParser[FileReader, config_](
             FileReader(test_dir + file)

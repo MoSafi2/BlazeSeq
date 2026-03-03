@@ -66,18 +66,29 @@ struct FastaRecord(
         self._sequence = sequence^
 
     @always_inline
-    fn sequence(self) -> StringSlice[MutExternalOrigin]:
-        """Return the sequence line as a string slice."""
-        return self._sequence.as_string_slice()
+    fn sequence(ref [_]self) -> Span[Byte, origin_of(self)]:
+        """Return the sequence line as a span."""
+        return Span[Byte, origin_of(self)](
+            ptr=self._sequence.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
+            length=len(self._sequence),
+        )
 
     @always_inline
-    fn id(self) -> StringSlice[MutExternalOrigin]:
-        """Return the read identifier (id without leading '>') as a string slice."""
-        return self._id.as_string_slice()
+    fn id(ref [_]self) -> Span[Byte, origin_of(self)]:
+        """Return the read identifier (id without leading '>') as a span."""
+        return Span[Byte, origin_of(self)](
+            ptr=self._id.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
+            length=len(self._id),
+        )
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\")."""
+        """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\").
+        """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
     @always_inline
@@ -119,7 +130,6 @@ struct FastaRecord(
         return self.__str__()
 
 
-
 # Add minimal internal validation, id start and length of quality and sequence.
 struct FastqRecord(
     Copyable,
@@ -147,7 +157,7 @@ struct FastqRecord(
         from blazeseq import FastqRecord
         from blazeseq.quality_schema import generic_schema
         var rec = FastqRecord("read1", "ACGT", "IIII", generic_schema)
-        print(rec.id())
+        print(StringSlice(unsafe_from_utf8=rec.id()))
         var scores = rec.phred_scores()
         ```
     """
@@ -222,14 +232,24 @@ struct FastqRecord(
         self._phred_offset = Int8(schema.OFFSET)
 
     @always_inline
-    fn sequence(self) -> StringSlice[MutExternalOrigin]:
-        """Return the sequence line as a string slice."""
-        return self._sequence.as_string_slice()
+    fn sequence(ref [_]self) -> Span[Byte, origin_of(self)]:
+        """Return the sequence line as a span."""
+        return Span[Byte, origin_of(self)](
+            ptr=self._sequence.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
+            length=len(self._sequence),
+        )
 
     @always_inline
-    fn quality(self) -> StringSlice[MutExternalOrigin]:
-        """Return the quality line (raw ASCII bytes) as a string slice."""
-        return self._quality.as_string_slice()
+    fn quality(ref [_]self) -> Span[Byte, origin_of(self)]:
+        """Return the quality line (raw ASCII bytes) as a span."""
+        return Span[Byte, origin_of(self)](
+            ptr=self._quality.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
+            length=len(self._quality),
+        )
 
     @always_inline
     fn phred_scores(self) -> List[UInt8]:
@@ -250,10 +270,14 @@ struct FastqRecord(
         return output^
 
     @always_inline
-    fn id(self) -> StringSlice[MutExternalOrigin]:
-        """Return the read identifier (id without leading '@') as a string slice.
-        """
-        return self._id.as_string_slice()
+    fn id(ref [_]self) -> Span[Byte, origin_of(self)]:
+        """Return the read identifier (id without leading '@') as a span."""
+        return Span[Byte, origin_of(self)](
+            ptr=self._id.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
+            length=len(self._id),
+        )
 
     @always_inline
     fn byte_len(self) -> Int:
@@ -350,7 +374,7 @@ struct Validator(Copyable):
         var snippet = String(capacity=100)
         var id_str = record.id()
         if len(id_str) > 0:
-            snippet += String(id_str)
+            snippet += String(StringSlice(unsafe_from_utf8=id_str))
             if len(snippet) > 100:
                 snippet = snippet[:97] + "..."
         return snippet
