@@ -23,12 +23,13 @@ Example:
 
     var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
     for record in parser.records():
-        print(record.id())
+        print(StringSlice(unsafe_from_utf8=record.id()))
     ```
 """
 
 from blazeseq.record import FastqRecord, RefRecord, Validator
 from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq.fasta import FastaRecord, FastaParser
 from blazeseq.record_batch import (
     FastqBatch,
     upload_batch_to_device,
