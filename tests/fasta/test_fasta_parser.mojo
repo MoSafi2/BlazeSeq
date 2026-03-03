@@ -27,6 +27,7 @@ fn test_single_record_single_line() raises:
         "ACGT",
         "Sequence should match",
     )
+    _ = rec
     # assert_raises(contains="EOFError", parser.next_record() )
 
 
@@ -41,6 +42,7 @@ fn test_single_record_multiline() raises:
         "ACGTTAGG",
         "Multi-line sequence should be concatenated without newlines",
     )
+    _ = rec
     # assert_raises(EOFError, fn() raises { _ = parser.next_record() })
 
 
@@ -69,6 +71,8 @@ fn test_multiple_records_back_to_back() raises:
         String(StringSlice(unsafe_from_utf8=rec2.sequence())),
         "TTAA",
     )
+    _ = rec2
+    _ = rec1
 
     # assert_raises(EOFError, fn() raises { _ = parser.next_record() })
 
