@@ -121,16 +121,21 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
         self.ptr = new_data
 
     @always_inline
-    fn as_span(self) -> Span[UInt8, MutExternalOrigin]:
-        return Span[UInt8, MutExternalOrigin](ptr=self.ptr, length=len(self))
+    fn as_span(ref [_]self) -> Span[UInt8, origin_of(self)]:
+        return Span[UInt8, origin_of(self)](
+            ptr=self.ptr.unsafe_mut_cast[origin_of(self).mut]().unsafe_origin_cast[
+                origin_of(self)
+            ](),
+            length=len(self),
+        )
 
     fn to_string(self) -> String:
         return String(StringSlice(unsafe_from_utf8=self.as_span()))
 
     @always_inline
-    fn as_string_slice(self) -> StringSlice[MutExternalOrigin]:
+    fn as_string_slice(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return StringSlice view of ASCIIString bytes."""
-        return StringSlice(unsafe_from_utf8=self.as_span())
+        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=self.as_span())
 
     @always_inline
     fn __ne__(self, other: Self) -> Bool:
