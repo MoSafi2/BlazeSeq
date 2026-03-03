@@ -7,8 +7,8 @@ from memory import alloc, Span, memcpy
 from blazeseq.io.readers import RapidgzipReader
 from blazeseq.io.writers import GZWriter
 from blazeseq.io.buffered import LineIterator, buffered_writer_for_gzip
-from blazeseq.parser import FastqParser
-from blazeseq.record import FastqRecord
+from blazeseq.fastq.parser import FastqParser
+from blazeseq.fastq.record import FastqRecord
 
 
 # ============================================================================

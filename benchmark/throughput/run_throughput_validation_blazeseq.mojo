@@ -14,7 +14,7 @@ from sys import argv
 from pathlib import Path
 from blazeseq.CONSTS import KB
 from blazeseq.io.readers import FileReader
-from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.parser import FastqParser, ParserConfig
 
 
 fn run_mode_none(path: String, mode: String) raises -> Tuple[Int, Int]:

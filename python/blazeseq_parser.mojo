@@ -19,9 +19,9 @@ from python.bindings import PythonModuleBuilder
 from pathlib import Path
 from os import abort
 from memory import UnsafePointer
-from blazeseq.parser import FastqParser, ParserConfig
-from blazeseq.record import FastqRecord, RefRecord
-from blazeseq import FastqBatch
+from blazeseq.fastq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.record import FastqRecord, RefRecord
+from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.io.readers import FileReader, RapidgzipReader
 from blazeseq.io.buffered import EOFError
 from blazeseq.CONSTS import EOF

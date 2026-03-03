@@ -1,6 +1,6 @@
 """Tests for error handling with context in BlazeSeq."""
 
-from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import MemoryReader
 from blazeseq.errors import ParseError, ValidationError
 from blazeseq.CONSTS import EOF

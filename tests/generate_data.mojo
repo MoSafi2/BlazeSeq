@@ -1,4 +1,4 @@
-from blazeseq.record import FastqRecord
+from blazeseq.fastq.record import FastqRecord
 from blazeseq.quality_schema import QualitySchema, generic_schema
 import random
 from collections.string import chr, String

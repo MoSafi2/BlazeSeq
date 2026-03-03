@@ -27,10 +27,10 @@ Example:
     ```
 """
 
-from blazeseq.record import FastqRecord, RefRecord, Validator
-from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.record import FastqRecord, RefRecord, Validator
+from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.fasta import FastaRecord, FastaParser
-from blazeseq.record_batch import (
+from blazeseq.fastq.record_batch import (
     FastqBatch,
     upload_batch_to_device,
 )

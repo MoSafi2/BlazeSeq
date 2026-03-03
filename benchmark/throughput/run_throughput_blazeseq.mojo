@@ -13,7 +13,7 @@ from sys import argv
 from pathlib import Path
 from blazeseq.CONSTS import KB
 from blazeseq.io.readers import FileReader
-from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.parser import FastqParser, ParserConfig
 
 fn main() raises:
     var args = argv()

@@ -13,7 +13,8 @@ This module bridges main.mojo and kernels.mojo. It handles:
 Kernels (nw_kernel, needleman_wunsch_cpu) and shared constants live in kernels.mojo.
 """
 
-from blazeseq import FastqParser, FastqBatch
+from blazeseq.fastq.parser import FastqParser
+from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.io.readers import MemoryReader, Reader
 from gpu.host import DeviceContext

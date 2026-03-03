@@ -19,7 +19,7 @@ Requires a compatible GPU.
 """
 
 from sys import has_accelerator, exit
-from blazeseq import FastqBatch
+from blazeseq.fastq.record_batch import FastqBatch
 from gpu.host import DeviceContext
 
 from examples.nw_gpu.execution import (

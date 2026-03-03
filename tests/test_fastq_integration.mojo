@@ -12,8 +12,8 @@ from pathlib import Path
 from os import remove
 from os.path import exists
 from testing import assert_equal, TestSuite
-from blazeseq.record import FastqRecord
-from blazeseq.parser import FastqParser
+from blazeseq.fastq.record import FastqRecord
+from blazeseq.fastq.parser import FastqParser
 from blazeseq.io.readers import FileReader, GZFile
 from blazeseq.io.writers import WriterBackend
 from blazeseq.io.buffered import (

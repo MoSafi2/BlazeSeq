@@ -11,7 +11,7 @@ Usage:
 from sys import argv
 from pathlib import Path
 from blazeseq.io.readers import RapidgzipReader
-from blazeseq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.parser import FastqParser, ParserConfig
 
 fn main() raises:
     var args = argv()

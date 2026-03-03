@@ -18,7 +18,7 @@ from blazeseq.CONSTS import *
 from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
 from blazeseq.io.readers import Reader
 from blazeseq.errors import ParseError, FastqErrorCode
-from blazeseq.parser import FastqParser
+from blazeseq.fastq.parser import FastqParser
 
 
 
