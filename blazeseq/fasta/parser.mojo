@@ -2,16 +2,18 @@ from blazeseq.fasta.record import FastaRecord
 from blazeseq.io.buffered import EOFError, BufferedReader
 from blazeseq.io.readers import Reader
 from blazeseq.CONSTS import new_line, carriage_return, EOF
-from blazeseq.errors import ParseError, format_parse_error
+from blazeseq.errors import ParseError
+from blazeseq.utils import format_parse_error
 from blazeseq.ascii_string import ASCIIString
 from memory import Span
 from collections.string import StringSlice, String
+from memory import memcpy
 
 
 comptime fasta_header = ord(">")
 
 
-struct FastaParser[R: Reader](Movable):
+struct FastaParser[R: Reader](Iterable, Movable):
     """Streaming FASTA parser over a `Reader`.
 
     Multi-line FASTA sequences are normalized so that all line breaks within
@@ -22,9 +24,13 @@ struct FastaParser[R: Reader](Movable):
         - `records()` → iterator over `FastaRecord`
     """
 
+    comptime IteratorType[
+        mut: Bool, origin: Origin[mut=mut]
+    ] = _FastaParserRecordIter[Self.R, origin]
+
     var buffer: BufferedReader[Self.R]
     var _current_line_number: Int  # 1-based, for error context
-    var _record_number: Int        # 1-based record count
+    var _record_number: Int  # 1-based record count
 
     fn __init__(out self, var reader: Self.R) raises:
         self.buffer = BufferedReader(reader^)
@@ -57,11 +63,15 @@ struct FastaParser[R: Reader](Movable):
             var view = self.buffer.view()
             if len(view) == 0:
                 if self.buffer.is_eof():
-                    return Span[Byte, MutExternalOrigin](ptr=view.unsafe_ptr(), length=0)
+                    return Span[Byte, MutExternalOrigin](
+                        ptr=view.unsafe_ptr(), length=0
+                    )
                 _ = self.buffer.compact_and_fill()
                 view = self.buffer.view()
                 if len(view) == 0:
-                    return Span[Byte, MutExternalOrigin](ptr=view.unsafe_ptr(), length=0)
+                    return Span[Byte, MutExternalOrigin](
+                        ptr=view.unsafe_ptr(), length=0
+                    )
 
             # Find newline
             var i = 0
@@ -94,7 +104,9 @@ struct FastaParser[R: Reader](Movable):
             # Trim CR and LF to test emptiness
             var start = 0
             var end = len(line)
-            while end > start and (line[end - 1] == new_line or line[end - 1] == carriage_return):
+            while end > start and (
+                line[end - 1] == new_line or line[end - 1] == carriage_return
+            ):
                 end -= 1
             var is_blank = True
             for i in range(start, end):
@@ -121,7 +133,9 @@ struct FastaParser[R: Reader](Movable):
 
         var start = 0
         var end = len(line)
-        while end > start and (line[end - 1] == new_line or line[end - 1] == carriage_return):
+        while end > start and (
+            line[end - 1] == new_line or line[end - 1] == carriage_return
+        ):
             end -= 1
 
         if end <= start or line[start] != fasta_header:
@@ -135,17 +149,22 @@ struct FastaParser[R: Reader](Movable):
             raise Error(msg)
 
         start += 1  # skip '>'
-        while start < end and (line[start] == ord(" ") or line[start] == ord("\t")):
+        while start < end and (
+            line[start] == ord(" ") or line[start] == ord("\t")
+        ):
             start += 1
-        while end > start and (line[end - 1] == ord(" ") or line[end - 1] == ord("\t")):
+        while end > start and (
+            line[end - 1] == ord(" ") or line[end - 1] == ord("\t")
+        ):
             end -= 1
         return line[start:end]
 
     fn _append_span_no_newlines(
+        mut self,
         mut seq: ASCIIString,
         chunk: Span[Byte, MutExternalOrigin],
-        at_line_start: inout Bool,
-        found_next_header: inout Bool,
+        mut at_line_start: Bool,
+        mut found_next_header: Bool,
     ):
         """Append bytes from chunk into seq, stripping '\\n'/'\\r' and stopping
         when a '>' appears at start-of-line (sets found_next_header=True)."""
@@ -196,7 +215,6 @@ struct FastaParser[R: Reader](Movable):
 
         var seq_buf = ASCIIString()
         var at_line_start = True
-        var found_next_header = False
         var seq_start_line = self._current_line_number + 0
 
         while True:
@@ -206,11 +224,10 @@ struct FastaParser[R: Reader](Movable):
                 break
 
             var tmp_found_header = False
-            FastaParser._append_span_no_newlines(
+            self._append_span_no_newlines(
                 seq_buf, line, at_line_start, tmp_found_header
             )
             if tmp_found_header:
-                found_next_header = True
                 var consumed = self.buffer.stream_position() - pos_before
                 self.buffer.unconsume(consumed)
                 self._current_line_number -= 1
@@ -225,22 +242,13 @@ struct FastaParser[R: Reader](Movable):
                 "",
             )
             raise Error(msg2)
-
-        var rec: FastaRecord
-        try:
-            rec = FastaRecord(id_span, seq_buf.as_span())
-        except e:
-            var msg3 = format_parse_error(
-                String(e),
-                self._record_number + 1,
-                self._current_line_number,
-                self.get_file_position(),
-                "",
-            )
-            raise Error(msg3)
-
+            
+        rec = FastaRecord(ASCIIString(id_span), seq_buf^)
         self._record_number += 1
         return rec^
+
+    fn __iter__(ref self,) -> Self.IteratorType[origin_of(self).mut, origin_of(self)]:
+        return  {Pointer(to=self)}
 
 
 struct _FastaParserRecordIter[R: Reader, origin: Origin](Iterator):
@@ -265,11 +273,11 @@ struct _FastaParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     fn __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[
-            Pointer[FastaParser[Self.R], MutExternalOrigin]
-        ](self._src)
+        var mut_ptr = rebind[Pointer[FastaParser[Self.R], MutExternalOrigin]](
+            self._src
+        )
         try:
-            return mut_ptr.pointee.next_record()
+            return mut_ptr[].next_record()
         except e:
             if String(e) == EOF or String(e).startswith(EOF):
                 raise StopIteration()
@@ -278,9 +286,8 @@ struct _FastaParserRecordIter[R: Reader, origin: Origin](Iterator):
                 raise StopIteration()
 
 
-fn records[R: Reader](
-    ref parser: FastaParser[R],
-) -> _FastaParserRecordIter[R, origin_of(parser)]:
+fn records[
+    R: Reader
+](ref parser: FastaParser[R],) -> _FastaParserRecordIter[R, origin_of(parser)]:
     """Return an iterator over owned FastaRecord."""
     return _FastaParserRecordIter[R, origin_of(parser)](Pointer(to=parser))
-
