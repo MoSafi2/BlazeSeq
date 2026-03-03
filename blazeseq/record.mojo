@@ -5,7 +5,11 @@ from blazeseq.quality_schema import (
 )
 from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import _check_ascii
-from blazeseq.errors import ValidationError, FastqErrorCode, format_validation_error_from_code
+from blazeseq.errors import (
+    ValidationError,
+    FastqErrorCode,
+    format_validation_error_from_code,
+)
 
 comptime read_header = ord("@")
 comptime quality_header = ord("+")
@@ -40,15 +44,15 @@ struct FastqRecord(
         from blazeseq import FastqRecord
         from blazeseq.quality_schema import generic_schema
         var rec = FastqRecord("read1", "ACGT", "IIII", generic_schema)
-        print(rec.id_slice())
+        print(rec.id())
         var scores = rec.phred_scores()
         ```
     """
 
-    var id: ASCIIString
-    var sequence: ASCIIString
-    var quality: ASCIIString
-    var phred_offset: Int8
+    var _id: ASCIIString
+    var _sequence: ASCIIString
+    var _quality: ASCIIString
+    var _phred_offset: Int8
 
     @always_inline
     fn __init__(
@@ -58,11 +62,12 @@ struct FastqRecord(
         quality: String,
         schema: QualitySchema = generic_schema,
     ) raises:
-        """Build from id, sequence, and quality strings; phred_offset from schema (default generic_schema)."""
-        self.id = ASCIIString(id)
-        self.sequence = ASCIIString(sequence)
-        self.quality = ASCIIString(quality)
-        self.phred_offset = Int8(schema.OFFSET)
+        """Build from id, sequence, and quality strings; phred_offset from schema (default generic_schema).
+        """
+        self._id = ASCIIString(id)
+        self._sequence = ASCIIString(sequence)
+        self._quality = ASCIIString(quality)
+        self._phred_offset = Int8(schema.OFFSET)
 
     @always_inline
     fn __init__(
@@ -72,10 +77,10 @@ struct FastqRecord(
         quality: Span[Byte, MutExternalOrigin],
         phred_offset: Int8 = 33,
     ) raises:
-        self.id = ASCIIString(id)
-        self.sequence = ASCIIString(sequence)
-        self.quality = ASCIIString(quality)
-        self.phred_offset = phred_offset
+        self._id = ASCIIString(id)
+        self._sequence = ASCIIString(sequence)
+        self._quality = ASCIIString(quality)
+        self._phred_offset = phred_offset
 
     fn __init__(out self, four_lines: String) raises:
         """Build from a single string containing four newline-separated lines (line 3, plus line, is discarded).
@@ -84,10 +89,10 @@ struct FastqRecord(
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
-        self.id = ASCIIString(String(seqs[0].strip()))
-        self.sequence = ASCIIString(String(seqs[1].strip()))
-        self.quality = ASCIIString(String(seqs[3].strip()))
-        self.phred_offset = 33
+        self._id = ASCIIString(String(seqs[0].strip()))
+        self._sequence = ASCIIString(String(seqs[1].strip()))
+        self._quality = ASCIIString(String(seqs[3].strip()))
+        self._phred_offset = 33
 
     fn __init__(
         out self,
@@ -96,10 +101,10 @@ struct FastqRecord(
         var quality: ASCIIString,
         phred_offset: Int8,
     ):
-        self.id = id^
-        self.sequence = sequence^
-        self.quality = quality^
-        self.phred_offset = phred_offset
+        self._id = id^
+        self._sequence = sequence^
+        self._quality = quality^
+        self._phred_offset = phred_offset
 
     fn __init__(
         out self,
@@ -108,64 +113,66 @@ struct FastqRecord(
         var quality: ASCIIString,
         schema: QualitySchema = generic_schema,
     ):
-        self.id = id^
-        self.sequence = sequence^
-        self.quality = quality^
-        self.phred_offset = Int8(schema.OFFSET)
+        self._id = id^
+        self._sequence = sequence^
+        self._quality = quality^
+        self._phred_offset = Int8(schema.OFFSET)
 
     @always_inline
-    fn sequence_slice(self) -> StringSlice[MutExternalOrigin]:
+    fn sequence(self) -> StringSlice[MutExternalOrigin]:
         """Return the sequence line as a string slice."""
-        return self.sequence.as_string_slice()
+        return self._sequence.as_string_slice()
 
     @always_inline
-    fn quality_slice(self) -> StringSlice[MutExternalOrigin]:
+    fn quality(self) -> StringSlice[MutExternalOrigin]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
-        return self.quality.as_string_slice()
+        return self._quality.as_string_slice()
 
     @always_inline
     fn phred_scores(self) -> List[UInt8]:
         """Return Phred quality scores using the record's phred_offset (e.g. 33).
         """
-        output = List[UInt8](length=len(self.quality), fill=0)
-        for i in range(len(self.quality)):
-            output[i] = self.quality[i] - UInt8(self.phred_offset)
+        output = List[UInt8](length=len(self._quality), fill=0)
+        for i in range(len(self._quality)):
+            output[i] = self._quality[i] - UInt8(self._phred_offset)
         return output^
 
     @always_inline
     fn phred_scores(self, offset: UInt8) -> List[UInt8]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
-        output = List[UInt8](length=len(self.quality), fill=0)
-        for i in range(len(self.quality)):
-            output[i] = self.quality[i] - offset
+        output = List[UInt8](length=len(self._quality), fill=0)
+        for i in range(len(self._quality)):
+            output[i] = self._quality[i] - offset
         return output^
 
     @always_inline
-    fn id_slice(self) -> StringSlice[MutExternalOrigin]:
-        """Return the read identifier (id without leading '@') as a string slice."""
-        return self.id.as_string_slice()
+    fn id(self) -> StringSlice[MutExternalOrigin]:
+        """Return the read identifier (id without leading '@') as a string slice.
+        """
+        return self._id.as_string_slice()
 
     @always_inline
     fn byte_len(self) -> Int:
         """Return total byte length when written (\"@\" + id + sequence + quality + \"+\\n\").
         """
-        return 1 + len(self.id) + len(self.sequence) + len(self.quality) + 5
+        return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline
     fn __str__(self) -> String:
         return String.write(self)
 
     fn write[w: Writer](self, mut writer: w):
-        """Write the record in standard four-line FASTQ format to writer (emits \"@\" before id and \"+\" for the plus line)."""
+        """Write the record in standard four-line FASTQ format to writer (emits \"@\" before id and \"+\" for the plus line).
+        """
         writer.write("@")
         writer.write(
-            self.id.to_string(),
+            self._id.to_string(),
             "\n",
-            self.sequence.to_string(),
+            self._sequence.to_string(),
             "\n",
             "+\n",
-            self.quality.to_string(),
+            self._quality.to_string(),
             "\n",
         )
 
@@ -177,15 +184,15 @@ struct FastqRecord(
     @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
-        return len(self.sequence)
+        return len(self._sequence)
 
     @always_inline
     fn __hash__[H: Hasher](self, mut hasher: H):
-        hasher.update(self.sequence.as_string_slice())
+        hasher.update(self._sequence.as_string_slice())
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
-        return self.sequence == other.sequence
+        return self._sequence == other._sequence
 
     fn __ne__(self, other: Self) -> Bool:
         return not self.__eq__(other)
@@ -238,7 +245,7 @@ struct Validator(Copyable):
     fn id_snippet(self, record: FastqRecord) -> String:
         """Extract id snippet from record for error messages."""
         var snippet = String(capacity=100)
-        var id_str = record.id_slice()
+        var id_str = record.id()
         if len(id_str) > 0:
             snippet += String(id_str)
             if len(snippet) > 100:
@@ -248,7 +255,7 @@ struct Validator(Copyable):
     fn id_snippet(self, record: RefRecord) -> String:
         """Extract id snippet from RefRecord for error messages."""
         var snippet = String(capacity=100)
-        var id_str = StringSlice(unsafe_from_utf8=record.id)
+        var id_str = StringSlice(unsafe_from_utf8=record._id)
         if len(id_str) > 0:
             snippet += String(id_str)
             if len(snippet) > 100:
@@ -257,51 +264,56 @@ struct Validator(Copyable):
 
     @always_inline
     fn _validate_quality_range(self, record: RefRecord) -> FastqErrorCode:
-        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE."""
-        for i in range(len(record.quality)):
+        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
+        """
+        for i in range(len(record._quality)):
             if (
-                record.quality[i] > self.quality_schema.UPPER
-                or record.quality[i] < self.quality_schema.LOWER
+                record._quality[i] > self.quality_schema.UPPER
+                or record._quality[i] < self.quality_schema.LOWER
             ):
                 return FastqErrorCode.QUALITY_OUT_OF_RANGE
         return FastqErrorCode.OK
 
     @always_inline
     fn _validate_ascii(self, record: RefRecord) -> FastqErrorCode:
-        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID."""
-        var c = _check_ascii(record.id)
+        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
+        """
+        var c = _check_ascii(record._id)
         if c != FastqErrorCode.OK:
             return c
-        c = _check_ascii(record.sequence)
+        c = _check_ascii(record._sequence)
         if c != FastqErrorCode.OK:
             return c
-        return _check_ascii(record.quality)
+        return _check_ascii(record._quality)
 
     @always_inline
     fn _validate_quality_range(self, record: FastqRecord) -> FastqErrorCode:
-        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE."""
-        for i in range(len(record.quality)):
+        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
+        """
+        for i in range(len(record._quality)):
             if (
-                record.quality[i] > self.quality_schema.UPPER
-                or record.quality[i] < self.quality_schema.LOWER
+                record._quality[i] > self.quality_schema.UPPER
+                or record._quality[i] < self.quality_schema.LOWER
             ):
                 return FastqErrorCode.QUALITY_OUT_OF_RANGE
         return FastqErrorCode.OK
 
     @always_inline
     fn _validate_ascii(self, record: FastqRecord) -> FastqErrorCode:
-        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID."""
-        var c = _check_ascii(record.id.as_span())
+        """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
+        """
+        var c = _check_ascii(record._id.as_span())
         if c != FastqErrorCode.OK:
             return c
-        c = _check_ascii(record.sequence.as_span())
+        c = _check_ascii(record._sequence.as_span())
         if c != FastqErrorCode.OK:
             return c
-        return _check_ascii(record.quality.as_span())
+        return _check_ascii(record._quality.as_span())
 
     @always_inline
     fn _validate(self, record: RefRecord) -> FastqErrorCode:
-        """Run configured validations; returns error code. Used by parser hot path."""
+        """Run configured validations; returns error code. Used by parser hot path.
+        """
         if self.check_ascii:
             var code = self._validate_ascii(record)
             if code != FastqErrorCode.OK:
@@ -312,7 +324,8 @@ struct Validator(Copyable):
 
     @always_inline
     fn _validate(self, record: FastqRecord) -> FastqErrorCode:
-        """Run configured validations; returns error code. Used by parser hot path."""
+        """Run configured validations; returns error code. Used by parser hot path.
+        """
         if self.check_ascii:
             var code = self._validate_ascii(record)
             if code != FastqErrorCode.OK:
@@ -386,15 +399,15 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record_ref in parser.ref_records():
-            _ = record_ref.id_slice()
-            _ = record_ref.sequence_slice()
+            _ = record_ref.id()
+            _ = record_ref.sequence()
         ```
     """
 
-    var id: Span[Byte, Self.origin]
-    var sequence: Span[Byte, Self.origin]
-    var quality: Span[Byte, Self.origin]
-    var phred_offset: UInt8
+    var _id: Span[Byte, Self.origin]
+    var _sequence: Span[Byte, Self.origin]
+    var _quality: Span[Byte, Self.origin]
+    var _phred_offset: UInt8
 
     fn __init__(
         out self,
@@ -403,67 +416,69 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         quality: Span[Byte, Self.origin],
         phred_offset: UInt8 = 33,
     ):
-        self.id = id
-        self.sequence = sequence
-        self.quality = quality
-        self.phred_offset = phred_offset
+        self._id = id
+        self._sequence = sequence
+        self._quality = quality
+        self._phred_offset = phred_offset
 
     @always_inline
-    fn sequence_slice(self) -> StringSlice[origin = Self.origin]:
+    fn sequence(self) -> StringSlice[origin = Self.origin]:
         """Return the sequence line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.sequence)
+        return StringSlice[origin = Self.origin](
+            unsafe_from_utf8=self._sequence
+        )
 
     @always_inline
-    fn quality_slice(self) -> StringSlice[origin = Self.origin]:
+    fn quality(self) -> StringSlice[origin = Self.origin]:
         """Return the quality line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self.quality)
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self._quality)
 
     @always_inline
-    fn id_slice(self) -> StringSlice[origin = Self.origin]:
+    fn id(self) -> StringSlice[origin = Self.origin]:
         """Return the read identifier (id without leading '@') as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](
-            unsafe_from_utf8=self.id
-        )
+        return StringSlice[origin = Self.origin](unsafe_from_utf8=self._id)
 
     @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
-        return len(self.sequence)
+        return len(self._sequence)
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written (\"@\" + id + sequence + quality + newlines and \"+\\n\")."""
-        return 1 + len(self.id) + len(self.sequence) + len(self.quality) + 5
+        """Return total byte length when written (\"@\" + id + sequence + quality + newlines and \"+\\n\").
+        """
+        return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline
     fn phred_scores(self) -> List[Byte]:
         """Return Phred quality scores using the record's phred_offset."""
-        output = List[Byte](length=len(self.quality), fill=0)
-        for i in range(len(self.quality)):
-            output[i] = self.quality[i] - UInt8(self.phred_offset)
+        output = List[Byte](length=len(self._quality), fill=0)
+        for i in range(len(self._quality)):
+            output[i] = self._quality[i] - UInt8(self._phred_offset)
         return output^
 
     @always_inline
     fn phred_scores(self, offset: UInt8) -> List[Byte]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
-        output = List[Byte](length=len(self.quality), fill=0)
-        for i in range(len(self.quality)):
-            output[i] = self.quality[i] - offset
+        output = List[Byte](length=len(self._quality), fill=0)
+        for i in range(len(self._quality)):
+            output[i] = self._quality[i] - offset
         return output^
 
     fn write[w: Writer](self, mut writer: w):
-        """Write the record in standard four-line FASTQ format to writer (emits \"@\" before id and \"+\" for the plus line)."""
+        """Write the record in standard four-line FASTQ format to writer (emits \"@\" before id and \"+\" for the plus line).
+        """
         writer.write("@")
-        writer.write_string(StringSlice(unsafe_from_utf8=self.id))
+        writer.write_string(StringSlice(unsafe_from_utf8=self._id))
         writer.write("\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self.sequence))
+        writer.write_string(StringSlice(unsafe_from_utf8=self._sequence))
         writer.write("\n")
         writer.write("+\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self.quality))
+        writer.write_string(StringSlice(unsafe_from_utf8=self._quality))
         writer.write("\n")
 
     @always_inline

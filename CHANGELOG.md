@@ -20,7 +20,7 @@ All notable changes to BlazeSeq are documented here.
   var reader = RapidgzipReader("data.fastq.gz")
   var parser = FastqParser[RapidgzipReader](reader^, "generic")
   for record in parser.records():
-      _ = record.id_slice()
+      _ = record.id()
   ```
   
 - **Compressed (gzip) FASTQ benchmark**  benchmark comparing BlazeSeq (RapidgzipReader) and needletail on a 3 GB synthetic FASTQ compressed to `.fastq.gz`. Run with `pixi run -e benchmark benchmark-gzip`.
@@ -33,7 +33,7 @@ All notable changes to BlazeSeq are documented here.
 
 ### Changed
 
-- **Records**: Removed `plus_line`. Renamed `header` → `id`, `header_slice()` → `id_slice()`; validator `header_snippet()` → `id_snippet()`. Batch/device use `id_buffer` / `id_ends`.
+- **Records**: Removed `plus_line`. Renamed `header` → `id`, `header_slice()` → `id()`; validator `header_snippet()` → `id_snippet()`. Batch/device use `id_buffer` / `id_ends`.
 - **ByteString** replaced by ASCII string type; string-like API, less vector-like.
 - **BatchedParser**: Parse-then-copy RefRecords; parametric mutability and origin tracking for RefRecord from FastqBatch.
 - **MemoryReader** performance improvements; `BufferedReader` `__del__` enabled.

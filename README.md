@@ -102,7 +102,7 @@ from blazeseq import RapidgzipReader, FastqParser
 var reader = RapidgzipReader("data.fastq.gz", parallelism=4)  # 0 = use all available cores.
 var parser = FastqParser(reader^, "illumina_1.8")
 for record in parser.records():
-    _ = record.id_slice()
+    _ = record.id()
 ```
 
 ## Architecture & Trade-offs

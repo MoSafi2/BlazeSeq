@@ -62,17 +62,17 @@ fn test_fastq_batch_from_records_and_to_records() raises:
     assert_equal(len(back), 3)
     for i in range(3):
         assert_equal(
-            back[i].id.as_string_slice(),
-            records[i].id.as_string_slice(),
+            back[i]._id.as_string_slice(),
+            records[i]._id.as_string_slice(),
         )
         assert_equal(
-            back[i].sequence.as_string_slice(),
-            records[i].sequence.as_string_slice(),
+            back[i]._sequence.as_string_slice(),
+            records[i]._sequence.as_string_slice(),
         )
         assert_equal(
-            back[i].quality.as_string_slice(), records[i].quality.as_string_slice()
+            back[i]._quality.as_string_slice(), records[i]._quality.as_string_slice()
         )
-        assert_equal(back[i].phred_offset, records[i].phred_offset)
+        assert_equal(back[i]._phred_offset, records[i]._phred_offset)
 
 
 fn test_fastq_batch_get_record_matches_to_records() raises:
@@ -82,8 +82,8 @@ fn test_fastq_batch_get_record_matches_to_records() raises:
     records.append(FastqRecord("@x", "AA", "!!"))
     records.append(FastqRecord("@y", "TT", "!!"))
     # Sanity: input quality strings are as expected (33 = '!')
-    assert_equal(records[0].quality.as_string_slice(), String("!!"))
-    assert_equal(records[1].quality.as_string_slice(), String("!!"))
+    assert_equal(records[0]._quality.as_string_slice(), String("!!"))
+    assert_equal(records[1]._quality.as_string_slice(), String("!!"))
     var batch = FastqBatch()
     for i in range(len(records)):
         batch.add(records[i])
@@ -98,29 +98,29 @@ fn test_fastq_batch_get_record_matches_to_records() raises:
         var from_get = batch.get_record(i)
         # Compare to original record we added (stable expected value)
         assert_equal(
-            from_get.id.as_string_slice(),
-            records[i].id.as_string_slice(),
+            from_get._id.as_string_slice(),
+            records[i]._id.as_string_slice(),
         )
         assert_equal(
-            from_get.sequence.as_string_slice(),
-            records[i].sequence.as_string_slice(),
+            from_get._sequence.as_string_slice(),
+            records[i]._sequence.as_string_slice(),
         )
         assert_equal(
-            from_get.quality.as_string_slice(),
-            records[i].quality.as_string_slice(),
+            from_get._quality.as_string_slice(),
+            records[i]._quality.as_string_slice(),
         )
         # Also assert get_record(i) matches to_records()[i]
         assert_equal(
-            from_get.id.as_string_slice(),
-            as_list[i].id.as_string_slice(),
+            from_get._id.as_string_slice(),
+            as_list[i]._id.as_string_slice(),
         )
         assert_equal(
-            from_get.sequence.as_string_slice(),
-            as_list[i].sequence.as_string_slice(),
+            from_get._sequence.as_string_slice(),
+            as_list[i]._sequence.as_string_slice(),
         )
         assert_equal(
-            from_get.quality.as_string_slice(),
-            as_list[i].quality.as_string_slice(),
+            from_get._quality.as_string_slice(),
+            as_list[i]._quality.as_string_slice(),
         )
         _ = from_get
 
@@ -277,18 +277,18 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(back_list), len(records))
 #     for i in range(len(records)):
 #         assert_equal(
-#                 back_list[i].id.as_string_slice(),
-#             records[i].id.as_string_slice(),
+#                 back_list[i]._id.as_string_slice(),
+#             records[i]._id.as_string_slice(),
 #         )
 #         assert_equal(
-#             back_list[i].sequence.as_string_slice(),
-#             records[i].sequence.as_string_slice(),
+#             back_list[i]._sequence.as_string_slice(),
+#             records[i]._sequence.as_string_slice(),
 #         )
 #         assert_equal(
-#             back_list[i].quality.as_string_slice(),
-#             records[i].quality.as_string_slice(),
+#             back_list[i]._quality.as_string_slice(),
+#             records[i]._quality.as_string_slice(),
 #         )
-#         assert_equal(back_list[i].phred_offset, records[i].phred_offset)
+#         assert_equal(back_list[i]._phred_offset, records[i]._phred_offset)
 
 
 # fn test_device_fastq_batch_empty_roundtrip() raises:
@@ -319,10 +319,10 @@ fn test_fastq_batch_empty_from_records() raises:
 #     var back_batch = d.copy_to_host(ctx)
 #     var back_list = back_batch.to_records()
 #     assert_equal(len(back_list), 1)
-#     assert_equal(back_list[0].id.as_string_slice(), String("@r"))
-#     assert_equal(back_list[0].sequence.as_string_slice(), String("AB"))
-#     assert_equal(back_list[0].quality.as_string_slice(), String("!!"))
-#     assert_equal(back_list[0].phred_offset, 33)
+#     assert_equal(back_list[0]._id.as_string_slice(), String("@r"))
+#     assert_equal(back_list[0]._sequence.as_string_slice(), String("AB"))
+#     assert_equal(back_list[0]._quality.as_string_slice(), String("!!"))
+#     assert_equal(back_list[0]._phred_offset, 33)
 #     _ = back_list
 
 
@@ -343,14 +343,14 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(back_list), len(records))
 #     for i in range(len(records)):
 #         assert_equal(
-#             back_list[i].sequence.as_string_slice(),
-#             records[i].sequence.as_string_slice(),
+#             back_list[i]._sequence.as_string_slice(),
+#             records[i]._sequence.as_string_slice(),
 #         )
 #         assert_equal(
-#             back_list[i].quality.as_string_slice(),
-#             records[i].quality.as_string_slice(),
+#             back_list[i]._quality.as_string_slice(),
+#             records[i]._quality.as_string_slice(),
 #         )
-#         assert_equal(back_list[i].phred_offset, records[i].phred_offset)
+#         assert_equal(back_list[i]._phred_offset, records[i]._phred_offset)
 
 
 # fn test_device_fastq_batch_copy_to_host_succeeds() raises:

@@ -118,9 +118,9 @@ struct ParserMethodsPlain:
         try:
             var ref_rec = holder_ptr[].parser.next_ref()
             var record = FastqRecord(
-                ref_rec.id,
-                ref_rec.sequence,
-                ref_rec.quality,
+                ref_rec._id,
+                ref_rec._sequence,
+                ref_rec._quality,
                 Int8(holder_ptr[].parser.quality_schema.OFFSET),
             )
             return PythonObject(alloc=record^)
@@ -130,7 +130,9 @@ struct ParserMethodsPlain:
             raise e^
 
     @staticmethod
-    fn next_batch(py_self: PythonObject, max_records: PythonObject) raises -> PythonObject:
+    fn next_batch(
+        py_self: PythonObject, max_records: PythonObject
+    ) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         var batch = holder_ptr[].parser.next_batch(Int(py=max_records))
         return PythonObject(alloc=batch^)
@@ -151,6 +153,7 @@ struct ParserMethodsPlain:
             if String(e) == EOF or String(e).startswith(EOF):
                 raise Error("StopIteration")
             raise e^
+
 
 # Method wrappers for gzip parser (BlazeSeqGZParserHolder).
 struct ParserMethodsGz:
@@ -176,9 +179,9 @@ struct ParserMethodsGz:
         try:
             var ref_rec = holder_ptr[].parser.next_ref()
             var record = FastqRecord(
-                ref_rec.id,
-                ref_rec.sequence,
-                ref_rec.quality,
+                ref_rec._id,
+                ref_rec._sequence,
+                ref_rec._quality,
                 Int8(holder_ptr[].parser.quality_schema.OFFSET),
             )
             return PythonObject(alloc=record^)
@@ -188,7 +191,9 @@ struct ParserMethodsGz:
             raise e^
 
     @staticmethod
-    fn next_batch(py_self: PythonObject, max_records: PythonObject) raises -> PythonObject:
+    fn next_batch(
+        py_self: PythonObject, max_records: PythonObject
+    ) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         var batch = holder_ptr[].parser.next_batch(Int(py=max_records))
         return PythonObject(alloc=batch^)
@@ -220,17 +225,17 @@ struct FastqRecordMethods:
     @staticmethod
     fn get_id(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
-        return String(self_ptr[].id_slice())
+        return String(self_ptr[].id())
 
     @staticmethod
     fn get_sequence(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
-        return String(self_ptr[].sequence_slice())
+        return String(self_ptr[].sequence())
 
     @staticmethod
     fn get_quality(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
-        return String(self_ptr[].quality_slice())
+        return String(self_ptr[].quality())
 
     @staticmethod
     fn get_len(py_self: PythonObject) raises -> PythonObject:
@@ -270,7 +275,8 @@ struct FastqBatchMethods:
 
     @staticmethod
     fn batch_py_iter(py_self: PythonObject) raises -> PythonObject:
-        """Return an iterator over records in the batch. Iterator is invalid after batch is discarded."""
+        """Return an iterator over records in the batch. Iterator is invalid after batch is discarded.
+        """
         var batch_ptr = py_self.downcast_value_ptr[FastqBatch]()
         var count = batch_ptr[].num_records()
         var iter_val = FastqBatchIterator(batch_ptr, 0, count)
@@ -295,11 +301,7 @@ struct FastqBatchIterator(Movable, Representable):
 
     fn __repr__(self) -> String:
         return String(
-            "FastqBatchIterator(index=",
-            self.index,
-            ", count=",
-            self.count,
-            ")"
+            "FastqBatchIterator(index=", self.index, ", count=", self.count, ")"
         )
 
     @staticmethod
@@ -332,14 +334,14 @@ fn PyInit_blazeseq_parser() -> PythonObject:
         mb.def_function[parser](
             "parser",
             docstring=(
-                "Create a FASTQ parser for the given path and quality schema.\n\n"
-                "Args:\n"
-                "  path: File path (.fastq, .fq, .fastq.gz, or .fq.gz).\n"
-                "  quality_schema: One of 'generic', 'sanger', 'solexa', "
-                "'illumina_1.3', 'illumina_1.5', 'illumina_1.8'.\n"
-                "  parallelism: Decompression threads for gzip (default 4); 0 = auto. Used for all reads.\n\n"
-                "Returns:\n"
-                "  Parser instance with has_more(), next_record(), next_batch(max_records), and iteration."
+                "Create a FASTQ parser for the given path and quality"
+                " schema.\n\nArgs:\n  path: File path (.fastq, .fq, .fastq.gz,"
+                " or .fq.gz).\n  quality_schema: One of 'generic', 'sanger',"
+                " 'solexa', 'illumina_1.3', 'illumina_1.5', 'illumina_1.8'.\n "
+                " parallelism: Decompression threads for gzip (default 4); 0 ="
+                " auto. Used for all reads.\n\nReturns:\n  Parser instance with"
+                " has_more(), next_record(), next_batch(max_records), and"
+                " iteration."
             ),
         )
         # Types: FastqParser (plain) and FastqGZParser (gzip); same API.
@@ -352,29 +354,36 @@ fn PyInit_blazeseq_parser() -> PythonObject:
             .def_method[ParserMethodsPlain.next_record](
                 "next_record",
                 docstring=(
-                    "Return the next record as a FastqRecord. Raises on EOF or parse error."
+                    "Return the next record as a FastqRecord. Raises on EOF or"
+                    " parse error."
                 ),
             )
             .def_method[ParserMethodsPlain.next_ref_as_record](
                 "next_ref_as_record",
                 docstring=(
-                    "Return the next record (from zero-copy ref) as an owned FastqRecord. "
-                    "Raises on EOF or parse error."
+                    "Return the next record (from zero-copy ref) as an owned"
+                    " FastqRecord. Raises on EOF or parse error."
                 ),
             )
             .def_method[ParserMethodsPlain.next_batch](
                 "next_batch",
                 docstring=(
-                    "Return a batch of up to max_records records as a FastqBatch."
+                    "Return a batch of up to max_records records as a"
+                    " FastqBatch."
                 ),
             )
             .def_method[ParserMethodsPlain.parser_py_iter](
                 "__iter__",
-                docstring="Return self as the iterator for 'for rec in parser'.",
+                docstring=(
+                    "Return self as the iterator for 'for rec in parser'."
+                ),
             )
             .def_method[ParserMethodsPlain.parser_py_next](
                 "__next__",
-                docstring="Return the next FastqRecord. Raises StopIteration when exhausted.",
+                docstring=(
+                    "Return the next FastqRecord. Raises StopIteration when"
+                    " exhausted."
+                ),
             )
         )
         _ = (
@@ -386,36 +395,45 @@ fn PyInit_blazeseq_parser() -> PythonObject:
             .def_method[ParserMethodsGz.next_record](
                 "next_record",
                 docstring=(
-                    "Return the next record as a FastqRecord. Raises on EOF or parse error."
+                    "Return the next record as a FastqRecord. Raises on EOF or"
+                    " parse error."
                 ),
             )
             .def_method[ParserMethodsGz.next_ref_as_record](
                 "next_ref_as_record",
                 docstring=(
-                    "Return the next record (from zero-copy ref) as an owned FastqRecord. "
-                    "Raises on EOF or parse error."
+                    "Return the next record (from zero-copy ref) as an owned"
+                    " FastqRecord. Raises on EOF or parse error."
                 ),
             )
             .def_method[ParserMethodsGz.next_batch](
                 "next_batch",
                 docstring=(
-                    "Return a batch of up to max_records records as a FastqBatch."
+                    "Return a batch of up to max_records records as a"
+                    " FastqBatch."
                 ),
             )
             .def_method[ParserMethodsGz.parser_py_iter](
                 "__iter__",
-                docstring="Return self as the iterator for 'for rec in parser'.",
+                docstring=(
+                    "Return self as the iterator for 'for rec in parser'."
+                ),
             )
             .def_method[ParserMethodsGz.parser_py_next](
                 "__next__",
-                docstring="Return the next FastqRecord. Raises StopIteration when exhausted.",
+                docstring=(
+                    "Return the next FastqRecord. Raises StopIteration when"
+                    " exhausted."
+                ),
             )
         )
         _ = (
             mb.add_type[FastqRecord]("FastqRecord")
             .def_method[FastqRecordMethods.get_id](
                 "id",
-                docstring="Return the read identifier (without the leading '@').",
+                docstring=(
+                    "Return the read identifier (without the leading '@')."
+                ),
             )
             .def_method[FastqRecordMethods.get_sequence](
                 "sequence",
@@ -431,7 +449,9 @@ fn PyInit_blazeseq_parser() -> PythonObject:
             )
             .def_method[FastqRecordMethods.get_phred_scores](
                 "phred_scores",
-                docstring="Return Phred quality scores as a Python list of integers.",
+                docstring=(
+                    "Return Phred quality scores as a Python list of integers."
+                ),
             )
         )
         _ = (
@@ -442,7 +462,10 @@ fn PyInit_blazeseq_parser() -> PythonObject:
             )
             .def_method[FastqBatchMethods.get_record_at](
                 "get_record",
-                docstring="Return the record at the given index (0-based) as a FastqRecord.",
+                docstring=(
+                    "Return the record at the given index (0-based) as a"
+                    " FastqRecord."
+                ),
             )
             .def_method[FastqBatchMethods.batch_py_iter](
                 "__iter__",
@@ -457,7 +480,10 @@ fn PyInit_blazeseq_parser() -> PythonObject:
             )
             .def_method[FastqBatchIterator.py_next](
                 "__next__",
-                docstring="Return the next FastqRecord in the batch. Raises StopIteration when exhausted.",
+                docstring=(
+                    "Return the next FastqRecord in the batch. Raises"
+                    " StopIteration when exhausted."
+                ),
             )
         )
         return mb.finalize()

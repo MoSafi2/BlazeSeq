@@ -23,7 +23,7 @@ Example:
 
     var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
     for record in parser.records():
-        print(record.id_slice())
+        print(record.id())
     ```
 """
 
@@ -33,6 +33,11 @@ from blazeseq.record_batch import (
     FastqBatch,
     upload_batch_to_device,
 )
-from blazeseq.io.readers import FileReader, MemoryReader, GZFile, RapidgzipReader
+from blazeseq.io.readers import (
+    FileReader,
+    MemoryReader,
+    GZFile,
+    RapidgzipReader,
+)
 from blazeseq.io.writers import Writer, FileWriter, MemoryWriter, GZWriter
 from blazeseq.errors import ParseError, ValidationError

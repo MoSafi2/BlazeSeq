@@ -56,7 +56,7 @@ struct ParserConfig(Copyable):
         comptime config = ParserConfig(check_ascii=True, buffer_capacity=65536)
         var parser = FastqParser[FileReader, config](FileReader(Path("data.fastq")), "sanger")
         for record in parser.records():
-            _ = record.id_slice()
+            _ = record.id()
         ```
     """
 
@@ -125,7 +125,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         from pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record in parser.records():
-            print(record.id_slice())
+            print(record.id())
         ```
     """
 
@@ -227,7 +227,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     fn get_record_number(ref self) -> Int:
-        """Return the 1-based index of the last record that was parsed (computed from line number)."""
+        """Return the 1-based index of the last record that was parsed (computed from line number).
+        """
         return self._current_line_number // 4
 
     @always_inline
@@ -286,9 +287,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var record: FastqRecord
         try:
             record = FastqRecord(
-                ref_rec.id,
-                ref_rec.sequence,
-                ref_rec.quality,
+                ref_rec._id,
+                ref_rec._sequence,
+                ref_rec._quality,
                 Int8(self.quality_schema.OFFSET),
             )
         except e:
@@ -399,9 +400,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
 
     fn _refill_error_message(
-        self, refill_code: FastqErrorCode, phase: SearchPhase, offsets: RecordOffsets
+        self,
+        refill_code: FastqErrorCode,
+        phase: SearchPhase,
+        offsets: RecordOffsets,
     ) -> String:
-        """Build error message for refill-phase failures (ID_NO_AT, SEP_NO_PLUS, SEQ_QUAL_LEN_MISMATCH, UNEXPECTED_EOF, BUFFER_*)."""
+        """Build error message for refill-phase failures (ID_NO_AT, SEP_NO_PLUS, SEQ_QUAL_LEN_MISMATCH, UNEXPECTED_EOF, BUFFER_*).
+        """
         if (
             refill_code == FastqErrorCode.ID_NO_AT
             or refill_code == FastqErrorCode.SEP_NO_PLUS
@@ -424,14 +429,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             return (
                 "FASTQ record exceeds buffer capacity ("
                 + String(self.buffer.capacity())
-                + " bytes). Enable buffer growth or increase"
-                " buffer_capacity."
+                + " bytes). Enable buffer growth or increase buffer_capacity."
             )
         return (
             "FASTQ record exceeds maximum buffer capacity ("
             + String(self._max_capacity)
-            + " bytes). Enable buffer growth or increase"
-            " max_capacity."
+            + " bytes). Enable buffer growth or increase max_capacity."
         )
 
     fn _find_and_consume_ref_record(
@@ -458,7 +461,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
         var complete: Bool
         var parse_code: FastqErrorCode
-        complete, offsets, phase, parse_code = _scan_record(scan_view, offsets, phase)
+        complete, offsets, phase, parse_code = _scan_record(
+            scan_view, offsets, phase
+        )
         if parse_code != FastqErrorCode.OK:
             # Record we're about to parse (1-based); line is first line of that record
             var rec_num = self._current_line_number // 4 + 1
@@ -480,7 +485,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if refill_code == FastqErrorCode.EOF and not complete:
                 raise EOFError()
             elif refill_code != FastqErrorCode.OK:
-                raise Error(self._refill_error_message(refill_code, phase, offsets))
+                raise Error(
+                    self._refill_error_message(refill_code, phase, offsets)
+                )
             if not complete:
                 raise Error()
 
@@ -507,9 +514,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
 
         var to_consume = offsets.record_end + 1
-        _ = self.buffer.consume(
-            min(to_consume, self.buffer._end - base)
-        )
+        _ = self.buffer.consume(min(to_consume, self.buffer._end - base))
         self._current_line_number += 4
 
         return ref_rec
@@ -540,7 +545,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     got_record, offsets = _check_end_qual(
                         self.buffer, new_base, offsets
                     )
-                    return (got_record, offsets, SearchPhase(new_base), FastqErrorCode.OK)
+                    return (
+                        got_record,
+                        offsets,
+                        SearchPhase(new_base),
+                        FastqErrorCode.OK,
+                    )
                 else:
                     return (
                         False,
@@ -550,6 +560,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
+
                 @parameter
                 if not self.config.buffer_growth_enabled:
                     return (
@@ -595,13 +606,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _get_record_snippet(self, record: RefRecord) -> String:
         """Get first 200 characters of record for error context."""
         var snippet = String(capacity=200)
-        var id_str = StringSlice(unsafe_from_utf8=record.id)
+        var id_str = StringSlice(unsafe_from_utf8=record._id)
         if len(id_str) > 0:
             snippet += String(id_str)
             if len(snippet) < 200:
                 snippet += "\n"
-        if len(snippet) < 200 and len(record.sequence) > 0:
-            var seq_str = StringSlice(unsafe_from_utf8=record.sequence)
+        if len(snippet) < 200 and len(record._sequence) > 0:
+            var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
             var seq_len = min(len(seq_str), 200 - len(snippet))
             snippet += String(seq_str[:seq_len])
         if len(snippet) > 200:
@@ -611,13 +622,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
         """Get first 200 characters of FastqRecord for error context."""
         var snippet = String(capacity=200)
-        var id_str = record.id_slice()
+        var id_str = record.id()
         if len(id_str) > 0:
             snippet += String(id_str)
             if len(snippet) < 200:
                 snippet += "\n"
         if len(snippet) < 200:
-            var seq_str = record.sequence_slice()
+            var seq_str = record.sequence()
             var seq_len = min(len(seq_str), 200 - len(snippet))
             snippet += String(seq_str[:seq_len])
         if len(snippet) > 200:
@@ -657,7 +668,7 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
     @always_inline
     fn __has_next__(self) -> Bool:
         return True
-    
+
     @always_inline
     fn __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[

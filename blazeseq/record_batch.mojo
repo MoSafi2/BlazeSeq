@@ -107,30 +107,30 @@ struct FastqBatch(Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized, Repr
     fn add(mut self, record: FastqRecord):
         """Append one FastqRecord to the batch (copies into packed buffers)."""
 
-        self._quality_bytes.extend(record.quality.as_span())
-        self._sequence_bytes.extend(record.sequence.as_span())
-        self._id_bytes.extend(record.id.as_span())
+        self._quality_bytes.extend(record._quality.as_span())
+        self._sequence_bytes.extend(record._sequence.as_span())
+        self._id_bytes.extend(record._id.as_span())
 
         if self.num_records() == 0:
-            self._id_ends.append(Int64(len(record.id)))
-            self._ends.append(Int64(len(record.quality)))
+            self._id_ends.append(Int64(len(record._id)))
+            self._ends.append(Int64(len(record._quality)))
         else:
-            self._id_ends.append(Int64(len(record.id))+ self._id_ends[- 1])
-            self._ends.append(Int64(len(record.quality)) + self._ends[- 1])
+            self._id_ends.append(Int64(len(record._id))+ self._id_ends[- 1])
+            self._ends.append(Int64(len(record._quality)) + self._ends[- 1])
 
     fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
         """Append one RefRecord to the batch (copies into packed buffers; no FastqRecord allocation)."""
 
-        self._quality_bytes.extend(record.quality)
-        self._sequence_bytes.extend(record.sequence)
-        self._id_bytes.extend(record.id)
+        self._quality_bytes.extend(record._quality)
+        self._sequence_bytes.extend(record._sequence)
+        self._id_bytes.extend(record._id)
 
         if self.num_records() == 0:
-            self._id_ends.append(Int64(len(record.id)))
-            self._ends.append(Int64(len(record.quality)))
+            self._id_ends.append(Int64(len(record._id)))
+            self._ends.append(Int64(len(record._quality)))
         else:
-            self._id_ends.append(Int64(len(record.id))+ self._id_ends[- 1])
-            self._ends.append(Int64(len(record.quality)) + self._ends[- 1])
+            self._id_ends.append(Int64(len(record._id))+ self._id_ends[- 1])
+            self._ends.append(Int64(len(record._quality)) + self._ends[- 1])
 
     fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         """Upload this batch to the device (id, sequence, and quality together).

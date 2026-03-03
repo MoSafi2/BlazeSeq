@@ -45,23 +45,23 @@ comptime SYNTHETIC_GZ_PATH = "tests/test_data/fastq_integration_synthetic.fastq.
 fn assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") raises:
     """Assert two FastqRecords are equal on all fields (not just sequence)."""
     assert_equal(
-        a.id.to_string(),
-        b.id.to_string(),
+        a._id.to_string(),
+        b._id.to_string(),
         "id mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.sequence.to_string(),
-        b.sequence.to_string(),
+        a._sequence.to_string(),
+        b._sequence.to_string(),
         "sequence mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.quality.to_string(),
-        b.quality.to_string(),
+        a._quality.to_string(),
+        b._quality.to_string(),
         "quality mismatch" + (" " + msg) if len(msg) else "",
     )
     assert_equal(
-        a.phred_offset,
-        b.phred_offset,
+        a._phred_offset,
+        b._phred_offset,
         "phred_offset mismatch" + (" " + msg) if len(msg) else "",
     )
 

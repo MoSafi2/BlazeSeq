@@ -144,7 +144,7 @@ fn run_cpu_nw(
             var rec = batch.get_ref(i)  # ← zero-copy, no String allocation
             var score = needleman_wunsch_cpu(
                 reference=ref_str,
-                query_bytes=rec.sequence,  # ← raw Span[Byte], exact length
+                query_bytes=rec._sequence,  # ← raw Span[Byte], exact length
             )
             all_scores.append(score)
     var end_ns = perf_counter_ns()

@@ -43,9 +43,9 @@ fn example_record_parser(file_path: String) raises:
         # Print first 3 records as examples
         if record_count <= 3:
             print("Record " + String(record_count) + ":")
-            print("  Id: " + String(record.id_slice()))
+            print("  Id: " + String(record.id()))
             print("  Sequence length: " + String(len(record)))
-            print("  Quality length: " + String(len(record.quality)))
+            print("  Quality length: " + String(len(record._quality)))
             print()
 
     print("Summary:")
@@ -84,9 +84,9 @@ fn example_record_parser_no_validation(file_path: String) raises:
         # Print first 3 records as examples
         if record_count <= 3:
             print("Record " + String(record_count) + ":")
-            print("  Id: " + String(record.id_slice()))
+            print("  Id: " + String(record.id()))
             print("  Sequence length: " + String(len(record)))
-            print("  Quality length: " + String(len(record.quality)))
+            print("  Quality length: " + String(len(record._quality)))
             print()
 
     print("Summary:")
@@ -98,6 +98,7 @@ fn example_record_parser_no_validation(file_path: String) raises:
 # ---------------------------------------------------------------------------
 # Example 3: FastqParser - Parsing in batches
 # ---------------------------------------------------------------------------
+
 
 fn example_batched_parser(file_path: String) raises:
     """
@@ -122,14 +123,13 @@ fn example_batched_parser(file_path: String) raises:
             for i in range(3):
                 var rec = batch.get_ref(i)
                 print("Record " + String(i + 1) + ":")
-                print("  Id: " + String(rec.id_slice()))
+                print("  Id: " + String(rec.id()))
                 print("  Sequence length: " + String(len(rec)))
-                print("  Quality length: " + String(len(rec.quality)))
+                print("  Quality length: " + String(len(rec._quality)))
                 print()
             batch_no += 1
         record_count += batch.num_records()
         total_base_pairs += batch.seq_len()
-
 
     print("Summary:")
     print("  Total records: " + String(record_count))
@@ -147,7 +147,9 @@ fn main() raises:
 
     var args = argv()
     if len(args) < 2:
-        print("Usage: mojo run examples/example_parser.mojo /path/to/file.fastq")
+        print(
+            "Usage: mojo run examples/example_parser.mojo /path/to/file.fastq"
+        )
         return
 
     var file_path = args[1]
