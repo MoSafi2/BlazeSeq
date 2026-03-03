@@ -10,6 +10,7 @@ from blazeseq.errors import (
     FastqErrorCode,
     format_validation_error_from_code,
 )
+from blazeseq.CONSTS import simd_width
 
 comptime read_header = ord("@")
 comptime quality_header = ord("+")
@@ -78,12 +79,30 @@ struct Validator(Copyable):
     fn _validate_quality_range(self, record: RefRecord) -> FastqErrorCode:
         """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
         """
-        for i in range(len(record._quality)):
-            if (
-                record._quality[i] > self.quality_schema.UPPER
-                or record._quality[i] < self.quality_schema.LOWER
-            ):
+        var ptr = record._quality.unsafe_ptr()
+        var n = len(record._quality)
+
+        var lower = UInt8(self.quality_schema.LOWER)
+        var span = UInt8(self.quality_schema.UPPER - self.quality_schema.LOWER)
+
+        var lower_v = SIMD[DType.uint8, simd_width](lower)
+        var span_v = SIMD[DType.uint8, simd_width](span)
+
+        var i = 0
+        while i + simd_width <= n:
+            var chunk = ptr.load[width=simd_width](i)
+            var mask = (chunk - lower_v).ge(
+                span_v
+            )  # Unsigned unsaturated substraction wraps on underflow.
+            if mask.reduce_or():
                 return FastqErrorCode.QUALITY_OUT_OF_RANGE
+            i += simd_width
+
+        while i < n:
+            if (ptr[i] - lower) > span:
+                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+            i += 1
+
         return FastqErrorCode.OK
 
     @always_inline
@@ -100,14 +119,34 @@ struct Validator(Copyable):
 
     @always_inline
     fn _validate_quality_range(self, record: FastqRecord) -> FastqErrorCode:
-        """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
+        """Validate quality bytes using SIMD vectorization + unsigned range trick.
         """
-        for i in range(len(record._quality)):
-            if (
-                record._quality[i] > self.quality_schema.UPPER
-                or record._quality[i] < self.quality_schema.LOWER
-            ):
+
+        var ptr = record._quality.as_span().unsafe_ptr()
+        var n = len(record._quality)
+
+        # Precompute once: valid range is [lower, upper], span = upper - lower
+        # The unsigned trick: (byte - lower) > span  <==>  byte < lower OR byte > upper
+        var lower = UInt8(self.quality_schema.LOWER)
+        var span = UInt8(self.quality_schema.UPPER - self.quality_schema.LOWER)
+
+        var lower_v = SIMD[DType.uint8, simd_width](lower)
+        var span_v = SIMD[DType.uint8, simd_width](span)
+
+        var i = 0
+        while i + simd_width <= n:
+            var chunk = ptr.load[width=simd_width](i)
+            # unsigned subtraction wraps on underflow — out-of-range bytes produce value > span
+            var mask = (chunk - lower_v).ge(span_v)
+            if mask.reduce_or():
                 return FastqErrorCode.QUALITY_OUT_OF_RANGE
+            i += simd_width
+
+        while i < n:
+            if (ptr[i] - lower) > span:
+                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+            i += 1
+
         return FastqErrorCode.OK
 
     @always_inline
@@ -390,7 +429,6 @@ struct FastqRecord(
 # ---------------------------------------------------------------------------
 # Validator: FASTQ record validation, instantiable from ParserConfig
 # ---------------------------------------------------------------------------
-
 
 
 @align(64)
