@@ -5,6 +5,19 @@ from memory import Span
 from blazeseq.io.writers import Writer
 
 
+@fieldwise_init
+struct Definition(Copyable, Movable):
+    """Definition of a FASTA/FASTQ record.
+
+    Attributes:
+        Id: The identifier of the record.
+        Description: The description of the record.
+    """
+
+    var Id: ASCIIString
+    var Description: Optional[ASCIIString]
+
+
 struct FastaRecord(
     Copyable,
     Hashable,
@@ -75,7 +88,8 @@ struct FastaRecord(
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\")."""
+        """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\").
+        """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
     @always_inline
@@ -115,4 +129,3 @@ struct FastaRecord(
 
     fn __repr__(self) -> String:
         return self.__str__()
-

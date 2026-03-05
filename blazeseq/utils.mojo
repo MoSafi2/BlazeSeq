@@ -17,7 +17,7 @@ import math
 from blazeseq.CONSTS import *
 from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
 from blazeseq.io.readers import Reader
-from blazeseq.errors import ParseError, FastqErrorCode
+from blazeseq.errors import ParseError, FastxErrorCode
 from blazeseq.fastq.parser import FastqParser
 
 
@@ -273,7 +273,7 @@ fn _strip_spaces[
 @always_inline
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
-](buffer: Span[Byte, o]) -> FastqErrorCode:
+](buffer: Span[Byte, o]) -> FastxErrorCode:
     """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set). Returns OK or ASCII_INVALID."""
     var aligned_end = math.align_down(len(buffer), simd_width)
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
@@ -281,12 +281,12 @@ fn _check_ascii[
     for i in range(0, aligned_end, simd_width):
         var vec = buffer.unsafe_ptr().load[width=simd_width](i)
         if (vec & bit_mask).reduce_or():
-            return FastqErrorCode.ASCII_INVALID
+            return FastxErrorCode.ASCII_INVALID
 
     for i in range(aligned_end, len(buffer)):
         if buffer.unsafe_ptr()[i] & bit_mask != 0:
-            return FastqErrorCode.ASCII_INVALID
-    return FastqErrorCode.OK
+            return FastxErrorCode.ASCII_INVALID
+    return FastxErrorCode.OK
 
 
 
@@ -297,11 +297,11 @@ fn is_posix_space(c: UInt8) -> Bool:
     """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
     # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
-    comptime MASK: UInt64 = (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13) | 
-                         (1 << 28) | (1 << 29) | (1 << 30) | (1 << 32)
+    comptime MASK: UInt64 = (1 << ord("\t")) | (1 << ord("\n")) | (1 << ord("\v")) | (1 << ord("\f")) | (1 << ord("\r)")) | 
+                         (1 << ord("\x1c")) | (1 << ord("\x1d")) | (1 << ord("\x1e")) | (1 << ord(" "))
 
     # If c > 63, it's definitely not one of our space characters.
-    if c > 63:
+    if c > 32:
         return False
 
     # Check if the 'c-th' bit is set in our mask
@@ -456,17 +456,17 @@ fn _record_snippet[o: Origin](view: Span[Byte, o], offsets: RecordOffsets) -> St
 fn _validate_fastq_structure[o: Origin](
     view: Span[Byte, o],
     offsets: RecordOffsets,
-) -> FastqErrorCode:
+) -> FastxErrorCode:
     """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code."""
     if view[offsets.header_start] != Byte(AT_SIGN):
-        return FastqErrorCode.ID_NO_AT
+        return FastxErrorCode.ID_NO_AT
     if view[offsets.sep_start] != Byte(PLUS_SIGN):
-        return FastqErrorCode.SEP_NO_PLUS
+        return FastxErrorCode.SEP_NO_PLUS
     var seq_len = offsets.sep_start - offsets.seq_start - 1
     var qual_len = offsets.record_end - offsets.qual_start
     if seq_len != qual_len:
-        return FastqErrorCode.SEQ_QUAL_LEN_MISMATCH
-    return FastqErrorCode.OK
+        return FastxErrorCode.SEQ_QUAL_LEN_MISMATCH
+    return FastxErrorCode.OK
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +479,7 @@ fn _scan_record[o: Origin](
     view: Span[Byte, o],
     mut offsets: RecordOffsets,
     phase: SearchPhase,
-) -> Tuple[Bool, RecordOffsets, SearchPhase, FastqErrorCode]:
+) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
     """Locate all four record-bounding newlines in a single forward pass.
 
     Replaces four sequential `_find_newline_from` / `memchr` calls with one
@@ -515,7 +515,7 @@ fn _scan_record[o: Origin](
     var avail     = len(scan_span)
 
     if avail <= 0:
-        return (False, offsets, phase, FastqErrorCode.OK)
+        return (False, offsets, phase, FastxErrorCode.OK)
 
     # How many newlines already found (= how many offsets fields are set)
     var found = _phase_to_count(phase)
@@ -556,7 +556,7 @@ fn _scan_record[o: Origin](
     if found == 4:
         var code = _validate_fastq_structure(view, offsets)
         return (True, offsets, _count_to_phase(found), code)
-    return (False, offsets, _count_to_phase(found), FastqErrorCode.OK)
+    return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
 
 
 @always_inline
