@@ -1,19 +1,21 @@
 """Custom error types for BlazeSeq with contextual information.
 
 Public API:
-- FastqErrorCode: trivial enum for hot-path returns (no raise)
+- FastxErrorCode: trivial enum for hot-path returns (no raise)
 - ParseError, ValidationError: structs with message and context
 - format_parse_error_from_code, format_validation_error_from_code: build error strings from codes
 - buffer_capacity_error: build buffer-capacity message for callers that raise Error(...)
 """
 
 # ---------------------------------------------------------------------------
-# FastqErrorCode: trivial enum for hot-path error returns (no raise)
+# FastxErrorCode: trivial enum for hot-path error returns (no raise)
 # ---------------------------------------------------------------------------
 
+
 @register_passable("trivial")
-struct FastqErrorCode(Copyable, Equatable):
-    """Trivial error code returned by low-level parsing/validation; caller builds and raises."""
+struct FastxErrorCode(Copyable, Equatable):
+    """Trivial error code returned by low-level parsing/validation; caller builds and raises.
+    """
 
     var value: Int8
 
@@ -34,6 +36,7 @@ struct FastqErrorCode(Copyable, Equatable):
     comptime UNEXPECTED_EOF = Self(7)
     comptime BUFFER_EXCEEDED = Self(8)
     comptime BUFFER_AT_MAX = Self(9)
+    comptime OTHER = Self(10)
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -44,29 +47,30 @@ struct FastqErrorCode(Copyable, Equatable):
         return self.value != other.value
 
 
-fn _message_for_code(code: FastqErrorCode) -> String:
-    """Internal: return default message for a FastqErrorCode. Used when building ParseError/ValidationError."""
-    if code == FastqErrorCode.ID_NO_AT:
+fn _message_for_code(code: FastxErrorCode) -> String:
+    """Internal: return default message for a FastxErrorCode. Used when building ParseError/ValidationError.
+    """
+    if code == FastxErrorCode.ID_NO_AT:
         return "Sequence id line does not start with '@'"
-    if code == FastqErrorCode.SEP_NO_PLUS:
+    if code == FastxErrorCode.SEP_NO_PLUS:
         return "Separator line does not start with '+'"
-    if code == FastqErrorCode.SEQ_QUAL_LEN_MISMATCH:
+    if code == FastxErrorCode.SEQ_QUAL_LEN_MISMATCH:
         return "Quality and sequence line do not match in length"
-    if code == FastqErrorCode.ASCII_INVALID:
+    if code == FastxErrorCode.ASCII_INVALID:
         return "Non ASCII letters found"
-    if code == FastqErrorCode.QUALITY_OUT_OF_RANGE:
+    if code == FastxErrorCode.QUALITY_OUT_OF_RANGE:
         return "Corrupt quality score according to provided schema"
-    if code == FastqErrorCode.UNEXPECTED_EOF:
+    if code == FastxErrorCode.UNEXPECTED_EOF:
         return "Unexpected end of file in FASTQ record"
-    if code == FastqErrorCode.BUFFER_EXCEEDED:
+    if code == FastxErrorCode.BUFFER_EXCEEDED:
         return "FASTQ record exceeds buffer capacity"
-    if code == FastqErrorCode.BUFFER_AT_MAX:
+    if code == FastxErrorCode.BUFFER_AT_MAX:
         return "FASTQ record exceeds maximum buffer capacity"
     return "Parse or validation error"
 
 
 fn format_parse_error_from_code(
-    code: FastqErrorCode,
+    code: FastxErrorCode,
     record_number: Int,
     line_number: Int,
     file_position: Int64,
@@ -84,16 +88,17 @@ fn format_parse_error_from_code(
 
 
 fn format_validation_error_from_code(
-    code: FastqErrorCode,
+    code: FastxErrorCode,
     record_number: Int,
     field: String = "",
     record_snippet: String = "",
 ) -> String:
-    """Build full ValidationError string from error code and context (cold path)."""
+    """Build full ValidationError string from error code and context (cold path).
+    """
     var field_name = field
-    if len(field_name) == 0 and code == FastqErrorCode.ASCII_INVALID:
+    if len(field_name) == 0 and code == FastxErrorCode.ASCII_INVALID:
         field_name = "ascii"
-    elif len(field_name) == 0 and code == FastqErrorCode.QUALITY_OUT_OF_RANGE:
+    elif len(field_name) == 0 and code == FastxErrorCode.QUALITY_OUT_OF_RANGE:
         field_name = "quality"
     var val_err = ValidationError(
         _message_for_code(code),
@@ -106,13 +111,13 @@ fn format_validation_error_from_code(
 
 struct ParseError(Writable):
     """Error raised during FASTQ parsing with contextual information."""
-    
+
     var message: String
     var record_number: Int  # 1-indexed record number
-    var line_number: Int    # 1-indexed line number in file
-    var file_position: Int64 # Byte position in file
+    var line_number: Int  # 1-indexed line number in file
+    var file_position: Int64  # Byte position in file
     var record_snippet: String  # First 100-200 chars of problematic record
-    
+
     fn __init__(
         out self,
         message: String,
@@ -122,7 +127,7 @@ struct ParseError(Writable):
         record_snippet: String = "",
     ):
         """Initialize ParseError with message and optional context.
-        
+
         Args:
             message: The error message.
             record_number: 1-indexed record number where error occurred (0 if unknown).
@@ -135,7 +140,7 @@ struct ParseError(Writable):
         self.line_number = line_number
         self.file_position = file_position
         self.record_snippet = record_snippet
-    
+
     fn __str__(self) -> String:
         """Format error message with context."""
         var msg = self.message
@@ -148,7 +153,7 @@ struct ParseError(Writable):
         if len(self.record_snippet) > 0:
             msg += "\n  Record snippet: " + self.record_snippet
         return msg
-    
+
     fn write_to[w: Writer](self, mut writer: w):
         """Write error to writer."""
         writer.write(self.__str__())
@@ -156,12 +161,12 @@ struct ParseError(Writable):
 
 struct ValidationError(Writable):
     """Error raised during FASTQ record validation."""
-    
+
     var message: String
     var record_number: Int
     var field: String  # "header", "sequence", "quality", etc.
     var record_snippet: String
-    
+
     fn __init__(
         out self,
         message: String,
@@ -170,7 +175,7 @@ struct ValidationError(Writable):
         record_snippet: String = "",
     ):
         """Initialize ValidationError with message and optional context.
-        
+
         Args:
             message: The error message.
             record_number: 1-indexed record number where error occurred (0 if unknown).
@@ -181,7 +186,7 @@ struct ValidationError(Writable):
         self.record_number = record_number
         self.field = field
         self.record_snippet = record_snippet
-    
+
     fn __str__(self) -> String:
         """Format error message with context."""
         var msg = self.message
@@ -192,7 +197,7 @@ struct ValidationError(Writable):
         if len(self.record_snippet) > 0:
             msg += "\n  Record snippet: " + self.record_snippet
         return msg
-    
+
     fn write_to[w: Writer](self, mut writer: w):
         """Write error to writer."""
         writer.write(self.__str__())
@@ -201,6 +206,7 @@ struct ValidationError(Writable):
 # ---------------------------------------------------------------------------
 # Shared error message helpers (for consistent Error strings across modules)
 # ---------------------------------------------------------------------------
+
 
 fn buffer_capacity_error(
     capacity: Int,
@@ -221,7 +227,11 @@ fn buffer_capacity_error(
     """
     var msg: String
     if at_max and max_capacity > 0:
-        msg = "Line exceeds max buffer capacity of " + String(max_capacity) + " bytes"
+        msg = (
+            "Line exceeds max buffer capacity of "
+            + String(max_capacity)
+            + " bytes"
+        )
     else:
         msg = "Line exceeds buffer capacity of " + String(capacity) + " bytes"
     if growth_hint:

@@ -7,7 +7,7 @@ from blazeseq.ascii_string import ASCIIString
 from blazeseq.utils import _check_ascii
 from blazeseq.errors import (
     ValidationError,
-    FastqErrorCode,
+    FastxErrorCode,
     format_validation_error_from_code,
 )
 from blazeseq.CONSTS import simd_width
@@ -80,7 +80,7 @@ struct Validator(Copyable):
         return snippet
 
     @always_inline
-    fn _validate_quality_range(self, record: RefRecord) -> FastqErrorCode:
+    fn _validate_quality_range(self, record: RefRecord) -> FastxErrorCode:
         """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
         """
         var ptr = record._quality.unsafe_ptr()
@@ -99,30 +99,30 @@ struct Validator(Copyable):
                 span_v
             )  # Unsigned unsaturated substraction wraps on underflow.
             if mask.reduce_or():
-                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+                return FastxErrorCode.QUALITY_OUT_OF_RANGE
             i += simd_width
 
         while i < n:
             if (ptr[i] - lower) > span:
-                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+                return FastxErrorCode.QUALITY_OUT_OF_RANGE
             i += 1
 
-        return FastqErrorCode.OK
+        return FastxErrorCode.OK
 
     @always_inline
-    fn _validate_ascii(self, record: RefRecord) -> FastqErrorCode:
+    fn _validate_ascii(self, record: RefRecord) -> FastxErrorCode:
         """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
         """
         var c = _check_ascii(record._id)
-        if c != FastqErrorCode.OK:
+        if c != FastxErrorCode.OK:
             return c
         c = _check_ascii(record._sequence)
-        if c != FastqErrorCode.OK:
+        if c != FastxErrorCode.OK:
             return c
         return _check_ascii(record._quality)
 
     @always_inline
-    fn _validate_quality_range(self, record: FastqRecord) -> FastqErrorCode:
+    fn _validate_quality_range(self, record: FastqRecord) -> FastxErrorCode:
         """Validate quality bytes using SIMD vectorization + unsigned range trick.
         """
 
@@ -143,51 +143,51 @@ struct Validator(Copyable):
             # unsigned subtraction wraps on underflow — out-of-range bytes produce value > span
             var mask = (chunk - lower_v).ge(span_v)
             if mask.reduce_or():
-                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+                return FastxErrorCode.QUALITY_OUT_OF_RANGE
             i += simd_width
 
         while i < n:
             if (ptr[i] - lower) > span:
-                return FastqErrorCode.QUALITY_OUT_OF_RANGE
+                return FastxErrorCode.QUALITY_OUT_OF_RANGE
             i += 1
 
-        return FastqErrorCode.OK
+        return FastxErrorCode.OK
 
     @always_inline
-    fn _validate_ascii(self, record: FastqRecord) -> FastqErrorCode:
+    fn _validate_ascii(self, record: FastqRecord) -> FastxErrorCode:
         """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
         """
         var c = _check_ascii(record._id.as_span())
-        if c != FastqErrorCode.OK:
+        if c != FastxErrorCode.OK:
             return c
         c = _check_ascii(record._sequence.as_span())
-        if c != FastqErrorCode.OK:
+        if c != FastxErrorCode.OK:
             return c
         return _check_ascii(record._quality.as_span())
 
     @always_inline
-    fn _validate(self, record: RefRecord) -> FastqErrorCode:
+    fn _validate(self, record: RefRecord) -> FastxErrorCode:
         """Run configured validations; returns error code. Used by parser hot path.
         """
         if self.check_ascii:
             var code = self._validate_ascii(record)
-            if code != FastqErrorCode.OK:
+            if code != FastxErrorCode.OK:
                 return code
         if self.check_quality:
             return self._validate_quality_range(record)
-        return FastqErrorCode.OK
+        return FastxErrorCode.OK
 
     @always_inline
-    fn _validate(self, record: FastqRecord) -> FastqErrorCode:
+    fn _validate(self, record: FastqRecord) -> FastxErrorCode:
         """Run configured validations; returns error code. Used by parser hot path.
         """
         if self.check_ascii:
             var code = self._validate_ascii(record)
-            if code != FastqErrorCode.OK:
+            if code != FastxErrorCode.OK:
                 return code
         if self.check_quality:
             return self._validate_quality_range(record)
-        return FastqErrorCode.OK
+        return FastxErrorCode.OK
 
     fn validate(
         self, record: FastqRecord, record_number: Int = 0, line_number: Int = 0
@@ -203,7 +203,7 @@ struct Validator(Copyable):
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
         var code = self._validate(record)
-        if code != FastqErrorCode.OK:
+        if code != FastxErrorCode.OK:
             raise Error(
                 format_validation_error_from_code(
                     code, record_number, "", self.id_snippet(record)
@@ -224,7 +224,7 @@ struct Validator(Copyable):
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
         var code = self._validate(record)
-        if code != FastqErrorCode.OK:
+        if code != FastxErrorCode.OK:
             raise Error(
                 format_validation_error_from_code(
                     code, record_number, "", self.id_snippet(record)
@@ -538,4 +538,3 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     fn write_to[w: Writer](self, mut writer: w):
         """Required by Writable trait; delegates to write()."""
         self.write(writer)
-
