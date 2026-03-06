@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FASTA parser benchmark: BlazeSeq vs needletail.
+# FASTA parser benchmark: BlazeSeq vs needletail vs noodles.
 # Generates synthetic FASTA on a ramfs mount (default 1GB; set FASTA_SIZE_GB), runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fasta-parser/run_benchmarks.sh [--ramfs|--tmpfs]
 # Requires: pixi, hyperfine, cargo, rustc. On Linux: sudo for ramfs/tmpfs mount/umount.
@@ -111,7 +111,7 @@ if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fasta.mojo" "$BENCH_
     exit 1
 fi
 
-# --- Build Rust needletail runner ---
+# --- Build Rust runners ---
 export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
 echo "Building needletail_fasta_runner ..."
 (cd "$SCRIPT_DIR/needletail_runner" && cargo build --release) || {
@@ -119,6 +119,13 @@ echo "Building needletail_fasta_runner ..."
     exit 1
 }
 NEEDLETAIL_BIN="$SCRIPT_DIR/needletail_runner/target/release/needletail_fasta_runner"
+
+echo "Building noodles_fasta_runner ..."
+(cd "$SCRIPT_DIR/noodles_runner" && cargo build --release) || {
+    echo "Failed to build noodles_fasta_runner. Check Rust toolchain and dependencies."
+    exit 1
+}
+NOODLES_BIN="$SCRIPT_DIR/noodles_runner/target/release/noodles_fasta_runner"
 
 # --- Build BlazeSeq FASTA runner ---
 BLAZESEQ_BIN="$SCRIPT_DIR/run_blazeseq_fasta"
@@ -131,10 +138,11 @@ fi
 # --- Verify both parsers agree on record/base count (non-fatal) ---
 echo "Verifying parser outputs..."
 ref=""
-for cmd_label in "BlazeSeq" "needletail"; do
+for cmd_label in "BlazeSeq" "needletail" "noodles"; do
     case "$cmd_label" in
         BlazeSeq)   out=$("$BLAZESEQ_BIN" "$BENCH_FILE" 2>/dev/null) || out="" ;;
         needletail) out=$("$NEEDLETAIL_BIN" "$BENCH_FILE" 2>/dev/null) || out="" ;;
+        noodles)    out=$("$NOODLES_BIN" "$BENCH_FILE" 2>/dev/null) || out="" ;;
     esac
     out=$(echo "$out" | tail -1)
     if [ -z "$out" ]; then
@@ -162,7 +170,8 @@ hyperfine_cmd \
     --export-markdown "$REPO_ROOT/benchmark_results_fasta.md" \
     --export-json "$REPO_ROOT/benchmark_results_fasta.json" \
     -n BlazeSeq   "$BLAZESEQ_BIN $BENCH_FILE" \
-    -n needletail "$NEEDLETAIL_BIN $BENCH_FILE"
+    -n needletail "$NEEDLETAIL_BIN $BENCH_FILE" \
+    -n noodles    "$NOODLES_BIN $BENCH_FILE"
 
 echo "Results written to benchmark_results_fasta.md and benchmark_results_fasta.json"
 
