@@ -4,10 +4,15 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
-### Parsing (public API)
+## [0.3] - 2026-03-06
 
-- **FastqParser[R, config]**:
-  - **Iterators**: `ref_records()`, `records()`, `batches(max_records=None)` (None uses parser default). On parse/validation error they print context and raise `StopIteration`.
+### Added
+
+- **FASTA support**: `FastaRecord` and `FastaParser` in `blazeseq.fasta` with definition-line parsing, optional description, and `definition()` method. Strip leading/trailing spaces from definition lines.
+- **Correctness test suite**: 140 FASTQ tests from BioPython/BioJava/BioPerl test data in `tests/test_data/fastq_parser/`; coverage for `ref_records()` and `records()` on valid/invalid files, including gzip/bgzip (example.fastq.gz, example_dos.fastq.bgz, etc.).
+- **Error context**: Parse and validation errors now include record number, line number, file position, and a snippet of the failing record when using `next_record()` or iterators.
+- **Throughput validation benchmark**: `run_throughput_validation_blazeseq.mojo` and scripts to measure effect of ASCII/quality validation on throughput.
+- **FASTA benchmarks**: Benchmark harness for FASTA parser with Noodles and needletail runners; plotting script for benchmark results.
 
 ## [0.2] - 2026-02-23
 

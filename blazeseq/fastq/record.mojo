@@ -384,6 +384,7 @@ struct FastqRecord(
     @always_inline
     fn byte_len(self) -> Int:
         """Return total byte length when written ("@" + id + sequence + quality + "+\n").
+        Used for calculating buffer capacity.
         """
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
@@ -502,6 +503,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     @always_inline
     fn byte_len(self) -> Int:
         """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n").
+        Used for calculating buffer capacity.
         """
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
@@ -515,8 +517,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn phred_scores(self, offset: UInt8) -> List[Byte]:
-        """Return Phred quality scores using the given offset (e.g. 33 or 64).
-        """
+        """Return Phred quality scores using the given offset (e.g. 33 or 64)."""
         output = List[Byte](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - offset
