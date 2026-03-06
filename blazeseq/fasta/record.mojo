@@ -87,7 +87,7 @@ struct FastaRecord(
             length=len(self._id),
         )
 
-    fn definition(ref [_]self) -> Definition:
+    fn definition(self) -> Definition:
         var id_span = self._id.as_span()
         var id_str = StringSlice(unsafe_from_utf8=id_span)
         var parts = id_str.split(" ")
