@@ -86,6 +86,22 @@ struct FastaRecord(
             length=len(self._id),
         )
 
+    fn definition(ref [_]self) -> Definition:
+        var id_span = self._id.as_span()
+        var id_str = StringSlice(unsafe_from_utf8=id_span)
+        var parts = id_str.split(" ")
+        var id = Span[Byte](ptr=parts[0].unsafe_ptr(), length=len(parts[0]))
+        var id_ascii = ASCIIString(id)
+        if len(parts) > 1:
+            description = ASCIIString()
+            for part in parts[1:]:
+                description.extend(
+                    Span[Byte](ptr=part.unsafe_ptr(), length=len(part))
+                )
+            return Definition(Id=id_ascii^, Description=description^)
+
+        return Definition(Id=id_ascii^, Description=None)
+
     @always_inline
     fn byte_len(self) -> Int:
         """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\").
