@@ -1,5 +1,5 @@
 from hashlib.hasher import default_hasher, Hasher
-from blazeseq.ascii_string import ASCIIString
+from blazeseq.byte_string import BString
 from collections.string import StringSlice, String
 from memory import Span
 from blazeseq.io.writers import Writer
@@ -15,8 +15,8 @@ struct Definition(Copyable, Movable):
         Description: The description of the record.
     """
 
-    var Id: ASCIIString
-    var Description: Optional[ASCIIString]
+    var Id: BString
+    var Description: Optional[BString]
 
 
 struct FastaRecord(
@@ -37,8 +37,8 @@ struct FastaRecord(
         sequence: Sequence line (normalized to a single line, no '\\n' or '\\r').
     """
 
-    var _id: ASCIIString
-    var _sequence: ASCIIString
+    var _id: BString
+    var _sequence: BString
 
     @always_inline
     fn __init__(
@@ -47,8 +47,8 @@ struct FastaRecord(
         sequence: String,
     ) raises:
         """Build from id and sequence strings."""
-        self._id = ASCIIString(id)
-        self._sequence = ASCIIString(sequence)
+        self._id = BString(id)
+        self._sequence = BString(sequence)
 
     @always_inline
     fn __init__(
@@ -56,13 +56,13 @@ struct FastaRecord(
         id: Span[Byte, MutExternalOrigin],
         sequence: Span[Byte, MutExternalOrigin],
     ) raises:
-        self._id = ASCIIString(id)
-        self._sequence = ASCIIString(sequence)
+        self._id = BString(id)
+        self._sequence = BString(sequence)
 
     fn __init__(
         out self,
-        var id: ASCIIString,
-        var sequence: ASCIIString,
+        var id: BString,
+        var sequence: BString,
     ):
         self._id = id^
         self._sequence = sequence^
@@ -92,14 +92,14 @@ struct FastaRecord(
         var id_str = StringSlice(unsafe_from_utf8=id_span)
         var parts = id_str.split(" ")
         var id = Span[Byte](ptr=parts[0].unsafe_ptr(), length=len(parts[0]))
-        var id_ascii = ASCIIString(_strip_spaces(id))
+        var id_ascii = BString(_strip_spaces(id))
         if len(parts) > 1:
-            description = ASCIIString()
+            description = BString()
             for part in parts[1:]:
                 description.extend(
                     Span[Byte](ptr=part.unsafe_ptr(), length=len(part))
                 )
-            description = ASCIIString(_strip_spaces(description.as_span()))
+            description = BString(_strip_spaces(description.as_span()))
             return Definition(Id=id_ascii^, Description=description^)
 
         return Definition(Id=id_ascii^, Description=None)

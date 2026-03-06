@@ -3,7 +3,7 @@ from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
 from blazeseq.CONSTS import EOF
 from blazeseq.utils import format_parse_error, _strip_spaces
-from blazeseq.ascii_string import ASCIIString
+from blazeseq.byte_string import BString
 from memory import Span
 from collections import List
 from collections.string import StringSlice, String
@@ -33,13 +33,13 @@ struct FastaParser[R: Reader](Iterable, Movable):
 
     var lines: LineIterator[Self.R]
     var _record_number: Int  # 1-based record count
-    var _pending_ids: List[ASCIIString]
+    var _pending_ids: List[BString]
     var _last_seq_size: UInt32  # tracks previous sequence size for optimistic pre-allocation
 
     fn __init__(out self, var reader: Self.R) raises:
         self.lines = LineIterator(reader^)
         self._record_number = 0
-        self._pending_ids = List[ASCIIString]()
+        self._pending_ids = List[BString]()
         self._last_seq_size = 0
 
     # ------------------------------------------------------------------ #
@@ -83,7 +83,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
             raise EOFError()
 
         var id_str = self._read_header_line()
-        var seq_buf = ASCIIString()
+        var seq_buf = BString()
         if self._last_seq_size > 0:
             seq_buf.reserve(self._last_seq_size)
         var seq_start_line = self.lines.get_line_number() + 1
@@ -94,7 +94,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
                 if len(line) > 0 and line[0] == FASTA_HEADER_BYTE:
                     # Next record's header; store for next next_record().
                     var id_span = _strip_spaces(line[1:])
-                    self._pending_ids.append(ASCIIString(id_span))
+                    self._pending_ids.append(BString(id_span))
                     break
                 # Sequence line: append (line has no newline from LineIterator).
                 seq_buf.extend(line)
@@ -121,7 +121,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #
 
-    fn _read_header_line(mut self) raises -> ASCIIString:
+    fn _read_header_line(mut self) raises -> BString:
         """Return the next header id (after '>'), or raise EOFError/ParseError.
 
         Uses _pending_ids if non-empty; otherwise reads lines until a non-blank
@@ -146,7 +146,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
                 raise Error(msg)
             # Id is text after '>', trimmed of leading/trailing whitespace.
             var id_span = _strip_spaces(trimmed[1:])
-            return ASCIIString(id_span)
+            return BString(id_span)
 
     fn __iter__(
         ref self,

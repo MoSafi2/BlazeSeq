@@ -8,7 +8,7 @@ validation with explicit assert_raises where errors are expected.
 from memory import alloc
 from blazeseq import FastqRecord, Validator
 from blazeseq.CONSTS import generic_schema
-from blazeseq.ascii_string import ASCIIString
+from blazeseq.byte_string import BString
 from collections.string import StringSlice
 from testing import (
     assert_equal,
@@ -63,8 +63,12 @@ fn test_fastq_record_getters_and_length() raises:
     """Accessors and length methods return correct values."""
     var record = FastqRecord("@test_seq", "ATCGATCGG", "!!!!!!!!!")
 
-    assert_equal(String(StringSlice(unsafe_from_utf8=record.sequence())), "ATCGATCGG")
-    assert_equal(String(StringSlice(unsafe_from_utf8=record.quality())), "!!!!!!!!!")
+    assert_equal(
+        String(StringSlice(unsafe_from_utf8=record.sequence())), "ATCGATCGG"
+    )
+    assert_equal(
+        String(StringSlice(unsafe_from_utf8=record.quality())), "!!!!!!!!!"
+    )
     assert_equal(String(StringSlice(unsafe_from_utf8=record.id())), "@test_seq")
 
     assert_equal(len(record), 9)
@@ -134,17 +138,17 @@ fn test_validator_ascii_invalid_raises() raises:
     """With check_ascii=True, validate() raises when a field contains non-ASCII.
     """
     var v = Validator(True, False, materialize[generic_schema]())
-    # Build record with non-ASCII byte in id (String is UTF-8, so use alloc + ASCIIString).
+    # Build record with non-ASCII byte in id (String is UTF-8, so use alloc + BString).
     var ptr = alloc[UInt8](2)
     ptr[0] = 64  # '@'
     ptr[1] = 128  # non-ASCII
     var span = Span[UInt8, MutExternalOrigin](ptr=ptr, length=2)
-    var bad_id = ASCIIString(span)
+    var bad_id = BString(span)
     ptr.free()
     var record = FastqRecord(
         bad_id^,
-        ASCIIString("ACGT"),
-        ASCIIString("!!!!"),
+        BString("ACGT"),
+        BString("!!!!"),
         33,
     )
     with assert_raises(contains="Non ASCII letters found"):

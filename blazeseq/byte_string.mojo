@@ -6,7 +6,10 @@ from collections.string import StringSlice, String
 from blazeseq.utils import memchr
 
 
-struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
+struct BString(Copyable, Equatable, Movable, Sized, Writable):
+    """ByteString is a mutable sequence of bytes. it does not ensure any encoding of the bytes.
+    """
+
     # TODO: add address_space
     var size: UInt32
     var cap: UInt32
@@ -131,7 +134,7 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
 
     @always_inline
     fn as_string_slice(ref [_]self) -> StringSlice[origin = origin_of(self)]:
-        """Return StringSlice view of ASCIIString bytes."""
+        """Return StringSlice view of BString bytes."""
         return StringSlice[origin = origin_of(self)](
             unsafe_from_utf8=self.as_span()
         )
@@ -166,7 +169,7 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
         self.size = needed
 
     @always_inline
-    fn extend(mut self, read src: ASCIIString):
+    fn extend(mut self, read src: BString):
         var needed = self.size + src.size
         if needed > self.cap:
             self.reserve(Self._roundup32(needed))

@@ -12,7 +12,7 @@ from blazeseq.errors import (
     buffer_capacity_error,
 )
 from std.iter import Iterator
-from blazeseq.ascii_string import ASCIIString
+from blazeseq.byte_string import BString
 from blazeseq.utils import (
     _parse_schema,
     format_parse_error,
