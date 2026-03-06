@@ -142,3 +142,27 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
     @always_inline
     fn write_to[w: Writer](self, mut writer: w) -> None:
         writer.write(self.as_string_slice())
+
+    @always_inline
+    fn extend(mut self, src: Span[UInt8, MutExternalOrigin]):
+        var needed = self.size + UInt32(len(src))
+        if needed > self.cap:
+            self.reserve(Self._roundup32(needed))
+        memcpy(dest=self.ptr + Int(self.size), src=src.unsafe_ptr(), count=len(src))
+        self.size = needed
+
+    @always_inline
+    fn extend(mut self, src: List[UInt8]):
+        var needed = self.size + UInt32(len(src))
+        if needed > self.cap:
+            self.reserve(Self._roundup32(needed))
+        memcpy(dest=self.ptr + Int(self.size), src=src.unsafe_ptr(), count=len(src))
+        self.size = needed
+
+    @always_inline
+    fn extend(mut self, read src: ASCIIString):
+        var needed = self.size + src.size
+        if needed > self.cap:
+            self.reserve(Self._roundup32(needed))
+        memcpy(dest=self.ptr + Int(self.size), src=src.ptr, count=Int(src.size))
+        self.size = needed
