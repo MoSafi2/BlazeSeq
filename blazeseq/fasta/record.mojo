@@ -3,6 +3,7 @@ from blazeseq.ascii_string import ASCIIString
 from collections.string import StringSlice, String
 from memory import Span
 from blazeseq.io.writers import Writer
+from blazeseq.utils import _strip_spaces
 
 
 @fieldwise_init
@@ -91,13 +92,14 @@ struct FastaRecord(
         var id_str = StringSlice(unsafe_from_utf8=id_span)
         var parts = id_str.split(" ")
         var id = Span[Byte](ptr=parts[0].unsafe_ptr(), length=len(parts[0]))
-        var id_ascii = ASCIIString(id)
+        var id_ascii = ASCIIString(_strip_spaces(id))
         if len(parts) > 1:
             description = ASCIIString()
             for part in parts[1:]:
                 description.extend(
                     Span[Byte](ptr=part.unsafe_ptr(), length=len(part))
                 )
+            description = ASCIIString(_strip_spaces(description.as_span()))
             return Definition(Id=id_ascii^, Description=description^)
 
         return Definition(Id=id_ascii^, Description=None)

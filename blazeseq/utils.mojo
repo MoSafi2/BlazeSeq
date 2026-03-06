@@ -251,7 +251,7 @@ fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 @always_inline
 fn _strip_spaces[
     mut: Bool, o: Origin[mut=mut]
-](in_slice: Span[Byte, o]) raises -> Span[Byte, o]:
+](in_slice: Span[Byte, o]) -> Span[Byte, o]:
     """Trim leading and trailing POSIX whitespace from a byte span."""
     if len(in_slice) == 0:
         return in_slice
