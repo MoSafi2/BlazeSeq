@@ -297,7 +297,7 @@ fn is_posix_space(c: UInt8) -> Bool:
     """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
     # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
-    comptime MASK: UInt64 = (1 << ord("\t")) | (1 << ord("\n")) | (1 << ord("\v")) | (1 << ord("\f")) | (1 << ord("\r)")) | 
+    comptime MASK: UInt64 = (1 << ord("\t")) | (1 << ord("\n")) | (1 << ord("\v")) | (1 << ord("\f")) | (1 << ord("\r")) | 
                          (1 << ord("\x1c")) | (1 << ord("\x1d")) | (1 << ord("\x1e")) | (1 << ord(" "))
 
     # If c > 63, it's definitely not one of our space characters.
