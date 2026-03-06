@@ -7,7 +7,6 @@ from blazeseq.ascii_string import ASCIIString
 from memory import Span
 from collections import List
 from collections.string import StringSlice, String
-from memory import memcpy
 
 
 # Fix #8: Named constant with explicit value documented for clarity.
@@ -35,11 +34,13 @@ struct FastaParser[R: Reader](Iterable, Movable):
     var lines: LineIterator[Self.R]
     var _record_number: Int  # 1-based record count
     var _pending_ids: List[ASCIIString]
+    var _last_seq_size: UInt32  # tracks previous sequence size for optimistic pre-allocation
 
     fn __init__(out self, var reader: Self.R) raises:
         self.lines = LineIterator(reader^)
         self._record_number = 0
         self._pending_ids = List[ASCIIString]()
+        self._last_seq_size = 0
 
     # ------------------------------------------------------------------ #
     # Public accessors                                                     #
@@ -83,6 +84,8 @@ struct FastaParser[R: Reader](Iterable, Movable):
 
         var id_str = self._read_header_line()
         var seq_buf = ASCIIString()
+        if self._last_seq_size > 0:
+            seq_buf.reserve(self._last_seq_size)
         var seq_start_line = self.lines.get_line_number() + 1
 
         while True:
@@ -94,18 +97,13 @@ struct FastaParser[R: Reader](Iterable, Movable):
                     self._pending_ids.append(ASCIIString(id_span))
                     break
                 # Sequence line: append (line has no newline from LineIterator).
-                var old_len = len(seq_buf)
-                seq_buf.resize(UInt32(old_len + len(line)))
-                memcpy(
-                    dest=seq_buf.addr(old_len),
-                    src=line.unsafe_ptr(),
-                    count=len(line),
-                )
+                seq_buf.extend(line)
             except e:
                 if String(e) == String(EOFError()) or String(e).startswith(EOF):
                     break
                 raise
 
+        self._last_seq_size = seq_buf.size
         if len(seq_buf) == 0:
             var msg = format_parse_error(
                 "FASTA record has empty sequence",
