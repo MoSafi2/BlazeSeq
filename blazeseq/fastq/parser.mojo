@@ -2,7 +2,7 @@ from blazeseq.fastq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
 from blazeseq.io.buffered import EOFError, BufferedReader
 from blazeseq.io.readers import Reader
-from blazeseq.record_batch import FastqBatch
+from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.errors import (
     ParseError,
     ValidationError,

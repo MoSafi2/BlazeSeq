@@ -120,9 +120,10 @@ fn valid_file_test_fun_gz(file_gz: String, schema: String = "generic") raises:
         pass
 
 
-fn valid_file_test_fun_gz_ref(file_gz: String, schema: String = "generic") raises:
-    """Same as valid_file_test_fun_gz but iterate via ref_records().
-    """
+fn valid_file_test_fun_gz_ref(
+    file_gz: String, schema: String = "generic"
+) raises:
+    """Same as valid_file_test_fun_gz but iterate via ref_records()."""
     var parser = FastqParser[RapidgzipReader](
         RapidgzipReader(test_dir + file_gz), schema
     )
@@ -135,6 +136,7 @@ fn valid_file_test_fun_gz_ref(file_gz: String, schema: String = "generic") raise
 # ---------------------------------------------------------------------------
 # Valid file tests (one per file)
 # ---------------------------------------------------------------------------
+
 
 fn test_valid_example_fastq() raises:
     valid_file_test_fun("example.fastq")
@@ -173,7 +175,9 @@ fn test_valid_illumina_full_range_as_illumina_fastq() raises:
 
 
 fn test_valid_illumina_full_range_as_illumina_fastq_ref() raises:
-    valid_file_test_fun_ref("illumina_full_range_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun_ref(
+        "illumina_full_range_as_illumina.fastq", "illumina_1.3"
+    )
 
 
 fn test_valid_illumina_full_range_as_sanger_fastq() raises:
@@ -193,11 +197,15 @@ fn test_valid_illumina_full_range_as_solexa_fastq_ref() raises:
 
 
 fn test_valid_illumina_full_range_original_illumina_fastq() raises:
-    valid_file_test_fun("illumina_full_range_original_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun(
+        "illumina_full_range_original_illumina.fastq", "illumina_1.3"
+    )
 
 
 fn test_valid_illumina_full_range_original_illumina_fastq_ref() raises:
-    valid_file_test_fun_ref("illumina_full_range_original_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun_ref(
+        "illumina_full_range_original_illumina.fastq", "illumina_1.3"
+    )
 
 
 fn test_valid_longreads_as_illumina_fastq() raises:
@@ -309,7 +317,9 @@ fn test_valid_sanger_full_range_as_illumina_fastq() raises:
 
 
 fn test_valid_sanger_full_range_as_illumina_fastq_ref() raises:
-    valid_file_test_fun_ref("sanger_full_range_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun_ref(
+        "sanger_full_range_as_illumina.fastq", "illumina_1.3"
+    )
 
 
 fn test_valid_sanger_full_range_as_sanger_fastq() raises:
@@ -357,7 +367,9 @@ fn test_valid_solexa_full_range_as_illumina_fastq() raises:
 
 
 fn test_valid_solexa_full_range_as_illumina_fastq_ref() raises:
-    valid_file_test_fun_ref("solexa_full_range_as_illumina.fastq", "illumina_1.3")
+    valid_file_test_fun_ref(
+        "solexa_full_range_as_illumina.fastq", "illumina_1.3"
+    )
 
 
 fn test_valid_solexa_full_range_as_sanger_fastq() raises:
@@ -465,6 +477,7 @@ fn test_valid_wrapping_as_solexa_fastq_ref() raises:
 # Compressed FASTQ (RapidgzipReader)
 # ---------------------------------------------------------------------------
 
+
 fn test_valid_example_fastq_gz() raises:
     valid_file_test_fun_gz("example.fastq.gz")
 
@@ -492,6 +505,7 @@ fn test_valid_example_dos_fastq_bgz_ref() raises:
 # ---------------------------------------------------------------------------
 # Invalid file tests (one per file)
 # ---------------------------------------------------------------------------
+
 
 fn test_invalid_empty_fastq() raises:
     invalid_file_test_fun("empty.fastq", EOF)
@@ -736,6 +750,7 @@ fn test_invalid_zero_length_fastq_ref() raises:
 # ---------------------------------------------------------------------------
 # Ref path: loop over same file lists
 # ---------------------------------------------------------------------------
+
 
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
