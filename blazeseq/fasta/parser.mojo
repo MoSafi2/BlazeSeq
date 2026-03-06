@@ -14,15 +14,6 @@ from memory import memcpy
 comptime FASTA_HEADER_BYTE: Byte = 62  # ord('>')
 
 
-@always_inline
-fn _copy_span_to_ascii(s: Span[Byte, MutExternalOrigin]) -> ASCIIString:
-    """Copy a byte span into an owned ASCIIString (Byte and UInt8 are compatible)."""
-    var out = ASCIIString(capacity=len(s))
-    out.resize(UInt32(len(s)))
-    memcpy(dest=out.addr(0), src=s.unsafe_ptr(), count=len(s))
-    return out^
-
-
 struct FastaParser[R: Reader](Iterable, Movable):
     """Streaming FASTA parser over a `Reader`.
 
@@ -95,12 +86,11 @@ struct FastaParser[R: Reader](Iterable, Movable):
 
         while True:
             try:
-                var line = self.lines.next_line()
+                var line = _strip_spaces(self.lines.next_line())
                 if len(line) > 0 and line[0] == FASTA_HEADER_BYTE:
                     # Next record's header; store for next next_record().
-                    var trimmed = _strip_spaces(line)
-                    var id_span = _strip_spaces(trimmed[1:])  # id is after '>', trimmed
-                    self._pending_ids.append(_copy_span_to_ascii(id_span))
+                    var id_span = _strip_spaces(line[1:])
+                    self._pending_ids.append(ASCIIString(id_span))
                     break
                 # Sequence line: append (line has no newline from LineIterator).
                 var old_len = len(seq_buf)
@@ -157,7 +147,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
                 raise Error(msg)
             # Id is text after '>', trimmed of leading/trailing whitespace.
             var id_span = _strip_spaces(trimmed[1:])
-            return _copy_span_to_ascii(id_span)
+            return ASCIIString(id_span)
 
     fn __iter__(
         ref self,
