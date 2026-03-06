@@ -1,6 +1,6 @@
 [workspace]
 name = "blazeseq"
-version = "0.2.0"
+version = "0.3.0"
 description = "Primitives for FASTQ parsing and GPU-accelerated sequencing utilities in Mojo."
 authors = []
 channels = ["conda-forge", "https://conda.modular.com/max-nightly"]
@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 
 [package]
 name = "blazeseq"
-version = "0.2.0"
+version = "0.3.0"
 
 [package.build]
 backend = { name = "pixi-build-mojo", version = "0.*", channels = [
@@ -54,7 +54,7 @@ test = { cmd = "sh -c 'find ./tests -name \"test_*.mojo\" | xargs -I % pixi run 
 docs = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run build"
 docs-serve = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run dev"
 rbuild = "pixi build"
-rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq-0.2.0-0.conda", depends-on = [
+rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq-0.3.0-0.conda", depends-on = [
     "rbuild",
 ] }
 [pypi-dependencies]

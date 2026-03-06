@@ -101,7 +101,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
             except e:
                 if String(e) == String(EOFError()) or String(e).startswith(EOF):
                     break
-                raise
+                raise e^
 
         self._last_seq_size = seq_buf.size
         if len(seq_buf) == 0:
