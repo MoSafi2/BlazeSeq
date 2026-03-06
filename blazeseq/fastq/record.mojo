@@ -3,7 +3,7 @@ from blazeseq.quality_schema import (
     QualitySchema,
     generic_schema,
 )
-from blazeseq.ascii_string import ASCIIString
+from blazeseq.byte_string import BString
 from blazeseq.utils import _check_ascii
 from blazeseq.errors import (
     ValidationError,
@@ -264,9 +264,9 @@ struct FastqRecord(
         ```
     """
 
-    var _id: ASCIIString
-    var _sequence: ASCIIString
-    var _quality: ASCIIString
+    var _id: BString
+    var _sequence: BString
+    var _quality: BString
     var _phred_offset: Int8
 
     @always_inline
@@ -279,9 +279,9 @@ struct FastqRecord(
     ) raises:
         """Build from id, sequence, and quality strings; phred_offset from schema (default generic_schema).
         """
-        self._id = ASCIIString(id)
-        self._sequence = ASCIIString(sequence)
-        self._quality = ASCIIString(quality)
+        self._id = BString(id)
+        self._sequence = BString(sequence)
+        self._quality = BString(quality)
         self._phred_offset = Int8(schema.OFFSET)
 
     @always_inline
@@ -292,9 +292,9 @@ struct FastqRecord(
         quality: Span[Byte, MutExternalOrigin],
         phred_offset: Int8 = 33,
     ) raises:
-        self._id = ASCIIString(id)
-        self._sequence = ASCIIString(sequence)
-        self._quality = ASCIIString(quality)
+        self._id = BString(id)
+        self._sequence = BString(sequence)
+        self._quality = BString(quality)
         self._phred_offset = phred_offset
 
     fn __init__(out self, four_lines: String) raises:
@@ -304,16 +304,16 @@ struct FastqRecord(
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
-        self._id = ASCIIString(String(seqs[0].strip()))
-        self._sequence = ASCIIString(String(seqs[1].strip()))
-        self._quality = ASCIIString(String(seqs[3].strip()))
+        self._id = BString(String(seqs[0].strip()))
+        self._sequence = BString(String(seqs[1].strip()))
+        self._quality = BString(String(seqs[3].strip()))
         self._phred_offset = 33
 
     fn __init__(
         out self,
-        var id: ASCIIString,
-        var sequence: ASCIIString,
-        var quality: ASCIIString,
+        var id: BString,
+        var sequence: BString,
+        var quality: BString,
         phred_offset: Int8,
     ):
         self._id = id^
@@ -323,9 +323,9 @@ struct FastqRecord(
 
     fn __init__(
         out self,
-        var id: ASCIIString,
-        var sequence: ASCIIString,
-        var quality: ASCIIString,
+        var id: BString,
+        var sequence: BString,
+        var quality: BString,
         schema: QualitySchema = generic_schema,
     ):
         self._id = id^
