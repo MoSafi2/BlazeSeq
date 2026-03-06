@@ -1,14 +1,14 @@
 [package]
-name = "needletail_fasta_runner"
+name = "noodles_fasta_runner"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "needletail_fasta_runner"
+name = "noodles_fasta_runner"
 path = "src/main.rs"
 
 [dependencies]
-needletail = "0.6.3"
+noodles = { version = "0.88", features = ["fasta"] }
 
 [profile.release]
 opt-level = 3
