@@ -71,6 +71,7 @@ struct FastaParser[R: Reader](Iterable, Movable):
     # Public record API                                                    #
     # ------------------------------------------------------------------ #
 
+    # TODO: Add validation to FASTA Record
     fn next_record(mut self) raises -> FastaRecord:
         """Return the next FASTA record as an owned FastaRecord.
 
