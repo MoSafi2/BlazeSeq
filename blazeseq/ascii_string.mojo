@@ -25,13 +25,13 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 
-    fn __init__(out self, s: Span[UInt8, MutExternalOrigin]):
+    fn __init__(out self, s: Span[UInt8, _]):
         self.ptr = alloc[UInt8](len(s))
         memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 
-    fn __init__(out self, s: StringSlice[MutExternalOrigin]):
+    fn __init__(out self, s: StringSlice[_]):
         self.ptr = alloc[UInt8](len(s))
         memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
         self.size = UInt32(len(s))
@@ -120,9 +120,9 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
     @always_inline
     fn as_span(ref [_]self) -> Span[UInt8, origin_of(self)]:
         return Span[UInt8, origin_of(self)](
-            ptr=self.ptr.unsafe_mut_cast[origin_of(self).mut]().unsafe_origin_cast[
-                origin_of(self)
-            ](),
+            ptr=self.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self),
         )
 
@@ -132,7 +132,9 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
     @always_inline
     fn as_string_slice(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return StringSlice view of ASCIIString bytes."""
-        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=self.as_span())
+        return StringSlice[origin = origin_of(self)](
+            unsafe_from_utf8=self.as_span()
+        )
 
     @always_inline
     fn __ne__(self, other: Self) -> Bool:
@@ -144,11 +146,13 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
         writer.write(self.as_string_slice())
 
     @always_inline
-    fn extend(mut self, src: Span[UInt8, MutExternalOrigin]):
+    fn extend(mut self, src: Span[UInt8, _]):
         var needed = self.size + UInt32(len(src))
         if needed > self.cap:
             self.reserve(Self._roundup32(needed))
-        memcpy(dest=self.ptr + Int(self.size), src=src.unsafe_ptr(), count=len(src))
+        memcpy(
+            dest=self.ptr + Int(self.size), src=src.unsafe_ptr(), count=len(src)
+        )
         self.size = needed
 
     @always_inline
@@ -156,7 +160,9 @@ struct ASCIIString(Copyable, Equatable, Movable, Sized, Writable):
         var needed = self.size + UInt32(len(src))
         if needed > self.cap:
             self.reserve(Self._roundup32(needed))
-        memcpy(dest=self.ptr + Int(self.size), src=src.unsafe_ptr(), count=len(src))
+        memcpy(
+            dest=self.ptr + Int(self.size), src=src.unsafe_ptr(), count=len(src)
+        )
         self.size = needed
 
     @always_inline
