@@ -1,0 +1,14 @@
+[package]
+name = "needletail_fasta_runner"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "needletail_fasta_runner"
+path = "src/main.rs"
+
+[dependencies]
+needletail = "0.6.3"
+
+[profile.release]
+opt-level = 3

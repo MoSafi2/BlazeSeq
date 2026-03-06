@@ -77,6 +77,7 @@ benchmark-gzip-single = "bash -c 'GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-par
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh --ramfs'"
 benchmark-throughput-validation = "bash -c './benchmark/throughput/run_throughput_validation_benchmarks.sh --ramfs'"
 benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_benchmarks.sh"
+benchmark-fasta = "bash -c './benchmark/fasta-parser/run_benchmarks.sh --ramfs'"
 benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets'"
 
 [environments]

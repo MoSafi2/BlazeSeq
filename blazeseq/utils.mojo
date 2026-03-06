@@ -816,3 +816,142 @@ fn generate_synthetic_fastq_buffer(
         out.append(newline)
 
     return out^
+
+
+fn compute_num_fasta_reads_for_size(
+    target_size_bytes: Int,
+    min_length: Int,
+    max_length: Int,
+    line_width: Int = 60,
+) -> Int:
+    """Compute the number of FASTA records needed to approximate a target size.
+
+    Estimates bytes per record based on:
+    - Header: >read_<padded_i>\\n (constant: 6 + num_digits + 1 bytes)
+    - Sequence: seq_len bytes + ceil(seq_len / line_width) newlines
+
+    Args:
+        target_size_bytes: Target total size in bytes.
+        min_length: Minimum sequence length per record (inclusive).
+        max_length: Maximum sequence length per record (inclusive).
+        line_width: Number of bases per sequence line (default 60).
+
+    Returns:
+        Estimated number of records needed to reach target_size_bytes.
+    """
+    if target_size_bytes <= 0:
+        return 0
+    var avg_length = (min_length + max_length) // 2
+    var header_est: Int = 15
+    var seq_newlines = (avg_length + line_width - 1) // line_width
+    var bytes_per_record_est = header_est + avg_length + seq_newlines
+    var num_reads_est = target_size_bytes // bytes_per_record_est
+    if num_reads_est <= 0:
+        return 0
+    # Refine header size from estimated num_reads
+    var num_digits: Int = 1
+    if num_reads_est > 1:
+        num_digits = len(String(num_reads_est - 1))
+    var header_size = 6 + num_digits + 1
+    var bytes_per_record = header_size + avg_length + seq_newlines
+    return target_size_bytes // bytes_per_record
+
+
+fn generate_synthetic_fasta_buffer(
+    num_reads: Int,
+    min_length: Int,
+    max_length: Int,
+    line_width: Int = 60,
+    gc_bias: Float32 = 0.5,
+) raises -> List[Byte]:
+    """Generate a contiguous in-memory FASTA buffer with configurable sequence length and GC content.
+
+    Sequence lengths are chosen deterministically in [min_length, max_length].
+    Sequences are wrapped at `line_width` bases per line (multiline FASTA).
+    Base composition follows the same LCG + GC-bias model as generate_synthetic_fastq_buffer.
+
+    Args:
+        num_reads: Number of FASTA records to generate.
+        min_length: Minimum sequence length per record (inclusive).
+        max_length: Maximum sequence length per record (inclusive).
+        line_width: Number of bases per sequence line. Default 60 (standard FASTA).
+        gc_bias: Target GC fraction in [0.0, 1.0]. Default 0.5.
+
+    Returns:
+        List[Byte] containing valid multiline FASTA data; pass to MemoryReader for parsing.
+
+    Raises:
+        Error: If arguments are invalid.
+    """
+    if num_reads <= 0:
+        return List[Byte]()
+    if min_length < 0 or max_length < 0:
+        raise Error("generate_synthetic_fasta_buffer: lengths must be non-negative")
+    if min_length > max_length:
+        raise Error("generate_synthetic_fasta_buffer: min_length must be <= max_length")
+    if line_width <= 0:
+        raise Error("generate_synthetic_fasta_buffer: line_width must be positive")
+
+    var capacity_estimate = num_reads * (max_length + max_length // line_width + 20)
+    var out = List[Byte](capacity=capacity_estimate)
+
+    # Base LUT: same GC-bias model as generate_synthetic_fastq_buffer
+    var gc_slots = Int(gc_bias * 8.0 + 0.5)
+    if gc_slots < 0:
+        gc_slots = 0
+    if gc_slots > 8:
+        gc_slots = 8
+    var at_slots = 8 - gc_slots
+
+    var base_lut = List[Byte](capacity=8)
+    for k in range(gc_slots):
+        if k % 2 == 0:
+            base_lut.append(Byte(ord("G")))
+        else:
+            base_lut.append(Byte(ord("C")))
+    for k in range(at_slots):
+        if k % 2 == 0:
+            base_lut.append(Byte(ord("A")))
+        else:
+            base_lut.append(Byte(ord("T")))
+
+    var newline = Byte(ord("\n"))
+    var gt = Byte(ord(">"))
+
+    # Header zero-padding width
+    var num_digits: Int = 1
+    if num_reads > 1:
+        num_digits = len(String(num_reads - 1))
+
+    for i in range(num_reads):
+        # --- Record length (same deterministic scheme as FASTQ generator) ---
+        var seq_len: Int
+        if max_length == min_length:
+            seq_len = min_length
+        else:
+            seq_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
+
+        # --- Header: >read_XXXXXXX\n ---
+        var index_str = String(i)
+        while len(index_str) < num_digits:
+            index_str = "0" + index_str
+        out.append(gt)
+        var header_body = "read_" + index_str + "\n"
+        out.extend(header_body.as_bytes())
+
+        # --- Sequence lines (wrapped at line_width) ---
+        var lcg_state: Int = (i * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
+        var col = 0
+        for _ in range(seq_len):
+            lcg_state = (lcg_state * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
+            var slot = (lcg_state >> 33) % 8
+            out.append(base_lut[slot])
+            col += 1
+            if col == line_width:
+                out.append(newline)
+                col = 0
+        # Final newline if last line wasn't full
+        if col > 0:
+            out.append(newline)
+
+    return out^
