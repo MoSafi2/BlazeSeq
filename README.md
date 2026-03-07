@@ -128,7 +128,7 @@ Throughput (file-based and in-memory) and comparison with needletail, seq_io, an
 ## Limitations
 
 - No multi-line FASTQ support — Records must fit four lines (standard Illumina/ONT format)
-- No current support for Paired-end reads, or FASTA files (in progress)
+- No current support for Paired-end reads (in progress)
 - No index/seek — Streaming parser only; use MemoryReader for repeated scans
 - Python package is wheel-only (no source build of the extension on install)
 
