@@ -12,22 +12,20 @@ from memory import pack_bits
 from blazeseq.CONSTS import simd_width
 from bit import count_trailing_zeros
 import math
-from sys.info import simd_width_of
 import math
 from blazeseq.CONSTS import *
+from blazeseq.fastq.quality_schema import (
+    QualitySchema,
+    generic_schema,
+    sanger_schema,
+    solexa_schema,
+    illumina_1_3_schema,
+    illumina_1_5_schema,
+    illumina_1_8_schema,
+)
 from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
 from blazeseq.io.readers import Reader
 from blazeseq.errors import ParseError, FastxErrorCode
-from blazeseq.fastq.parser import FastqParser
-
-
-
-
-
-comptime NEW_LINE = 10
-comptime AT_SIGN = ord("@")
-comptime PLUS_SIGN = ord("+")
-comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 
 @doc_private
@@ -161,9 +159,9 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
         The index of the found character, or -1 if not found.
     """
 
-    comptime CASCADE = build_cascade[SIMD_U8_WIDTH]()
+    comptime CASCADE = build_cascade[simd_width]()
 
-    if (len(haystack) - start) < SIMD_U8_WIDTH:
+    if (len(haystack) - start) < simd_width:
         for i in range(start, len(haystack)):
             if haystack[i] == chr:
                 return i
@@ -176,12 +174,12 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     # Find the last aligned end
     var haystack_len = len(haystack) - start
     var aligned_end = math.align_down(
-        haystack_len, SIMD_U8_WIDTH
+        haystack_len, simd_width
     )  
 
     # Now do aligned reads all through
-    for s in range(0, aligned_end, SIMD_U8_WIDTH):
-        var v = ptr.load[width=SIMD_U8_WIDTH](s)
+    for s in range(0, aligned_end, simd_width):
+        var v = ptr.load[width=simd_width](s)
         var mask = v.eq(chr)
         var packed = pack_bits(mask)
         if packed:
@@ -458,9 +456,9 @@ fn _validate_fastq_structure[o: Origin](
     offsets: RecordOffsets,
 ) -> FastxErrorCode:
     """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code."""
-    if view[offsets.header_start] != Byte(AT_SIGN):
+    if view[offsets.header_start] != Byte(read_header):
         return FastxErrorCode.ID_NO_AT
-    if view[offsets.sep_start] != Byte(PLUS_SIGN):
+    if view[offsets.sep_start] != Byte(quality_header):
         return FastxErrorCode.SEP_NO_PLUS
     var seq_len = offsets.sep_start - offsets.seq_start - 1
     var qual_len = offsets.record_end - offsets.qual_start
@@ -505,7 +503,7 @@ fn _scan_record[o: Origin](
         complete=False → ran out of buffer; offsets partially populated;
                          phase indicates where to resume on the next call; parse_code=OK.
     """
-    comptime W = SIMD_U8_WIDTH
+    comptime W = simd_width
     comptime nl_splat = SIMD[DType.uint8, W](new_line)
 
     # ── Determine where to start scanning ────────────────────────────────────

@@ -1,5 +1,5 @@
 from hashlib.hasher import default_hasher, Hasher
-from blazeseq.quality_schema import (
+from blazeseq.fastq.quality_schema import (
     QualitySchema,
     generic_schema,
 )
@@ -14,13 +14,6 @@ from blazeseq.CONSTS import simd_width
 from collections.string import StringSlice, String
 from memory import Span
 from blazeseq.io.writers import Writer
-
-
-comptime read_header = ord("@")
-comptime quality_header = ord("+")
-comptime new_line = ord("\n")
-comptime carriage_return = ord("\r")
-comptime fasta_header = ord(">")
 
 
 struct Validator(Copyable):
@@ -257,7 +250,7 @@ struct FastqRecord(
     Example:
         ```mojo
         from blazeseq import FastqRecord
-        from blazeseq.quality_schema import generic_schema
+        from blazeseq.fastq.quality_schema import generic_schema
         var rec = FastqRecord("read1", "ACGT", "IIII", generic_schema)
         print(rec.id())
         var scores = rec.phred_scores()

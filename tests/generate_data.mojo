@@ -1,5 +1,5 @@
 from blazeseq.fastq.record import FastqRecord
-from blazeseq.quality_schema import QualitySchema, generic_schema
+from blazeseq.fastq.quality_schema import QualitySchema, generic_schema
 import random
 from collections.string import chr, String
 from time import perf_counter_ns

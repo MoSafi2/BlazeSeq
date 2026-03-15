@@ -7,7 +7,7 @@ validation with explicit assert_raises where errors are expected.
 """
 from memory import alloc
 from blazeseq import FastqRecord, Validator
-from blazeseq.CONSTS import generic_schema
+from blazeseq.fastq.quality_schema import generic_schema
 from blazeseq.byte_string import BString
 from testing import (
     assert_equal,
