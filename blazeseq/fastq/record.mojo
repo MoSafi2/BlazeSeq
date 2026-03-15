@@ -297,10 +297,10 @@ struct FastqRecord(
         self._quality = BString(quality)
         self._phred_offset = phred_offset
 
-    fn __init__(out self, four_lines: String) raises:
+    fn __init__(out self, fast_str: String) raises:
         """Build from a single string containing four newline-separated lines (line 3, plus line, is discarded).
         """
-        var seqs = four_lines.strip().split("\n")
+        var seqs = fast_str.strip().split("\n")
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
@@ -321,24 +321,13 @@ struct FastqRecord(
         self._quality = quality^
         self._phred_offset = phred_offset
 
-    fn __init__(
-        out self,
-        var id: BString,
-        var sequence: BString,
-        var quality: BString,
-        schema: QualitySchema = generic_schema,
-    ):
-        self._id = id^
-        self._sequence = sequence^
-        self._quality = quality^
-        self._phred_offset = Int8(schema.OFFSET)
-
     @always_inline
     fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._sequence.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
@@ -347,8 +336,9 @@ struct FastqRecord(
     fn quality(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._quality.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._quality.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._quality),
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
@@ -373,10 +363,12 @@ struct FastqRecord(
 
     @always_inline
     fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
-        """Return the read identifier (id without leading '@') as a string slice."""
+        """Return the read identifier (id without leading '@') as a string slice.
+        """
         var span = Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._id.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
@@ -384,7 +376,6 @@ struct FastqRecord(
     @always_inline
     fn byte_len(self) -> Int:
         """Return total byte length when written ("@" + id + sequence + quality + "+\n").
-        Used for calculating buffer capacity.
         """
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
@@ -517,7 +508,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn phred_scores(self, offset: UInt8) -> List[Byte]:
-        """Return Phred quality scores using the given offset (e.g. 33 or 64)."""
+        """Return Phred quality scores using the given offset (e.g. 33 or 64).
+        """
         output = List[Byte](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - offset
