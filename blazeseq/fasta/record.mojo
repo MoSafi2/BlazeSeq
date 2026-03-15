@@ -53,8 +53,8 @@ struct FastaRecord(
     @always_inline
     fn __init__(
         out self,
-        id: Span[Byte, MutExternalOrigin],
-        sequence: Span[Byte, MutExternalOrigin],
+        id: Span[Byte, _],
+        sequence: Span[Byte, _],
     ) raises:
         self._id = BString(id)
         self._sequence = BString(sequence)
@@ -71,34 +71,34 @@ struct FastaRecord(
     fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._sequence.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
-        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
+        return StringSlice(unsafe_from_utf8=span)
 
     @always_inline
     fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
-        """Return the read identifier (id without leading '>') as a string slice."""
+        """Return the read identifier (id without leading '>') as a string slice.
+        """
         var span = Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._id.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
-        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
+        return StringSlice(unsafe_from_utf8=span)
 
     fn definition(self) -> Definition:
-        var id_span = self._id.as_span()
-        var id_str = StringSlice(unsafe_from_utf8=id_span)
+        var id_str = self._id.as_string_slice()
         var parts = id_str.split(" ")
-        var id = Span[Byte](ptr=parts[0].unsafe_ptr(), length=len(parts[0]))
-        var id_ascii = BString(_strip_spaces(id))
+        var id = parts[0].strip()
+        var id_ascii = BString(id)
         if len(parts) > 1:
             description = BString()
             for part in parts[1:]:
-                description.extend(
-                    Span[Byte](ptr=part.unsafe_ptr(), length=len(part))
-                )
+                description.extend(part.as_bytes())
             description = BString(_strip_spaces(description.as_span()))
             return Definition(Id=id_ascii^, Description=description^)
 
