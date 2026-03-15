@@ -4,7 +4,8 @@ from blazeseq.fastq.quality_schema import (
     generic_schema,
 )
 from blazeseq.byte_string import BString
-from blazeseq.utils import _check_ascii
+from blazeseq.fasta.definition import Definition
+from blazeseq.utils import _check_ascii, _strip_spaces
 from blazeseq.errors import (
     ValidationError,
     FastxErrorCode,
@@ -366,10 +367,23 @@ struct FastqRecord(
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
+    fn definition(ref self) -> Definition:
+        """Return Id and optional Description parsed from the id line (first token vs rest)."""
+        var id_str = self._id.as_string_slice()
+        var parts = id_str.split(" ")
+        var id = parts[0].strip()
+        var id_ascii = BString(id)
+        if len(parts) > 1:
+            description = BString()
+            for part in parts[1:]:
+                description.extend(part.as_bytes())
+            description = BString(_strip_spaces(description.as_span()))
+            return Definition(Id=id_ascii^, Description=description^)
+        return Definition(Id=id_ascii^, Description=None)
+
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + "+\n").
-        """
+        """Return total byte length when written ("@" + id + sequence + quality + "+\n")."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline
@@ -479,6 +493,20 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         """
         return StringSlice[origin = Self.origin](unsafe_from_utf8=self._id)
 
+    fn definition(self) -> Definition:
+        """Return Id and optional Description parsed from the id line (first token vs rest)."""
+        var id_str = StringSlice(unsafe_from_utf8=self._id)
+        var parts = id_str.split(" ")
+        var id = parts[0].strip()
+        var id_ascii = BString(id)
+        if len(parts) > 1:
+            description = BString()
+            for part in parts[1:]:
+                description.extend(part.as_bytes())
+            description = BString(_strip_spaces(description.as_span()))
+            return Definition(Id=id_ascii^, Description=description^)
+        return Definition(Id=id_ascii^, Description=None)
+
     @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
@@ -486,9 +514,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n").
-        Used for calculating buffer capacity.
-        """
+        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n"). Used for calculating buffer capacity."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline
