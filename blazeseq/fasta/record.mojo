@@ -68,24 +68,24 @@ struct FastaRecord(
         self._sequence = sequence^
 
     @always_inline
-    fn sequence(ref [_]self) -> Span[Byte, origin_of(self)]:
-        """Return the sequence line as a span."""
-        return Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[
-                origin_of(self).mut
-            ]().unsafe_origin_cast[origin_of(self)](),
+    fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+        """Return the sequence line as a string slice."""
+        var span = Span[Byte, origin_of(self)](
+            ptr=self._sequence.ptr.unsafe_mut_cast[origin_of(self).mut]()
+            .unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
+        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
     @always_inline
-    fn id(ref [_]self) -> Span[Byte, origin_of(self)]:
-        """Return the read identifier (id without leading '>') as a span."""
-        return Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[
-                origin_of(self).mut
-            ]().unsafe_origin_cast[origin_of(self)](),
+    fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+        """Return the read identifier (id without leading '>') as a string slice."""
+        var span = Span[Byte, origin_of(self)](
+            ptr=self._id.ptr.unsafe_mut_cast[origin_of(self).mut]()
+            .unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
+        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
     fn definition(self) -> Definition:
         var id_span = self._id.as_span()

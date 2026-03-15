@@ -9,7 +9,6 @@ from memory import alloc
 from blazeseq import FastqRecord, Validator
 from blazeseq.CONSTS import generic_schema
 from blazeseq.byte_string import BString
-from collections.string import StringSlice
 from testing import (
     assert_equal,
     assert_false,
@@ -63,13 +62,9 @@ fn test_fastq_record_getters_and_length() raises:
     """Accessors and length methods return correct values."""
     var record = FastqRecord("@test_seq", "ATCGATCGG", "!!!!!!!!!")
 
-    assert_equal(
-        String(StringSlice(unsafe_from_utf8=record.sequence())), "ATCGATCGG"
-    )
-    assert_equal(
-        String(StringSlice(unsafe_from_utf8=record.quality())), "!!!!!!!!!"
-    )
-    assert_equal(String(StringSlice(unsafe_from_utf8=record.id())), "@test_seq")
+    assert_equal(String(record.sequence()), "ATCGATCGG")
+    assert_equal(String(record.quality()), "!!!!!!!!!")
+    assert_equal(String(record.id()), "@test_seq")
 
     assert_equal(len(record), 9)
     # byte_len = 1 + len(id) + len(sequence) + len(quality) + 5 ("@" + id + four newlines and "+\n")

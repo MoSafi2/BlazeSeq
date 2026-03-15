@@ -446,13 +446,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var snippet = String(capacity=200)
         var id_str = record.id()
         if len(id_str) > 0:
-            snippet += String(StringSlice(unsafe_from_utf8=id_str))
+            snippet += String(id_str)
             if len(snippet) < 200:
                 snippet += "\n"
         if len(snippet) < 200:
             var seq_str = record.sequence()
             var seq_len = min(len(seq_str), 200 - len(snippet))
-            snippet += String(StringSlice(unsafe_from_utf8=seq_str[:seq_len]))
+            snippet += String(seq_str[:seq_len])
         if len(snippet) > 200:
             snippet = snippet[:197] + "..."
         return snippet

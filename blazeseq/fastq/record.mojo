@@ -64,7 +64,7 @@ struct Validator(Copyable):
         var snippet = String(capacity=100)
         var id_str = record.id()
         if len(id_str) > 0:
-            snippet += String(StringSlice(unsafe_from_utf8=id_str))
+            snippet += String(id_str)
             if len(snippet) > 100:
                 snippet = snippet[:97] + "..."
         return snippet
@@ -259,7 +259,7 @@ struct FastqRecord(
         from blazeseq import FastqRecord
         from blazeseq.quality_schema import generic_schema
         var rec = FastqRecord("read1", "ACGT", "IIII", generic_schema)
-        print(StringSlice(unsafe_from_utf8=rec.id()))
+        print(rec.id())
         var scores = rec.phred_scores()
         ```
     """
@@ -334,24 +334,24 @@ struct FastqRecord(
         self._phred_offset = Int8(schema.OFFSET)
 
     @always_inline
-    fn sequence(ref [_]self) -> Span[Byte, origin_of(self)]:
-        """Return the sequence line as a span."""
-        return Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[
-                origin_of(self).mut
-            ]().unsafe_origin_cast[origin_of(self)](),
+    fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+        """Return the sequence line as a string slice."""
+        var span = Span[Byte, origin_of(self)](
+            ptr=self._sequence.ptr.unsafe_mut_cast[origin_of(self).mut]()
+            .unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
+        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
     @always_inline
-    fn quality(ref [_]self) -> Span[Byte, origin_of(self)]:
-        """Return the quality line (raw ASCII bytes) as a span."""
-        return Span[Byte, origin_of(self)](
-            ptr=self._quality.ptr.unsafe_mut_cast[
-                origin_of(self).mut
-            ]().unsafe_origin_cast[origin_of(self)](),
+    fn quality(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+        """Return the quality line (raw ASCII bytes) as a string slice."""
+        var span = Span[Byte, origin_of(self)](
+            ptr=self._quality.ptr.unsafe_mut_cast[origin_of(self).mut]()
+            .unsafe_origin_cast[origin_of(self)](),
             length=len(self._quality),
         )
+        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
     @always_inline
     fn phred_scores(self) -> List[UInt8]:
@@ -372,14 +372,14 @@ struct FastqRecord(
         return output^
 
     @always_inline
-    fn id(ref [_]self) -> Span[Byte, origin_of(self)]:
-        """Return the read identifier (id without leading '@') as a span."""
-        return Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[
-                origin_of(self).mut
-            ]().unsafe_origin_cast[origin_of(self)](),
+    fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+        """Return the read identifier (id without leading '@') as a string slice."""
+        var span = Span[Byte, origin_of(self)](
+            ptr=self._id.ptr.unsafe_mut_cast[origin_of(self).mut]()
+            .unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
+        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
     @always_inline
     fn byte_len(self) -> Int:

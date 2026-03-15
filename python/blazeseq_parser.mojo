@@ -226,17 +226,17 @@ struct FastqRecordMethods:
     @staticmethod
     fn get_id(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
-        return String(StringSlice(unsafe_from_utf8=self_ptr[].id()))
+        return String(self_ptr[].id())
 
     @staticmethod
     fn get_sequence(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
-        return String(StringSlice(unsafe_from_utf8=self_ptr[].sequence()))
+        return String(self_ptr[].sequence())
 
     @staticmethod
     fn get_quality(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
-        return String(StringSlice(unsafe_from_utf8=self_ptr[].quality()))
+        return String(self_ptr[].quality())
 
     @staticmethod
     fn get_len(py_self: PythonObject) raises -> PythonObject:

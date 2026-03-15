@@ -92,12 +92,12 @@ fn test_single_record_single_line() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "id1",
         "ID should match header without '>'",
     )
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGT",
         "Sequence should match",
     )
@@ -111,7 +111,7 @@ fn test_single_record_multiline() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGTTAGG",
         "Multi-line sequence should be concatenated without newlines",
     )
@@ -125,12 +125,12 @@ fn test_multiple_records_back_to_back() raises:
     var parser = FastaParser[MemoryReader](reader^)
 
     var rec1 = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec1.id())), "id1")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec1.sequence())), "ACGT")
+    assert_equal(String(rec1.id()), "id1")
+    assert_equal(String(rec1.sequence()), "ACGT")
 
     var rec2 = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec2.id())), "id2")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec2.sequence())), "TTAA")
+    assert_equal(String(rec2.id()), "id2")
+    assert_equal(String(rec2.sequence()), "TTAA")
     _ = rec2
     _ = rec1
 
@@ -142,7 +142,7 @@ fn test_record_end_at_eof_without_newline() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGT",
     )
     _ = rec
@@ -173,8 +173,8 @@ fn test_records_iterator() raises:
     var ids = List[String]()
     var seqs = List[String]()
     for rec in parser:
-        ids.append(String(StringSlice(unsafe_from_utf8=rec.id())))
-        seqs.append(String(StringSlice(unsafe_from_utf8=rec.sequence())))
+        ids.append(String(rec.id()))
+        seqs.append(String(rec.sequence()))
     assert_equal(len(ids), 2)
     assert_equal(ids[0], "id1")
     assert_equal(ids[1], "id2")
@@ -197,7 +197,7 @@ fn test_iterator_ten_records() raises:
     var count = 0
     for rec in parser:
         assert_equal(
-            String(StringSlice(unsafe_from_utf8=rec.sequence())),
+            String(rec.sequence()),
             "ACGT",
         )
         count += 1
@@ -216,7 +216,7 @@ fn test_next_record_loop_ten_records() raises:
     while parser.has_more():
         var rec = parser.next_record()
         assert_equal(
-            String(StringSlice(unsafe_from_utf8=rec.sequence())),
+            String(rec.sequence()),
             "ACGT",
         )
         count += 1
@@ -290,11 +290,11 @@ fn test_iterator_five_records_ids_and_sequences() raises:
     var index = 0
     for rec in parser:
         assert_equal(
-            String(StringSlice(unsafe_from_utf8=rec.id())),
+            String(rec.id()),
             expected_ids[index],
         )
         assert_equal(
-            String(StringSlice(unsafe_from_utf8=rec.sequence())),
+            String(rec.sequence()),
             expected_seqs[index],
         )
         index += 1
@@ -317,11 +317,11 @@ fn test_record_broken_across_chunks() raises:
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "id1",
     )
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGTACGT",
     )
     _ = rec
@@ -336,11 +336,11 @@ fn test_header_broken_across_chunks() raises:
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "long_identifier_name",
     )
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGT",
     )
     _ = rec
@@ -357,7 +357,7 @@ fn test_sequence_larger_than_chunk_size() raises:
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         seq,
         (
             "100-base sequence should be accumulated correctly across chunk"
@@ -381,7 +381,7 @@ fn test_large_multiline_sequence_with_chunks() raises:
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         expected_seq,
         "60-base multi-line sequence should be normalized correctly",
     )
@@ -396,8 +396,8 @@ fn test_multiple_records_broken_across_chunks() raises:
     var ids = List[String]()
     var seqs = List[String]()
     for rec in parser:
-        ids.append(String(StringSlice(unsafe_from_utf8=rec.id())))
-        seqs.append(String(StringSlice(unsafe_from_utf8=rec.sequence())))
+        ids.append(String(rec.id()))
+        seqs.append(String(rec.sequence()))
     assert_equal(len(ids), 3, "Should have read exactly 3 records")
     assert_equal(ids[0], "r1")
     assert_equal(seqs[0], "AAAA")
@@ -415,8 +415,8 @@ fn test_chunk_boundary_on_newline() raises:
     var reader = ChunkedMemoryReader(_bytes(data), chunk_size=4)
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.id())), "ab")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "ACGT")
+    assert_equal(String(rec.id()), "ab")
+    assert_equal(String(rec.sequence()), "ACGT")
     _ = rec
 
 
@@ -428,8 +428,8 @@ fn test_chunk_boundary_splits_sequence_line() raises:
     var reader = ChunkedMemoryReader(_bytes(data), chunk_size=3)
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.id())), "id")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "ACGT")
+    assert_equal(String(rec.id()), "id")
+    assert_equal(String(rec.sequence()), "ACGT")
     _ = rec
 
 
@@ -445,11 +445,11 @@ fn test_record_larger_than_many_chunks() raises:
     var parser = FastaParser[ChunkedMemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "longseq",
     )
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         seq,
         "200-base sequence must survive many chunk-boundary crossings",
     )
@@ -467,8 +467,8 @@ fn test_format_valid_leading_blank_lines() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.id())), "id1")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "ACGT")
+    assert_equal(String(rec.id()), "id1")
+    assert_equal(String(rec.sequence()), "ACGT")
     _ = rec
 
 
@@ -479,10 +479,10 @@ fn test_format_valid_blank_lines_between_records() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec1 = parser.next_record()
     var rec2 = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec1.id())), "id1")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec1.sequence())), "ACGT")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec2.id())), "id2")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec2.sequence())), "TTAA")
+    assert_equal(String(rec1.id()), "id1")
+    assert_equal(String(rec1.sequence()), "ACGT")
+    assert_equal(String(rec2.id()), "id2")
+    assert_equal(String(rec2.sequence()), "TTAA")
     _ = rec1
     _ = rec2
 
@@ -494,8 +494,8 @@ fn test_format_valid_crlf_line_endings() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.id())), "id1")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "ACGT")
+    assert_equal(String(rec.id()), "id1")
+    assert_equal(String(rec.sequence()), "ACGT")
     _ = rec
 
 
@@ -506,8 +506,8 @@ fn test_format_valid_crlf_multiple_records() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec1 = parser.next_record()
     var rec2 = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec1.sequence())), "ACGT")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec2.sequence())), "TTAA")
+    assert_equal(String(rec1.sequence()), "ACGT")
+    assert_equal(String(rec2.sequence()), "TTAA")
     _ = rec1
     _ = rec2
 
@@ -519,7 +519,7 @@ fn test_format_valid_id_leading_spaces_trimmed() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "spaced_id",
         "Leading spaces should be stripped from ID",
     )
@@ -533,7 +533,7 @@ fn test_format_valid_id_trailing_spaces_trimmed() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "seq_id",
         "Trailing spaces should be stripped from ID",
     )
@@ -547,7 +547,7 @@ fn test_format_valid_id_tabs_trimmed() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.id())),
+        String(rec.id()),
         "tab_id",
         "Tab characters should be stripped from ID",
     )
@@ -560,8 +560,8 @@ fn test_format_valid_empty_id() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.id())), "")
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "ACGT")
+    assert_equal(String(rec.id()), "")
+    assert_equal(String(rec.sequence()), "ACGT")
     _ = rec
 
 
@@ -571,7 +571,7 @@ fn test_format_valid_single_char_sequence() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "A")
+    assert_equal(String(rec.sequence()), "A")
     assert_equal(len(rec), 1)
     _ = rec
 
@@ -582,7 +582,7 @@ fn test_format_valid_lowercase_sequence() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(String(StringSlice(unsafe_from_utf8=rec.sequence())), "acgt")
+    assert_equal(String(rec.sequence()), "acgt")
     _ = rec
 
 
@@ -593,7 +593,7 @@ fn test_format_valid_mixed_case_sequence() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())), "AcGtAcGt"
+        String(rec.sequence()), "AcGtAcGt"
     )
     _ = rec
 
@@ -605,7 +605,7 @@ fn test_format_valid_many_single_base_lines() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGTACGT",
         "8 single-base lines should be normalised to one 8-base sequence",
     )
@@ -620,7 +620,7 @@ fn test_format_valid_no_trailing_newline_multiline() raises:
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
     assert_equal(
-        String(StringSlice(unsafe_from_utf8=rec.sequence())),
+        String(rec.sequence()),
         "ACGTTA",
     )
     _ = rec
@@ -849,8 +849,8 @@ fn test_record_accessors_consistent() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    var id_str = String(StringSlice(unsafe_from_utf8=rec.id()))
-    var seq_str = String(StringSlice(unsafe_from_utf8=rec.sequence()))
+    var id_str = String(rec.id())
+    var seq_str = String(rec.sequence())
     assert_equal(id_str, "myid")
     assert_equal(seq_str, "GATTACA")
     assert_equal(len(rec), 7)

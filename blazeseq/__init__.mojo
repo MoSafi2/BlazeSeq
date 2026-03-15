@@ -23,7 +23,7 @@ Example:
 
     var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
     for record in parser.records():
-        print(StringSlice(unsafe_from_utf8=record.id()))
+        print(record.id())
     ```
 """
 
