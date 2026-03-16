@@ -116,11 +116,6 @@ struct FastaRecord(
         )
 
     @always_inline
-    fn write_to[w: Writer](self, mut writer: w):
-        """Required by Writable trait; delegates to write()."""
-        self.write(writer)
-
-    @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
         return len(self._sequence)
