@@ -153,8 +153,12 @@ struct FaiParser[R: Reader](Iterable, Movable):
         """Iterator yielding zero-alloc `FaiRecordView`s."""
         return _FaiParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
 
-    fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    fn records(ref self) -> _FaiParserRecordIter[Self.R, origin_of(self)]:
+        """Iterator yielding owned `FaiRecord`s."""
         return {Pointer(to=self)}
+
+    fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+        return self.records()
 
 
 struct _FaiParserViewIter[R: Reader, origin: Origin](Iterator):

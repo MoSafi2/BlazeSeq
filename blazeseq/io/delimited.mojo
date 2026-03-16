@@ -355,9 +355,9 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
 
     fn __iter__(
         ref self,
-    ) -> _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)]:
+    ) -> _DelimitedRecordIter[Self.R, Self.MAX, origin_of(self)]:
         """Default iteration yields zero-alloc views."""
-        return self.views()
+        return self.records()
 
     # ------------------------------------------------------------------
     # Internal helpers
