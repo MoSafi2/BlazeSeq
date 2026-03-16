@@ -15,6 +15,9 @@ All notable changes to BlazeSeq are documented here.
 - **Error context**: Parse and validation errors now include record number, line number, file position, and a snippet of the failing record when using `next_record()` or iterators.
 - **Throughput validation benchmark**: `run_throughput_validation_blazeseq.mojo` and scripts to measure effect of ASCII/quality validation on throughput.
 - **FASTA benchmarks**: Benchmark harness for FASTA parser with Noodles and needletail runners; plotting script for benchmark results.
+- **FAI index parser**: `FaiRecord` and `FaiParser` in `blazeseq.fai` for streaming parsing of FASTA/FASTQ `.fai` index files (5-column FASTA and 6-column FASTQ formats), plus a `collect()` helper to load whole indexes into memory and tests based on the samtools `faidx` examples. Zero-copy access via `FaiRecordView` and `views()` / `next_record_view()`.
+- **Delimited parser**: Streaming delimited-line parser in `blazeseq.io.delimited` with minimal allocation; stack-allocated `FieldOffsets`, zero-copy field access, and support for CSV/TSV-style parsing.
+- **FASTA writing**: Multi-line FASTA writing with configurable line breaks; round-trip testing for FASTA.
 
 ### Changed
 
@@ -22,6 +25,8 @@ All notable changes to BlazeSeq are documented here.
 - **Record API**: `sequence()`, `id()`, and `quality()` on `FastqRecord` and `RefRecord` now return `StringSlice` for zero-copy access.
 - **ByteString → BString**: Renamed for brevity.
 - **Benchmarks**: Use tmpfs by default (instead of ramfs); pixi benchmark tasks no longer pass `--ramfs`; fallback to `/dev/shm` when mount fails.
+- **Test layout**: Test directory structure reorganized into `tests/io/` and `tests/fastq/`.
+- **Error internals**: Methods used for error message creation (e.g. file position, line number) made private.
 
 ## [0.2] - 2026-02-23
 

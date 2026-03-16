@@ -46,6 +46,7 @@ struct FastaRecord(
         self._id = BString(id)
         self._sequence = BString(sequence)
 
+    @always_inline
     fn __init__(
         out self,
         var id: BString,
@@ -55,7 +56,7 @@ struct FastaRecord(
         self._sequence = sequence^
 
     @always_inline
-    fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
             ptr=self._sequence.ptr.unsafe_mut_cast[
@@ -66,7 +67,7 @@ struct FastaRecord(
         return StringSlice(unsafe_from_utf8=span)
 
     @always_inline
-    fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the read identifier (id without leading '>') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
@@ -77,6 +78,7 @@ struct FastaRecord(
         )
         return StringSlice(unsafe_from_utf8=span)
 
+    @always_inline
     fn definition(self) -> Definition:
         var id_str = self._id.as_string_slice()
         var parts = id_str.split(" ")
@@ -97,19 +99,27 @@ struct FastaRecord(
         """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
-    fn write[w: Writer](self, mut writer: w):
+    @always_inline
+    fn write[w: Writer](self, mut writer: w, line_width: Int = 60):
         """Write the record in standard FASTA format."""
-        writer.write(">")
-        writer.write(
-            self._id.to_string(),
-            "\n",
-            self._sequence.to_string(),
-            "\n",
-        )
+        var width = line_width
+        if width <= 0:
+            width = len(self._sequence)
+
+        writer.write(">", self._id.to_string(), "\n")
+
+        var seq_len = len(self._sequence)
+        var i = 0
+        while i < seq_len:
+            var j = min(i + width, seq_len)
+            writer.write(
+                StringSlice(unsafe_from_utf8=self._sequence[i:j]),
+                "\n",
+            )
+            i = j
 
     @always_inline
     fn write_to[w: Writer](self, mut writer: w):
-        """Required by Writable trait; delegates to write()."""
         self.write(writer)
 
     @always_inline

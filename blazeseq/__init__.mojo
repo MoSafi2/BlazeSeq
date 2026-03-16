@@ -27,18 +27,14 @@ Example:
     ```
 """
 
-from blazeseq.fastq.record import FastqRecord, RefRecord, Validator
-from blazeseq.fastq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.record import FastqRecord, RefRecord
+from blazeseq.fastq.parser import FastqParser
 from blazeseq.fasta import FastaRecord, FastaParser
-from blazeseq.fastq.record_batch import (
-    FastqBatch,
-    upload_batch_to_device,
-)
-from blazeseq.io.readers import (
+from blazeseq.fai import FaiRecord, FaiRecordView, FaiParser
+from blazeseq.fastq.record_batch import FastqBatch, upload_batch_to_device
+
+from blazeseq.io import (
     FileReader,
-    MemoryReader,
     GZFile,
     RapidgzipReader,
 )
-from blazeseq.io.writers import Writer, FileWriter, MemoryWriter, GZWriter
-from blazeseq.errors import ParseError, ValidationError

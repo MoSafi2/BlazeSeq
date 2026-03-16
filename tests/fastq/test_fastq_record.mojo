@@ -6,7 +6,8 @@ into: (1) FastqRecord behaviour as a container, (2) Validator structure/ASCII/qu
 validation with explicit assert_raises where errors are expected.
 """
 from std.memory import alloc
-from blazeseq import FastqRecord, Validator
+from blazeseq import FastqRecord
+from blazeseq.fastq import Validator
 from blazeseq.fastq.quality_schema import generic_schema
 from blazeseq.byte_string import BString
 from std.testing import (

@@ -102,15 +102,15 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
         return len(self._pending_ids) > 0 or self.lines.has_more()
 
     @always_inline
-    fn get_record_number(ref self) -> Int:
+    fn _get_record_number(ref self) -> Int:
         return self._record_number
 
     @always_inline
-    fn get_line_number(ref self) -> Int:
+    fn _get_line_number(ref self) -> Int:
         return self.lines.get_line_number()
 
     @always_inline
-    fn get_file_position(ref self) -> Int64:
+    fn _get_file_position(ref self) -> Int64:
         return self.lines.get_file_position()
 
     @always_inline
@@ -158,7 +158,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
                 "FASTA record has empty sequence",
                 self._record_number + 1,
                 seq_start_line,
-                self.get_file_position(),
+                self._get_file_position(),
                 "",
             )
             raise Error(msg)
@@ -192,7 +192,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
                     "Sequence id line does not start with '>'",
                     self._record_number + 1,
                     self.lines.get_line_number(),
-                    self.get_file_position(),
+                    self._get_file_position(),
                     "",
                 )
                 raise Error(msg)
