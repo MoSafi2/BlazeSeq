@@ -231,7 +231,6 @@ struct FastqRecord(
     Copyable,
     Hashable,
     Movable,
-    Representable,
     Sized,
     Writable,
 ):
@@ -430,9 +429,8 @@ struct FastqRecord(
 
 
 @align(64)
-@register_passable("trivial")
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
-    ImplicitlyDestructible, Movable, Sized, Writable
+    ImplicitlyDestructible, Movable, Sized, Writable, TrivialRegisterPassable
 ):
     """Zero-copy reference to a FASTQ record inside the parser's buffer.
 

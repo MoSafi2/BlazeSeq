@@ -36,7 +36,7 @@ trait WriterBackend(ImplicitlyDestructible):
         """
         ...
 
-    fn __moveinit__(out self, deinit other: Self):
+    fn __init__(out self, *, take other: Self):
         """Move constructor for Movable trait compliance."""
         ...
 
@@ -95,9 +95,9 @@ struct FileWriter(Movable, WriterBackend):
         self.handle.write_bytes(bytes_list)
         return UInt64(amt)
 
-    fn __moveinit__(out self, deinit other: Self):
+    fn __init__(out self, *, deinit take: Self):
         """Move constructor."""
-        self.handle = other.handle^
+        self.handle = take.handle^
 
 
 struct MemoryWriter(Movable, WriterBackend):
@@ -151,9 +151,9 @@ struct MemoryWriter(Movable, WriterBackend):
         """Clear the buffer."""
         self.data.clear()
 
-    fn __moveinit__(out self, deinit other: Self):
+    fn __init__(out self, *, deinit take: Self):
         """Move constructor."""
-        self.data = other.data^
+        self.data = take.data^
 
 
 struct GZWriter(Movable, WriterBackend):
@@ -216,7 +216,7 @@ struct GZWriter(Movable, WriterBackend):
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
-    fn __moveinit__(out self, deinit other: Self):
+    fn __init__(out self, *, take other: Self):
         """Move constructor."""
         self.handle = other.handle
         self.lib = other.lib^

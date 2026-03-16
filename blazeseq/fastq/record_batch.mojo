@@ -17,7 +17,7 @@ trait GpuMovableBatch:
 
 
 struct FastqBatch(
-    Copyable, GpuMovableBatch, ImplicitlyDestructible, Representable, Sized
+    Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized, Writable
 ):
     var _id_bytes: List[UInt8]
     var _quality_bytes: List[UInt8]

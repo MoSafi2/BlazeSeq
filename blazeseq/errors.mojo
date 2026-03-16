@@ -12,8 +12,7 @@ Public API:
 # ---------------------------------------------------------------------------
 
 
-@register_passable("trivial")
-struct FastxErrorCode(Copyable, Equatable):
+struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     """Trivial error code returned by low-level parsing/validation; caller builds and raises.
     """
 

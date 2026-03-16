@@ -11,7 +11,6 @@ struct FastaRecord(
     Copyable,
     Hashable,
     Movable,
-    Representable,
     Sized,
     Writable,
 ):

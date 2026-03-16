@@ -389,8 +389,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
             if new_base == 0:
 
-                @parameter
-                if not self.config.buffer_growth_enabled:
+                comptime if not self.config.buffer_growth_enabled:
                     return (
                         False,
                         offsets,

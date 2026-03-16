@@ -49,10 +49,10 @@ struct ChunkedMemoryReader(Movable, Reader):
         self.position = 0
         self.chunk_size = chunk_size
 
-    fn __moveinit__(out self, deinit other: Self):
-        self.data = other.data^
-        self.position = other.position
-        self.chunk_size = other.chunk_size
+    fn __init__(out self, *, deinit take: Self):
+        self.data = take.data^
+        self.position = take.position
+        self.chunk_size = take.chunk_size
 
     fn read_to_buffer(
         mut self,

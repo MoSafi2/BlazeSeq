@@ -160,8 +160,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
             )
             raise Error(msg)
 
-        @parameter
-        if Self.config.check_ascii:
+        comptime if Self.config.check_ascii:
             self.validator.validate(id_str, seq_buf, self._record_number + 1)
 
         self._record_number += 1

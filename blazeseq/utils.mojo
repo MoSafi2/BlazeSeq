@@ -29,9 +29,8 @@ from blazeseq.errors import ParseError, FastxErrorCode
 
 
 @doc_private
-@register_passable("trivial")
 @align(64)
-struct RecordOffsets(Copyable, Movable, Writable):
+struct RecordOffsets(Copyable, Movable, Writable, TrivialRegisterPassable):
     """
     Byte offsets into the buffer for one FASTQ record, all **relative to
     view()[0]** (i.e. relative to buf._ptr + buf._head) at the moment
@@ -90,9 +89,8 @@ struct RecordOffsets(Copyable, Movable, Writable):
 
 
 @doc_private
-@register_passable("trivial")
 @fieldwise_init
-struct SearchPhase(Copyable, Equatable, Movable, Writable):
+struct SearchPhase(Copyable, Equatable, Movable, Writable, TrivialRegisterPassable):
     """
     Tracks which line boundary we are currently looking for within a 4-line
     FASTQ record.  Values are ordered so that `<=` comparisons work correctly
@@ -147,7 +145,7 @@ fn format_parse_error(
 # From extramojo pacakge, skipping version problems
 @always_inline("nodebug")
 @doc_private
-fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
+fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Function to find the next occurrence of character.
     Args:
@@ -191,8 +189,7 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     var tail_len = len(haystack) - (start + tail_start)
 
     # Finish and last bytes
-    @parameter
-    fn check_tail[width: Int](p: UnsafePointer[UInt8], base_offset: Int) -> Int:
+    fn check_tail[width: Int](p: UnsafePointer[UInt8, _], base_offset: Int) -> Int:
         """Load `width` bytes, return absolute index of first match or -1."""
         var v = p.load[width=width]()
         var mask = v.eq(SIMD[DType.uint8, width](chr))
@@ -204,11 +201,9 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     var tail_ptr = ptr + tail_start
     var tail_off = tail_start 
 
-    @parameter
-    for i in range(len(CASCADE)):
+    comptime for i in range(len(CASCADE)):
         comptime w = CASCADE[i]
-        @parameter
-        if w >= 1:                    # compile-time: elides dead branches
+        comptime if w >= 1:           # compile-time: elides dead branches
             if tail_len >= w:         # runtime check
                 var result = check_tail[w](tail_ptr, tail_off)
                 if result != -1:
@@ -220,7 +215,6 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     return -1
 
 
-@parameter
 @doc_private
 fn build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
@@ -234,7 +228,7 @@ fn build_cascade[W: Int]() -> List[Int]:
 
 @doc_private
 @always_inline("nodebug")
-fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
+fn memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Scalar (non-SIMD) variant of memchr. Find first occurrence of byte in haystack.
     Returns index or -1 if not found.
@@ -248,7 +242,7 @@ fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 @doc_private
 @always_inline
 fn _strip_spaces[
-    mut: Bool, o: Origin[mut=mut]
+    mut: Bool, //, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) -> Span[Byte, o]:
     """Trim leading and trailing POSIX whitespace from a byte span."""
     if len(in_slice) == 0:

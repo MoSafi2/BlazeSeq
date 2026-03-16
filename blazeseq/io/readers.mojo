@@ -74,7 +74,7 @@ trait Reader(ImplicitlyDestructible):
         """
         ...
 
-    fn __moveinit__(out self, deinit other: Self):
+    fn __init__(out self, *, take other: Self):
         ...
 
 
@@ -152,7 +152,7 @@ struct MemoryReader(Movable, Reader):
         self.data = data^
         self.position = 0
 
-    fn __init__(out self, data: Span[Byte]):
+    fn __init__(out self, data: Span[Byte, _]):
         """Initialize with a Span[Byte]; bytes are copied into an internal list.
         """
         self.data = List[Byte](capacity=len(data))
@@ -216,10 +216,10 @@ struct MemoryReader(Movable, Reader):
         """
         self.position = 0
 
-    fn __moveinit__(out self, deinit other: Self):
+    fn __init__(out self, *, deinit take: Self):
         """Move constructor for Movable trait compliance."""
-        self.data = other.data^
-        self.position = other.position
+        self.data = take.data^
+        self.position = take.position
 
 
 @doc_private
@@ -231,8 +231,7 @@ struct ZLib(Movable):
 
     @staticmethod
     fn _get_libname() -> StaticString:
-        @parameter
-        if CompilationTarget.is_macos():
+        comptime if CompilationTarget.is_macos():
             return "libz.dylib"
         else:
             return "libz.so"
@@ -321,11 +320,11 @@ struct GZFile(Movable, Reader):
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
-    fn __moveinit__(out self, deinit other: Self):
-        self.handle = other.handle
-        self.lib = other.lib^
-        self.filename = other.filename^
-        self.mode = other.mode^
+    fn __init__(out self, *, deinit take: Self):
+        self.handle = take.handle
+        self.lib = take.lib^
+        self.filename = take.filename^
+        self.mode = take.mode^
 
     fn read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int

@@ -32,8 +32,8 @@ comptime PyFastqParser = FastqParser[FileReader, ParserConfig()]
 comptime PyFastqGZParser = FastqParser[RapidgzipReader, ParserConfig()]
 
 
-# Holder for the parser so we can register it with add_type (FastqParser does not implement Representable).
-struct BlazeSeqParserHolder(Movable, Representable):
+# Holder for the parser so we can register it with add_type (FastqParser does not implement Writable).
+struct BlazeSeqParserHolder(Movable, Writable):
     var parser: PyFastqParser
 
     fn __init__(out self, var parser: PyFastqParser):
@@ -43,7 +43,7 @@ struct BlazeSeqParserHolder(Movable, Representable):
         return "BlazeSeqParser(...)"
 
 
-struct BlazeSeqGZParserHolder(Movable, Representable):
+struct BlazeSeqGZParserHolder(Movable, Writable):
     var parser: PyFastqGZParser
 
     fn __init__(out self, var parser: PyFastqGZParser):
@@ -285,7 +285,7 @@ struct FastqBatchMethods:
 
 
 # Iterator over FastqBatch records. Holds a pointer to the batch; batch must outlive the iterator.
-struct FastqBatchIterator(Movable, Representable):
+struct FastqBatchIterator(Movable, Writable):
     var batch_ptr: UnsafePointer[FastqBatch, MutAnyOrigin]
     var index: Int
     var count: Int

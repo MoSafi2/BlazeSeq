@@ -16,7 +16,7 @@ from blazeseq.utils import memchr, memchr_scalar
 
 
 from sys import (
-    is_compile_time,
+    is_run_in_comptime_interpreter,
     llvm_intrinsic,
     size_of,
 )
@@ -44,7 +44,7 @@ fn memmove[
         count: The number of elements to copy.
     """
     var n = count * size_of[T]()
-    if is_compile_time():
+    if is_run_in_comptime_interpreter():
         for i in range(n):
             (dest.bitcast[Byte]() + i).store((src.bitcast[Byte]() + i).load())
     else:
@@ -57,11 +57,10 @@ fn memmove[
         )
 
 
-@register_passable("trivial")
 @fieldwise_init
 @doc_private
 struct LineIteratorError(
-    Copyable, Equatable, ImplicitlyDestructible, Movable, Writable
+    Copyable, Equatable, ImplicitlyDestructible, Movable, Writable, TrivialRegisterPassable
 ):
     """Error type used by `LineIterator.next_complete_line()` to signal conditions without raising.
 
@@ -96,9 +95,8 @@ struct LineIteratorError(
         writer.write(msg)
 
 
-@register_passable("trivial")
 @fieldwise_init
-struct EOFError(Writable):
+struct EOFError(Writable, TrivialRegisterPassable):
     """Raised when no more input is available (end of file or stream).
 
     `FastqParser` and `LineIterator` raise `EOFError` when `next_ref()/next_record()`
@@ -416,8 +414,7 @@ struct BufferedWriter[W: WriterBackend](
         """Write a sequence of Writable arguments. Required by the builtin `Writer` trait.
         """
 
-        @parameter
-        for i in range(args.__len__()):
+        comptime for i in range(args.__len__()):
             args[i].write_to(self)
 
     @always_inline

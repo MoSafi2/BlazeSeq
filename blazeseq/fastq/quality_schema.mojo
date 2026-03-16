@@ -6,8 +6,7 @@
 
 
 @fieldwise_init
-@register_passable("trivial")
-struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable):
+struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable, TrivialRegisterPassable):
     var SCHEMA: StringSlice[StaticConstantOrigin]
     var LOWER: UInt8
     var UPPER: UInt8
