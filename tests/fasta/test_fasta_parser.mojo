@@ -919,6 +919,109 @@ fn test_record_accessors_consistent() raises:
     _ = rec
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Round-trip: read -> write -> read fidelity
+# ──────────────────────────────────────────────────────────────────────────────
+
+struct _RoundtripResult:
+    var original: List[FastaRecord]
+    var roundtrip: List[FastaRecord]
+
+    fn __init__(out self, var original: List[FastaRecord], var roundtrip: List[FastaRecord]):
+        self.original = original^
+        self.roundtrip = roundtrip^
+
+
+fn _roundtrip_records(data: String) raises -> _RoundtripResult:
+    """Parse data, write all records to a string, parse again; return original and roundtrip lists.
+    """
+    var reader = MemoryReader(_bytes(data))
+    var parser = FastaParser[MemoryReader](reader^)
+    var original = List[FastaRecord]()
+    for rec in parser:
+        original.append(rec.copy())
+
+    var out = String()
+    for rec in original:
+        rec.write(out)
+
+    var reader2 = MemoryReader(_bytes(out))
+    var parser2 = FastaParser[MemoryReader](reader2^)
+    var roundtrip = List[FastaRecord]()
+    for rec in parser2:
+        roundtrip.append(rec.copy())
+    return _RoundtripResult(original^, roundtrip^)
+
+
+fn test_roundtrip_single_record() raises:
+    """Read -> write -> read preserves a single record's id and sequence."""
+    var result = _roundtrip_records(">id1\nACGT\n")
+    assert_equal(len(result.original), 1, "single record input")
+    assert_equal(len(result.roundtrip), 1, "single record after round-trip")
+    assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
+    assert_equal(String(result.original[0].sequence()), String(result.roundtrip[0].sequence()))
+
+
+fn test_roundtrip_multiple_records() raises:
+    """Read -> write -> read preserves multiple records in order."""
+    var result = _roundtrip_records(">id1\nACGT\n>id2\nTTAA\n>id3\nGGCC\n")
+    assert_equal(len(result.original), 3)
+    assert_equal(len(result.roundtrip), 3)
+    for i in range(3):
+        assert_equal(
+            String(result.original[i].id()),
+            String(result.roundtrip[i].id()),
+            "id at index " + String(i),
+        )
+        assert_equal(
+            String(result.original[i].sequence()),
+            String(result.roundtrip[i].sequence()),
+            "sequence at index " + String(i),
+        )
+
+
+fn test_roundtrip_preserves_definition_line() raises:
+    """Round-trip preserves full definition line (id and optional description).
+    """
+    var result = _roundtrip_records(">id1 description here\nACGT\n")
+    assert_equal(len(result.original), 1)
+    assert_equal(len(result.roundtrip), 1)
+    assert_equal(String(result.original[0].id()), "id1 description here")
+    assert_equal(String(result.roundtrip[0].id()), "id1 description here")
+    assert_equal(
+        String(result.original[0].sequence()),
+        String(result.roundtrip[0].sequence()),
+    )
+
+
+fn test_roundtrip_multiline_sequence() raises:
+    """Round-trip preserves multi-line sequence (normalized to one line in memory).
+    """
+    var result = _roundtrip_records(">seq1\nACG\nTTA\nGG\n")
+    assert_equal(len(result.original), 1)
+    assert_equal(len(result.roundtrip), 1)
+    assert_equal(String(result.original[0].sequence()), "ACGTTAGG")
+    assert_equal(String(result.roundtrip[0].sequence()), "ACGTTAGG")
+    assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
+
+
+fn test_roundtrip_long_sequence_wrapping() raises:
+    """Round-trip with default line wrapping: long sequence written as 60-char lines.
+    """
+    var seq = String("")
+    for _ in range(100):
+        seq += "ACGT"
+    var result = _roundtrip_records(">long\n" + seq + "\n")
+    assert_equal(len(result.original), 1)
+    assert_equal(len(result.roundtrip), 1)
+    assert_equal(len(result.original[0].sequence()), 400)
+    assert_equal(
+        String(result.original[0].sequence()),
+        String(result.roundtrip[0].sequence()),
+    )
+    assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
+
+
 fn main() raises:
     var suite = TestSuite.discover_tests[__functions_in_module()]().run()
     # test_single_record_single_line()
