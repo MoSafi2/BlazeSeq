@@ -1,8 +1,8 @@
-from memory import memcpy, UnsafePointer, Span, alloc
-from pathlib import Path
-from utils import StaticTuple
-from builtin.builtin_slice import ContiguousSlice
-from collections.string import StringSlice, String
+from std.memory import memcpy, UnsafePointer, Span, alloc
+from std.pathlib import Path
+from std.utils import StaticTuple
+from std.builtin.builtin_slice import ContiguousSlice
+from std.collections.string import StringSlice, String
 from blazeseq.io.readers import Reader
 from blazeseq.io.writers import (
     WriterBackend,
@@ -15,7 +15,7 @@ from blazeseq.errors import buffer_capacity_error
 from blazeseq.utils import memchr, memchr_scalar
 
 
-from sys import (
+from std.sys import (
     is_run_in_comptime_interpreter,
     llvm_intrinsic,
     size_of,
@@ -60,7 +60,12 @@ fn memmove[
 @fieldwise_init
 @doc_private
 struct LineIteratorError(
-    Copyable, Equatable, ImplicitlyDestructible, Movable, Writable, TrivialRegisterPassable
+    Copyable,
+    Equatable,
+    ImplicitlyDestructible,
+    Movable,
+    TrivialRegisterPassable,
+    Writable,
 ):
     """Error type used by `LineIterator.next_complete_line()` to signal conditions without raising.
 
@@ -96,7 +101,7 @@ struct LineIteratorError(
 
 
 @fieldwise_init
-struct EOFError(Writable, TrivialRegisterPassable):
+struct EOFError(TrivialRegisterPassable, Writable):
     """Raised when no more input is available (end of file or stream).
 
     `FastqParser` and `LineIterator` raise `EOFError` when `next_ref()/next_record()`
@@ -213,7 +218,7 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref [_]self) -> Span[Byte, MutExternalOrigin]:
+    fn view(ref[_] self) -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head

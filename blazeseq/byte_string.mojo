@@ -1,8 +1,8 @@
 # Adapted from: https://github.com/BioRadOpenSource/ish/blob/main/ishlib/vendor/kseq.mojo
 # Adapted from Kseq crystal implementation by ssstadick
 
-from memory import memcpy, UnsafePointer, Span, alloc
-from collections.string import StringSlice, String
+from std.memory import memcpy, UnsafePointer, Span, alloc
+from std.collections.string import StringSlice, String
 from blazeseq.utils import memchr
 
 

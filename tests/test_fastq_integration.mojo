@@ -8,10 +8,10 @@ Large fixtures: generated synthetic reads written to tests/test_data/ (see
 generate_synthetic_fastq_fixtures) so round-trip tests can run on larger data.
 """
 
-from pathlib import Path
-from os import remove
+from std.pathlib import Path
+from std.os import remove
 from os.path import exists
-from testing import assert_equal, TestSuite
+from std.testing import assert_equal, TestSuite
 from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.parser import FastqParser
 from blazeseq.io.readers import FileReader, GZFile

@@ -1,11 +1,11 @@
 """Tests for FileReader and MemoryReader from blazeseq.readers module."""
 
-from testing import assert_equal, assert_raises, assert_true, assert_false
-from pathlib import Path
-from os import remove
+from std.testing import assert_equal, assert_raises, assert_true, assert_false
+from std.pathlib import Path
+from std.os import remove
 from blazeseq.io.readers import FileReader, MemoryReader
-from memory import alloc, Span
-from testing import TestSuite
+from std.memory import alloc, Span
+from std.testing import TestSuite
 
 
 # ============================================================================

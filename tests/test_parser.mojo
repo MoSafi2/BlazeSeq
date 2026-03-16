@@ -11,27 +11,27 @@ from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.CONSTS import EOF
-from testing import assert_equal, assert_raises, assert_true, TestSuite
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 
 
 fn create_non_ascii_fastq_data() -> List[Byte]:
     var data = List[Byte]()
-    data.append(ord("@"))
-    data.append(ord("r"))
-    data.append(ord("1"))
-    data.append(ord("\n"))
-    data.append(ord("A"))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
     data.append(Byte(200))
-    data.append(ord("C"))
-    data.append(ord("\n"))
-    data.append(ord("+"))
-    data.append(ord("\n"))
-    data.append(ord("!"))
-    data.append(ord("!"))
-    data.append(ord("!"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("+")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("\n")))
     return data^
 
 

@@ -11,9 +11,9 @@ from blazeseq.fastq.record_batch import (
     stage_batch_to_host,
     move_staged_to_device,
 )
-from gpu.host import DeviceContext
-from sys import has_accelerator, is_defined
-from testing import (
+from std.gpu.host import DeviceContext
+from std.sys import has_accelerator, is_defined
+from std.testing import (
     assert_equal,
     assert_true,
     assert_false,

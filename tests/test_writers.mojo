@@ -1,6 +1,6 @@
-from testing import assert_equal, assert_raises, assert_true, TestSuite
-from pathlib import Path
-from os import remove
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
+from std.pathlib import Path
+from std.os import remove
 from blazeseq.io.writers import Writer, FileWriter, MemoryWriter, GZWriter
 from blazeseq.io.buffered import (
     BufferedWriter, BufferedReader,
@@ -10,8 +10,8 @@ from blazeseq.io.buffered import (
 )
 from blazeseq.io.readers import FileReader, GZFile
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from memory import Span, alloc, memcpy
-from collections.string import String
+from std.memory import Span, alloc, memcpy
+from std.collections.string import String
 
 
 fn test_file_writer_basic() raises:

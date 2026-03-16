@@ -5,9 +5,9 @@ from blazeseq.CONSTS import EOF
 from blazeseq.utils import format_parse_error, _strip_spaces, _check_ascii
 from blazeseq.errors import FastxErrorCode, format_validation_error_from_code
 from blazeseq.byte_string import BString
-from memory import Span
+from std.memory import Span
 from collections import List
-from collections.string import StringSlice, String
+from std.collections.string import StringSlice, String
 
 
 # Fix #8: Named constant with explicit value documented for clarity.

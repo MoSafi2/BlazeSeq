@@ -1,4 +1,4 @@
-from hashlib.hasher import default_hasher, Hasher
+from std.hashlib.hasher import default_hasher, Hasher
 from blazeseq.fastq.quality_schema import (
     QualitySchema,
     generic_schema,
@@ -12,8 +12,8 @@ from blazeseq.errors import (
     format_validation_error_from_code,
 )
 from blazeseq.CONSTS import simd_width
-from collections.string import StringSlice, String
-from memory import Span
+from std.collections.string import StringSlice, String
+from std.memory import Span
 from blazeseq.io.writers import Writer
 
 

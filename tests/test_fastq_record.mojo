@@ -5,11 +5,11 @@ performed externally via Validator (e.g. from ParserConfig). Tests are split
 into: (1) FastqRecord behaviour as a container, (2) Validator structure/ASCII/quality
 validation with explicit assert_raises where errors are expected.
 """
-from memory import alloc
+from std.memory import alloc
 from blazeseq import FastqRecord, Validator
 from blazeseq.fastq.quality_schema import generic_schema
 from blazeseq.byte_string import BString
-from testing import (
+from std.testing import (
     assert_equal,
     assert_false,
     assert_true,

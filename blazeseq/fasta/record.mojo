@@ -1,8 +1,8 @@
-from hashlib.hasher import default_hasher, Hasher
+from std.hashlib.hasher import default_hasher, Hasher
 from blazeseq.byte_string import BString
 from blazeseq.fasta.definition import Definition
-from collections.string import StringSlice, String
-from memory import Span
+from std.collections.string import StringSlice, String
+from std.memory import Span
 from blazeseq.io.writers import Writer
 from blazeseq.utils import _strip_spaces
 

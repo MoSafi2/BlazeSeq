@@ -6,8 +6,8 @@ URL: https://github.com/biopython/biopython/tree/master/Tests/Quality
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import FileReader, RapidgzipReader
 from blazeseq.CONSTS import EOF
-from pathlib import Path
-from testing import assert_true, TestSuite
+from std.pathlib import Path
+from std.testing import assert_true, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 

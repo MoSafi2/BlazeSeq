@@ -13,9 +13,9 @@ Coverage:
 from blazeseq import FastaParser, FastaRecord, FileReader, MemoryReader
 from blazeseq.fasta.parser import ParserConfig
 from blazeseq.CONSTS import EOF
-from pathlib import Path
-from testing import assert_equal, assert_true, assert_raises, TestSuite
-from memory import memcpy, Span
+from std.pathlib import Path
+from std.testing import assert_equal, assert_true, assert_raises, TestSuite
+from std.memory import memcpy, Span
 from blazeseq.io.readers import Reader
 
 

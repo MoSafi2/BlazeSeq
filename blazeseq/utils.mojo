@@ -8,11 +8,10 @@ Most other symbols (`SearchState`, `SearchResults`, `_parse_schema`, `_parse_rec
 `_handle_incomplete_line`, etc.) are used by the parser and are internal.
 """
 
-from memory import pack_bits
+from std.memory import pack_bits
 from blazeseq.CONSTS import simd_width
-from bit import count_trailing_zeros
-import math
-import math
+from std.bit import count_trailing_zeros
+from std import math
 from blazeseq.CONSTS import *
 from blazeseq.fastq.quality_schema import (
     QualitySchema,

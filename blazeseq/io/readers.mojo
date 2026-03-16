@@ -8,12 +8,12 @@ it pass through to a normal reader that is quite fast when paired with a
 
 """
 
-from memory import memset_zero, UnsafePointer, Span, memcpy
-from memory.legacy_unsafe_pointer import LegacyUnsafePointer
-from sys import ffi
-from sys.info import CompilationTarget
-from pathlib import Path
-from collections.string import String, chr
+from std.memory import memset_zero, UnsafePointer, Span, memcpy
+from std.memory.legacy_unsafe_pointer import LegacyUnsafePointer
+import std.ffi as ffi
+from std.sys.info import CompilationTarget
+from std.pathlib import Path
+from std.collections.string import String, chr
 from rapidgzip import RapidgzipFile
 
 
@@ -35,14 +35,14 @@ comptime c_uint = UInt32
 comptime c_int = Int32
 
 # Define function signatures for zlib functions
-comptime gzopen_fn_type = fn (
+comptime gzopen_fn_type = fn(
     filename: c_char_ptr, mode: c_char_ptr
 ) -> c_void_ptr
-comptime gzclose_fn_type = fn (file: c_void_ptr) -> c_int
-comptime gzread_fn_type = fn (
+comptime gzclose_fn_type = fn(file: c_void_ptr) -> c_int
+comptime gzread_fn_type = fn(
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
-comptime gzwrite_fn_type = fn (
+comptime gzwrite_fn_type = fn(
     file: c_void_ptr, buf: c_void_ptr, len: c_uint
 ) -> c_int
 
@@ -63,7 +63,7 @@ trait Reader(ImplicitlyDestructible):
                 # ... copy up to amt bytes from your source into buf starting at pos
                 var bytes_read: Int = 0
                 return UInt64(bytes_read)
-            fn __moveinit__(out self, deinit other: Self): ...
+            fn __init__(out self, *, deinit take: Self): ...
         ```
     """
 
@@ -74,7 +74,7 @@ trait Reader(ImplicitlyDestructible):
         """
         ...
 
-    fn __init__(out self, *, take other: Self):
+    fn __init__(out self, *, deinit take: Self):
         ...
 
 

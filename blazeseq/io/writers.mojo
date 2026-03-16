@@ -4,9 +4,9 @@ Provides a unified abstraction for writing bytes to files, memory buffers,
 or compressed files. Similar to the Reader trait but for writing operations.
 """
 
-from memory import Span, UnsafePointer
-from pathlib import Path
-from collections.string import String
+from std.memory import Span, UnsafePointer
+from std.pathlib import Path
+from std.collections.string import String
 from blazeseq.io.readers import ZLib, c_void_ptr, c_uint
 
 

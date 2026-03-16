@@ -1,9 +1,9 @@
 """Tests for RapidgzipReader from blazeseq.io.readers."""
 
-from testing import assert_equal, assert_raises, assert_true, TestSuite
-from pathlib import Path
-from os import remove
-from memory import alloc, Span, memcpy
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
+from std.pathlib import Path
+from std.os import remove
+from std.memory import alloc, Span, memcpy
 from blazeseq.io.readers import RapidgzipReader
 from blazeseq.io.writers import GZWriter
 from blazeseq.io.buffered import LineIterator, buffered_writer_for_gzip

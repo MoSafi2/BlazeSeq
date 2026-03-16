@@ -1,4 +1,4 @@
-from testing import assert_equal, assert_raises, assert_true, assert_false
+from std.testing import assert_equal, assert_raises, assert_true, assert_false
 from blazeseq.CONSTS import (
     DEFAULT_CAPACITY,
     MAX_CAPACITY,
@@ -7,9 +7,9 @@ from blazeseq.CONSTS import (
 )
 from blazeseq.io.buffered import LineIterator
 from blazeseq.io.readers import MemoryReader
-from memory import Span
-from collections.string import StringSlice
-from testing import TestSuite
+from std.memory import Span
+from std.collections.string import StringSlice
+from std.testing import TestSuite
 
 
 # ============================================================================

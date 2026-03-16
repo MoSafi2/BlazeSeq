@@ -1,6 +1,6 @@
 """Central constants for BlazeSeq. General consts live here; quality-schema-specific
 symbols are in blazeseq.fastq.quality_schema."""
-from sys.info import simd_width_of
+from std.sys.info import simd_width_of
 
 # Size units
 comptime KB = 1024

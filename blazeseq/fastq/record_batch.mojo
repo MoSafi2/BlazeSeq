@@ -1,11 +1,11 @@
 from blazeseq.fastq.record import FastqRecord, RefRecord
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import DEFAULT_BATCH_SIZE
-from gpu.host import DeviceContext
-from gpu.host.device_context import DeviceBuffer, HostBuffer
-from gpu import block_idx, thread_idx
-from memory import UnsafePointer, memcpy, Span, alloc
-from collections.string import String
+from std.gpu.host import DeviceContext
+from std.gpu.host.device_context import DeviceBuffer, HostBuffer
+from std.gpu import block_idx, thread_idx
+from std.memory import UnsafePointer, memcpy, Span, alloc
+from std.collections.string import String
 
 
 trait GpuMovableBatch:
@@ -188,7 +188,7 @@ struct FastqBatch(
             length=range[1] - range[0],
         )
 
-        return RefRecord[origin = origin_of(self)](
+        return RefRecord[origin=origin_of(self)](
             id_span,
             seq_span,
             qual_span,
