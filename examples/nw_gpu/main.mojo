@@ -61,8 +61,8 @@ fn main() raises:
     var cpu_sec = cpu_result[0]
     var cpu_scores = cpu_result[1].copy()
 
-    # print("GPU scores: ", gpu_scores[1:10].__str__())
-    # print("CPU scores: ", cpu_scores[1:10].__str__())
+    # print("GPU scores: ", gpu_scores[1:10])
+    # print("CPU scores: ", cpu_scores[1:10])
     print("")
     print(t"GPU time:  {gpu_sec} s")
     print(t"CPU time:  {cpu_sec} s")

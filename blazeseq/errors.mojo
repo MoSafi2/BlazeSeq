@@ -75,7 +75,13 @@ fn format_parse_error_from_code(
     file_position: Int64,
     record_snippet: String = "",
 ) -> String:
-    """Build full ParseError string from error code and context (cold path)."""
+    """Build full ParseError string from error code and context (cold path).
+
+    Returns the full formatted error string, including contextual lines such as
+    "Record number", "Line number", "File position", and "Record snippet" when
+    that information is available. This is used by callers that raise
+    `Error(String)` so that `String(Error)` already contains rich context.
+    """
     var parse_err = ParseError(
         _message_for_code(code),
         record_number=record_number,
@@ -83,7 +89,9 @@ fn format_parse_error_from_code(
         file_position=file_position,
         record_snippet=record_snippet,
     )
-    return parse_err.message
+    # Use the Writable implementation to build the complete message with
+    # contextual fields, instead of returning only the base message.
+    return String(parse_err)
 
 
 fn format_validation_error_from_code(
@@ -93,6 +101,10 @@ fn format_validation_error_from_code(
     record_snippet: String = "",
 ) -> String:
     """Build full ValidationError string from error code and context (cold path).
+
+    Returns the full formatted error string, including contextual lines such as
+    "Record number", "Field", and "Record snippet" when that information is
+    available.
     """
     var field_name = field
     if len(field_name) == 0 and code == FastxErrorCode.ASCII_INVALID:
@@ -105,7 +117,7 @@ fn format_validation_error_from_code(
         field=field_name,
         record_snippet=record_snippet,
     )
-    return val_err.message
+    return String(val_err)
 
 
 struct ParseError(Writable):

@@ -385,10 +385,6 @@ struct FastqRecord(
         """Return total byte length when written ("@" + id + sequence + quality + "+\n")."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
-    @always_inline
-    fn __str__(self) -> String:
-        return String.write(self)
-
     fn write[w: Writer](self, mut writer: w):
         """Write the record in standard four-line FASTQ format to writer (emits "@" before id and "+" for the plus line).
         """

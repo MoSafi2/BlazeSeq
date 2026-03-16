@@ -529,13 +529,13 @@ fn test_buffered_reader_write_to() raises:
 
 
 fn test_buffered_reader_str() raises:
-    """Test __str__() method."""
+    """Test String(buf_reader) representation."""
     var test_content = "String representation test\n"
     var reader = create_memory_reader(test_content)
     var buf_reader = BufferedReader(reader^)
 
     # Get string representation
-    var str_repr = buf_reader.__str__()
+    var str_repr = String(buf_reader)
 
     # Verify it matches buffer content
     assert_equal(
