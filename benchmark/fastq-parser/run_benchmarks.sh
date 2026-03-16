@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # FASTQ parser benchmark: BlazeSeq vs needletail, seq_io, kseq.
-# Generates synthetic FASTQ on a ramfs mount (default 3GB; set FASTQ_SIZE_GB), runs each parser with hyperfine.
+# Generates synthetic FASTQ on a tmpfs/ramfs mount (default 3GB; set FASTQ_SIZE_GB), runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fastq-parser/run_benchmarks.sh [--ramfs|--tmpfs]
 # Requires: pixi, hyperfine, cargo, gcc or clang. On Linux: sudo for ramfs/tmpfs mount/umount.
 
 set -e
 
-# --- Mount type: --ramfs (default) or --tmpfs ---
-BENCH_FS="ramfs"
+# --- Mount type: tmpfs (default) or --ramfs/--tmpfs ---
+BENCH_FS="tmpfs"
 while [ $# -gt 0 ]; do
     case "$1" in
         --ramfs) BENCH_FS="ramfs"; shift ;;

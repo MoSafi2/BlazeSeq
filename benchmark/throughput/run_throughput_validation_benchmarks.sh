@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Throughput benchmark: validation regimes across batches/records/ref_records.
-# Generates 3GB synthetic FASTQ on a ramfs/tmpfs mount and runs all 9
+# Generates 3GB synthetic FASTQ on a tmpfs/ramfs mount and runs all 9
 # mode x validation combinations with hyperfine.
 #
 # Run from repository root:
@@ -8,8 +8,8 @@
 
 set -e
 
-# --- Mount type: --ramfs (default) or --tmpfs ---
-BENCH_FS="ramfs"
+# --- Mount type: tmpfs (default) or --ramfs/--tmpfs ---
+BENCH_FS="tmpfs"
 while [ $# -gt 0 ]; do
     case "$1" in
         --ramfs) BENCH_FS="ramfs"; shift ;;
