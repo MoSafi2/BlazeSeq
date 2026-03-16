@@ -44,10 +44,10 @@ struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
         return self._data[i * 2 + 1]
 
     @always_inline
-    fn _push(mut self, s: Int, e: Int):
+    fn _push(mut self, start: Int, end: Int):
         if self._num_fields < Self.MAX:
-            self._data[self._num_fields * 2] = s
-            self._data[self._num_fields * 2 + 1] = e
+            self._data[self._num_fields * 2] = start
+            self._data[self._num_fields * 2 + 1] = end
             self._num_fields += 1
 
 
@@ -59,7 +59,7 @@ struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
 @always_inline
 fn _fill_offsets[
     O: Origin, MAX: Int
-](line: Span[UInt8, O], delimiter: UInt8, mut offsets: FieldOffsets[MAX]):
+](line: Span[Byte, O], delimiter: Byte, mut offsets: FieldOffsets[MAX]):
     """Scan `line` for `delimiter` and write field boundaries into `offsets`.
 
     Zero allocations. Works over any span origin — the caller owns the buffer.
@@ -98,7 +98,7 @@ struct DelimitedRecordView[
 
     **Lifetime contract**: the view is invalidated the moment `LineIterator`
     advances (i.e. on the next `next_line()` call or any buffer compaction).
-    Never store a `DelimitedRecordView`; call `.materialize()` if you need
+    Never store a `DelimitedRecordView`; call `.to_record()` if you need
     the record to outlive the current iteration step.
 
     Not thread-safe — the backing span is a raw pointer into the reader buffer.
@@ -106,12 +106,14 @@ struct DelimitedRecordView[
 
     var _line: Span[UInt8, Self.O]
     var _offsets: FieldOffsets[Self.MAX]
+    var _delimiter: Byte
 
     @always_inline
     fn __init__(out self, line: Span[UInt8, Self.O], delimiter: UInt8):
         self._line = line
         self._offsets = FieldOffsets[Self.MAX]()
         _fill_offsets(line, delimiter, self._offsets)
+        self._delimiter = delimiter
 
     @always_inline
     fn num_fields(self) -> Int:
@@ -133,7 +135,7 @@ struct DelimitedRecordView[
         return self.get_span(idx)
 
     @always_inline
-    fn materialize(deinit self) -> DelimitedRecord[Self.MAX]:
+    fn to_record(deinit self) -> DelimitedRecord[Self.MAX]:
         """Copy the backing bytes and offsets into an owned `DelimitedRecord`.
 
         One `BString` allocation; offsets are copied by value (stack to stack).
@@ -144,7 +146,7 @@ struct DelimitedRecordView[
     fn write_to[w: Writer](self, mut writer: w):
         for i in range(len(self._offsets)):
             if i > 0:
-                writer.write("\t")
+                writer.write(self._delimiter)
             writer.write(String(self.get_span(i)))
 
 
@@ -157,7 +159,7 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
     """An owned, heap-allocated delimited row.
 
     Created either directly (when ownership is needed from the start) or via
-    `DelimitedRecordView.materialize()`. Holds exactly one `BString` (the raw
+    `DelimitedRecordView.to_record()`. Holds exactly one `BString` (the raw
     line bytes) and a stack-allocated `FieldOffsets`.
 
     Field access via `get_span()` is zero-copy into the owned `BString`.
@@ -172,13 +174,12 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
         self._offsets = FieldOffsets[Self.MAX]()
 
     @always_inline
-    fn __init__[
-        O: Origin
-    ](out self, var view: DelimitedRecordView[O, Self.MAX]):
+    fn __init__(out self, var view: DelimitedRecordView[_, Self.MAX]):
         """Materialize from a view — one `BString` alloc, offsets copied by value.
         """
+        # TODO: use Move instead of a copy, Lifetime Issue here
         self._line = BString(view._line)
-        self._offsets = view._offsets^
+        self._offsets = view._offsets.copy()
 
     @always_inline
     fn num_fields(self) -> Int:
@@ -267,7 +268,7 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
             var line = self._next_nonempty_line()
             self._header = DelimitedRecordView[MutExternalOrigin, Self.MAX](
                 line, self._delimiter
-            ).materialize()
+            ).to_record()
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -325,7 +326,7 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
         Convenience wrapper around `next_record_view().materialize()`.
         Raises `EOFError` when no more records are available.
         """
-        return self.next_record_view().materialize()
+        return self.next_record_view().to_record()
 
     # ------------------------------------------------------------------
     # Iterators
