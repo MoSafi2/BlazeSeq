@@ -76,7 +76,7 @@ fn write_fastq_records[W: WriterBackend](
 ) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""
     for i in range(len(records)):
-        var s = records[i].__str__()
+        var s = String(records[i])
         var bytes = List(s.as_bytes())
         writer.write_bytes(bytes)
     writer.flush()

@@ -83,9 +83,9 @@ fn test_fastq_record_equality() raises:
 
 
 fn test_fastq_record_string_representation() raises:
-    """__str__ produces four lines (\"@\" + id, seq, +, qual)."""
+    """String(record) produces four lines (\"@\" + id, seq, +, qual)."""
     var record = FastqRecord("id", "ACGT", "!!!!")
-    var s = record.__str__()
+    var s = String(record)
     assert_equal(s.count("\n"), 4)
     assert_true(s.startswith(String("@id")))
 

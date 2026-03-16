@@ -97,10 +97,6 @@ struct FastaRecord(
         """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
-    @always_inline
-    fn __str__(self) -> String:
-        return String.write(self)
-
     fn write[w: Writer](self, mut writer: w):
         """Write the record in standard FASTA format."""
         writer.write(">")
@@ -133,4 +129,6 @@ struct FastaRecord(
         return not self.__eq__(other)
 
     fn __repr__(self) -> String:
-        return self.__str__()
+        var string = String()
+        self.write_to(string)
+        return string

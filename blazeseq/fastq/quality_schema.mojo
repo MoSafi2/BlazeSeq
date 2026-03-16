@@ -13,19 +13,14 @@ struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable, TrivialReg
     var OFFSET: UInt8
 
     fn write_to[w: Writer](self, mut writer: w) -> None:
-        writer.write(self.__str__())
-
-    fn __str__(self) -> String:
-        return (
-            String("Quality schema: ")
-            + self.SCHEMA
-            + "\nLower: "
-            + String(self.LOWER)
-            + "\nUpper: "
-            + String(self.UPPER)
-            + "\nOffset: "
-            + String(self.OFFSET)
-        )
+        writer.write("Quality schema: ")
+        writer.write(self.SCHEMA)
+        writer.write("\nLower: ")
+        writer.write(self.LOWER)
+        writer.write("\nUpper: ")
+        writer.write(self.UPPER)
+        writer.write("\nOffset: ")
+        writer.write(self.OFFSET)
 
 
 comptime generic_schema = QualitySchema("Generic", 33, 126, 33)

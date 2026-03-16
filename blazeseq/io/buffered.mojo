@@ -304,12 +304,6 @@ struct BufferedReader[R: Reader](
         return self._end - self._head
 
     @always_inline
-    fn __str__(self) raises -> String:
-        var x = String(capacity=len(self))
-        self.write_to(x)
-        return x
-
-    @always_inline
     fn __getitem__(self, index: Int) -> Byte:
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
         Indices are not validated; out-of-bounds access is undefined behavior.

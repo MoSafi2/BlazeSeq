@@ -75,7 +75,13 @@ fn format_parse_error_from_code(
     file_position: Int64,
     record_snippet: String = "",
 ) -> String:
-    """Build full ParseError string from error code and context (cold path)."""
+    """Build full ParseError string from error code and context (cold path).
+
+    Returns the full formatted error string, including contextual lines such as
+    "Record number", "Line number", "File position", and "Record snippet" when
+    that information is available. This is used by callers that raise
+    `Error(String)` so that `String(Error)` already contains rich context.
+    """
     var parse_err = ParseError(
         _message_for_code(code),
         record_number=record_number,
@@ -83,7 +89,9 @@ fn format_parse_error_from_code(
         file_position=file_position,
         record_snippet=record_snippet,
     )
-    return parse_err.__str__()
+    # Use the Writable implementation to build the complete message with
+    # contextual fields, instead of returning only the base message.
+    return String(parse_err)
 
 
 fn format_validation_error_from_code(
@@ -93,6 +101,10 @@ fn format_validation_error_from_code(
     record_snippet: String = "",
 ) -> String:
     """Build full ValidationError string from error code and context (cold path).
+
+    Returns the full formatted error string, including contextual lines such as
+    "Record number", "Field", and "Record snippet" when that information is
+    available.
     """
     var field_name = field
     if len(field_name) == 0 and code == FastxErrorCode.ASCII_INVALID:
@@ -105,7 +117,7 @@ fn format_validation_error_from_code(
         field=field_name,
         record_snippet=record_snippet,
     )
-    return val_err.__str__()
+    return String(val_err)
 
 
 struct ParseError(Writable):
@@ -140,22 +152,22 @@ struct ParseError(Writable):
         self.file_position = file_position
         self.record_snippet = record_snippet
 
-    fn __str__(self) -> String:
-        """Format error message with context."""
-        var msg = self.message
-        if self.record_number > 0:
-            msg += "\n  Record number: " + String(self.record_number)
-        if self.line_number > 0:
-            msg += "\n  Line number: " + String(self.line_number)
-        if self.file_position > 0:
-            msg += "\n  File position: " + String(self.file_position)
-        if len(self.record_snippet) > 0:
-            msg += "\n  Record snippet: " + self.record_snippet
-        return msg
 
     fn write_to[w: Writer](self, mut writer: w):
-        """Write error to writer."""
-        writer.write(self.__str__())
+        """Write error to writer without building an intermediate String."""
+        writer.write(self.message)
+        if self.record_number > 0:
+            writer.write("\n  Record number: ")
+            writer.write(self.record_number)
+        if self.line_number > 0:
+            writer.write("\n  Line number: ")
+            writer.write(self.line_number)
+        if self.file_position > 0:
+            writer.write("\n  File position: ")
+            writer.write(self.file_position)
+        if len(self.record_snippet) > 0:
+            writer.write("\n  Record snippet: ")
+            writer.write(self.record_snippet)
 
 
 struct ValidationError(Writable):
@@ -186,20 +198,18 @@ struct ValidationError(Writable):
         self.field = field
         self.record_snippet = record_snippet
 
-    fn __str__(self) -> String:
-        """Format error message with context."""
-        var msg = self.message
-        if self.record_number > 0:
-            msg += "\n  Record number: " + String(self.record_number)
-        if len(self.field) > 0:
-            msg += "\n  Field: " + self.field
-        if len(self.record_snippet) > 0:
-            msg += "\n  Record snippet: " + self.record_snippet
-        return msg
-
     fn write_to[w: Writer](self, mut writer: w):
-        """Write error to writer."""
-        writer.write(self.__str__())
+        """Write error to writer without building an intermediate String."""
+        writer.write(self.message)
+        if self.record_number > 0:
+            writer.write("\n  Record number: ")
+            writer.write(self.record_number)
+        if len(self.field) > 0:
+            writer.write("\n  Field: ")
+            writer.write(self.field)
+        if len(self.record_snippet) > 0:
+            writer.write("\n  Record snippet: ")
+            writer.write(self.record_snippet)
 
 
 # ---------------------------------------------------------------------------

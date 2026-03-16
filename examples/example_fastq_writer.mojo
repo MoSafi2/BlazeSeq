@@ -36,7 +36,7 @@ fn write_fastq_records[
 ](mut writer: BufferedWriter[W], records: List[FastqRecord]) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""
     for i in range(len(records)):
-        var s = records[i].__str__()
+        var s = String(records[i])
         var bytes = List(s.as_bytes())
         writer.write_bytes(bytes)
     writer.flush()
@@ -77,12 +77,12 @@ fn example_write_sample_to_plain_and_gzip() raises:
     # Write to plain file
     var plain_writer = buffered_writer_for_file(plain_path)
     write_fastq_records(plain_writer, records)
-    print("Wrote " + String(len(records)) + " records to " + String(plain_path))
+    print(t"Wrote {len(records)} records to {plain_path}")
 
     # Write to gzipped file
     var gz_writer = buffered_writer_for_gzip(gz_path)
     write_fastq_records(gz_writer, records)
-    print("Wrote " + String(len(records)) + " records to " + gz_path)
+    print(t"Wrote {len(records)} records to {gz_path}")
     print()
 
     # Clean up example outputs (optional)
@@ -124,7 +124,7 @@ fn example_read_then_write_plain_and_gzip(input_path: String) raises:
             records.append(record.copy())
 
     if len(records) == 0:
-        print("No records found in " + path_str)
+        print(t"No records found in {path_str}")
         print()
         return
 
@@ -140,12 +140,12 @@ fn example_read_then_write_plain_and_gzip(input_path: String) raises:
     # Write to plain file
     var plain_writer = buffered_writer_for_file(Path(plain_out))
     write_fastq_records(plain_writer, records)
-    print("Wrote " + String(len(records)) + " records to " + plain_out)
+    print(t"Wrote {len(records)} records to {plain_out}")
 
     # Write to gzipped file
     var gz_writer = buffered_writer_for_gzip(gz_out)
     write_fastq_records(gz_writer, records)
-    print("Wrote " + String(len(records)) + " records to " + gz_out)
+    print(t"Wrote {len(records)} records to {gz_out}")
     print()
 
 

@@ -653,9 +653,7 @@ fn test_format_valid_mixed_case_sequence() raises:
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(
-        String(rec.sequence()), "AcGtAcGt"
-    )
+    assert_equal(String(rec.sequence()), "AcGtAcGt")
     _ = rec
 
 
