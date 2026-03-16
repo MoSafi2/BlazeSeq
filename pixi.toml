@@ -22,10 +22,10 @@ backend = { name = "pixi-build-mojo", version = "0.*", channels = [
 mojo-compiler = "=0.26.2.0"
 
 # [package.target.linux-64.host-dependencies]
-# rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-hb0f4dca_0.conda" }
+# rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
 
 # [package.target.osx-arm64.host-dependencies]
-# rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-h60d57d3_0.conda" }
+# rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
 
 
 [package.build-dependencies]
@@ -33,19 +33,19 @@ mojo-compiler = "=0.26.2.0"
 rattler-build = "*"
 
 [package.target.linux-64.build-dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-hb0f4dca_0.conda" }
+rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
 
 [package.target.osx-arm64.build-dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-h60d57d3_0.conda" }
+rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
 
 [dependencies]
 mojo = "=0.26.2.0"
 
 [target.linux-64.dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-hb0f4dca_0.conda" }
+rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
 
 [target.osx-arm64.dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1/rapidgzip-mojo-0.1.0-h60d57d3_0.conda" }
+rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
 
 
 [tasks]

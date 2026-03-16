@@ -1,5 +1,5 @@
 context:
-  version: "0.2.0"
+  version: "0.3.0"
 
 package:
   name: "blazeseq"
@@ -19,10 +19,10 @@ build:
 requirements:
   build:
     - ${{ compiler('cxx') }} # Needed if any shim logic is triggered
-    - mojo ==0.26.1.0
+    - mojo ==0.26.2.0
   host:
-    - mojo ==0.26.1.0
-    - rapidgzip-mojo >=0.1.0 # This MUST be a package, not a git link
+    - mojo ==0.26.2.0
+    - rapidgzip-mojo >=0.1.1 # This MUST be a package, not a git link
   run:
-    - mojo ==0.26.1.0
-    - rapidgzip-mojo >=0.1.0
+    - mojo ==0.26.2.0
+    - rapidgzip-mojo >=0.1.1
