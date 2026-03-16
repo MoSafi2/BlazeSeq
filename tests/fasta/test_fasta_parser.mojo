@@ -174,33 +174,33 @@ fn test_invalid_first_line_not_header() raises:
 fn _fasta_bytes_with_non_ascii_in_id() -> List[Byte]:
     """FASTA with non-ASCII byte (0x80) in the id line after '>'."""
     var data = List[Byte]()
-    data.append(ord(">"))
-    data.append(ord("i"))
-    data.append(ord("d"))
+    data.append(Byte(ord(">")))
+    data.append(Byte(ord("i")))
+    data.append(Byte(ord("d")))
     data.append(Byte(0x80))
-    data.append(ord("\n"))
-    data.append(ord("A"))
-    data.append(ord("C"))
-    data.append(ord("G"))
-    data.append(ord("T"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("\n")))
     return data^
 
 
 fn _fasta_bytes_with_non_ascii_in_sequence() -> List[Byte]:
     """FASTA with non-ASCII byte (0x80) in the sequence."""
     var data = List[Byte]()
-    data.append(ord(">"))
-    data.append(ord("i"))
-    data.append(ord("d"))
-    data.append(ord("1"))
-    data.append(ord("\n"))
-    data.append(ord("A"))
-    data.append(ord("C"))
+    data.append(Byte(ord(">")))
+    data.append(Byte(ord("i")))
+    data.append(Byte(ord("d")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("C")))
     data.append(Byte(0x80))
-    data.append(ord("G"))
-    data.append(ord("T"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("\n")))
     return data^
 
 
@@ -411,7 +411,7 @@ fn test_sequence_larger_than_chunk_size() raises:
     """A 100-base sequence delivered 7 bytes at a time is accumulated correctly.
     """
     var seq = String("")
-    for i in range(25):
+    for _ in range(25):
         seq += "ACGT"
     var data = ">id1\n" + seq + "\n"
     var reader = ChunkedMemoryReader(_bytes(data), chunk_size=7)
@@ -498,7 +498,7 @@ fn test_record_larger_than_many_chunks() raises:
     """A single record whose total byte size exceeds many chunk deliveries."""
     # Build a record with a 200-base single-line sequence.
     var seq = String("")
-    for i in range(50):
+    for _ in range(50):
         seq += "ACGT"
     var data = ">longseq\n" + seq + "\n"
     # chunk_size=9: data is ~210 bytes, requires ~24 chunk fills.

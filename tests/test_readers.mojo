@@ -218,7 +218,7 @@ fn test_memory_reader_read_to_buffer_eof() raises:
 fn test_memory_reader_read_to_buffer_large_content() raises:
     """Test reading large content."""
     var content = String("")
-    for i in range(1000):
+    for _ in range(1000):
         content += "A"
     
     var reader = create_memory_reader_from_string(content)
@@ -387,7 +387,7 @@ fn test_file_reader_read_bytes_empty_file() raises:
 fn test_file_reader_read_bytes_large_file() raises:
     """Test FileReader read_bytes on large file."""
     var content = String("")
-    for i in range(1000):
+    for _ in range(1000):
         content += "A"
     
     var test_path = create_test_file(Path("test_file_reader_read_bytes_large.txt"), content)
@@ -500,7 +500,7 @@ fn test_file_reader_read_to_buffer_multiple_reads() raises:
 fn test_file_reader_read_to_buffer_large_file() raises:
     """Test FileReader read_to_buffer on large file."""
     var content = String("")
-    for i in range(2000):
+    for _ in range(2000):
         content += "A"
     
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_large.txt"), content)

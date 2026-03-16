@@ -58,7 +58,7 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
 
 fn valid_file_test_fun(file: String, schema: String = "generic") raises:
     var parser = FastqParser[FileReader](FileReader(test_dir + file), schema)
-    for record in parser.records():
+    for _ in parser.records():
         pass
 
 
@@ -116,7 +116,7 @@ fn valid_file_test_fun_gz(file_gz: String, schema: String = "generic") raises:
     var parser = FastqParser[RapidgzipReader](
         RapidgzipReader(test_dir + file_gz), schema
     )
-    for record in parser.records():
+    for _ in parser.records():
         pass
 
 

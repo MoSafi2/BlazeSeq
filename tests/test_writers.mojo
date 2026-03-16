@@ -21,8 +21,8 @@ fn test_file_writer_basic() raises:
     
     # Create a buffer with MutExternalOrigin
     var data = List[Byte]()
-    data.append(ord("H"))
-    data.append(ord("i"))
+    data.append(Byte(ord("H")))
+    data.append(Byte(ord("i")))
     var buf = alloc[Byte](2)
     memcpy(dest=buf, src=data.unsafe_ptr(), count=2)
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=2)
@@ -35,8 +35,8 @@ fn test_file_writer_basic() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 2, "File should contain 2 bytes")
-    assert_equal(bytes_read[0], ord("H"), "First byte should be 'H'")
-    assert_equal(bytes_read[1], ord("i"), "Second byte should be 'i'")
+    assert_equal(bytes_read[0], Byte(ord("H")), "First byte should be 'H'")
+    assert_equal(bytes_read[1], Byte(ord("i")), "Second byte should be 'i'")
     
     print("✓ test_file_writer_basic passed")
 
@@ -74,9 +74,9 @@ fn test_file_writer_with_offset() raises:
     var writer = FileWriter(test_path)
     
     var data = List[Byte]()
-    data.append(ord("X"))
-    data.append(ord("Y"))
-    data.append(ord("Z"))
+    data.append(Byte(ord("X")))
+    data.append(Byte(ord("Y")))
+    data.append(Byte(ord("Z")))
     var buf = alloc[Byte](3)
     memcpy(dest=buf, src=data.unsafe_ptr(), count=3)
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=3)
@@ -90,8 +90,8 @@ fn test_file_writer_with_offset() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 2, "File should contain 2 bytes")
-    assert_equal(bytes_read[0], ord("Y"), "First byte should be 'Y'")
-    assert_equal(bytes_read[1], ord("Z"), "Second byte should be 'Z'")
+    assert_equal(bytes_read[0], Byte(ord("Y")), "First byte should be 'Y'")
+    assert_equal(bytes_read[1], Byte(ord("Z")), "Second byte should be 'Z'")
     
     print("✓ test_file_writer_with_offset passed")
 
@@ -101,10 +101,10 @@ fn test_memory_writer_basic() raises:
     var writer = MemoryWriter()
     
     var data = List[Byte]()
-    data.append(ord("T"))
-    data.append(ord("e"))
-    data.append(ord("s"))
-    data.append(ord("t"))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("e")))
+    data.append(Byte(ord("s")))
+    data.append(Byte(ord("t")))
     var buf = alloc[Byte](4)
     memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)
@@ -115,10 +115,10 @@ fn test_memory_writer_basic() raises:
     
     var result = writer.get_data()
     assert_equal(len(result), 4, "Should have 4 bytes")
-    assert_equal(result[0], ord("T"), "First byte should be 'T'")
-    assert_equal(result[1], ord("e"), "Second byte should be 'e'")
-    assert_equal(result[2], ord("s"), "Third byte should be 's'")
-    assert_equal(result[3], ord("t"), "Fourth byte should be 't'")
+    assert_equal(result[0], Byte(ord("T")), "First byte should be 'T'")
+    assert_equal(result[1], Byte(ord("e")), "Second byte should be 'e'")
+    assert_equal(result[2], Byte(ord("s")), "Third byte should be 's'")
+    assert_equal(result[3], Byte(ord("t")), "Fourth byte should be 't'")
     
     print("✓ test_memory_writer_basic passed")
 
@@ -129,8 +129,8 @@ fn test_memory_writer_multiple_writes() raises:
     
     # First write
     var data1 = List[Byte]()
-    data1.append(ord("H"))
-    data1.append(ord("e"))
+    data1.append(Byte(ord("H")))
+    data1.append(Byte(ord("e")))
     var buf1 = alloc[Byte](2)
     memcpy(dest=buf1, src=data1.unsafe_ptr(), count=2)
     var span1 = Span[Byte, MutExternalOrigin](ptr=buf1, length=2)
@@ -139,9 +139,9 @@ fn test_memory_writer_multiple_writes() raises:
     
     # Second write
     var data2 = List[Byte]()
-    data2.append(ord("l"))
-    data2.append(ord("l"))
-    data2.append(ord("o"))
+    data2.append(Byte(ord("l")))
+    data2.append(Byte(ord("l")))
+    data2.append(Byte(ord("o")))
     var buf2 = alloc[Byte](3)
     memcpy(dest=buf2, src=data2.unsafe_ptr(), count=3)
     var span2 = Span[Byte, MutExternalOrigin](ptr=buf2, length=3)
@@ -150,11 +150,11 @@ fn test_memory_writer_multiple_writes() raises:
     
     var result = writer.get_data()
     assert_equal(len(result), 5, "Should have 5 bytes")
-    assert_equal(result[0], ord("H"), "First byte should be 'H'")
-    assert_equal(result[1], ord("e"), "Second byte should be 'e'")
-    assert_equal(result[2], ord("l"), "Third byte should be 'l'")
-    assert_equal(result[3], ord("l"), "Fourth byte should be 'l'")
-    assert_equal(result[4], ord("o"), "Fifth byte should be 'o'")
+    assert_equal(result[0], Byte(ord("H")), "First byte should be 'H'")
+    assert_equal(result[1], Byte(ord("e")), "Second byte should be 'e'")
+    assert_equal(result[2], Byte(ord("l")), "Third byte should be 'l'")
+    assert_equal(result[3], Byte(ord("l")), "Fourth byte should be 'l'")
+    assert_equal(result[4], Byte(ord("o")), "Fifth byte should be 'o'")
     
     print("✓ test_memory_writer_multiple_writes passed")
 
@@ -164,10 +164,10 @@ fn test_memory_writer_clear() raises:
     var writer = MemoryWriter()
     
     var data = List[Byte]()
-    data.append(ord("T"))
-    data.append(ord("e"))
-    data.append(ord("s"))
-    data.append(ord("t"))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("e")))
+    data.append(Byte(ord("s")))
+    data.append(Byte(ord("t")))
     var buf = alloc[Byte](4)
     memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)
@@ -247,9 +247,9 @@ fn test_buffered_writer_with_memory_writer() raises:
     var buf_writer = BufferedWriter(mem_writer^)
     
     var data = List[Byte]()
-    data.append(ord("M"))
-    data.append(ord("e"))
-    data.append(ord("m"))
+    data.append(Byte(ord("M")))
+    data.append(Byte(ord("e")))
+    data.append(Byte(ord("m")))
     buf_writer.write_bytes(data)
     buf_writer.flush()
     
@@ -267,7 +267,7 @@ fn test_buffered_writer_convenience_constructors() raises:
     # File convenience constructor
     var file_buf = buffered_writer_for_file(test_path)
     var file_data = List[Byte]()
-    file_data.append(ord("F"))
+    file_data.append(Byte(ord("F")))
     file_buf.write_bytes(file_data)
     file_buf.flush()
     
@@ -275,19 +275,19 @@ fn test_buffered_writer_convenience_constructors() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 1, "File should contain 1 byte")
-    assert_equal(bytes_read[0], ord("F"), "Content should match")
+    assert_equal(bytes_read[0], Byte(ord("F")), "Content should match")
     
     # Memory convenience constructor
     var mem_buf = buffered_writer_for_memory()
     var mem_data = List[Byte]()
-    mem_data.append(ord("M"))
+    mem_data.append(Byte(ord("M")))
     mem_buf.write_bytes(mem_data)
     mem_buf.flush()
     
     # Gzip convenience constructor
     var gz_buf = buffered_writer_for_gzip("tests/test_data/test_convenience.gz")
     var gz_data = List[Byte]()
-    gz_data.append(ord("G"))
+    gz_data.append(Byte(ord("G")))
     gz_buf.write_bytes(gz_data)
     gz_buf.flush()
     
@@ -318,10 +318,10 @@ fn test_writer_error_handling() raises:
     var writer = MemoryWriter()
     
     var data = List[Byte]()
-    data.append(ord("T"))
-    data.append(ord("e"))
-    data.append(ord("s"))
-    data.append(ord("t"))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("e")))
+    data.append(Byte(ord("s")))
+    data.append(Byte(ord("t")))
     var buf = alloc[Byte](4)
     memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
     var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)

@@ -328,10 +328,10 @@ fn test_next_line_crosses_boundary() raises:
     # Create a line that will cross buffer boundary
     # Use small buffer (64 bytes), line1=50 chars, line2=30 chars
     var line1 = String("")
-    for i in range(50):
+    for _ in range(50):
         line1 += "A"
     var line2 = String("")
-    for i in range(30):
+    for _ in range(30):
         line2 += "B"
     var content = line1 + "\n" + line2 + "\n"
 
@@ -350,13 +350,13 @@ fn test_next_line_crosses_boundary() raises:
 fn test_next_line_crosses_boundary_multiple() raises:
     """Multiple lines crossing boundaries."""
     var line1 = String("")
-    for i in range(50):
+    for _ in range(50):
         line1 += "A"
     var line2 = String("")
-    for i in range(30):
+    for _ in range(30):
         line2 += "B"
     var line3 = String("")
-    for i in range(40):
+    for _ in range(40):
         line3 += "C"
     var content = line1 + "\n" + line2 + "\n" + line3 + "\n"
 
@@ -378,10 +378,10 @@ fn test_next_line_crosses_boundary_multiple() raises:
 fn test_next_line_crosses_boundary_with_cr() raises:
     """Line with \\r\\n crossing boundary."""
     var line1 = String("")
-    for i in range(50):
+    for _ in range(50):
         line1 += "A"
     var line2 = String("")
-    for i in range(30):
+    for _ in range(30):
         line2 += "B"
     var content = line1 + "\r\n" + line2 + "\r\n"
 
@@ -400,7 +400,7 @@ fn test_next_line_crosses_boundary_with_cr() raises:
 fn test_next_line_newline_at_buffer_end() raises:
     """Newline exactly at last byte of buffer (index capacity-1)."""
     var line1 = String("")
-    for i in range(63):
+    for _ in range(63):
         line1 += "A"
     var content = line1 + "\n" + "second\n"
 
@@ -480,10 +480,10 @@ fn test_next_line_empty_lines_only_small_buffer() raises:
 fn test_next_line_crosses_boundary_then_no_trailing_newline() raises:
     """Line that crosses boundary followed by final line without trailing newline."""
     var line1 = String("")
-    for i in range(50):
+    for _ in range(50):
         line1 += "A"
     var line2 = String("")
-    for i in range(30):
+    for _ in range(30):
         line2 += "B"
     var content = line1 + "\n" + line2
 
@@ -510,7 +510,7 @@ fn test_next_line_crosses_boundary_then_no_trailing_newline() raises:
 fn test_next_line_exceeds_capacity() raises:
     """Line longer than buffer capacity (should raise error)."""
     var long_line = String("")
-    for i in range(100):
+    for _ in range(100):
         long_line += "A"
     var content = long_line + "\n"
 
@@ -527,7 +527,7 @@ fn test_next_line_exceeds_capacity() raises:
 # fn test_next_line_exceeds_capacity_with_growth() raises:
 #     """Line longer than capacity but growth enabled (should grow buffer)."""
 #     var long_line = String("")
-#     for i in range(100):
+#     for _ in range(100):
 #         long_line += "A"
 #     var content = long_line + "\n"
 
@@ -545,7 +545,7 @@ fn test_next_line_exceeds_capacity() raises:
 fn test_next_line_exceeds_max_capacity() raises:
     """Line longer than buffer capacity raises (with growth disabled, raises at initial capacity 64)."""
     var long_line = String("")
-    for i in range(200):
+    for _ in range(200):
         long_line += "A"
     var content = long_line + "\n"
 
@@ -618,7 +618,7 @@ fn test_line_iterator_stop_iteration() raises:
 
     # Next iteration should not execute (StopIteration raised internally)
     var count = 0
-    for line in line_iter:
+    for _ in line_iter:
         count += 1
 
     assert_equal(count, 0, "Should not iterate after EOF")
@@ -738,10 +738,10 @@ fn test_position_after_multiple_lines() raises:
 fn test_next_line_position_after_boundary_cross() raises:
     """Position advances correctly after reading a line that required refill."""
     var line1 = String("")
-    for i in range(50):
+    for _ in range(50):
         line1 += "A"
     var line2 = String("")
-    for i in range(30):
+    for _ in range(30):
         line2 += "B"
     var content = line1 + "\n" + line2 + "\n"
 

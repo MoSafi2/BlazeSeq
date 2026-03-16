@@ -87,7 +87,7 @@ fn test_error_context_in_iterator() raises:
     
     # Using iterator should print error and stop iteration
     var count = 0
-    for record in parser.records():
+    for _ in parser.records():
         count += 1
     
     # Should have processed 0 records due to error

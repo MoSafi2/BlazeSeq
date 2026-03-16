@@ -70,12 +70,12 @@ fn test_record_parser_for_loop_stop_iteration() raises:
     var parser = FastqParser[MemoryReader](reader^, "generic")
 
     var count = 0
-    for record in parser.records():
+    for _ in parser.records():
         count += 1
     assert_equal(count, 1, "Should iterate over 1 record")
 
     var count_after = 0
-    for record in parser.records():
+    for _ in parser.records():
         count_after += 1
     assert_equal(count_after, 0, "Should not iterate after EOF")
 
@@ -182,7 +182,7 @@ fn test_batched_parser_empty_input() raises:
     )
 
     var count = 0
-    for batch in parser.batches():
+    for _ in parser.batches():
         count += 1
     assert_equal(count, 0, "No batches from empty input")
 
@@ -478,10 +478,10 @@ fn _ref_parser_long_record_content() -> String:
     """One FASTQ record with sequence and quality length 20 (longer than small buffer).
     """
     var seq = String("")
-    for i in range(20):
+    for _ in range(20):
         seq += "A"
     var qual = String("")
-    for i in range(20):
+    for _ in range(20):
         qual += "!"
     return "@id\n" + seq + "\n+\n" + qual + "\n"
 

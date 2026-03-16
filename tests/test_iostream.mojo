@@ -1342,7 +1342,7 @@ fn test_buffered_writer_multiple_flushes() raises:
     var writer = BufferedWriter(FileWriter(test_path))
 
     var data = List[Byte]()
-    data.append(ord("F"))
+    data.append(Byte(ord("F")))
     writer.write_bytes(data)
 
     writer.flush()
@@ -1356,7 +1356,7 @@ fn test_buffered_writer_multiple_flushes() raises:
     )
 
     var data2 = List[Byte]()
-    data2.append(ord("L"))
+    data2.append(Byte(ord("L")))
     writer.write_bytes(data2)
     writer.flush()
 

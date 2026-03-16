@@ -10,7 +10,7 @@ generate_synthetic_fastq_fixtures) so round-trip tests can run on larger data.
 
 from std.pathlib import Path
 from std.os import remove
-from os.path import exists
+from std.os.path import exists
 from std.testing import assert_equal, TestSuite
 from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.parser import FastqParser
