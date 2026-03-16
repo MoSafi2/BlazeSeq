@@ -1,1 +1,0 @@
-FastqBatch(_id_bytes=[114, 49, 114, 50], _quality_bytes=[33, 33, 33, 33, 35, 35, 35, 35], _sequence_bytes=[65, 67, 71, 84, 84, 71, 67, 65], _id_ends=[2, 4], _ends=[4, 8], _quality_offset=33)
