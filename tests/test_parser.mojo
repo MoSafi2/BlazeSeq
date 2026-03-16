@@ -43,7 +43,7 @@ fn test_record_parser_for_loop() raises:
 
     var records = List[FastqRecord]()
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
 
     assert_equal(len(records), 2, "Should iterate over 2 records")
     assert_equal(
@@ -125,7 +125,7 @@ fn test_batched_parser_for_loop() raises:
 
     var batches = List[FastqBatch]()
     for batch in parser.batches():
-        batches.append(batch^)
+        batches.append(batch.copy())
 
     assert_equal(
         len(batches), 2, "Should yield 2 batches (batch_size=2, 3 records)"
@@ -355,7 +355,7 @@ fn test_record_parser_records_iterator_span_chunks() raises:
 
     var records = List[FastqRecord]()
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
 
     assert_equal(len(records), 2, "Should yield two records")
     assert_equal(records[0]._id.to_string(), "a", "First record id")

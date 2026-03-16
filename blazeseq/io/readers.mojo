@@ -248,10 +248,14 @@ struct ZLib(Movable):
         # Get function pointer
         var func = self.lib_handle.get_function[gzopen_fn_type]("gzopen")
 
-        # Call the function
+        # Call the function (cast to MutExternalOrigin for FFI - Mojo 26.2 requires explicit origin for indirect calls)
         var result = func(
-            filename.as_c_string_slice().unsafe_ptr(),
-            mode.as_c_string_slice().unsafe_ptr(),
+            filename.as_c_string_slice().unsafe_ptr().unsafe_origin_cast[
+                MutExternalOrigin
+            ](),
+            mode.as_c_string_slice().unsafe_ptr().unsafe_origin_cast[
+                MutExternalOrigin
+            ](),
         )
 
         return result

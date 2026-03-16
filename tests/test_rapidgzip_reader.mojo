@@ -175,7 +175,7 @@ fn test_rapidgzip_reader_fastq_parser() raises:
     var parser = FastqParser[RapidgzipReader](reader^, "generic")
     var records = List[FastqRecord]()
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
 
     assert_equal(len(records), 2, "Should parse 2 records")
     assert_equal(records[0]._id.to_string(), "r1", "First record id should match")

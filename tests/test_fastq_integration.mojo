@@ -92,7 +92,7 @@ fn parse_plain_fastq(path: String) raises -> List[FastqRecord]:
     var records = List[FastqRecord]()
     var parser = FastqParser[FileReader](FileReader(Path(path)), SCHEMA)
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
     return records^
 
 
@@ -131,7 +131,7 @@ fn parse_gzip_fastq(path: String) raises -> List[FastqRecord]:
     var records = List[FastqRecord]()
     var parser = FastqParser[GZFile](GZFile(path, "rb"), SCHEMA)
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
     return records^
 
 
