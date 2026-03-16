@@ -315,7 +315,7 @@ struct FastqRecord(
         self._phred_offset = phred_offset
 
     @always_inline
-    fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
             ptr=self._sequence.ptr.unsafe_mut_cast[
@@ -323,10 +323,10 @@ struct FastqRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
-        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
+        return StringSlice[origin=origin_of(self)](unsafe_from_utf8=span)
 
     @always_inline
-    fn quality(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn quality(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
         var span = Span[Byte, origin_of(self)](
             ptr=self._quality.ptr.unsafe_mut_cast[
@@ -334,7 +334,7 @@ struct FastqRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._quality),
         )
-        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
+        return StringSlice[origin=origin_of(self)](unsafe_from_utf8=span)
 
     @always_inline
     fn phred_scores(self) -> List[UInt8]:
@@ -355,7 +355,7 @@ struct FastqRecord(
         return output^
 
     @always_inline
-    fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the read identifier (id without leading '@') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
@@ -364,10 +364,11 @@ struct FastqRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
-        return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
+        return StringSlice[origin=origin_of(self)](unsafe_from_utf8=span)
 
     fn definition(ref self) -> Definition:
-        """Return Id and optional Description parsed from the id line (first token vs rest)."""
+        """Return Id and optional Description parsed from the id line (first token vs rest).
+        """
         var id_str = self._id.as_string_slice()
         var parts = id_str.split(" ")
         var id = parts[0].strip()
@@ -382,7 +383,8 @@ struct FastqRecord(
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + "+\n")."""
+        """Return total byte length when written ("@" + id + sequence + quality + "+\n").
+        """
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     fn write[w: Writer](self, mut writer: w):
@@ -428,7 +430,7 @@ struct FastqRecord(
 
 @align(64)
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
-    ImplicitlyDestructible, Movable, Sized, Writable, TrivialRegisterPassable
+    ImplicitlyDestructible, Movable, Sized, TrivialRegisterPassable, Writable
 ):
     """Zero-copy reference to a FASTQ record inside the parser's buffer.
 
@@ -444,7 +446,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
     Example:
         ```mojo
         from blazeseq import FastqParser, FileReader
-        from pathlib import Path
+        from std.pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
         for record_ref in parser.ref_records():
             _ = record_ref.id()
@@ -470,27 +472,26 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         self._phred_offset = phred_offset
 
     @always_inline
-    fn sequence(self) -> StringSlice[origin = Self.origin]:
+    fn sequence(self) -> StringSlice[origin=Self.origin]:
         """Return the sequence line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](
-            unsafe_from_utf8=self._sequence
-        )
+        return StringSlice[origin=Self.origin](unsafe_from_utf8=self._sequence)
 
     @always_inline
-    fn quality(self) -> StringSlice[origin = Self.origin]:
+    fn quality(self) -> StringSlice[origin=Self.origin]:
         """Return the quality line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self._quality)
+        return StringSlice[origin=Self.origin](unsafe_from_utf8=self._quality)
 
     @always_inline
-    fn id(self) -> StringSlice[origin = Self.origin]:
+    fn id(self) -> StringSlice[origin=Self.origin]:
         """Return the read identifier (id without leading '@') as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin = Self.origin](unsafe_from_utf8=self._id)
+        return StringSlice[origin=Self.origin](unsafe_from_utf8=self._id)
 
     fn definition(self) -> Definition:
-        """Return Id and optional Description parsed from the id line (first token vs rest)."""
+        """Return Id and optional Description parsed from the id line (first token vs rest).
+        """
         var id_str = StringSlice(unsafe_from_utf8=self._id)
         var parts = id_str.split(" ")
         var id = parts[0].strip()
@@ -510,7 +511,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n"). Used for calculating buffer capacity."""
+        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n"). Used for calculating buffer capacity.
+        """
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline

@@ -2,6 +2,7 @@ from std.collections import List
 from std.collections.string import String
 from std.memory import Span
 from std.iter import Iterator
+from std.collections import InlineArray
 
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
@@ -10,92 +11,234 @@ from blazeseq.io.readers import Reader
 from blazeseq.utils import memchr, format_parse_error
 
 
-struct DelimitedRecord(Copyable, Movable, Sized, Writable):
-    """A single delimited row, storing fields as owned `BString`s."""
+# ---------------------------------------------------------------------------
+# FieldOffsets — stack-allocated field boundary table
+# ---------------------------------------------------------------------------
 
-    var _fields: List[BString]
 
-    fn __init__(out self):
-        self._fields = List[BString]()
+struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
+    """Stack-allocated flat array of (start, end) byte pairs for up to MAX fields.
 
-    fn __init__(out self, *, var fields: List[BString]):
-        self._fields = fields^
+    Layout: [start0, end0, start1, end1, …]  — avoids a separate count field
+    at the cost of doubling the index arithmetic, which is branch-free.
+    """
+
+    var _data: InlineArray[Int, Self.MAX * 2]
+    var _num_fields: Int
 
     @always_inline
-    fn num_fields(self) -> Int:
-        return len(self._fields)
+    fn __init__(out self):
+        self._data = InlineArray[Int, self.MAX * 2](fill=0)
+        self._num_fields = 0
 
     @always_inline
     fn __len__(self) -> Int:
-        return len(self._fields)
+        return self._num_fields
 
-    fn __getitem__(mut self, idx: Int) -> BString:
-        return self._fields[idx].copy()
+    @always_inline
+    fn start(self, i: Int) -> Int:
+        return self._data[i * 2]
 
-    fn get(mut self, idx: Int) -> Optional[BString]:
-        if idx < 0 or idx >= len(self._fields):
-            return None
-        return self._fields[idx].copy()
+    @always_inline
+    fn end(self, i: Int) -> Int:
+        return self._data[i * 2 + 1]
 
-    fn write_to[w: Writer](self, mut writer: w):
-        var first = True
-        for field in self._fields:
-            if not first:
-                writer.write("\t")
-            first = False
-            writer.write(String(field.as_span()))
+    @always_inline
+    fn _push(mut self, s: Int, e: Int):
+        if self._num_fields < Self.MAX:
+            self._data[self._num_fields * 2] = s
+            self._data[self._num_fields * 2 + 1] = e
+            self._num_fields += 1
 
 
-fn _split_by_delimiter[
-    O: Origin
-](line: Span[UInt8, O], delimiter: UInt8,) -> List[Span[UInt8, O]]:
-    """Split a single line into fields on `delimiter`, returning spans into `line`.
+# ---------------------------------------------------------------------------
+# _fill_offsets — shared parse kernel (no allocation)
+# ---------------------------------------------------------------------------
+
+
+@always_inline
+fn _fill_offsets[
+    O: Origin, MAX: Int
+](line: Span[UInt8, O], delimiter: UInt8, mut offsets: FieldOffsets[MAX]):
+    """Scan `line` for `delimiter` and write field boundaries into `offsets`.
+
+    Zero allocations. Works over any span origin — the caller owns the buffer.
+    Handles trailing delimiters (appends one empty final field).
     """
-    var fields = List[Span[UInt8, O]](capacity=10)
+    offsets._num_fields = 0
+    var n = len(line)
     var start = 0
 
-    while True:
+    while start <= n:
         var idx = memchr(line, delimiter, start)
+        var end = idx if idx != -1 else n
+        offsets._push(start, end)
         if idx == -1:
-            # Final field (may be empty).
-            var tail = line[start:]
-            fields.append(tail)
             break
-        else:
-            var span = line[start:idx]
-            fields.append(span)
-            start = idx + 1
-            if start > len(line):
-                # Trailing delimiter -> final empty field.
-                fields.append(Span[UInt8, O]())
-                break
+        start = idx + 1
 
-    return fields^
+    # Trailing delimiter -> one extra empty field.
+    if n > 0 and line[n - 1] == delimiter:
+        offsets._push(n, n)
 
 
-struct DelimitedReader[R: Reader](Movable):
+# ---------------------------------------------------------------------------
+# DelimitedRecordView — zero-alloc, NOT thread-safe, NOT to be stored
+# ---------------------------------------------------------------------------
+
+
+struct DelimitedRecordView[
+    O: Origin,
+    MAX: Int = 64,
+](Movable, Sized, Writable):
+    """A non-owning view over one delimited row.
+
+    Holds a `Span` into the *reader's internal buffer* and a stack-allocated
+    `FieldOffsets`. No heap allocation is made.
+
+    **Lifetime contract**: the view is invalidated the moment `LineIterator`
+    advances (i.e. on the next `next_line()` call or any buffer compaction).
+    Never store a `DelimitedRecordView`; call `.materialize()` if you need
+    the record to outlive the current iteration step.
+
+    Not thread-safe — the backing span is a raw pointer into the reader buffer.
+    """
+
+    var _line: Span[UInt8, Self.O]
+    var _offsets: FieldOffsets[Self.MAX]
+
+    @always_inline
+    fn __init__(out self, line: Span[UInt8, Self.O], delimiter: UInt8):
+        self._line = line
+        self._offsets = FieldOffsets[Self.MAX]()
+        _fill_offsets(line, delimiter, self._offsets)
+
+    @always_inline
+    fn num_fields(self) -> Int:
+        return len(self._offsets)
+
+    @always_inline
+    fn __len__(self) -> Int:
+        return len(self._offsets)
+
+    @always_inline
+    fn get_span(self, idx: Int) -> Span[UInt8, Self.O]:
+        """Zero-copy view of field `idx`. Same lifetime as this view."""
+        return self._line[self._offsets.start(idx) : self._offsets.end(idx)]
+
+    @always_inline
+    fn get(self, idx: Int) -> Optional[Span[UInt8, Self.O]]:
+        if idx < 0 or idx >= len(self._offsets):
+            return None
+        return self.get_span(idx)
+
+    @always_inline
+    fn materialize(deinit self) -> DelimitedRecord[Self.MAX]:
+        """Copy the backing bytes and offsets into an owned `DelimitedRecord`.
+
+        One `BString` allocation; offsets are copied by value (stack to stack).
+        Call this when the record must outlive the current iteration step.
+        """
+        return DelimitedRecord[Self.MAX](self^)
+
+    fn write_to[w: Writer](self, mut writer: w):
+        for i in range(len(self._offsets)):
+            if i > 0:
+                writer.write("\t")
+            writer.write(String(self.get_span(i)))
+
+
+# ---------------------------------------------------------------------------
+# DelimitedRecord — owned, storeable, sendable
+# ---------------------------------------------------------------------------
+
+
+struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
+    """An owned, heap-allocated delimited row.
+
+    Created either directly (when ownership is needed from the start) or via
+    `DelimitedRecordView.materialize()`. Holds exactly one `BString` (the raw
+    line bytes) and a stack-allocated `FieldOffsets`.
+
+    Field access via `get_span()` is zero-copy into the owned `BString`.
+    """
+
+    var _line: BString
+    var _offsets: FieldOffsets[Self.MAX]
+
+    @always_inline
+    fn __init__(out self):
+        self._line = BString()
+        self._offsets = FieldOffsets[Self.MAX]()
+
+    @always_inline
+    fn __init__[
+        O: Origin
+    ](out self, var view: DelimitedRecordView[O, Self.MAX]):
+        """Materialize from a view — one `BString` alloc, offsets copied by value.
+        """
+        self._line = BString(view._line)
+        self._offsets = view._offsets^
+
+    @always_inline
+    fn num_fields(self) -> Int:
+        return len(self._offsets)
+
+    @always_inline
+    fn __len__(self) -> Int:
+        return len(self._offsets)
+
+    @always_inline
+    fn get_span(ref self, idx: Int) -> Span[UInt8, origin_of(self._line)]:
+        """Zero-copy view of field `idx`. Lifetime tied to this record."""
+        return self._line.as_span()[
+            self._offsets.start(idx) : self._offsets.end(idx)
+        ]
+
+    @always_inline
+    fn __getitem__(ref self, idx: Int) -> BString:
+        """Owned copy of field `idx`. Prefer `get_span()` in hot paths."""
+        return BString(self.get_span(idx))
+
+    fn get(ref self, idx: Int) -> Optional[BString]:
+        if idx < 0 or idx >= len(self._offsets):
+            return None
+        return BString(self.get_span(idx))
+
+    fn write_to[w: Writer](ref self, mut writer: w):
+        for i in range(len(self._offsets)):
+            if i > 0:
+                writer.write("\t")
+            writer.write(String(self.get_span(i)))
+
+
+# ---------------------------------------------------------------------------
+# DelimitedReader
+# ---------------------------------------------------------------------------
+
+
+struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
     """Generic delimited-file reader over a `Reader`.
 
-    Supports TSV, CSV, FAI, and similar formats by choosing an appropriate
-    delimiter byte at construction time.
+    Supports TSV, CSV, FAI, and similar formats.
 
-    Example:
-        ```mojo
-        from blazeseq.io.readers import MemoryReader
-        from blazeseq.io.delimited import DelimitedReader
+    The hot path — `next_record_view()` / `for view in dr.views()` — yields a
+    `DelimitedRecordView` with **zero heap allocations** per row: the span
+    lives in the reader's internal buffer and the offsets are stack-allocated.
 
-        var content = "col1\tcol2\n1\t2\n3\t4\n"
-        var reader = MemoryReader(content.as_bytes())
-        var delimited = DelimitedReader[MemoryReader](reader^, has_header=True)
+    Call `.materialize()` on the view when you need the record to outlive the
+    current iteration step; `next_record()` / `for record in dr.records()` do
+    this automatically (one `BString` alloc per row).
 
-        # Optional header row as owned `BString`s.
-        if header_opt = delimited.header():
-            let header = header_opt.value()
-            print(header[0].to_string(), header[1].to_string())
+    `for view in dr` (i.e. `__iter__`) defaults to the zero-alloc view path.
 
-        # Iterate over rows.
-        for record in delimited.records():
-            print(record[0].to_string(), record[1].to_string())
+    Example — filter without allocating on every row:
+        ```
+        var dr = DelimitedReader[FileReader](reader^, has_header=True)
+        var results = List[DelimitedRecord]()
+        for view in dr.views():
+            if String(view.get_span(2)) == "homo_sapiens":
+                results.append(view.materialize())  # alloc only on match
         ```
     """
 
@@ -103,7 +246,7 @@ struct DelimitedReader[R: Reader](Movable):
     var _delimiter: UInt8
     var _record_number: Int
     var _has_header: Bool
-    var _header: Optional[List[BString]]
+    var _header: Optional[DelimitedRecord[Self.MAX]]
     var _expected_num_fields: Int
 
     fn __init__(
@@ -120,8 +263,11 @@ struct DelimitedReader[R: Reader](Movable):
         self._expected_num_fields = 0
 
         if self._has_header and self.lines.has_more():
-            var header_record = self._read_next_record()
-            self._header = header_record._fields.copy()
+            # Header must survive the whole session, so always materialize.
+            var line = self._next_nonempty_line()
+            self._header = DelimitedRecordView[MutExternalOrigin, Self.MAX](
+                line, self._delimiter
+            ).materialize()
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -139,68 +285,122 @@ struct DelimitedReader[R: Reader](Movable):
     fn get_file_position(ref self) -> Int64:
         return self.lines.get_file_position()
 
-    fn header(mut self) -> Optional[List[BString]]:
-        if self._header:
-            return self._header.value().copy()
-        return None
+    fn header(ref self) -> Optional[DelimitedRecord[Self.MAX]]:
+        """Copy of the stored header record, if present."""
+        return self._header.copy()
 
-    fn next_record(mut self) raises -> DelimitedRecord:
-        """Return the next row as a `DelimitedRecord`.
+    # ------------------------------------------------------------------
+    # Hot path: zero-alloc view
+    # ------------------------------------------------------------------
 
-        Raises EOFError when no more records are available.
+    fn next_record_view(
+        mut self,
+    ) raises -> DelimitedRecordView[MutExternalOrigin, Self.MAX]:
+        """Return the next row as a zero-alloc `DelimitedRecordView`.
+
+        The view borrows from the reader's internal line buffer and is
+        invalidated on the next call to any advancing method. Call
+        `.materialize()` to obtain an owned `DelimitedRecord`.
+
+        Raises `EOFError` when no more records are available.
         """
         if not self.has_more():
             raise EOFError()
 
-        var record = self._read_next_record()
-        if self._expected_num_fields == 0:
-            self._expected_num_fields = record.num_fields()
-        elif record.num_fields() != self._expected_num_fields:
-            var msg = format_parse_error(
-                "Delimited row has inconsistent number of fields",
-                self._record_number + 1,
-                self.get_line_number(),
-                self.get_file_position(),
-                "",
-            )
-            raise Error(msg)
-
+        var line = self._next_nonempty_line()
+        var view = DelimitedRecordView[MutExternalOrigin, Self.MAX](
+            line, self._delimiter
+        )
+        self._check_field_count(view.num_fields())
         self._record_number += 1
-        return record^
+        return view^
 
-    fn _read_next_record(mut self) raises -> DelimitedRecord:
-        while True:
-            var line = self.lines.next_line()
-            if len(line) == 0:
-                continue
-            var field_spans = _split_by_delimiter(line, self._delimiter)
-            var fields = List[BString]()
-            for span in field_spans:
-                fields.append(BString(span))
-            return DelimitedRecord(fields=fields^)
+    # ------------------------------------------------------------------
+    # Convenience: owned record (one BString alloc per row)
+    # ------------------------------------------------------------------
+
+    fn next_record(mut self) raises -> DelimitedRecord[Self.MAX]:
+        """Return the next row as an owned `DelimitedRecord`.
+
+        Convenience wrapper around `next_record_view().materialize()`.
+        Raises `EOFError` when no more records are available.
+        """
+        return self.next_record_view().materialize()
+
+    # ------------------------------------------------------------------
+    # Iterators
+    # ------------------------------------------------------------------
+
+    fn views(
+        ref self,
+    ) -> _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)]:
+        """Iterator yielding zero-alloc `DelimitedRecordView`s."""
+        return _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)](
+            Pointer(to=self)
+        )
 
     fn records(
         ref self,
-    ) -> _DelimitedReaderIter[Self.R, origin_of(self)]:
-        return _DelimitedReaderIter[Self.R, origin_of(self)](Pointer(to=self))
+    ) -> _DelimitedRecordIter[Self.R, Self.MAX, origin_of(self)]:
+        """Iterator yielding owned `DelimitedRecord`s."""
+        return _DelimitedRecordIter[Self.R, Self.MAX, origin_of(self)](
+            Pointer(to=self)
+        )
 
     fn __iter__(
         ref self,
-    ) -> _DelimitedReaderIter[Self.R, origin_of(self)]:
-        return _DelimitedReaderIter[Self.R, origin_of(self)](Pointer(to=self))
+    ) -> _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)]:
+        """Default iteration yields zero-alloc views."""
+        return self.views()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @always_inline
+    fn _next_nonempty_line(
+        mut self,
+    ) raises -> Span[UInt8, MutExternalOrigin]:
+        while True:
+            var line = self.lines.next_line()  # raises EOFError at end-of-file
+            if len(line) > 0:
+                return line
+
+    @always_inline
+    fn _check_field_count(mut self, n: Int) raises:
+        if self._expected_num_fields == 0:
+            self._expected_num_fields = n
+        elif n != self._expected_num_fields:
+            raise Error(
+                format_parse_error(
+                    "Delimited row has inconsistent number of fields",
+                    self._record_number + 1,
+                    self.get_line_number(),
+                    self.get_file_position(),
+                    "",
+                )
+            )
 
 
-struct _DelimitedReaderIter[R: Reader, origin: Origin](Iterator):
-    """Iterator adapter for `for row in reader` and `for row in reader.records()`.
-    """
+# ---------------------------------------------------------------------------
+# Iterator — views (zero-alloc)
+# ---------------------------------------------------------------------------
 
-    comptime Element = DelimitedRecord
 
-    var _src: Pointer[DelimitedReader[Self.R], Self.origin]
+struct _DelimitedViewIter[
+    R: Reader,
+    MAX: Int,
+    origin: Origin,
+](Iterator):
+    """Yields `DelimitedRecordView` — no heap allocation per row."""
+
+    comptime Element = DelimitedRecordView[MutExternalOrigin, Self.MAX]
+
+    var _src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin]
 
     fn __init__(
         out self,
-        src: Pointer[DelimitedReader[Self.R], Self.origin],
+        src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin],
     ):
         self._src = src
 
@@ -214,7 +414,52 @@ struct _DelimitedReaderIter[R: Reader, origin: Origin](Iterator):
     @always_inline
     fn __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
-            Pointer[DelimitedReader[Self.R], MutExternalOrigin]
+            Pointer[DelimitedReader[Self.R, Self.MAX], MutExternalOrigin]
+        ](self._src)
+        try:
+            return mut_ptr[].next_record_view()
+        except e:
+            var msg = String(e)
+            if msg == EOF or msg.startswith(EOF):
+                raise StopIteration()
+            else:
+                print(msg)
+                raise StopIteration()
+
+
+# ---------------------------------------------------------------------------
+# Iterator — owned records (one BString alloc per row)
+# ---------------------------------------------------------------------------
+
+
+struct _DelimitedRecordIter[
+    R: Reader,
+    MAX: Int,
+    origin: Origin,
+](Iterator):
+    """Yields owned `DelimitedRecord`s — use when records must be stored."""
+
+    comptime Element = DelimitedRecord[Self.MAX]
+
+    var _src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin]
+
+    fn __init__(
+        out self,
+        src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin],
+    ):
+        self._src = src
+
+    fn __iter__(ref self) -> Self:
+        return Self(self._src)
+
+    @always_inline
+    fn __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    @always_inline
+    fn __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[
+            Pointer[DelimitedReader[Self.R, Self.MAX], MutExternalOrigin]
         ](self._src)
         try:
             return mut_ptr[].next_record()
