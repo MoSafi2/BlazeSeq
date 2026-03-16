@@ -3,7 +3,8 @@
  * Add Starlight frontmatter (title) to Modo-generated API markdown files
  * that don't already have frontmatter.
  */
-import { readdir, readFile, writeFile } from 'fs/promises';
+import { readdir, readFile, writeFile, access } from 'fs/promises';
+import { constants } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -39,7 +40,24 @@ title: ${title}
   }
 }
 
-walk(contentDir).catch((err) => {
+async function main() {
+  try {
+    await access(contentDir, constants.R_OK);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.error(
+        `Error: API directory not found at ${contentDir}. ` +
+          "Ensure 'modo build' completed successfully."
+      );
+    } else {
+      console.error(err);
+    }
+    process.exit(1);
+  }
+  await walk(contentDir);
+}
+
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

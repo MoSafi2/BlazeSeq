@@ -14,16 +14,17 @@ Use from Python with:
       ...
 """
 
-from python import PythonObject, Python
-from python.bindings import PythonModuleBuilder
-from pathlib import Path
-from os import abort
-from memory import UnsafePointer
-from collections.string import StringSlice
+from std.python import PythonObject, Python
+from std.python.bindings import PythonModuleBuilder
+from std.pathlib import Path
+from std.os import abort
+from std.memory import UnsafePointer, alloc
+from std.collections.string import StringSlice
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.fastq.record import FastqRecord, RefRecord
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.io.readers import FileReader, RapidgzipReader
+from blazeseq.io.writers import Writer
 from blazeseq.io.buffered import EOFError
 from blazeseq.CONSTS import EOF
 
@@ -34,23 +35,41 @@ comptime PyFastqGZParser = FastqParser[RapidgzipReader, ParserConfig()]
 
 # Holder for the parser so we can register it with add_type (FastqParser does not implement Writable).
 struct BlazeSeqParserHolder(Movable, Writable):
-    var parser: PyFastqParser
+    var _parser_ptr: UnsafePointer[PyFastqParser, MutAnyOrigin]
 
     fn __init__(out self, var parser: PyFastqParser):
-        self.parser = parser^
+        var storage = alloc[PyFastqParser](1)
+        storage[0] = parser^
+        self._parser_ptr = storage
+
+    fn __del__(deinit self):
+        self._parser_ptr.destroy_pointee()
 
     fn __repr__(self) -> String:
         return "BlazeSeqParser(...)"
 
+    fn write_to(self, mut writer: Some[Writer]):
+        writer.write("BlazeSeqParser(...)")
 
+
+# Opaque holder: parser stored behind pointer because FastqParser[RapidgzipReader]
+# does not implement Writable (RapidgzipFile from rapidgzip package doesn't).
 struct BlazeSeqGZParserHolder(Movable, Writable):
-    var parser: PyFastqGZParser
+    var _parser_ptr: UnsafePointer[PyFastqGZParser, MutAnyOrigin]
 
     fn __init__(out self, var parser: PyFastqGZParser):
-        self.parser = parser^
+        var storage = alloc[PyFastqGZParser](1)
+        storage[0] = parser^
+        self._parser_ptr = storage
+
+    fn __del__(deinit self):
+        self._parser_ptr.destroy_pointee()
 
     fn __repr__(self) -> String:
         return "BlazeSeqParser(...)"
+
+    fn write_to(self, mut writer: Some[Writer]):
+        writer.write("BlazeSeqParser(...)")
 
 
 # ---------------------------------------------------------------------------
@@ -100,13 +119,13 @@ struct ParserMethodsPlain:
     @staticmethod
     fn has_more(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
-        return PythonObject(holder_ptr[].parser.has_more())
+        return PythonObject(holder_ptr[]._parser_ptr[].has_more())
 
     @staticmethod
     fn next_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         try:
-            var record = holder_ptr[].parser.next_record()
+            var record = holder_ptr[]._parser_ptr[].next_record()
             return PythonObject(alloc=record^)
         except e:
             if String(e) == EOF or String(e).startswith(EOF):
@@ -117,12 +136,12 @@ struct ParserMethodsPlain:
     fn next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         try:
-            var ref_rec = holder_ptr[].parser.next_ref()
+            var ref_rec = holder_ptr[]._parser_ptr[].next_ref()
             var record = FastqRecord(
                 ref_rec._id,
                 ref_rec._sequence,
                 ref_rec._quality,
-                Int8(holder_ptr[].parser.quality_schema.OFFSET),
+                Int8(holder_ptr[]._parser_ptr[].quality_schema.OFFSET),
             )
             return PythonObject(alloc=record^)
         except e:
@@ -135,7 +154,7 @@ struct ParserMethodsPlain:
         py_self: PythonObject, max_records: PythonObject
     ) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
-        var batch = holder_ptr[].parser.next_batch(Int(py=max_records))
+        var batch = holder_ptr[]._parser_ptr[].next_batch(Int(py=max_records))
         return PythonObject(alloc=batch^)
 
     @staticmethod
@@ -145,10 +164,10 @@ struct ParserMethodsPlain:
     @staticmethod
     fn parser_py_next(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
-        if not self_ptr[].parser.has_more():
+        if not self_ptr[]._parser_ptr[].has_more():
             raise Error("StopIteration")
         try:
-            var record = self_ptr[].parser.next_record()
+            var record = self_ptr[]._parser_ptr[].next_record()
             return PythonObject(alloc=record^)
         except e:
             if String(e) == EOF or String(e).startswith(EOF):
@@ -161,13 +180,13 @@ struct ParserMethodsGz:
     @staticmethod
     fn has_more(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
-        return PythonObject(holder_ptr[].parser.has_more())
+        return PythonObject(holder_ptr[]._parser_ptr[].has_more())
 
     @staticmethod
     fn next_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         try:
-            var record = holder_ptr[].parser.next_record()
+            var record = holder_ptr[]._parser_ptr[].next_record()
             return PythonObject(alloc=record^)
         except e:
             if String(e) == EOF or String(e).startswith(EOF):
@@ -178,12 +197,12 @@ struct ParserMethodsGz:
     fn next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         try:
-            var ref_rec = holder_ptr[].parser.next_ref()
+            var ref_rec = holder_ptr[]._parser_ptr[].next_ref()
             var record = FastqRecord(
                 ref_rec._id,
                 ref_rec._sequence,
                 ref_rec._quality,
-                Int8(holder_ptr[].parser.quality_schema.OFFSET),
+                Int8(holder_ptr[]._parser_ptr[].quality_schema.OFFSET),
             )
             return PythonObject(alloc=record^)
         except e:
@@ -196,7 +215,7 @@ struct ParserMethodsGz:
         py_self: PythonObject, max_records: PythonObject
     ) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
-        var batch = holder_ptr[].parser.next_batch(Int(py=max_records))
+        var batch = holder_ptr[]._parser_ptr[].next_batch(Int(py=max_records))
         return PythonObject(alloc=batch^)
 
     @staticmethod
@@ -206,10 +225,10 @@ struct ParserMethodsGz:
     @staticmethod
     fn parser_py_next(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
-        if not self_ptr[].parser.has_more():
+        if not self_ptr[]._parser_ptr[].has_more():
             raise Error("StopIteration")
         try:
-            var record = self_ptr[].parser.next_record()
+            var record = self_ptr[]._parser_ptr[].next_record()
             return PythonObject(alloc=record^)
         except e:
             if String(e) == EOF or String(e).startswith(EOF):
@@ -310,7 +329,6 @@ struct FastqBatchIterator(Movable, Writable):
         """Return self as the iterator."""
         return py_self
 
-    @staticmethod
     @staticmethod
     fn py_next(py_self: PythonObject) raises -> PythonObject:
         """Return the next FastqRecord or raise StopIteration when exhausted."""

@@ -49,6 +49,23 @@ pre-run:
     echo Running 'mojo doc'...
     mkdir -p docs/src
     pixi run mojo doc -o docs/src/blazeseq.json blazeseq
+    echo Stripping isStabilityTracked for modo compatibility...
+    pixi run python -c "
+    import json
+    with open('docs/src/blazeseq.json') as f:
+        d = json.load(f)
+    def strip_key(obj, key):
+        if isinstance(obj, dict):
+            obj.pop(key, None)
+            for v in obj.values():
+                strip_key(v, key)
+        elif isinstance(obj, list):
+            for v in obj:
+                strip_key(v, key)
+    strip_key(d, 'isStabilityTracked')
+    with open('docs/src/blazeseq.json', 'w') as f:
+        json.dump(d, f, indent=2)
+    "
     echo Done.
 
 # Bash scripts to run before build.
