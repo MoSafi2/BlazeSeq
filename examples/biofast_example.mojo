@@ -2,11 +2,14 @@ from sys import argv
 from blazeseq import FileReader, GZFile
 from blazeseq import FastqParser, ParserConfig
 from pathlib import Path
-from utils import Variant
 
 
 fn main() raises:
-    file_name: String = argv()[1]
+    var args = argv()
+    if len(args) < 2:
+        print("Usage: pixi run mojo run examples/biofast_example.mojo /path/to/file.fastq")
+        return
+    file_name: String = args[1]
     comptime config = ParserConfig(
         check_ascii=False,
         check_quality=False,

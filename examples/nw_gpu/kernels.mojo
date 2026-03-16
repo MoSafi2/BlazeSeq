@@ -89,7 +89,7 @@ fn nw_kernel(
     scores[rec_idx] = dp_prev.load(ref_len)[0]
 
 
-fn needleman_wunsch_cpu(reference: String, query_bytes: Span[Byte]) -> Int32:
+fn needleman_wunsch_cpu(reference: String, query_bytes: Span[Byte, _]) -> Int32:
     """Host-side NW taking a raw byte span for the query (avoids String null-terminator issues)."""
     var r_len = len(reference)
     var q_len = len(query_bytes)        # ← exact byte count, no null terminator

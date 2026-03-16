@@ -31,9 +31,9 @@ from blazeseq.io.buffered import (
 # ---------------------------------------------------------------------------
 
 
-fn write_fastq_records[W: WriterBackend](
-    mut writer: BufferedWriter[W], records: List[FastqRecord]
-) raises:
+fn write_fastq_records[
+    W: WriterBackend
+](mut writer: BufferedWriter[W], records: List[FastqRecord]) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""
     for i in range(len(records)):
         var s = records[i].__str__()
@@ -60,6 +60,7 @@ fn example_write_sample_to_plain_and_gzip() raises:
     # Sanger quality (offset 33 via generic_schema); id, sequence, quality
     var records = List[FastqRecord]()
     from blazeseq.fastq.quality_schema import generic_schema
+
     records.append(
         FastqRecord("@read/1", "ACGTACGT", "IIIIIIII", generic_schema)
     )
@@ -114,11 +115,13 @@ fn example_read_then_write_plain_and_gzip(input_path: String) raises:
     if is_gz:
         var parser = FastqParser[GZFile](GZFile(path_str, "rb"), "sanger")
         for record in parser.records():
-            records.append(record^)
+            records.append(record.copy())
     else:
-        var parser = FastqParser[FileReader](FileReader(Path(path_str)), "sanger")
+        var parser = FastqParser[FileReader](
+            FileReader(Path(path_str)), "sanger"
+        )
         for record in parser.records():
-            records.append(record^)
+            records.append(record.copy())
 
     if len(records) == 0:
         print("No records found in " + path_str)
@@ -164,7 +167,10 @@ fn main() raises:
         example_read_then_write_plain_and_gzip(args[1])
     else:
         print("Tip: pass an input FASTQ to also run read → write plain/gzip:")
-        print("  pixi run mojo run examples/example_fastq_writer.mojo /path/to/file.fastq")
+        print(
+            "  pixi run mojo run examples/example_fastq_writer.mojo"
+            " /path/to/file.fastq"
+        )
         print()
 
     print("=" * 60)
