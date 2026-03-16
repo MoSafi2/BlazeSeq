@@ -1,7 +1,92 @@
-from std.collections.string import String
+from std.collections.string import String, StringSlice
+from std.memory import Span
 
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
+
+
+# ---------------------------------------------------------------------------
+# FaiRecordView — zero-alloc, NOT to be stored
+# ---------------------------------------------------------------------------
+
+
+struct FaiRecordView[O: Origin](Movable, Sized):
+    """Zero-copy view over one FAI index row in the parser's buffer.
+
+    Lifetime: Valid only until the next parser read. Do not store in
+    collections; call `.to_record()` to get an owned `FaiRecord` when the
+    record must outlive the current iteration step.
+    """
+
+    var _name: Span[UInt8, Self.O]
+    var _length: Int64
+    var _offset: Int64
+    var _line_bases: Int64
+    var _line_width: Int64
+    var _qual_offset: Optional[Int64]
+
+    fn __init__(
+        out self,
+        _name: Span[UInt8, Self.O],
+        _length: Int64,
+        _offset: Int64,
+        _line_bases: Int64,
+        _line_width: Int64,
+        _qual_offset: Optional[Int64],
+    ):
+        self._name = _name
+        self._length = _length
+        self._offset = _offset
+        self._line_bases = _line_bases
+        self._line_width = _line_width
+        self._qual_offset = _qual_offset
+
+    @always_inline
+    fn name(self) -> StringSlice[origin=Self.O]:
+        """Return the sequence name (valid only while view is valid)."""
+        return StringSlice[origin=Self.O](unsafe_from_utf8=self._name)
+
+    @always_inline
+    fn length(self) -> Int64:
+        return self._length
+
+    @always_inline
+    fn offset(self) -> Int64:
+        return self._offset
+
+    @always_inline
+    fn line_bases(self) -> Int64:
+        return self._line_bases
+
+    @always_inline
+    fn line_width(self) -> Int64:
+        return self._line_width
+
+    @always_inline
+    fn qual_offset(self) -> Optional[Int64]:
+        return self._qual_offset
+
+    @always_inline
+    fn __len__(self) -> Int:
+        """Return the reference length as an Int."""
+        return Int(self._length)
+
+    fn to_record(self) -> FaiRecord:
+        """Materialize an owned `FaiRecord`. Call when the record must outlive the view.
+        """
+        return FaiRecord(
+            Name=BString(self._name),
+            Length=self._length,
+            Offset=self._offset,
+            LineBases=self._line_bases,
+            LineWidth=self._line_width,
+            QualOffset=self._qual_offset,
+        )
+
+
+# ---------------------------------------------------------------------------
+# FaiRecord — owned, storeable
+# ---------------------------------------------------------------------------
 
 
 @fieldwise_init
@@ -26,7 +111,7 @@ struct FaiRecord(Copyable, Movable, Sized, Writable):
     var QualOffset: Optional[Int64]
 
     @always_inline
-    fn name(ref [_]self) -> String:
+    fn name(ref[_] self) -> String:
         return self.Name.to_string()
 
     @always_inline
@@ -68,4 +153,3 @@ struct FaiRecord(Copyable, Movable, Sized, Writable):
         if self.QualOffset:
             writer.write("\t")
             writer.write(String(self.QualOffset.value()))
-
