@@ -102,21 +102,25 @@ struct FastaRecord(
     @always_inline
     fn write[w: Writer](self, mut writer: w, line_width: Int = 60):
         """Write the record in standard FASTA format."""
-        writer.write(">")
-        no_lines = len(self._sequence) // line_width
-        seq = String(capacity=len(self._sequence) + no_lines)
-        for i in range(no_lines):
-            seq += StringSlice(
-                unsafe_from_utf8=self._sequence[
-                    i * line_width : (i + 1) * line_width
-                ]
+        var width = line_width
+        if width <= 0:
+            width = len(self._sequence)
+
+        writer.write(">", self._id.to_string(), "\n")
+
+        var seq_len = len(self._sequence)
+        var i = 0
+        while i < seq_len:
+            var j = min(i + width, seq_len)
+            writer.write(
+                StringSlice(unsafe_from_utf8=self._sequence[i:j]),
+                "\n",
             )
-            seq += "\n"
-        writer.write(
-            self._id.to_string(),
-            "\n",
-            seq,
-        )
+            i = j
+
+    @always_inline
+    fn write_to[w: Writer](self, mut writer: w):
+        self.write(writer)
 
     @always_inline
     fn __len__(self) -> Int:
