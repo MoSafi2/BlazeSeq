@@ -15,6 +15,7 @@ All notable changes to BlazeSeq are documented here.
 - **Error context**: Parse and validation errors now include record number, line number, file position, and a snippet of the failing record when using `next_record()` or iterators.
 - **Throughput validation benchmark**: `run_throughput_validation_blazeseq.mojo` and scripts to measure effect of ASCII/quality validation on throughput.
 - **FASTA benchmarks**: Benchmark harness for FASTA parser with Noodles and needletail runners; plotting script for benchmark results.
+- **FAI index parser**: `FaiRecord` and `FaiParser` in `blazeseq.fai` for streaming parsing of FASTA/FASTQ `.fai` index files (5-column FASTA and 6-column FASTQ formats), plus a `collect()` helper to load whole indexes into memory and tests based on the samtools `faidx` examples.
 
 ### Changed
 
