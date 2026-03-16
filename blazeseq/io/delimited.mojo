@@ -221,25 +221,30 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
 struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
     """Generic delimited-file reader over a `Reader`.
 
-    Supports TSV, CSV, FAI, and similar formats.
+    Supports TSV, CSV, FAI, BED, GFF, and similar formats.
 
     The hot path — `next_record_view()` / `for view in dr.views()` — yields a
     `DelimitedRecordView` with **zero heap allocations** per row: the span
     lives in the reader's internal buffer and the offsets are stack-allocated.
 
-    Call `.materialize()` on the view when you need the record to outlive the
+    Call `.to_record()` on the view when you need the record to outlive the
     current iteration step; `next_record()` / `for record in dr.records()` do
     this automatically (one `BString` alloc per row).
 
     `for view in dr` (i.e. `__iter__`) defaults to the zero-alloc view path.
 
     Example — filter without allocating on every row:
-        ```
+        ```mojo
+        from blazeseq.io import DelimitedReader, FileReader
+        from std.pathlib import Path
+        from blazeseq.io import DelimitedRecord
+
+        var reader = FileReader(Path("data.tsv"))
         var dr = DelimitedReader[FileReader](reader^, has_header=True)
-        var results = List[DelimitedRecord]()
+        var results = List[DelimitedRecord[64]]()
         for view in dr.views():
             if String(view.get_span(2)) == "homo_sapiens":
-                results.append(view.materialize())  # alloc only on match
+                results.append(view.to_record().copy())  # alloc only on match
         ```
     """
 
@@ -253,7 +258,7 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
     fn __init__(
         out self,
         var reader: Self.R,
-        delimiter: UInt8 = 9,  # ord("\t")
+        delimiter: Byte = Byte(ord("\t")),  # ord("\t")
         has_header: Bool = False,
     ) raises:
         self.lines = LineIterator(reader^)
