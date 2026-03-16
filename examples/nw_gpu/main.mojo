@@ -18,9 +18,9 @@ Usage (from repo root):
 Requires a compatible GPU.
 """
 
-from sys import has_accelerator, exit
+from std.sys import has_accelerator, exit
 from blazeseq.fastq.record_batch import FastqBatch
-from gpu.host import DeviceContext
+from std.gpu.host import DeviceContext
 
 from examples.nw_gpu.execution import (
     load_batches_synthetic,

@@ -1,7 +1,7 @@
-from sys import argv
+from std.sys import argv
 from blazeseq import FileReader, GZFile
 from blazeseq import FastqParser, ParserConfig
-from pathlib import Path
+from std.pathlib import Path
 
 
 fn main() raises:

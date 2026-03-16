@@ -17,10 +17,10 @@ from blazeseq.fastq.parser import FastqParser
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.io.readers import MemoryReader, Reader
-from gpu.host import DeviceContext
-from gpu.host.device_context import DeviceBuffer, HostBuffer
-from pathlib import Path
-from time import perf_counter_ns
+from std.gpu.host import DeviceContext
+from std.gpu.host.device_context import DeviceBuffer, HostBuffer
+from std.pathlib import Path
+from std.time import perf_counter_ns
 
 from examples.nw_gpu.kernels import (
     nw_kernel,

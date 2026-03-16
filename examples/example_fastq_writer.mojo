@@ -13,9 +13,9 @@ Usage:
     pixi run mojo run examples/example_fastq_writer.mojo /path/to/input.fastq
 """
 
-from pathlib import Path
-from sys import argv
-from os import remove
+from std.pathlib import Path
+from std.sys import argv
+from std.os import remove
 
 from blazeseq import FastqRecord, FastqParser, FileReader, GZFile
 from blazeseq.io.writers import WriterBackend

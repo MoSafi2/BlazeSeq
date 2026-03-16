@@ -8,8 +8,8 @@
     scoring (match +1, mismatch -1, gap -1) for correctness and CPU benchmarking.
 """
 
-from gpu import block_idx
-from memory import UnsafePointer
+from std.gpu import block_idx
+from std.memory import UnsafePointer
 
 # Max reference and query length for the NW kernel (avoids dynamic alloc on device).
 comptime MAX_REF_LEN: Int = 256

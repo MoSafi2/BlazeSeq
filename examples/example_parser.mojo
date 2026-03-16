@@ -12,8 +12,8 @@ Usage:
 """
 
 from blazeseq import FastqParser, ParserConfig, FileReader
-from pathlib import Path
-from sys import argv
+from std.pathlib import Path
+from std.sys import argv
 
 
 # ---------------------------------------------------------------------------
