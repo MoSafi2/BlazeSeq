@@ -425,7 +425,9 @@ struct FastqRecord(
         return not self.__eq__(other)
 
     fn __repr__(self) -> String:
-        return self.__str__()
+        var string = String()
+        self.write_to(string)
+        return string
 
 
 @align(64)

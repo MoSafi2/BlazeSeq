@@ -39,14 +39,14 @@ fn main() raises:
         print("No GPU detected. This example requires a compatible GPU.")
         exit(1)
 
-    # Generate synthetic data only (no file I/O). 1M reads, 20 bp each.
+    # Generate synthetic data only (no file I/O). 1M reads, 40 bp each.
     print("Generating 1 million 40 bp synthetic reads...")
     var batches = load_batches_synthetic(1_000_000, 40)
     print("Generated 1M reads (40 bp each).")
 
     var total = total_record_count(batches)
-    print("Total records: ", total)
-    print("Reference (40 bp): ", REF_40BP)
+    print(t"Total records: {total}")
+    print(t"Reference (40 bp): {REF_40BP}")
 
     # Upload reference to device and get buffer + length for kernel calls.
     var ctx = DeviceContext()
@@ -64,38 +64,24 @@ fn main() raises:
     # print("GPU scores: ", gpu_scores[1:10].__str__())
     # print("CPU scores: ", cpu_scores[1:10].__str__())
     print("")
-    print("GPU time:  ", gpu_sec, " s")
-    print("CPU time:  ", cpu_sec, " s")
-    print("Acceleration ratio (CPU/GPU): ", cpu_sec / gpu_sec, "x")
+    print(t"GPU time:  {gpu_sec} s")
+    print(t"CPU time:  {cpu_sec} s")
+    print(t"Acceleration ratio (CPU/GPU): {cpu_sec / gpu_sec}x")
 
     # Validate that GPU and CPU produce the same alignment scores.
     var match_result = scores_match(gpu_scores, cpu_scores)
     var match_result_bool: Bool = match_result[0]
     var mismatch_idx = match_result[1]
     if match_result_bool:
-        print(
-            "Validation: GPU and CPU results match (",
-            len(gpu_scores),
-            " scores).",
-        )
+        print(t"Validation: GPU and CPU results match ({len(gpu_scores)} scores).")
     else:
         if mismatch_idx == -1:
             print(
-                "Validation FAILED: length mismatch (GPU: ",
-                len(gpu_scores),
-                ", CPU: ",
-                len(cpu_scores),
-                ")",
+                t"Validation FAILED: length mismatch (GPU: {len(gpu_scores)}, CPU: {len(cpu_scores)})"
             )
         else:
+            print(t"Validation FAILED: first mismatch at record index {mismatch_idx}")
             print(
-                "Validation FAILED: first mismatch at record index ",
-                mismatch_idx,
-            )
-            print(
-                "  GPU score: ",
-                gpu_scores[mismatch_idx],
-                ", CPU score: ",
-                cpu_scores[mismatch_idx],
+                t"  GPU score: {gpu_scores[mismatch_idx]}, CPU score: {cpu_scores[mismatch_idx]}"
             )
         exit(1)

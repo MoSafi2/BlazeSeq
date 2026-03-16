@@ -143,7 +143,9 @@ fn format_parse_error(
         file_position=file_position,
         record_snippet=record_snippet,
     )
-    return parse_err.__str__()
+    var string = String()
+    parse_err.write_to(string)
+    return string
 
 
 # From extramojo pacakge, skipping version problems

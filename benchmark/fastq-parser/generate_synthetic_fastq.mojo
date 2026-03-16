@@ -9,8 +9,8 @@ Usage:
     size_gb defaults to 1.
 """
 
-from sys import argv
-from pathlib import Path
+from std.sys import argv
+from std.pathlib import Path
 from blazeseq.CONSTS import GB
 from blazeseq.utils import generate_synthetic_fastq_buffer, compute_num_reads_for_size
 from blazeseq.io.buffered import buffered_writer_for_file
@@ -31,13 +31,13 @@ fn main() raises:
 
     var target_size = size_gb * GB
     var num_reads = compute_num_reads_for_size(target_size, 100, 100)
-    print("Generating ", num_reads, " reads (~", size_gb, " GB)...")
+    print(t"Generating {num_reads} reads (~{size_gb} GB)...")
     var data = generate_synthetic_fastq_buffer(
         num_reads, 100, 100, 33, 73, "generic"
     )
-    print("Buffer size: ", len(data), " bytes")
+    print(t"Buffer size: {len(data)} bytes")
 
     var writer = buffered_writer_for_file(Path(output_path), capacity=4 * 1024 * 1024)
     writer.write_bytes(data)
     writer.flush()
-    print("Wrote ", output_path)
+    print(t"Wrote {output_path}")

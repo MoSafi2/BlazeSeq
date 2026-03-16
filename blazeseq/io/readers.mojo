@@ -9,7 +9,7 @@ it pass through to a normal reader that is quite fast when paired with a
 """
 
 from std.memory import memset_zero, UnsafePointer, Span, memcpy
-import std.ffi as ffi
+from std.ffi import OwnedDLHandle
 from std.sys.info import CompilationTarget
 from std.pathlib import Path
 from std.collections.string import String, chr
@@ -228,7 +228,7 @@ struct MemoryReader(Movable, Reader):
 struct ZLib(Movable):
     """Wrapper for zlib library functions."""
 
-    var lib_handle: ffi.OwnedDLHandle
+    var lib_handle: OwnedDLHandle
 
     @staticmethod
     fn _get_libname() -> StaticString:
@@ -239,7 +239,7 @@ struct ZLib(Movable):
 
     fn __init__(out self) raises:
         """Initialize zlib wrapper."""
-        self.lib_handle = ffi.OwnedDLHandle(Self._get_libname())
+        self.lib_handle = OwnedDLHandle(Self._get_libname())
 
     fn gzopen(
         self, mut filename: String, mut mode: String
