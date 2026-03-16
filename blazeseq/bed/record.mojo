@@ -74,6 +74,122 @@ struct ItemRgb(Copyable, Movable, Writable):
 
 
 # ---------------------------------------------------------------------------
+# Position — 1-based coordinate (aligned with noodles_core::Position)
+# ---------------------------------------------------------------------------
+
+struct Position(Copyable, Equatable, TrivialRegisterPassable):
+    """1-based genomic coordinate (aligned with noodles_core::Position).
+
+    Valid positions are >= 1. Position 0 is invalid.
+    BED stores 0-based half-open; convert when exposing via start_position/interval.
+    """
+
+    var _value: Int64
+
+    fn __init__(out self, value: Int64) raises:
+        if value < 1:
+            raise Error("Position must be >= 1")
+        self._value = value
+
+    @always_inline
+    fn __init__(out self, value: Int64, _unsafe: Bool):
+        """Internal: use when value is already known to be >= 1 (e.g. from conversion)."""
+        # Keep 1-based invariant: do not store 0
+        self._value = value
+
+    @always_inline
+    fn get(self) -> Int64:
+        """Return the raw 1-based coordinate."""
+        return self._value
+
+    @always_inline
+    fn __eq__(self, other: Self) -> Bool:
+        return self._value == other._value
+
+    @always_inline
+    fn __lt__(self, other: Self) -> Bool:
+        return self._value < other._value
+
+    @always_inline
+    fn __le__(self, other: Self) -> Bool:
+        return self._value <= other._value
+
+    @always_inline
+    fn __gt__(self, other: Self) -> Bool:
+        return self._value > other._value
+
+    @always_inline
+    fn __ge__(self, other: Self) -> Bool:
+        return self._value >= other._value
+
+
+
+# ---------------------------------------------------------------------------
+# Interval — 1-based closed [start, end] (aligned with noodles_core::Interval)
+# ---------------------------------------------------------------------------
+
+struct Interval(Copyable, Equatable, TrivialRegisterPassable):
+    """1-based closed genomic interval [start, end] (aligned with noodles_core::region::Interval).
+
+    Both start and end are 1-based and inclusive. Supports contains(), intersects(), length().
+    """
+
+    var _start: Position
+    var _end: Position
+
+    fn __init__(out self, start: Position, end: Position) raises:
+        if start.get() > end.get():
+            raise Error("Interval start must be <= end")
+        self._start = start
+        self._end = end
+
+    @always_inline
+    fn __init__(out self, start: Position, end: Position, _unsafe: Bool):
+        """Internal: use when start <= end is already guaranteed."""
+        self._start = start
+        self._end = end
+
+    @always_inline
+    fn start(self) -> Position:
+        return self._start
+
+    @always_inline
+    fn end(self) -> Position:
+        return self._end
+
+    @always_inline
+    fn length(self) -> Int64:
+        """Number of bases in the interval (end - start + 1 for closed [start, end])."""
+        return self._end.get() - self._start.get() + 1
+
+    @always_inline
+    fn is_empty(self) -> Bool:
+        return self._start.get() > self._end.get()
+
+    fn contains(self, position: Position) -> Bool:
+        """True if position is in [start, end] (1-based closed)."""
+        return self._start.get() <= position.get() and position.get() <= self._end.get()
+
+    fn intersects(self, other: Self) -> Bool:
+        """True if this interval overlaps other (both 1-based closed)."""
+        return self._start.get() <= other._end.get() and other._start.get() <= self._end.get()
+
+
+fn position_try_from(value: Int64) -> Optional[Position]:
+    """Create a Position if value >= 1 (1-based), else None (aligned with noodles_core)."""
+    if value < 1:
+        return None
+    return Optional(Position(value, True))
+
+
+fn interval_try_from_start_end(start: Int64, end: Int64) -> Optional[Interval]:
+    """Build an Interval from 1-based start and end (closed [start, end]) if valid."""
+    if start < 1 or end < 1 or start > end:
+        return None
+    return Optional(Interval(Position(start, True), Position(end, True), True))
+
+
+# ---------------------------------------------------------------------------
 # BedRecordView — zero-alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
@@ -145,6 +261,35 @@ struct BedRecordView[O: Origin](Movable):
     fn chrom_end(self) -> Int64:
         return self._chrom_end
 
+    fn start_position(self) -> Position:
+        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1)."""
+        return Position(self._chrom_start + 1, True)
+
+    fn end_position(self) raises -> Position:
+        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end)."""
+        if self._chrom_end < 1:
+            raise Error("chrom_end must be >= 1 for 1-based end_position (BED [start,end) has no bases when end is 0)")
+        return Position(self._chrom_end, True)
+
+    fn interval(self) raises -> Interval:
+        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval)."""
+        if self._chrom_end < 1:
+            raise Error("chrom_end must be >= 1 for 1-based interval (BED [start,end) has no bases when end is 0)")
+        return Interval(
+            Position(self._chrom_start + 1, True), Position(self._chrom_end, True), True
+        )
+
+    fn thick_interval(self) -> Optional[Interval]:
+        """Thick (coding) extent if fields 7–8 present; else None (1-based closed)."""
+        if not self._thick_start or not self._thick_end:
+            return None
+        var opt = interval_try_from_start_end(
+            self._thick_start.value() + 1, self._thick_end.value()
+        )
+        if not opt:
+            return None
+        return Optional(opt.value())
+
     @always_inline
     fn name(self) -> Optional[StringSlice[origin=Self.O]]:
         if not self._name:
@@ -167,9 +312,10 @@ struct BedRecordView[O: Origin](Movable):
     fn thick_end(self) -> Optional[Int64]:
         return self._thick_end
 
-    @always_inline
     fn item_rgb(self) -> Optional[ItemRgb]:
-        return self._item_rgb
+        if not self._item_rgb:
+            return None
+        return Optional(self._item_rgb.value().copy())
 
     @always_inline
     fn block_count(self) -> Optional[Int]:
@@ -202,7 +348,9 @@ struct BedRecordView[O: Origin](Movable):
             Strand=self._strand,
             ThickStart=self._thick_start,
             ThickEnd=self._thick_end,
-            ItemRgb=self._item_rgb.copy() if self._item_rgb else None,
+            ItemRgb=(
+                Optional(self._item_rgb.value().copy()) if self._item_rgb else None
+            ),
             BlockSizes=block_sizes^ if block_sizes else None,
             BlockStarts=block_starts^ if block_starts else None,
             NumFields=self._num_fields,
@@ -259,6 +407,35 @@ struct BedRecord(Copyable, Movable, Writable):
     fn chrom_end(self) -> Int64:
         return self.ChromEnd
 
+    fn start_position(self) -> Position:
+        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1)."""
+        return Position(self.ChromStart + 1, True)
+
+    fn end_position(self) raises -> Position:
+        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end)."""
+        if self.ChromEnd < 1:
+            raise Error("ChromEnd must be >= 1 for 1-based end_position (BED [start,end) has no bases when end is 0)")
+        return Position(self.ChromEnd, True)
+
+    fn interval(self) raises -> Interval:
+        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval)."""
+        if self.ChromEnd < 1:
+            raise Error("ChromEnd must be >= 1 for 1-based interval (BED [start,end) has no bases when end is 0)")
+        return Interval(
+            Position(self.ChromStart + 1, True), Position(self.ChromEnd, True), True
+        )
+
+    fn thick_interval(ref self) -> Optional[Interval]:
+        """Thick (coding) extent if fields 7–8 present; else None (1-based closed)."""
+        if not self.ThickStart or not self.ThickEnd:
+            return None
+        var opt = interval_try_from_start_end(
+            self.ThickStart.value() + 1, self.ThickEnd.value()
+        )
+        if not opt:
+            return None
+        return Optional(opt.value())
+
     @always_inline
     fn name(ref[_] self) -> Optional[String]:
         if not self.Name:
@@ -281,9 +458,10 @@ struct BedRecord(Copyable, Movable, Writable):
     fn thick_end(self) -> Optional[Int64]:
         return self.ThickEnd
 
-    @always_inline
-    fn item_rgb(self) -> Optional[ItemRgb]:
-        return self.ItemRgb
+    fn item_rgb(ref self) -> Optional[ItemRgb]:
+        if not self.ItemRgb:
+            return None
+        return Optional(self.ItemRgb.value().copy())
 
     fn block_sizes(ref self) -> Optional[List[Int64]]:
         if self.BlockSizes:
