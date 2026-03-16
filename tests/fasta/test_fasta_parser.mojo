@@ -10,7 +10,8 @@ Coverage:
   - Public parser accessors: has_more(), get_record_number(), get_line_number()
 """
 
-from blazeseq import FastaParser, FastaRecord, FileReader, MemoryReader
+from blazeseq import FastaParser, FastaRecord, FileReader
+from blazeseq.io import MemoryReader
 from blazeseq.fasta.parser import ParserConfig
 from blazeseq.CONSTS import EOF
 from std.pathlib import Path
