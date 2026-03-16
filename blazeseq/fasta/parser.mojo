@@ -2,7 +2,8 @@ from blazeseq.fasta.record import FastaRecord
 from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
 from blazeseq.CONSTS import EOF
-from blazeseq.utils import format_parse_error, _strip_spaces
+from blazeseq.utils import format_parse_error, _strip_spaces, _check_ascii
+from blazeseq.errors import FastxErrorCode, format_validation_error_from_code
 from blazeseq.byte_string import BString
 from memory import Span
 from collections import List
@@ -13,7 +14,51 @@ from collections.string import StringSlice, String
 comptime FASTA_HEADER_BYTE: Byte = 62  # ord('>')
 
 
-struct FastaParser[R: Reader](Iterable, Movable):
+struct ParserConfig(Copyable):
+    """Configuration for FASTA parsing.
+
+    Attributes:
+        check_ascii: If True, validate that id and sequence bytes are ASCII.
+    """
+
+    var check_ascii: Bool
+
+    fn __init__(out self, check_ascii: Bool = False):
+        self.check_ascii = check_ascii
+
+
+struct Validator(Copyable):
+    """Validator for FASTA records; enforces 7-bit ASCII on id and sequence."""
+
+    fn __init__(out self):
+        pass
+
+    @always_inline
+    fn _validate(self, id_bytes: BString, seq_bytes: BString) -> FastxErrorCode:
+        var code = _check_ascii(id_bytes.as_span())
+        if code != FastxErrorCode.OK:
+            return code
+        return _check_ascii(seq_bytes.as_span())
+
+    fn validate(
+        self,
+        id_bytes: BString,
+        seq_bytes: BString,
+        record_number: Int = 0,
+    ) raises:
+        var code = self._validate(id_bytes, seq_bytes)
+        if code != FastxErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code,
+                    record_number,
+                    "",
+                    "",
+                )
+            )
+
+
+struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, Movable):
     """Streaming FASTA parser over a `Reader`.
 
     Multi-line FASTA sequences are normalised so that all line breaks within
@@ -29,18 +74,20 @@ struct FastaParser[R: Reader](Iterable, Movable):
 
     comptime IteratorType[
         mut: Bool, origin: Origin[mut=mut]
-    ] = _FastaParserRecordIter[Self.R, origin]
+    ] = _FastaParserRecordIter[Self.R, Self.config, origin]
 
     var lines: LineIterator[Self.R]
     var _record_number: Int  # 1-based record count
     var _pending_ids: List[BString]
     var _last_seq_size: UInt32  # tracks previous sequence size for optimistic pre-allocation
+    var validator: Validator
 
     fn __init__(out self, var reader: Self.R) raises:
         self.lines = LineIterator(reader^)
         self._record_number = 0
         self._pending_ids = List[BString]()
         self._last_seq_size = 0
+        self.validator = Validator()
 
     # ------------------------------------------------------------------ #
     # Public accessors                                                     #
@@ -72,7 +119,6 @@ struct FastaParser[R: Reader](Iterable, Movable):
     # Public record API                                                    #
     # ------------------------------------------------------------------ #
 
-    # TODO: Add validation to FASTA Record
     fn next_record(mut self) raises -> FastaRecord:
         """Return the next FASTA record as an owned FastaRecord.
 
@@ -114,6 +160,10 @@ struct FastaParser[R: Reader](Iterable, Movable):
             )
             raise Error(msg)
 
+        @parameter
+        if Self.config.check_ascii:
+            self.validator.validate(id_str, seq_buf, self._record_number + 1)
+
         self._record_number += 1
         return FastaRecord(id_str^, seq_buf^)
 
@@ -154,7 +204,9 @@ struct FastaParser[R: Reader](Iterable, Movable):
         return {Pointer(to=self)}
 
 
-struct _FastaParserRecordIter[R: Reader, origin: Origin](Iterator):
+struct _FastaParserRecordIter[R: Reader, cfg: ParserConfig, origin: Origin](
+    Iterator
+):
     """Iterator returned by `for rec in parser`.
 
     Fix #5: Parse errors are now re-raised rather than printed-and-swallowed,
@@ -166,11 +218,11 @@ struct _FastaParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     comptime Element = FastaRecord
 
-    var _src: Pointer[FastaParser[Self.R], Self.origin]
+    var _src: Pointer[FastaParser[Self.R, Self.cfg], Self.origin]
 
     fn __init__(
         out self,
-        src: Pointer[FastaParser[Self.R], Self.origin],
+        src: Pointer[FastaParser[Self.R, Self.cfg], Self.origin],
     ):
         self._src = src
 

@@ -11,6 +11,7 @@ Coverage:
 """
 
 from blazeseq import FastaParser, FastaRecord, FileReader, MemoryReader
+from blazeseq.fasta.parser import ParserConfig
 from blazeseq.CONSTS import EOF
 from pathlib import Path
 from testing import assert_equal, assert_true, assert_raises, TestSuite
@@ -163,6 +164,66 @@ fn test_invalid_first_line_not_header() raises:
             "Expected 'does not start with' in error, got: " + String(e),
         )
     assert_true(raised, "Expected a parse error for a non-header first line")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ASCII validation
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+fn _fasta_bytes_with_non_ascii_in_id() -> List[Byte]:
+    """FASTA with non-ASCII byte (0x80) in the id line after '>'."""
+    var data = List[Byte]()
+    data.append(ord(">"))
+    data.append(ord("i"))
+    data.append(ord("d"))
+    data.append(Byte(0x80))
+    data.append(ord("\n"))
+    data.append(ord("A"))
+    data.append(ord("C"))
+    data.append(ord("G"))
+    data.append(ord("T"))
+    data.append(ord("\n"))
+    return data^
+
+
+fn _fasta_bytes_with_non_ascii_in_sequence() -> List[Byte]:
+    """FASTA with non-ASCII byte (0x80) in the sequence."""
+    var data = List[Byte]()
+    data.append(ord(">"))
+    data.append(ord("i"))
+    data.append(ord("d"))
+    data.append(ord("1"))
+    data.append(ord("\n"))
+    data.append(ord("A"))
+    data.append(ord("C"))
+    data.append(Byte(0x80))
+    data.append(ord("G"))
+    data.append(ord("T"))
+    data.append(ord("\n"))
+    return data^
+
+
+fn test_ascii_validation_non_ascii_in_id() raises:
+    """Non-ASCII byte in FASTA id line raises with 'Non ASCII' message."""
+    var data = _fasta_bytes_with_non_ascii_in_id()
+    var reader = MemoryReader(data^)
+    var parser = FastaParser[MemoryReader, ParserConfig(check_ascii=True)](
+        reader^
+    )
+    with assert_raises(contains="Non ASCII"):
+        _ = parser.next_record()
+
+
+fn test_ascii_validation_non_ascii_in_sequence() raises:
+    """Non-ASCII byte in FASTA sequence raises with 'Non ASCII' message."""
+    var data = _fasta_bytes_with_non_ascii_in_sequence()
+    var reader = MemoryReader(data^)
+    var parser = FastaParser[MemoryReader, ParserConfig(check_ascii=True)](
+        reader^
+    )
+    with assert_raises(contains="Non ASCII"):
+        _ = parser.next_record()
 
 
 fn test_records_iterator() raises:
