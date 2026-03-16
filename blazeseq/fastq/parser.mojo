@@ -141,15 +141,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         self._batch_size = batch_size
 
     @always_inline
-    fn get_record_number(ref self) -> Int:
+    fn _get_record_number(ref self) -> Int:
         return self._current_line_number // 4
 
     @always_inline
-    fn get_line_number(ref self) -> Int:
+    fn _get_line_number(ref self) -> Int:
         return self._current_line_number
 
     @always_inline
-    fn get_file_position(ref self) -> Int64:
+    fn _get_file_position(ref self) -> Int64:
         return Int64(self.buffer.stream_position())
 
     @always_inline
@@ -164,7 +164,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             raise Error(
                 format_validation_error_from_code(
                     code,
-                    self.get_record_number(),
+                    self._get_record_number(),
                     "",
                     self._get_record_snippet(ref_rec),
                 )
@@ -188,9 +188,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             raise Error(
                 format_parse_error(
                     String(e),
-                    self.get_record_number(),
-                    self.get_line_number(),
-                    self.get_file_position(),
+                    self._get_record_number(),
+                    self._get_line_number(),
+                    self._get_file_position(),
                     "",
                 )
             )
@@ -199,7 +199,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             raise Error(
                 format_validation_error_from_code(
                     code,
-                    self.get_record_number(),
+                    self._get_record_number(),
                     "",
                     self._get_record_snippet_from_fastq(record),
                 )
@@ -260,7 +260,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 refill_code,
                 rec_num,
                 line_num,
-                self.get_file_position(),
+                self._get_file_position(),
                 _record_snippet(self.buffer.view(), offsets),
             )
         if refill_code == FastxErrorCode.UNEXPECTED_EOF:
@@ -308,7 +308,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     parse_code,
                     rec_num,
                     line_num,
-                    self.get_file_position(),
+                    self._get_file_position(),
                     _record_snippet(scan_view, offsets),
                 )
             )

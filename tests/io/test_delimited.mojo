@@ -48,7 +48,7 @@ fn test_delimited_reader_skips_empty_lines() raises:
     var reader = _memory_reader_from_string(content)
     var delimited = DelimitedReader[MemoryReader](reader^)
 
-    var records = List[DelimitedRecord]()
+    var records = List[DelimitedRecord[64]]()
     for record in delimited.records():
         records.append(record.copy())
 
@@ -56,11 +56,6 @@ fn test_delimited_reader_skips_empty_lines() raises:
     assert_equal(records[0][0].to_string(), "a", "First record first field")
     assert_equal(records[1][0].to_string(), "1", "Second record first field")
     assert_equal(records[2][0].to_string(), "3", "Third record first field")
-    assert_equal(
-        delimited.get_record_number(),
-        3,
-        "Record number tracks consumed records",
-    )
 
 
 fn test_delimited_reader_inconsistent_num_fields_raises() raises:

@@ -61,16 +61,16 @@ struct FaiParser[R: Reader](Iterable, Movable):
         return self._rows.has_more()
 
     @always_inline
-    fn get_record_number(ref self) -> Int:
-        return self._rows.get_record_number()
+    fn _get_record_number(ref self) -> Int:
+        return self._rows._get_record_number()
 
     @always_inline
-    fn get_line_number(ref self) -> Int:
-        return self._rows.get_line_number()
+    fn _get_line_number(ref self) -> Int:
+        return self._rows._get_line_number()
 
     @always_inline
-    fn get_file_position(ref self) -> Int64:
-        return self._rows.get_file_position()
+    fn _get_file_position(ref self) -> Int64:
+        return self._rows._get_file_position()
 
     # ------------------------------------------------------------------ #
     # Record API                                                         #
@@ -95,9 +95,9 @@ struct FaiParser[R: Reader](Iterable, Movable):
         if n_fields != 5 and n_fields != 6:
             var msg = format_parse_error(
                 "FAI row must have 5 or 6 TAB-delimited columns",
-                self.get_record_number() + 1,
-                self.get_line_number(),
-                self.get_file_position(),
+                self._get_record_number() + 1,
+                self._get_line_number(),
+                self._get_file_position(),
                 "",
             )
             raise Error(msg)

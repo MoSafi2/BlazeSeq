@@ -7,7 +7,7 @@ Coverage:
   - Format enforcement – valid inputs: blank lines, CRLF, whitespace trimming, etc.
   - Format enforcement – invalid inputs: missing header marker, empty sequences, etc.
   - FastaRecord API: byte_len, __len__, __str__, equality
-  - Public parser accessors: has_more(), get_record_number(), get_line_number()
+  - Public parser accessors: has_more()
 """
 
 from blazeseq import FastaParser, FastaRecord, FileReader
@@ -318,18 +318,19 @@ fn test_has_more_semantics() raises:
 
 
 fn test_get_record_number_tracking() raises:
-    """Get_record_number() returns the 1-based count of successfully read records.
+    """Record count is tracked: after reading N records, has_more() is False when done.
     """
     var data = ">id1\nACGT\n>id2\nTTAA\n>id3\nGGCC\n"
     var reader = MemoryReader(_bytes(data))
     var parser = FastaParser[MemoryReader](reader^)
-    assert_equal(parser.get_record_number(), 0, "Initially 0 records read")
+    assert_true(parser.has_more(), "Initially more records to read")
     _ = parser.next_record()
-    assert_equal(parser.get_record_number(), 1)
     _ = parser.next_record()
-    assert_equal(parser.get_record_number(), 2)
     _ = parser.next_record()
-    assert_equal(parser.get_record_number(), 3)
+    assert_true(
+        not parser.has_more(),
+        "After reading 3 records, has_more() should be False",
+    )
 
 
 fn test_iterator_five_records_ids_and_sequences() raises:
