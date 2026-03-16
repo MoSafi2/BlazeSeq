@@ -9,8 +9,8 @@ Usage:
     mode: batches | records | ref_records
 """
 
-from sys import argv
-from pathlib import Path
+from std.sys import argv
+from std.pathlib import Path
 from blazeseq.CONSTS import KB
 from blazeseq.io.readers import FileReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig

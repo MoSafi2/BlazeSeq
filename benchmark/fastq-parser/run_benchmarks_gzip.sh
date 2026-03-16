@@ -6,8 +6,8 @@
 
 set -e
 
-# --- Mount type: --ramfs (default) or --tmpfs ---
-BENCH_FS="ramfs"
+# --- Mount type: tmpfs (default) or --ramfs/--tmpfs ---
+BENCH_FS="tmpfs"
 while [ $# -gt 0 ]; do
     case "$1" in
         --ramfs) BENCH_FS="ramfs"; shift ;;

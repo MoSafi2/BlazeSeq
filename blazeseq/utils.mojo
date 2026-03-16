@@ -8,32 +8,33 @@ Most other symbols (`SearchState`, `SearchResults`, `_parse_schema`, `_parse_rec
 `_handle_incomplete_line`, etc.) are used by the parser and are internal.
 """
 
-from memory import pack_bits
+from std.memory import pack_bits
 from blazeseq.CONSTS import simd_width
-from bit import count_trailing_zeros
-import math
-from sys.info import simd_width_of
-import math
+from std.bit import count_trailing_zeros
+from std import math
 from blazeseq.CONSTS import *
-from blazeseq.io.buffered import EOFError, LineIteratorError, LineIterator, BufferedReader
+from blazeseq.fastq.quality_schema import (
+    QualitySchema,
+    generic_schema,
+    sanger_schema,
+    solexa_schema,
+    illumina_1_3_schema,
+    illumina_1_5_schema,
+    illumina_1_8_schema,
+)
+from blazeseq.io.buffered import (
+    EOFError,
+    LineIteratorError,
+    LineIterator,
+    BufferedReader,
+)
 from blazeseq.io.readers import Reader
 from blazeseq.errors import ParseError, FastxErrorCode
-from blazeseq.fastq.parser import FastqParser
-
-
-
-
-
-comptime NEW_LINE = 10
-comptime AT_SIGN = ord("@")
-comptime PLUS_SIGN = ord("+")
-comptime SIMD_U8_WIDTH: Int = simd_width_of[DType.uint8]()
 
 
 @doc_private
-@register_passable("trivial")
 @align(64)
-struct RecordOffsets(Copyable, Movable, Writable):
+struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
     """
     Byte offsets into the buffer for one FASTQ record, all **relative to
     view()[0]** (i.e. relative to buf._ptr + buf._head) at the moment
@@ -48,13 +49,14 @@ struct RecordOffsets(Copyable, Movable, Writable):
 
     Zero-initialised; record_end == 0 means "not yet complete".
     """
-    var header_start : Int   # always 0 for the first record; non-zero after
-                             # make_room shifts don't apply here (we re-anchor
-                             # to view()[0] each time)
-    var seq_start    : Int   # set after HEADER phase newline is found
-    var sep_start    : Int   # set after SEQ phase newline is found
-    var qual_start   : Int   # set after SEP phase newline is found
-    var record_end   : Int   # set after QUAL phase newline is found (or EOF)
+
+    var header_start: Int  # always 0 for the first record; non-zero after
+    # make_room shifts don't apply here (we re-anchor
+    # to view()[0] each time)
+    var seq_start: Int  # set after HEADER phase newline is found
+    var sep_start: Int  # set after SEQ phase newline is found
+    var qual_start: Int  # set after SEP phase newline is found
+    var record_end: Int  # set after QUAL phase newline is found (or EOF)
 
     @always_inline
     fn __init__(
@@ -88,13 +90,12 @@ struct RecordOffsets(Copyable, Movable, Writable):
     fn is_complete(self) -> Bool:
         return self.record_end != 0
 
-    
-
 
 @doc_private
-@register_passable("trivial")
 @fieldwise_init
-struct SearchPhase(Copyable, Equatable, Movable, Writable):
+struct SearchPhase(
+    Copyable, Equatable, Movable, TrivialRegisterPassable, Writable
+):
     """
     Tracks which line boundary we are currently looking for within a 4-line
     FASTQ record.  Values are ordered so that `<=` comparisons work correctly
@@ -105,12 +106,13 @@ struct SearchPhase(Copyable, Equatable, Movable, Writable):
     SEP      (2) – seeking the '\\n' that ends the '+' separator line
     QUAL     (3) – seeking the '\\n' that ends the quality line
     """
+
     var value: Int8
 
     comptime HEADER = Self(0)
-    comptime SEQ    = Self(1)
-    comptime SEP    = Self(2)
-    comptime QUAL   = Self(3)
+    comptime SEQ = Self(1)
+    comptime SEP = Self(2)
+    comptime QUAL = Self(3)
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -119,10 +121,9 @@ struct SearchPhase(Copyable, Equatable, Movable, Writable):
     @always_inline
     fn __le__(self, other: Self) -> Bool:
         return self.value <= other.value
-    
+
     fn write_to(self, mut writer: Some[Writer]):
         writer.write(self.value)
-    
 
 
 @doc_private
@@ -133,7 +134,8 @@ fn format_parse_error(
     file_position: Int64,
     record_snippet: String,
 ) -> String:
-    """Build ParseError from message and parser context; return formatted string for raising Error."""
+    """Build ParseError from message and parser context; return formatted string for raising Error.
+    """
     var parse_err = ParseError(
         message,
         record_number=record_number,
@@ -144,12 +146,10 @@ fn format_parse_error(
     return parse_err.__str__()
 
 
-
-
 # From extramojo pacakge, skipping version problems
 @always_inline("nodebug")
 @doc_private
-fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
+fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Function to find the next occurrence of character.
     Args:
@@ -161,9 +161,9 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
         The index of the found character, or -1 if not found.
     """
 
-    comptime CASCADE = build_cascade[SIMD_U8_WIDTH]()
+    comptime CASCADE = build_cascade[simd_width]()
 
-    if (len(haystack) - start) < SIMD_U8_WIDTH:
+    if (len(haystack) - start) < simd_width:
         for i in range(start, len(haystack)):
             if haystack[i] == chr:
                 return i
@@ -172,49 +172,35 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     # Do an unaligned initial read, it doesn't matter that this will overlap the next portion
     var ptr = haystack[start:].unsafe_ptr()
 
-
     # Find the last aligned end
     var haystack_len = len(haystack) - start
-    var aligned_end = math.align_down(
-        haystack_len, SIMD_U8_WIDTH
-    )  
+    var aligned_end = math.align_down(haystack_len, simd_width)
 
     # Now do aligned reads all through
-    for s in range(0, aligned_end, SIMD_U8_WIDTH):
-        var v = ptr.load[width=SIMD_U8_WIDTH](s)
+    for s in range(0, aligned_end, simd_width):
+        var v = ptr.load[width=simd_width](s)
         var mask = v.eq(chr)
         var packed = pack_bits(mask)
         if packed:
             var index = Int(count_trailing_zeros(packed))
             return s + index + start
 
-    
     var tail_start = aligned_end  # relative to ptr base (haystack[start:])
     var tail_len = len(haystack) - (start + tail_start)
 
-    # Finish and last bytes
-    @parameter
-    fn check_tail[width: Int](p: UnsafePointer[UInt8], base_offset: Int) -> Int:
-        """Load `width` bytes, return absolute index of first match or -1."""
-        var v = p.load[width=width]()
-        var mask = v.eq(SIMD[DType.uint8, width](chr))
-        var packed = pack_bits(mask)
-        if packed:
-            return Int(count_trailing_zeros(packed)) + base_offset + start
-        return -1
-
     var tail_ptr = ptr + tail_start
-    var tail_off = tail_start 
+    var tail_off = tail_start
 
-    @parameter
-    for i in range(len(CASCADE)):
+    comptime for i in range(len(CASCADE)):
         comptime w = CASCADE[i]
-        @parameter
-        if w >= 1:                    # compile-time: elides dead branches
-            if tail_len >= w:         # runtime check
-                var result = check_tail[w](tail_ptr, tail_off)
-                if result != -1:
-                    return result
+        comptime if w >= 1:  # compile-time: elides dead branches
+            if tail_len >= w:  # runtime check
+                # Load `w` bytes and check for the first match, if any.
+                var v = tail_ptr.load[width=w]()
+                var mask = v.eq(SIMD[DType.uint8, w](chr))
+                var packed = pack_bits(mask)
+                if packed:
+                    return Int(count_trailing_zeros(packed)) + tail_off + start
                 tail_ptr = tail_ptr + w
                 tail_off = tail_off + w
                 tail_len -= w
@@ -222,7 +208,6 @@ fn memchr(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
     return -1
 
 
-@parameter
 @doc_private
 fn build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
@@ -236,7 +221,7 @@ fn build_cascade[W: Int]() -> List[Int]:
 
 @doc_private
 @always_inline("nodebug")
-fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
+fn memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Scalar (non-SIMD) variant of memchr. Find first occurrence of byte in haystack.
     Returns index or -1 if not found.
@@ -250,13 +235,15 @@ fn memchr_scalar(haystack: Span[UInt8], chr: UInt8, start: Int = 0) -> Int:
 @doc_private
 @always_inline
 fn _strip_spaces[
-    mut: Bool, o: Origin[mut=mut]
+    mut: Bool, //, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) -> Span[Byte, o]:
     """Trim leading and trailing POSIX whitespace from a byte span."""
     if len(in_slice) == 0:
         return in_slice
 
-    if not is_posix_space(in_slice[0]) and not is_posix_space(in_slice[len(in_slice) - 1]):
+    if not is_posix_space(in_slice[0]) and not is_posix_space(
+        in_slice[len(in_slice) - 1]
+    ):
         return in_slice
 
     var start = 0
@@ -274,7 +261,8 @@ fn _strip_spaces[
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
 ](buffer: Span[Byte, o]) -> FastxErrorCode:
-    """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set). Returns OK or ASCII_INVALID."""
+    """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set). Returns OK or ASCII_INVALID.
+    """
     var aligned_end = math.align_down(len(buffer), simd_width)
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 
@@ -289,7 +277,6 @@ fn _check_ascii[
     return FastxErrorCode.OK
 
 
-
 # Optimized posix_space check using bitmask lookup
 @doc_private
 @always_inline
@@ -297,9 +284,17 @@ fn is_posix_space(c: UInt8) -> Bool:
     """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
     # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
-    comptime MASK: UInt64 = (1 << ord("\t")) | (1 << ord("\n")) | (1 << ord("\v")) | (1 << ord("\f")) | (1 << ord("\r")) | 
-                         (1 << ord("\x1c")) | (1 << ord("\x1d")) | (1 << ord("\x1e")) | (1 << ord(" "))
-
+    comptime MASK: UInt64 = UInt64(
+        (1 << ord("\t"))
+        | (1 << ord("\n"))
+        | (1 << ord("\v"))
+        | (1 << ord("\f"))
+        | (1 << ord("\r"))
+        | (1 << ord("\x1c"))
+        | (1 << ord("\x1d"))
+        | (1 << ord("\x1e"))
+        | (1 << ord(" "))
+    )
     # If c > 63, it's definitely not one of our space characters.
     if c > 32:
         return False
@@ -311,9 +306,9 @@ fn is_posix_space(c: UInt8) -> Bool:
 @always_inline
 @doc_private
 fn _check_end_qual(
-    buf     : BufferedReader,
-    base    : Int,
-    mut offsets : RecordOffsets,
+    buf: BufferedReader,
+    base: Int,
+    mut offsets: RecordOffsets,
 ) raises -> Tuple[Bool, RecordOffsets]:
     """
     Handle EOF with no trailing newline on quality line.
@@ -331,12 +326,17 @@ fn _check_end_qual(
     var all_blank = True
     for i in range(len(rest)):
         var b = rest[i]
-        if b != new_line and b != carriage_return and b != ord(' ') and b != ord('\t'):
+        if (
+            b != new_line
+            and b != carriage_return
+            and b != Byte(ord(" "))
+            and b != Byte(ord("\t"))
+        ):
             all_blank = False
             break
 
     if all_blank:
-        return (False, offsets)   # EOF with only whitespace → no more records
+        return (False, offsets)  # EOF with only whitespace → no more records
 
     # Non-blank quality data with no trailing newline → valid last record
     offsets.record_end = buf._end - base
@@ -371,6 +371,7 @@ fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
 # Helper: _phase_to_count
 # ---------------------------------------------------------------------------
 
+
 @always_inline
 @doc_private
 fn _phase_to_count(phase: SearchPhase) -> Int:
@@ -389,6 +390,7 @@ fn _phase_to_count(phase: SearchPhase) -> Int:
 # Helper: _count_to_phase
 # ---------------------------------------------------------------------------
 
+
 @always_inline
 @doc_private
 fn _count_to_phase(found: Int) -> SearchPhase:
@@ -406,7 +408,7 @@ fn _count_to_phase(found: Int) -> SearchPhase:
       4 found → HEADER  (record complete; reset for next record)
     """
     if found >= 4:
-        return SearchPhase.HEADER   # record complete; caller checks Bool
+        return SearchPhase.HEADER  # record complete; caller checks Bool
     return SearchPhase(Int8(found))
 
 
@@ -416,12 +418,13 @@ fn _count_to_phase(found: Int) -> SearchPhase:
 # Kept out of the hot loop body to keep the loop tight.
 # ---------------------------------------------------------------------------
 
+
 @always_inline
 @doc_private
 fn _store_newline_offset(
     mut offsets: RecordOffsets,
-    found: Int,        # 1-indexed: which newline this is (1..4)
-    abs_pos: Int,      # relative-to-base position AFTER the '\n'
+    found: Int,  # 1-indexed: which newline this is (1..4)
+    abs_pos: Int,  # relative-to-base position AFTER the '\n'
 ):
     """Write the abs_pos (first byte of the *next* line) into the correct
     RecordOffsets field based on which newline was just found.
@@ -432,17 +435,21 @@ fn _store_newline_offset(
     found == 4 → record_end  (last byte of quality, i.e. abs_pos - 1)
     """
     if found == 1:
-        offsets.seq_start  = abs_pos
+        offsets.seq_start = abs_pos
     elif found == 2:
-        offsets.sep_start  = abs_pos
+        offsets.sep_start = abs_pos
     elif found == 3:
         offsets.qual_start = abs_pos
     else:  # found == 4
-        offsets.record_end = abs_pos - 1   # record_end is inclusive last qual byte
+        offsets.record_end = (
+            abs_pos - 1
+        )  # record_end is inclusive last qual byte
 
 
 @doc_private
-fn _record_snippet[o: Origin](view: Span[Byte, o], offsets: RecordOffsets) -> String:
+fn _record_snippet[
+    o: Origin
+](view: Span[Byte, o], offsets: RecordOffsets) -> String:
     """First 200 bytes of the record for ParseError snippet."""
     var end = min(offsets.record_end + 1, len(view))
     end = min(end, 200)
@@ -453,14 +460,14 @@ fn _record_snippet[o: Origin](view: Span[Byte, o], offsets: RecordOffsets) -> St
 
 
 @doc_private
-fn _validate_fastq_structure[o: Origin](
-    view: Span[Byte, o],
-    offsets: RecordOffsets,
-) -> FastxErrorCode:
-    """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code."""
-    if view[offsets.header_start] != Byte(AT_SIGN):
+fn _validate_fastq_structure[
+    o: Origin
+](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
+    """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code.
+    """
+    if view[offsets.header_start] != Byte(read_header):
         return FastxErrorCode.ID_NO_AT
-    if view[offsets.sep_start] != Byte(PLUS_SIGN):
+    if view[offsets.sep_start] != Byte(quality_header):
         return FastxErrorCode.SEP_NO_PLUS
     var seq_len = offsets.sep_start - offsets.seq_start - 1
     var qual_len = offsets.record_end - offsets.qual_start
@@ -473,9 +480,12 @@ fn _validate_fastq_structure[o: Origin](
 # _scan_record_fused: single-pass SIMD scan for all four FASTQ newlines
 # ---------------------------------------------------------------------------
 
+
 @always_inline
 @doc_private
-fn _scan_record[o: Origin](
+fn _scan_record[
+    o: Origin
+](
     view: Span[Byte, o],
     mut offsets: RecordOffsets,
     phase: SearchPhase,
@@ -505,14 +515,14 @@ fn _scan_record[o: Origin](
         complete=False → ran out of buffer; offsets partially populated;
                          phase indicates where to resume on the next call; parse_code=OK.
     """
-    comptime W = SIMD_U8_WIDTH
+    comptime W = simd_width
     comptime nl_splat = SIMD[DType.uint8, W](new_line)
 
     # ── Determine where to start scanning ────────────────────────────────────
     var start_rel = _phase_start_offset(offsets, phase)
     var scan_span = view[start_rel:]
-    var ptr       = scan_span.unsafe_ptr()
-    var avail     = len(scan_span)
+    var ptr = scan_span.unsafe_ptr()
+    var avail = len(scan_span)
 
     if avail <= 0:
         return (False, offsets, phase, FastxErrorCode.OK)
@@ -521,21 +531,21 @@ fn _scan_record[o: Origin](
     var found = _phase_to_count(phase)
 
     # ── SIMD aligned section ──────────────────────────────────────────────────
-    var i       = 0
+    var i = 0
     var aligned = math.align_down(avail, W)
 
     while i < aligned and found < 4:
-        var v    = ptr.load[width=W](i)
+        var v = ptr.load[width=W](i)
         var mask = pack_bits(v.eq(nl_splat))
 
         # Drain all set bits from this SIMD word before moving to the next.
         # Inner loop is ≤ 4 iterations total across the whole outer loop.
         while mask != 0 and found < 4:
-            var bit     = Int(count_trailing_zeros(mask))
-            var abs_pos = start_rel + i + bit + 1   # first byte of next line
-            found      += 1
+            var bit = Int(count_trailing_zeros(mask))
+            var abs_pos = start_rel + i + bit + 1  # first byte of next line
+            found += 1
             _store_newline_offset(offsets, found, abs_pos)
-            mask        &= mask - 1                  # clear lowest set bit
+            mask &= mask - 1  # clear lowest set bit
         i += W
 
     if found == 4:
@@ -549,7 +559,7 @@ fn _scan_record[o: Origin](
     while i < avail and found < 4:
         if ptr[i] == new_line:
             var abs_pos = start_rel + i + 1
-            found      += 1
+            found += 1
             _store_newline_offset(offsets, found, abs_pos)
         i += 1
 
@@ -561,9 +571,9 @@ fn _scan_record[o: Origin](
 
 @always_inline
 fn _find_newline_from(
-    buf     : BufferedReader,
-    base : Int,      # absolute _ptr offset of view()[0] (buf._head at scan start)
-    _from : Int,      # relative offset from base to start searching
+    buf: BufferedReader,
+    base: Int,  # absolute _ptr offset of view()[0] (buf._head at scan start)
+    _from: Int,  # relative offset from base to start searching
 ) -> Int:
     """
     Search for '\\n' in buffer starting at absolute offset (base + from).
@@ -577,13 +587,13 @@ fn _find_newline_from(
     if avail <= 0:
         return -1
     var view = Span[Byte, MutExternalOrigin](
-        ptr = buf._ptr + abs_start,
-        length = avail,
+        ptr=buf._ptr + abs_start,
+        length=avail,
     )
     var pos = memchr(haystack=view, chr=new_line)
     if pos < 0:
         return -1
-    return _from + pos + 1   # relative to base; +1 skips past the '\n'
+    return _from + pos + 1  # relative to base; +1 skips past the '\n'
 
 
 @doc_private
@@ -654,6 +664,7 @@ fn compute_num_reads_for_size(
     var bytes_per_record = header_size + 2 * avg_read_length + 4
     return target_size_bytes // bytes_per_record
 
+
 fn generate_synthetic_fastq_buffer(
     num_reads: Int,
     min_length: Int,
@@ -688,12 +699,22 @@ fn generate_synthetic_fastq_buffer(
     """
     if num_reads <= 0:
         return List[Byte]()
-    if num_reads < 0 or min_length < 0 or max_length < 0 or min_phred < 0 or max_phred < 0:
+    if (
+        num_reads < 0
+        or min_length < 0
+        or max_length < 0
+        or min_phred < 0
+        or max_phred < 0
+    ):
         raise Error("generate_synthetic_fastq_buffer: invalid arguments")
     if min_length > max_length:
-        raise Error("generate_synthetic_fastq_buffer: min_length must be <= max_length")
+        raise Error(
+            "generate_synthetic_fastq_buffer: min_length must be <= max_length"
+        )
     if min_phred > max_phred:
-        raise Error("generate_synthetic_fastq_buffer: min_phred must be <= max_phred")
+        raise Error(
+            "generate_synthetic_fastq_buffer: min_phred must be <= max_phred"
+        )
 
     var schema = _parse_schema(quality_schema)
     var offset_int = Int(schema.OFFSET)
@@ -744,7 +765,7 @@ fn generate_synthetic_fastq_buffer(
     # q_end   = min_phred (caller controls the 3' quality floor)
     # noise   = small jitter so consecutive bases aren't identical
     var q_start = max_phred  # Phred at position 0
-    var q_end   = min_phred  # Phred at last position
+    var q_end = min_phred  # Phred at last position
     var q_range = q_start - q_end  # total drop across the read (>= 0)
 
     # Noise amplitude: +/- noise_amp Phred units around the decayed mean.
@@ -757,7 +778,9 @@ fn generate_synthetic_fastq_buffer(
         if max_length == min_length:
             read_len = min_length
         else:
-            read_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
+            read_len = min_length + (
+                (i * 31 + 7) % (max_length - min_length + 1)
+            )
 
         # --- Header ---
         var index_str = String(i)
@@ -769,10 +792,16 @@ fn generate_synthetic_fastq_buffer(
         # --- Sequence line ---
         # We use a fast LCG per read seeded from i to get pseudorandom base indices.
         # Multiplier/increment from Knuth MMIX; state is 64-bit truncated to Int.
-        var lcg_state: Int = (i * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
-        for p in range(read_len):
-            lcg_state = (lcg_state * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
-            var slot = (lcg_state >> 33) % 8  # use upper bits for better distribution
+        var lcg_state: Int = (
+            i * 6364136223846793005 + 1442695040888963407
+        ) & 0x7FFFFFFFFFFFFFFF
+        for _ in range(read_len):
+            lcg_state = (
+                lcg_state * 6364136223846793005 + 1442695040888963407
+            ) & 0x7FFFFFFFFFFFFFFF
+            var slot = (
+                lcg_state >> 33
+            ) % 8  # use upper bits for better distribution
             out.append(base_lut[slot])
         out.append(newline)
 
@@ -793,11 +822,15 @@ fn generate_synthetic_fastq_buffer(
             if len_minus_1 == 0:
                 mean_phred = q_start
             else:
-                mean_phred = q_start - (q_range * p + len_minus_1 // 2) // len_minus_1  # integer rounding
+                mean_phred = (
+                    q_start - (q_range * p + len_minus_1 // 2) // len_minus_1
+                )  # integer rounding
 
             # Deterministic noise in [-noise_amp, +noise_amp]
             qrng = (qrng * 1664525 + 1013904223) & 0x7FFFFFFFFFFFFFFF
-            var noise_raw = Int((qrng >> 17) % (2 * noise_amp + 1))  # [0, 2*noise_amp]
+            var noise_raw = Int(
+                (qrng >> 17) % (2 * noise_amp + 1)
+            )  # [0, 2*noise_amp]
             var phred = mean_phred + noise_raw - noise_amp
 
             # Clamp to caller's [min_phred, max_phred]
@@ -886,13 +919,21 @@ fn generate_synthetic_fasta_buffer(
     if num_reads <= 0:
         return List[Byte]()
     if min_length < 0 or max_length < 0:
-        raise Error("generate_synthetic_fasta_buffer: lengths must be non-negative")
+        raise Error(
+            "generate_synthetic_fasta_buffer: lengths must be non-negative"
+        )
     if min_length > max_length:
-        raise Error("generate_synthetic_fasta_buffer: min_length must be <= max_length")
+        raise Error(
+            "generate_synthetic_fasta_buffer: min_length must be <= max_length"
+        )
     if line_width <= 0:
-        raise Error("generate_synthetic_fasta_buffer: line_width must be positive")
+        raise Error(
+            "generate_synthetic_fasta_buffer: line_width must be positive"
+        )
 
-    var capacity_estimate = num_reads * (max_length + max_length // line_width + 20)
+    var capacity_estimate = num_reads * (
+        max_length + max_length // line_width + 20
+    )
     var out = List[Byte](capacity=capacity_estimate)
 
     # Base LUT: same GC-bias model as generate_synthetic_fastq_buffer
@@ -929,7 +970,9 @@ fn generate_synthetic_fasta_buffer(
         if max_length == min_length:
             seq_len = min_length
         else:
-            seq_len = min_length + ((i * 31 + 7) % (max_length - min_length + 1))
+            seq_len = min_length + (
+                (i * 31 + 7) % (max_length - min_length + 1)
+            )
 
         # --- Header: >read_XXXXXXX\n ---
         var index_str = String(i)
@@ -940,10 +983,14 @@ fn generate_synthetic_fasta_buffer(
         out.extend(header_body.as_bytes())
 
         # --- Sequence lines (wrapped at line_width) ---
-        var lcg_state: Int = (i * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
+        var lcg_state: Int = (
+            i * 6364136223846793005 + 1442695040888963407
+        ) & 0x7FFFFFFFFFFFFFFF
         var col = 0
         for _ in range(seq_len):
-            lcg_state = (lcg_state * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF
+            lcg_state = (
+                lcg_state * 6364136223846793005 + 1442695040888963407
+            ) & 0x7FFFFFFFFFFFFFFF
             var slot = (lcg_state >> 33) % 8
             out.append(base_lut[slot])
             col += 1

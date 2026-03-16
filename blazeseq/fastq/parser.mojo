@@ -1,5 +1,6 @@
 from blazeseq.fastq.record import FastqRecord, RefRecord, Validator
 from blazeseq.CONSTS import *
+from blazeseq.fastq.quality_schema import QualitySchema, generic_schema
 from blazeseq.io.buffered import EOFError, BufferedReader
 from blazeseq.io.readers import Reader
 from blazeseq.fastq.record_batch import FastqBatch
@@ -375,7 +376,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     return (
                         got_record,
                         offsets,
-                        SearchPhase(new_base),
+                        SearchPhase(Int8(new_base)),
                         FastxErrorCode.OK,
                     )
                 else:
@@ -388,8 +389,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
             if new_base == 0:
 
-                @parameter
-                if not self.config.buffer_growth_enabled:
+                comptime if not self.config.buffer_growth_enabled:
                     return (
                         False,
                         offsets,

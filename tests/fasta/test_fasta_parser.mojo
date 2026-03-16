@@ -11,10 +11,11 @@ Coverage:
 """
 
 from blazeseq import FastaParser, FastaRecord, FileReader, MemoryReader
+from blazeseq.fasta.parser import ParserConfig
 from blazeseq.CONSTS import EOF
-from pathlib import Path
-from testing import assert_equal, assert_true, assert_raises, TestSuite
-from memory import memcpy, Span
+from std.pathlib import Path
+from std.testing import assert_equal, assert_true, assert_raises, TestSuite
+from std.memory import memcpy, Span
 from blazeseq.io.readers import Reader
 
 
@@ -48,10 +49,10 @@ struct ChunkedMemoryReader(Movable, Reader):
         self.position = 0
         self.chunk_size = chunk_size
 
-    fn __moveinit__(out self, deinit other: Self):
-        self.data = other.data^
-        self.position = other.position
-        self.chunk_size = other.chunk_size
+    fn __init__(out self, *, deinit take: Self):
+        self.data = take.data^
+        self.position = take.position
+        self.chunk_size = take.chunk_size
 
     fn read_to_buffer(
         mut self,
@@ -163,6 +164,66 @@ fn test_invalid_first_line_not_header() raises:
             "Expected 'does not start with' in error, got: " + String(e),
         )
     assert_true(raised, "Expected a parse error for a non-header first line")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ASCII validation
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+fn _fasta_bytes_with_non_ascii_in_id() -> List[Byte]:
+    """FASTA with non-ASCII byte (0x80) in the id line after '>'."""
+    var data = List[Byte]()
+    data.append(Byte(ord(">")))
+    data.append(Byte(ord("i")))
+    data.append(Byte(ord("d")))
+    data.append(Byte(0x80))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("\n")))
+    return data^
+
+
+fn _fasta_bytes_with_non_ascii_in_sequence() -> List[Byte]:
+    """FASTA with non-ASCII byte (0x80) in the sequence."""
+    var data = List[Byte]()
+    data.append(Byte(ord(">")))
+    data.append(Byte(ord("i")))
+    data.append(Byte(ord("d")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("C")))
+    data.append(Byte(0x80))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("\n")))
+    return data^
+
+
+fn test_ascii_validation_non_ascii_in_id() raises:
+    """Non-ASCII byte in FASTA id line raises with 'Non ASCII' message."""
+    var data = _fasta_bytes_with_non_ascii_in_id()
+    var reader = MemoryReader(data^)
+    var parser = FastaParser[MemoryReader, ParserConfig(check_ascii=True)](
+        reader^
+    )
+    with assert_raises(contains="Non ASCII"):
+        _ = parser.next_record()
+
+
+fn test_ascii_validation_non_ascii_in_sequence() raises:
+    """Non-ASCII byte in FASTA sequence raises with 'Non ASCII' message."""
+    var data = _fasta_bytes_with_non_ascii_in_sequence()
+    var reader = MemoryReader(data^)
+    var parser = FastaParser[MemoryReader, ParserConfig(check_ascii=True)](
+        reader^
+    )
+    with assert_raises(contains="Non ASCII"):
+        _ = parser.next_record()
 
 
 fn test_records_iterator() raises:
@@ -350,7 +411,7 @@ fn test_sequence_larger_than_chunk_size() raises:
     """A 100-base sequence delivered 7 bytes at a time is accumulated correctly.
     """
     var seq = String("")
-    for i in range(25):
+    for _ in range(25):
         seq += "ACGT"
     var data = ">id1\n" + seq + "\n"
     var reader = ChunkedMemoryReader(_bytes(data), chunk_size=7)
@@ -437,7 +498,7 @@ fn test_record_larger_than_many_chunks() raises:
     """A single record whose total byte size exceeds many chunk deliveries."""
     # Build a record with a 200-base single-line sequence.
     var seq = String("")
-    for i in range(50):
+    for _ in range(50):
         seq += "ACGT"
     var data = ">longseq\n" + seq + "\n"
     # chunk_size=9: data is ~210 bytes, requires ~24 chunk fills.

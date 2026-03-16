@@ -19,7 +19,7 @@ Exceptions:
 Example:
     ```mojo
     from blazeseq import FastqParser, FileReader
-    from pathlib import Path
+    from std.pathlib import Path
 
     var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
     for record in parser.records():

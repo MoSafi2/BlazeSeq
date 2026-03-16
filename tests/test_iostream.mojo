@@ -1,6 +1,6 @@
-from testing import assert_equal, assert_raises, assert_true, assert_false, TestSuite
-from pathlib import Path
-from os import remove
+from std.testing import assert_equal, assert_raises, assert_true, assert_false, TestSuite
+from std.pathlib import Path
+from std.os import remove
 from blazeseq.CONSTS import DEFAULT_CAPACITY
 from blazeseq.io.buffered import BufferedReader, BufferedWriter, LineIterator
 from blazeseq.io.readers import FileReader, MemoryReader
@@ -594,10 +594,10 @@ fn test_buffered_reader_ascii_validation_invalid() raises:
 
     # Write non-ASCII bytes directly
     var non_ascii_bytes = List[Byte]()
-    non_ascii_bytes.append(ord("A"))
-    non_ascii_bytes.append(ord("B"))
+    non_ascii_bytes.append(Byte(ord("A")))
+    non_ascii_bytes.append(Byte(ord("B")))
     non_ascii_bytes.append(Byte(200))  # Non-ASCII byte
-    non_ascii_bytes.append(ord("\n"))
+    non_ascii_bytes.append(Byte(ord("\n")))
 
     with open(new_path, "w") as f:
         f.write_bytes(non_ascii_bytes)
@@ -1076,11 +1076,11 @@ fn test_buffered_writer_write_small() raises:
     var writer = BufferedWriter(FileWriter(test_path))
 
     var data = List[Byte]()
-    data.append(ord("H"))
-    data.append(ord("e"))
-    data.append(ord("l"))
-    data.append(ord("l"))
-    data.append(ord("o"))
+    data.append(Byte(ord("H")))
+    data.append(Byte(ord("e")))
+    data.append(Byte(ord("l")))
+    data.append(Byte(ord("l")))
+    data.append(Byte(ord("o")))
 
     writer.write_bytes(data)
 
@@ -1108,8 +1108,8 @@ fn test_buffered_writer_write_small() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 5, "File should contain 5 bytes")
-    assert_equal(bytes_read[0], ord("H"), "First byte should be 'H'")
-    assert_equal(bytes_read[4], ord("o"), "Last byte should be 'o'")
+    assert_equal(bytes_read[0], Byte(ord("H")), "First byte should be 'H'")
+    assert_equal(bytes_read[4], Byte(ord("o")), "Last byte should be 'o'")
 
     print("✓ test_buffered_writer_write_small passed")
 
@@ -1168,10 +1168,10 @@ fn test_buffered_writer_write_span() raises:
     var writer = BufferedWriter(FileWriter(test_path))
 
     var data_bytes = List[Byte]()
-    data_bytes.append(ord("T"))
-    data_bytes.append(ord("e"))
-    data_bytes.append(ord("s"))
-    data_bytes.append(ord("t"))
+    data_bytes.append(Byte(ord("T")))
+    data_bytes.append(Byte(ord("e")))
+    data_bytes.append(Byte(ord("s")))
+    data_bytes.append(Byte(ord("t")))
 
     var span = Span[Byte](ptr=data_bytes.unsafe_ptr(), length=len(data_bytes))
     writer.write_bytes(span)
@@ -1183,10 +1183,10 @@ fn test_buffered_writer_write_span() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 4, "File should contain 4 bytes")
-    assert_equal(bytes_read[0], ord("T"), "First byte should be 'T'")
-    assert_equal(bytes_read[1], ord("e"), "Second byte should be 'e'")
-    assert_equal(bytes_read[2], ord("s"), "Third byte should be 's'")
-    assert_equal(bytes_read[3], ord("t"), "Fourth byte should be 't'")
+    assert_equal(bytes_read[0], Byte(ord("T")), "First byte should be 'T'")
+    assert_equal(bytes_read[1], Byte(ord("e")), "Second byte should be 'e'")
+    assert_equal(bytes_read[2], Byte(ord("s")), "Third byte should be 's'")
+    assert_equal(bytes_read[3], Byte(ord("t")), "Fourth byte should be 't'")
 
     print("✓ test_buffered_writer_write_span passed")
 
@@ -1199,7 +1199,7 @@ fn test_buffered_writer_explicit_flush() raises:
     var writer = BufferedWriter(FileWriter(test_path))
 
     var data1 = List[Byte]()
-    data1.append(ord("A"))
+    data1.append(Byte(ord("A")))
     writer.write_bytes(data1)
 
     assert_equal(
@@ -1213,7 +1213,7 @@ fn test_buffered_writer_explicit_flush() raises:
     )
 
     var data2 = List[Byte]()
-    data2.append(ord("B"))
+    data2.append(Byte(ord("B")))
     writer.write_bytes(data2)
     writer.flush()
 
@@ -1223,8 +1223,8 @@ fn test_buffered_writer_explicit_flush() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 2, "File should contain 2 bytes")
-    assert_equal(bytes_read[0], ord("A"), "First byte should be 'A'")
-    assert_equal(bytes_read[1], ord("B"), "Second byte should be 'B'")
+    assert_equal(bytes_read[0], Byte(ord("A")), "First byte should be 'A'")
+    assert_equal(bytes_read[1], Byte(ord("B")), "Second byte should be 'B'")
 
     print("✓ test_buffered_writer_explicit_flush passed")
 
@@ -1236,14 +1236,14 @@ fn test_buffered_writer_destructor_flush() raises:
     )
 
     var data = List[Byte]()
-    data.append(ord("D"))
-    data.append(ord("e"))
-    data.append(ord("s"))
-    data.append(ord("t"))
-    data.append(ord("r"))
-    data.append(ord("u"))
-    data.append(ord("c"))
-    data.append(ord("t"))
+    data.append(Byte(ord("D")))
+    data.append(Byte(ord("e")))
+    data.append(Byte(ord("s")))
+    data.append(Byte(ord("t")))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("u")))
+    data.append(Byte(ord("c")))
+    data.append(Byte(ord("t")))
 
     # Write without explicit flush, let destructor handle it
     var writer = BufferedWriter(FileWriter(test_path))
@@ -1254,14 +1254,14 @@ fn test_buffered_writer_destructor_flush() raises:
     var reader = FileReader(test_path)
     var bytes_read = reader.read_bytes()
     assert_equal(len(bytes_read), 8, "File should contain 8 bytes")
-    assert_equal(bytes_read[0], ord("D"), "Byte 0 should be 'D'")
-    assert_equal(bytes_read[1], ord("e"), "Byte 1 should be 'e'")
-    assert_equal(bytes_read[2], ord("s"), "Byte 2 should be 's'")
-    assert_equal(bytes_read[3], ord("t"), "Byte 3 should be 't'")
-    assert_equal(bytes_read[4], ord("r"), "Byte 4 should be 'r'")
-    assert_equal(bytes_read[5], ord("u"), "Byte 5 should be 'u'")
-    assert_equal(bytes_read[6], ord("c"), "Byte 6 should be 'c'")
-    assert_equal(bytes_read[7], ord("t"), "Byte 7 should be 't'")
+    assert_equal(bytes_read[0], Byte(ord("D")), "Byte 0 should be 'D'")
+    assert_equal(bytes_read[1], Byte(ord("e")), "Byte 1 should be 'e'")
+    assert_equal(bytes_read[2], Byte(ord("s")), "Byte 2 should be 's'")
+    assert_equal(bytes_read[3], Byte(ord("t")), "Byte 3 should be 't'")
+    assert_equal(bytes_read[4], Byte(ord("r")), "Byte 4 should be 'r'")
+    assert_equal(bytes_read[5], Byte(ord("u")), "Byte 5 should be 'u'")
+    assert_equal(bytes_read[6], Byte(ord("c")), "Byte 6 should be 'c'")
+    assert_equal(bytes_read[7], Byte(ord("t")), "Byte 7 should be 't'")
 
     print("✓ test_buffered_writer_destructor_flush passed")
 
@@ -1342,7 +1342,7 @@ fn test_buffered_writer_multiple_flushes() raises:
     var writer = BufferedWriter(FileWriter(test_path))
 
     var data = List[Byte]()
-    data.append(ord("F"))
+    data.append(Byte(ord("F")))
     writer.write_bytes(data)
 
     writer.flush()
@@ -1356,7 +1356,7 @@ fn test_buffered_writer_multiple_flushes() raises:
     )
 
     var data2 = List[Byte]()
-    data2.append(ord("L"))
+    data2.append(Byte(ord("L")))
     writer.write_bytes(data2)
     writer.flush()
 

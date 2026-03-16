@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Throughput benchmark: BlazeSeq batches vs records vs ref_records.
-# Generates 3GB synthetic FASTQ on a ramfs mount, runs each mode with hyperfine.
+# Generates 3GB synthetic FASTQ on a tmpfs/ramfs mount, runs each mode with hyperfine.
 # Run from repository root: ./benchmark/throughput/run_throughput_benchmarks.sh [--ramfs|--tmpfs]
 # Requires: pixi, hyperfine. On Linux: sudo for ramfs/tmpfs mount/umount.
 
 set -e
 
-# --- Mount type: --ramfs (default) or --tmpfs ---
-BENCH_FS="ramfs"
+# --- Mount type: tmpfs (default) or --ramfs/--tmpfs ---
+BENCH_FS="tmpfs"
 while [ $# -gt 0 ]; do
     case "$1" in
         --ramfs) BENCH_FS="ramfs"; shift ;;

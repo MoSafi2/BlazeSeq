@@ -1,11 +1,11 @@
 from blazeseq.fastq.record import FastqRecord, RefRecord
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import DEFAULT_BATCH_SIZE
-from gpu.host import DeviceContext
-from gpu.host.device_context import DeviceBuffer, HostBuffer
-from gpu import block_idx, thread_idx
-from memory import UnsafePointer, memcpy, Span, alloc
-from collections.string import String
+from std.gpu.host import DeviceContext
+from std.gpu.host.device_context import DeviceBuffer, HostBuffer
+from std.gpu import block_idx, thread_idx
+from std.memory import UnsafePointer, memcpy, Span, alloc
+from std.collections.string import String
 
 
 trait GpuMovableBatch:
@@ -17,7 +17,7 @@ trait GpuMovableBatch:
 
 
 struct FastqBatch(
-    Copyable, GpuMovableBatch, ImplicitlyDestructible, Representable, Sized
+    Copyable, GpuMovableBatch, ImplicitlyDestructible, Sized, Writable
 ):
     var _id_bytes: List[UInt8]
     var _quality_bytes: List[UInt8]
@@ -188,7 +188,7 @@ struct FastqBatch(
             length=range[1] - range[0],
         )
 
-        return RefRecord[origin = origin_of(self)](
+        return RefRecord[origin=origin_of(self)](
             id_span,
             seq_span,
             qual_span,
@@ -350,8 +350,8 @@ fn stage_batch_to_host(
 
     return StagedFastqBatch(
         num_records=n,
-        total_seq_bytes=total_bytes,
-        total_id_bytes=total_id_bytes,
+        total_seq_bytes=Int64(total_bytes),
+        total_id_bytes=Int64(total_id_bytes),
         quality_offset=batch.quality_offset(),
         quality_data=quality_data,
         ends=ends,

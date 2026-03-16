@@ -8,10 +8,10 @@ Large fixtures: generated synthetic reads written to tests/test_data/ (see
 generate_synthetic_fastq_fixtures) so round-trip tests can run on larger data.
 """
 
-from pathlib import Path
-from os import remove
-from os.path import exists
-from testing import assert_equal, TestSuite
+from std.pathlib import Path
+from std.os import remove
+from std.os.path import exists
+from std.testing import assert_equal, TestSuite
 from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.parser import FastqParser
 from blazeseq.io.readers import FileReader, GZFile
@@ -92,7 +92,7 @@ fn parse_plain_fastq(path: String) raises -> List[FastqRecord]:
     var records = List[FastqRecord]()
     var parser = FastqParser[FileReader](FileReader(Path(path)), SCHEMA)
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
     return records^
 
 
@@ -131,7 +131,7 @@ fn parse_gzip_fastq(path: String) raises -> List[FastqRecord]:
     var records = List[FastqRecord]()
     var parser = FastqParser[GZFile](GZFile(path, "rb"), SCHEMA)
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
     return records^
 
 

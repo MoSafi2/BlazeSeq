@@ -35,8 +35,7 @@ from examples.nw_gpu.execution import (
 
 fn main() raises:
     # Require an accelerator; this example is for GPU benchmarking.
-    @parameter
-    if not has_accelerator():
+    comptime if not has_accelerator():
         print("No GPU detected. This example requires a compatible GPU.")
         exit(1)
 

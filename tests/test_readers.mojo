@@ -1,11 +1,11 @@
 """Tests for FileReader and MemoryReader from blazeseq.readers module."""
 
-from testing import assert_equal, assert_raises, assert_true, assert_false
-from pathlib import Path
-from os import remove
+from std.testing import assert_equal, assert_raises, assert_true, assert_false
+from std.pathlib import Path
+from std.os import remove
 from blazeseq.io.readers import FileReader, MemoryReader
-from memory import alloc, Span
-from testing import TestSuite
+from std.memory import alloc, Span
+from std.testing import TestSuite
 
 
 # ============================================================================
@@ -218,7 +218,7 @@ fn test_memory_reader_read_to_buffer_eof() raises:
 fn test_memory_reader_read_to_buffer_large_content() raises:
     """Test reading large content."""
     var content = String("")
-    for i in range(1000):
+    for _ in range(1000):
         content += "A"
     
     var reader = create_memory_reader_from_string(content)
@@ -387,7 +387,7 @@ fn test_file_reader_read_bytes_empty_file() raises:
 fn test_file_reader_read_bytes_large_file() raises:
     """Test FileReader read_bytes on large file."""
     var content = String("")
-    for i in range(1000):
+    for _ in range(1000):
         content += "A"
     
     var test_path = create_test_file(Path("test_file_reader_read_bytes_large.txt"), content)
@@ -500,7 +500,7 @@ fn test_file_reader_read_to_buffer_multiple_reads() raises:
 fn test_file_reader_read_to_buffer_large_file() raises:
     """Test FileReader read_to_buffer on large file."""
     var content = String("")
-    for i in range(2000):
+    for _ in range(2000):
         content += "A"
     
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_large.txt"), content)

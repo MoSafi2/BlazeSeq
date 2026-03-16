@@ -11,27 +11,27 @@ from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.CONSTS import EOF
-from testing import assert_equal, assert_raises, assert_true, TestSuite
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 
 
 fn create_non_ascii_fastq_data() -> List[Byte]:
     var data = List[Byte]()
-    data.append(ord("@"))
-    data.append(ord("r"))
-    data.append(ord("1"))
-    data.append(ord("\n"))
-    data.append(ord("A"))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
     data.append(Byte(200))
-    data.append(ord("C"))
-    data.append(ord("\n"))
-    data.append(ord("+"))
-    data.append(ord("\n"))
-    data.append(ord("!"))
-    data.append(ord("!"))
-    data.append(ord("!"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("+")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("\n")))
     return data^
 
 
@@ -43,7 +43,7 @@ fn test_record_parser_for_loop() raises:
 
     var records = List[FastqRecord]()
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
 
     assert_equal(len(records), 2, "Should iterate over 2 records")
     assert_equal(
@@ -70,12 +70,12 @@ fn test_record_parser_for_loop_stop_iteration() raises:
     var parser = FastqParser[MemoryReader](reader^, "generic")
 
     var count = 0
-    for record in parser.records():
+    for _ in parser.records():
         count += 1
     assert_equal(count, 1, "Should iterate over 1 record")
 
     var count_after = 0
-    for record in parser.records():
+    for _ in parser.records():
         count_after += 1
     assert_equal(count_after, 0, "Should not iterate after EOF")
 
@@ -125,7 +125,7 @@ fn test_batched_parser_for_loop() raises:
 
     var batches = List[FastqBatch]()
     for batch in parser.batches():
-        batches.append(batch^)
+        batches.append(batch.copy())
 
     assert_equal(
         len(batches), 2, "Should yield 2 batches (batch_size=2, 3 records)"
@@ -182,7 +182,7 @@ fn test_batched_parser_empty_input() raises:
     )
 
     var count = 0
-    for batch in parser.batches():
+    for _ in parser.batches():
         count += 1
     assert_equal(count, 0, "No batches from empty input")
 
@@ -355,7 +355,7 @@ fn test_record_parser_records_iterator_span_chunks() raises:
 
     var records = List[FastqRecord]()
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
 
     assert_equal(len(records), 2, "Should yield two records")
     assert_equal(records[0]._id.to_string(), "a", "First record id")
@@ -478,10 +478,10 @@ fn _ref_parser_long_record_content() -> String:
     """One FASTQ record with sequence and quality length 20 (longer than small buffer).
     """
     var seq = String("")
-    for i in range(20):
+    for _ in range(20):
         seq += "A"
     var qual = String("")
-    for i in range(20):
+    for _ in range(20):
         qual += "!"
     return "@id\n" + seq + "\n+\n" + qual + "\n"
 

@@ -6,8 +6,8 @@ URL: https://github.com/biopython/biopython/tree/master/Tests/Quality
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import FileReader, RapidgzipReader
 from blazeseq.CONSTS import EOF
-from pathlib import Path
-from testing import assert_true, TestSuite
+from std.pathlib import Path
+from std.testing import assert_true, TestSuite
 
 comptime test_dir = "tests/test_data/fastq_parser/"
 
@@ -58,7 +58,7 @@ fn invalid_file_test_fun(file: String, msg: String = "") raises:
 
 fn valid_file_test_fun(file: String, schema: String = "generic") raises:
     var parser = FastqParser[FileReader](FileReader(test_dir + file), schema)
-    for record in parser.records():
+    for _ in parser.records():
         pass
 
 
@@ -116,7 +116,7 @@ fn valid_file_test_fun_gz(file_gz: String, schema: String = "generic") raises:
     var parser = FastqParser[RapidgzipReader](
         RapidgzipReader(test_dir + file_gz), schema
     )
-    for record in parser.records():
+    for _ in parser.records():
         pass
 
 

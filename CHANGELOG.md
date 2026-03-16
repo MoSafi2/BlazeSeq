@@ -4,15 +4,24 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
-## [0.3] - 2026-03-06
+## [0.3] - 2026-03-17
 
 ### Added
 
 - **FASTA support**: `FastaRecord` and `FastaParser` in `blazeseq.fasta` with definition-line parsing, optional description, and `definition()` method. Strip leading/trailing spaces from definition lines.
+- **Definition struct**: `Definition` in `blazeseq.fasta.definition` with `Id` and optional `Description`; `definition()` on `FastaRecord` and `FastqRef` for structured definition-line parsing.
+- **FASTA validation**: Optional ASCII validation for id and sequence via `ParserConfig.check_ascii`.
 - **Correctness test suite**: 140 FASTQ tests from BioPython/BioJava/BioPerl test data in `tests/test_data/fastq_parser/`; coverage for `ref_records()` and `records()` on valid/invalid files, including gzip/bgzip (example.fastq.gz, example_dos.fastq.bgz, etc.).
 - **Error context**: Parse and validation errors now include record number, line number, file position, and a snippet of the failing record when using `next_record()` or iterators.
 - **Throughput validation benchmark**: `run_throughput_validation_blazeseq.mojo` and scripts to measure effect of ASCII/quality validation on throughput.
 - **FASTA benchmarks**: Benchmark harness for FASTA parser with Noodles and needletail runners; plotting script for benchmark results.
+
+### Changed
+
+- **Mojo 26.2**: Upgrade to Mojo 0.26.2.
+- **Record API**: `sequence()`, `id()`, and `quality()` on `FastqRecord` and `RefRecord` now return `StringSlice` for zero-copy access.
+- **ByteString → BString**: Renamed for brevity.
+- **Benchmarks**: Use tmpfs by default (instead of ramfs); pixi benchmark tasks no longer pass `--ramfs`; fallback to `/dev/shm` when mount fails.
 
 ## [0.2] - 2026-02-23
 

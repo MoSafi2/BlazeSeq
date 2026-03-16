@@ -4,28 +4,28 @@ from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import MemoryReader
 from blazeseq.errors import ParseError, ValidationError
 from blazeseq.CONSTS import EOF
-from testing import assert_equal, assert_raises, assert_true, TestSuite
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 
 
 fn create_invalid_id_fastq() -> List[Byte]:
     """Create FASTQ data with invalid header (doesn't start with @)."""
     var data = List[Byte]()
     # Invalid header - doesn't start with @
-    data.append(ord("r"))
-    data.append(ord("1"))
-    data.append(ord("\n"))
-    data.append(ord("A"))
-    data.append(ord("T"))
-    data.append(ord("C"))
-    data.append(ord("G"))
-    data.append(ord("\n"))
-    data.append(ord("+"))
-    data.append(ord("\n"))
-    data.append(ord("!"))
-    data.append(ord("@"))
-    data.append(ord("#"))
-    data.append(ord("$"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("+")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("#")))
+    data.append(Byte(ord("$")))
+    data.append(Byte(ord("\n")))
     return data^
 
 
@@ -33,24 +33,24 @@ fn create_mismatched_length_fastq() -> List[Byte]:
     """Create FASTQ data with mismatched sequence/quality lengths."""
     var data = List[Byte]()
     # Valid header
-    data.append(ord("@"))
-    data.append(ord("r"))
-    data.append(ord("1"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
     # Sequence
-    data.append(ord("A"))
-    data.append(ord("T"))
-    data.append(ord("C"))
-    data.append(ord("G"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("\n")))
     # Quality header
-    data.append(ord("+"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("+")))
+    data.append(Byte(ord("\n")))
     # Quality string (only 3 chars, but sequence is 4)
-    data.append(ord("!"))
-    data.append(ord("@"))
-    data.append(ord("#"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("#")))
+    data.append(Byte(ord("\n")))
     return data^
 
 
@@ -87,7 +87,7 @@ fn test_error_context_in_iterator() raises:
     
     # Using iterator should print error and stop iteration
     var count = 0
-    for record in parser.records():
+    for _ in parser.records():
         count += 1
     
     # Should have processed 0 records due to error
@@ -99,30 +99,30 @@ fn test_record_number_tracking() raises:
     # Create data with multiple records, second one invalid
     var data = List[Byte]()
     # First record (valid)
-    data.append(ord("@"))
-    data.append(ord("r"))
-    data.append(ord("1"))
-    data.append(ord("\n"))
-    data.append(ord("A"))
-    data.append(ord("T"))
-    data.append(ord("\n"))
-    data.append(ord("+"))
-    data.append(ord("\n"))
-    data.append(ord("!"))
-    data.append(ord("@"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("1")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("A")))
+    data.append(Byte(ord("T")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("+")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("!")))
+    data.append(Byte(ord("@")))
+    data.append(Byte(ord("\n")))
     # Second record (invalid header)
-    data.append(ord("r"))
-    data.append(ord("2"))
-    data.append(ord("\n"))
-    data.append(ord("G"))
-    data.append(ord("C"))
-    data.append(ord("\n"))
-    data.append(ord("+"))
-    data.append(ord("\n"))
-    data.append(ord("#"))
-    data.append(ord("$"))
-    data.append(ord("\n"))
+    data.append(Byte(ord("r")))
+    data.append(Byte(ord("2")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("G")))
+    data.append(Byte(ord("C")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("+")))
+    data.append(Byte(ord("\n")))
+    data.append(Byte(ord("#")))
+    data.append(Byte(ord("$")))
+    data.append(Byte(ord("\n")))
     
     var reader = MemoryReader(data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)

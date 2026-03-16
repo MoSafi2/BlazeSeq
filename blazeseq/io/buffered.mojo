@@ -1,8 +1,8 @@
-from memory import memcpy, UnsafePointer, Span, alloc
-from pathlib import Path
-from utils import StaticTuple
-from builtin.builtin_slice import ContiguousSlice
-from collections.string import StringSlice, String
+from std.memory import memcpy, UnsafePointer, Span, alloc
+from std.pathlib import Path
+from std.utils import StaticTuple
+from std.builtin.builtin_slice import ContiguousSlice
+from std.collections.string import StringSlice, String
 from blazeseq.io.readers import Reader
 from blazeseq.io.writers import (
     WriterBackend,
@@ -15,8 +15,8 @@ from blazeseq.errors import buffer_capacity_error
 from blazeseq.utils import memchr, memchr_scalar
 
 
-from sys import (
-    is_compile_time,
+from std.sys import (
+    is_run_in_comptime_interpreter,
     llvm_intrinsic,
     size_of,
 )
@@ -27,8 +27,8 @@ fn memmove[
     T: AnyType
 ](
     *,
-    dest: UnsafePointer[mut=True, T],
-    src: UnsafePointer[mut=False, T],
+    dest: UnsafePointer[mut=True, T, _],
+    src: UnsafePointer[mut=False, T, _],
     count: Int,
 ):
     """Copy `count * size_of[T]()` bytes from src to dest.
@@ -44,7 +44,7 @@ fn memmove[
         count: The number of elements to copy.
     """
     var n = count * size_of[T]()
-    if is_compile_time():
+    if is_run_in_comptime_interpreter():
         for i in range(n):
             (dest.bitcast[Byte]() + i).store((src.bitcast[Byte]() + i).load())
     else:
@@ -57,11 +57,15 @@ fn memmove[
         )
 
 
-@register_passable("trivial")
 @fieldwise_init
 @doc_private
 struct LineIteratorError(
-    Copyable, Equatable, ImplicitlyDestructible, Movable, Writable
+    Copyable,
+    Equatable,
+    ImplicitlyDestructible,
+    Movable,
+    TrivialRegisterPassable,
+    Writable,
 ):
     """Error type used by `LineIterator.next_complete_line()` to signal conditions without raising.
 
@@ -96,9 +100,8 @@ struct LineIteratorError(
         writer.write(msg)
 
 
-@register_passable("trivial")
 @fieldwise_init
-struct EOFError(Writable):
+struct EOFError(TrivialRegisterPassable, Writable):
     """Raised when no more input is available (end of file or stream).
 
     `FastqParser` and `LineIterator` raise `EOFError` when `next_ref()/next_record()`
@@ -215,7 +218,7 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref [_]self) -> Span[Byte, MutExternalOrigin]:
+    fn view(ref[_] self) -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head
@@ -386,18 +389,27 @@ struct BufferedWriter[W: WriterBackend](
         return self._bytes_written
 
     @always_inline
+    fn write_bytes(mut self, data: Span[Byte, _]) raises:
+        """Write bytes from a Span to the buffer, flushing if needed.
+
+        This is the primary entry point; it supports views like List slices
+        and other contiguous byte buffers without copying.
+        """
+        if len(data) == 0:
+            return
+        self._write_bytes_impl(data)
+
+    @always_inline
     fn write_bytes(mut self, data: List[Byte]) raises:
         """Write bytes from a List to the buffer, flushing if needed.
 
-        Args:
-            data: List of bytes to write.
+        Kept for backward compatibility; forwards to the Span overload.
 
         Raises:
             Error: If writing fails.
         """
         if len(data) == 0:
             return
-        # var span = data[:]
         self._write_bytes_impl(data[:])
 
     @always_inline
@@ -416,8 +428,7 @@ struct BufferedWriter[W: WriterBackend](
         """Write a sequence of Writable arguments. Required by the builtin `Writer` trait.
         """
 
-        @parameter
-        for i in range(args.__len__()):
+        comptime for i in range(args.__len__()):
             args[i].write_to(self)
 
     @always_inline
@@ -440,7 +451,7 @@ struct BufferedWriter[W: WriterBackend](
             self._pos = 0
 
     @always_inline
-    fn _write_bytes_impl(mut self, data: Span[Byte]) raises:
+    fn _write_bytes_impl(mut self, data: Span[Byte, _]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
 
         Args:
@@ -524,9 +535,11 @@ struct LineIterator[R: Reader](Iterable, Movable):
     next iteration or any buffer mutation (same contract as `next_line()`).
     """
 
-    comptime IteratorType[
-        mut: Bool, origin: Origin[mut=mut]
-    ] = _LineIteratorIter[Self.R, origin]
+    # Iterator type alias for `for line in LineIterator` loops.
+    # Only the origin matters for the iterator; we do not need to
+    # parameterize over mutability here, which avoids parameter
+    # inference depending on another parameter.
+    comptime IteratorType[origin: Origin] = _LineIteratorIter[Self.R, origin]
 
     var buffer: BufferedReader[Self.R]
     var _growth_enabled: Bool

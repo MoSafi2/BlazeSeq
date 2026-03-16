@@ -11,8 +11,8 @@ Usage:
     mode: batches | records | ref_records
 """
 
-from sys import argv
-from time import perf_counter_ns
+from std.sys import argv
+from std.time import perf_counter_ns
 from blazeseq.CONSTS import KB, GB
 from blazeseq.io.readers import MemoryReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig

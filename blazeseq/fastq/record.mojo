@@ -1,26 +1,20 @@
-from hashlib.hasher import default_hasher, Hasher
-from blazeseq.quality_schema import (
+from std.hashlib.hasher import default_hasher, Hasher
+from blazeseq.fastq.quality_schema import (
     QualitySchema,
     generic_schema,
 )
 from blazeseq.byte_string import BString
-from blazeseq.utils import _check_ascii
+from blazeseq.fasta.definition import Definition
+from blazeseq.utils import _check_ascii, _strip_spaces
 from blazeseq.errors import (
     ValidationError,
     FastxErrorCode,
     format_validation_error_from_code,
 )
 from blazeseq.CONSTS import simd_width
-from collections.string import StringSlice, String
-from memory import Span
+from std.collections.string import StringSlice, String
+from std.memory import Span
 from blazeseq.io.writers import Writer
-
-
-comptime read_header = ord("@")
-comptime quality_header = ord("+")
-comptime new_line = ord("\n")
-comptime carriage_return = ord("\r")
-comptime fasta_header = ord(">")
 
 
 struct Validator(Copyable):
@@ -237,7 +231,6 @@ struct FastqRecord(
     Copyable,
     Hashable,
     Movable,
-    Representable,
     Sized,
     Writable,
 ):
@@ -257,7 +250,7 @@ struct FastqRecord(
     Example:
         ```mojo
         from blazeseq import FastqRecord
-        from blazeseq.quality_schema import generic_schema
+        from blazeseq.fastq.quality_schema import generic_schema
         var rec = FastqRecord("read1", "ACGT", "IIII", generic_schema)
         print(rec.id())
         var scores = rec.phred_scores()
@@ -297,10 +290,10 @@ struct FastqRecord(
         self._quality = BString(quality)
         self._phred_offset = phred_offset
 
-    fn __init__(out self, four_lines: String) raises:
+    fn __init__(out self, fast_str: String) raises:
         """Build from a single string containing four newline-separated lines (line 3, plus line, is discarded).
         """
-        var seqs = four_lines.strip().split("\n")
+        var seqs = fast_str.strip().split("\n")
         if len(seqs) > 4:
             raise Error("Sequence does not seem to be valid")
 
@@ -321,24 +314,13 @@ struct FastqRecord(
         self._quality = quality^
         self._phred_offset = phred_offset
 
-    fn __init__(
-        out self,
-        var id: BString,
-        var sequence: BString,
-        var quality: BString,
-        schema: QualitySchema = generic_schema,
-    ):
-        self._id = id^
-        self._sequence = sequence^
-        self._quality = quality^
-        self._phred_offset = Int8(schema.OFFSET)
-
     @always_inline
     fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._sequence.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
@@ -347,8 +329,9 @@ struct FastqRecord(
     fn quality(ref [_]self) -> StringSlice[origin = origin_of(self)]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._quality.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._quality.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._quality),
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
@@ -373,19 +356,33 @@ struct FastqRecord(
 
     @always_inline
     fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
-        """Return the read identifier (id without leading '@') as a string slice."""
+        """Return the read identifier (id without leading '@') as a string slice.
+        """
         var span = Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[origin_of(self).mut]()
-            .unsafe_origin_cast[origin_of(self)](),
+            ptr=self._id.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
         return StringSlice[origin = origin_of(self)](unsafe_from_utf8=span)
 
+    fn definition(ref self) -> Definition:
+        """Return Id and optional Description parsed from the id line (first token vs rest)."""
+        var id_str = self._id.as_string_slice()
+        var parts = id_str.split(" ")
+        var id = parts[0].strip()
+        var id_ascii = BString(id)
+        if len(parts) > 1:
+            description = BString()
+            for part in parts[1:]:
+                description.extend(part.as_bytes())
+            description = BString(_strip_spaces(description.as_span()))
+            return Definition(Id=id_ascii^, Description=description^)
+        return Definition(Id=id_ascii^, Description=None)
+
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + "+\n").
-        Used for calculating buffer capacity.
-        """
+        """Return total byte length when written ("@" + id + sequence + quality + "+\n")."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline
@@ -432,9 +429,8 @@ struct FastqRecord(
 
 
 @align(64)
-@register_passable("trivial")
 struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
-    ImplicitlyDestructible, Movable, Sized, Writable
+    ImplicitlyDestructible, Movable, Sized, Writable, TrivialRegisterPassable
 ):
     """Zero-copy reference to a FASTQ record inside the parser's buffer.
 
@@ -495,6 +491,20 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         """
         return StringSlice[origin = Self.origin](unsafe_from_utf8=self._id)
 
+    fn definition(self) -> Definition:
+        """Return Id and optional Description parsed from the id line (first token vs rest)."""
+        var id_str = StringSlice(unsafe_from_utf8=self._id)
+        var parts = id_str.split(" ")
+        var id = parts[0].strip()
+        var id_ascii = BString(id)
+        if len(parts) > 1:
+            description = BString()
+            for part in parts[1:]:
+                description.extend(part.as_bytes())
+            description = BString(_strip_spaces(description.as_span()))
+            return Definition(Id=id_ascii^, Description=description^)
+        return Definition(Id=id_ascii^, Description=None)
+
     @always_inline
     fn __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
@@ -502,9 +512,7 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n").
-        Used for calculating buffer capacity.
-        """
+        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n"). Used for calculating buffer capacity."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline
@@ -517,7 +525,8 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     fn phred_scores(self, offset: UInt8) -> List[Byte]:
-        """Return Phred quality scores using the given offset (e.g. 33 or 64)."""
+        """Return Phred quality scores using the given offset (e.g. 33 or 64).
+        """
         output = List[Byte](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - offset

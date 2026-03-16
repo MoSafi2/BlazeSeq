@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # FASTA parser benchmark: BlazeSeq vs needletail vs noodles.
-# Generates synthetic FASTA on a ramfs mount (default 1GB; set FASTA_SIZE_GB), runs each parser with hyperfine.
+# Generates synthetic FASTA on a tmpfs/ramfs mount (default 1GB; set FASTA_SIZE_GB), runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fasta-parser/run_benchmarks.sh [--ramfs|--tmpfs]
 # Requires: pixi, hyperfine, cargo, rustc. On Linux: sudo for ramfs/tmpfs mount/umount.
 
 set -e
 
-# --- Mount type: --ramfs (default) or --tmpfs ---
-BENCH_FS="ramfs"
+# --- Mount type: tmpfs (default) or --ramfs/--tmpfs ---
+BENCH_FS="tmpfs"
 while [ $# -gt 0 ]; do
     case "$1" in
         --ramfs) BENCH_FS="ramfs"; shift ;;

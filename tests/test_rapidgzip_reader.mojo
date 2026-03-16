@@ -1,9 +1,9 @@
 """Tests for RapidgzipReader from blazeseq.io.readers."""
 
-from testing import assert_equal, assert_raises, assert_true, TestSuite
-from pathlib import Path
-from os import remove
-from memory import alloc, Span, memcpy
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
+from std.pathlib import Path
+from std.os import remove
+from std.memory import alloc, Span, memcpy
 from blazeseq.io.readers import RapidgzipReader
 from blazeseq.io.writers import GZWriter
 from blazeseq.io.buffered import LineIterator, buffered_writer_for_gzip
@@ -175,7 +175,7 @@ fn test_rapidgzip_reader_fastq_parser() raises:
     var parser = FastqParser[RapidgzipReader](reader^, "generic")
     var records = List[FastqRecord]()
     for record in parser.records():
-        records.append(record^)
+        records.append(record.copy())
 
     assert_equal(len(records), 2, "Should parse 2 records")
     assert_equal(records[0]._id.to_string(), "r1", "First record id should match")

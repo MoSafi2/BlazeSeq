@@ -1,8 +1,8 @@
 # Adapted from: https://github.com/BioRadOpenSource/ish/blob/main/ishlib/vendor/kseq.mojo
 # Adapted from Kseq crystal implementation by ssstadick
 
-from memory import memcpy, UnsafePointer, Span, alloc
-from collections.string import StringSlice, String
+from std.memory import memcpy, UnsafePointer, Span, alloc
+from std.collections.string import StringSlice, String
 from blazeseq.utils import memchr
 
 
@@ -47,11 +47,11 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
 
     @doc_private
     @always_inline
-    fn __copyinit__(out self, read other: Self):
-        self.cap = other.cap
-        self.size = other.size
+    fn __init__(out self, *, copy: Self):
+        self.cap = copy.cap
+        self.size = copy.size
         self.ptr = alloc[UInt8](Int(self.cap))
-        memcpy(dest=self.ptr, src=other.ptr, count=Int(other.size))
+        memcpy(dest=self.ptr, src=copy.ptr, count=Int(copy.size))
 
     @always_inline
     fn __getitem__[I: Indexer](read self, idx: I) -> UInt8:
