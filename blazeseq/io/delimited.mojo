@@ -46,10 +46,9 @@ struct DelimitedRecord(Copyable, Movable, Sized, Writable):
             writer.write(String(field.as_span()))
 
 
-fn _split_by_delimiter[O: Origin](
-    line: Span[UInt8, O],
-    delimiter: UInt8,
-) -> List[Span[UInt8, O]]:
+fn _split_by_delimiter[
+    O: Origin
+](line: Span[UInt8, O], delimiter: UInt8,) -> List[Span[UInt8, O]]:
     """Split a single line into fields on `delimiter`, returning spans into `line`.
     """
     var fields = List[Span[UInt8, O]](capacity=10)

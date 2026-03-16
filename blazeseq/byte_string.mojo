@@ -57,6 +57,18 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
     fn __getitem__[I: Indexer](read self, idx: I) -> UInt8:
         return self.ptr[idx]
 
+    fn __getitem__(ref[_] self, slice: Slice) -> Span[UInt8, origin_of(self)]:
+        var start = slice.start.or_else(0)
+        var end = slice.end.or_else(len(self))
+        var length = end - start
+        return Span[UInt8, origin_of(self)](
+            ptr=self.ptr.unsafe_mut_cast[
+                origin_of(self).mut
+            ]().unsafe_origin_cast[origin_of(self)]()
+            + start,
+            length=length,
+        )
+
     @always_inline
     fn __setitem__[I: Indexer](mut self, idx: I, val: UInt8):
         self.ptr[idx] = val
@@ -121,7 +133,7 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
         self.ptr = new_data
 
     @always_inline
-    fn as_span(ref [_]self) -> Span[UInt8, origin_of(self)]:
+    fn as_span(ref[_] self) -> Span[UInt8, origin_of(self)]:
         return Span[UInt8, origin_of(self)](
             ptr=self.ptr.unsafe_mut_cast[
                 origin_of(self).mut
@@ -133,9 +145,9 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
         return String(StringSlice(unsafe_from_utf8=self.as_span()))
 
     @always_inline
-    fn as_string_slice(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn as_string_slice(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return StringSlice view of BString bytes."""
-        return StringSlice[origin = origin_of(self)](
+        return StringSlice[origin=origin_of(self)](
             unsafe_from_utf8=self.as_span()
         )
 

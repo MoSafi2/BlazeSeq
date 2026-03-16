@@ -55,7 +55,7 @@ struct FastaRecord(
         self._sequence = sequence^
 
     @always_inline
-    fn sequence(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
             ptr=self._sequence.ptr.unsafe_mut_cast[
@@ -66,7 +66,7 @@ struct FastaRecord(
         return StringSlice(unsafe_from_utf8=span)
 
     @always_inline
-    fn id(ref [_]self) -> StringSlice[origin = origin_of(self)]:
+    fn id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the read identifier (id without leading '>') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
@@ -97,14 +97,22 @@ struct FastaRecord(
         """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
-    fn write[w: Writer](self, mut writer: w):
+    fn write[w: Writer](self, mut writer: w, line_width: Int = 60):
         """Write the record in standard FASTA format."""
         writer.write(">")
+        no_lines = len(self._sequence) // line_width
+        seq = String(capacity=len(self._sequence) + no_lines)
+        for i in range(no_lines):
+            seq += StringSlice(
+                unsafe_from_utf8=self._sequence[
+                    i * line_width : (i + 1) * line_width
+                ]
+            )
+            seq += "\n"
         writer.write(
             self._id.to_string(),
             "\n",
-            self._sequence.to_string(),
-            "\n",
+            seq,
         )
 
     @always_inline
