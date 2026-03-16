@@ -31,6 +31,7 @@ from blazeseq.fastq.record import FastqRecord, RefRecord
 from blazeseq.fastq.parser import FastqParser
 from blazeseq.fasta import FastaRecord, FastaParser
 from blazeseq.fai import FaiRecord, FaiRecordView, FaiParser
+from blazeseq.bed import BedRecord, BedRecordView, BedParser
 from blazeseq.fastq.record_batch import FastqBatch, upload_batch_to_device
 
 from blazeseq.io import (
