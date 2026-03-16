@@ -24,6 +24,7 @@ fn _parse_fasta_file(path: String) raises -> List[FastaRecord]:
 
 # ─── SeqIO-style files (f001, f002, f003.fa, fa01) ───
 
+
 fn test_biopython_f001() raises:
     """Biopython f001: 1 protein sequence; long definition line."""
     var records = _parse_fasta_file(test_dir + "f001")
@@ -49,7 +50,10 @@ fn test_biopython_f002() raises:
     assert_true(id0.find("gi|1348912|gb|G26680|") >= 0, "first id")
     assert_true(id2.find("gi|1592936|gb|G29385|") >= 0, "last id")
     var seq0 = String(records[0].sequence())
-    assert_true(seq0.find("CGGACCAGACGGACACAGGGAGAAGCTAGTTTCTTTCATGTGATTGA") >= 0, "first sequence start")
+    assert_true(
+        seq0.find("CGGACCAGACGGACACAGGGAGAAGCTAGTTTCTTTCATGTGATTGA") >= 0,
+        "first sequence start",
+    )
     assert_true(len(seq0) > 100, "first sequence concatenated")
 
 
@@ -81,18 +85,27 @@ fn test_biopython_fa01() raises:
     var seq1 = String(records[1].sequence())
     assert_true(seq0.find("-") >= 0, "first sequence should contain gaps")
     assert_true(seq1.find("-") >= 0, "second sequence should contain gaps")
-    assert_true(seq0.find("CPDSINAALICRGEKMSIAIMAGVLEARGH") >= 0, "first sequence content")
-    assert_true(seq1.find("VEDAVKATIDCRGEKLSIAMMKAWFEARGY") >= 0, "second sequence content")
+    assert_true(
+        seq0.find("CPDSINAALICRGEKMSIAIMAGVLEARGH") >= 0,
+        "first sequence content",
+    )
+    assert_true(
+        seq1.find("VEDAVKATIDCRGEKLSIAMMKAWFEARGY") >= 0,
+        "second sequence content",
+    )
 
 
 # ─── Protein (.pro) files (standard FASTA; exclude those with leading comments) ───
+
 
 fn test_biopython_pro_aster() raises:
     """Biopython aster.pro: single protein record."""
     var records = _parse_fasta_file(test_dir + "aster.pro")
     assert_true(len(records) >= 1, "aster.pro should have at least 1 record")
     assert_true(len(String(records[0].id())) > 0, "first id non-empty")
-    assert_true(len(String(records[0].sequence())) > 0, "first sequence non-empty")
+    assert_true(
+        len(String(records[0].sequence())) > 0, "first sequence non-empty"
+    )
     assert_true(
         String(records[0].id()).find("gi|3298468|dbj|BAA31520.1|") >= 0,
         "id should contain gi|3298468|dbj|BAA31520.1|",
@@ -102,14 +115,18 @@ fn test_biopython_pro_aster() raises:
 fn test_biopython_pro_aster_no_wrap() raises:
     """Biopython aster_no_wrap.pro: single line sequence."""
     var records = _parse_fasta_file(test_dir + "aster_no_wrap.pro")
-    assert_true(len(records) >= 1, "aster_no_wrap.pro should have at least 1 record")
+    assert_true(
+        len(records) >= 1, "aster_no_wrap.pro should have at least 1 record"
+    )
     assert_true(len(String(records[0].sequence())) > 0, "sequence non-empty")
 
 
 fn test_biopython_pro_loveliesbleeding() raises:
     """Biopython loveliesbleeding.pro: single protein record."""
     var records = _parse_fasta_file(test_dir + "loveliesbleeding.pro")
-    assert_true(len(records) >= 1, "loveliesbleeding.pro should have at least 1 record")
+    assert_true(
+        len(records) >= 1, "loveliesbleeding.pro should have at least 1 record"
+    )
     assert_true(String(records[0].id()).find("gi|2781234|pdb|1JLY|") >= 0, "id")
 
 
@@ -122,7 +139,10 @@ fn test_biopython_pro_rose() raises:
         "id should contain gi|4959044|gb|AAD34209.1|",
     )
     assert_true(
-        String(records[0].sequence()).find("MENSDSNDKGSDQSAAQRRSQMDRLDREEAFYQFVNNLSEEDYRLMRDNNLLGTPGESTEEELLRRLQQI") >= 0,
+        String(records[0].sequence()).find(
+            "MENSDSNDKGSDQSAAQRRSQMDRLDREEAFYQFVNNLSEEDYRLMRDNNLLGTPGESTEEELLRRLQQI"
+        )
+        >= 0,
         "sequence start",
     )
 
@@ -131,11 +151,20 @@ fn test_biopython_pro_rosemary() raises:
     """Biopython rosemary.pro: single protein (rubisco large subunit)."""
     var records = _parse_fasta_file(test_dir + "rosemary.pro")
     assert_true(len(records) >= 1, "rosemary.pro should have at least 1 record")
-    assert_true(String(records[0].id()).find("gi|671626|emb|CAA85685.1|") >= 0, "id")
-    assert_true(String(records[0].sequence()).find("MSPQTETKASVGFKAGVKEYKLTYYTPEYETKDTDILAAFRVTPQPGVPPEEAGAAVAAESSTGTWTTVW") >= 0, "sequence start")
+    assert_true(
+        String(records[0].id()).find("gi|671626|emb|CAA85685.1|") >= 0, "id"
+    )
+    assert_true(
+        String(records[0].sequence()).find(
+            "MSPQTETKASVGFKAGVKEYKLTYYTPEYETKDTDILAAFRVTPQPGVPPEEAGAAVAAESSTGTWTTVW"
+        )
+        >= 0,
+        "sequence start",
+    )
 
 
 # ─── Nucleotide (.nu) files ───
+
 
 fn test_biopython_nu_centaurea() raises:
     """Biopython centaurea.nu: single nucleotide record."""
@@ -148,8 +177,16 @@ fn test_biopython_nu_centaurea() raises:
 fn test_biopython_nu_elderberry() raises:
     """Biopython elderberry.nu: single nucleotide record."""
     var records = _parse_fasta_file(test_dir + "elderberry.nu")
-    assert_true(len(records) >= 1, "elderberry.nu should have at least 1 record")
-    assert_true(String(records[0].sequence()).find("ATGAAGTTAAGCACTCTTCTCATCTTATCTTTTCCTTTCCTGCTCGGTACTATTGTCTTTGCAGATGATG") >= 0, "sequence start")
+    assert_true(
+        len(records) >= 1, "elderberry.nu should have at least 1 record"
+    )
+    assert_true(
+        String(records[0].sequence()).find(
+            "ATGAAGTTAAGCACTCTTCTCATCTTATCTTTTCCTTTCCTGCTCGGTACTATTGTCTTTGCAGATGATG"
+        )
+        >= 0,
+        "sequence start",
+    )
 
 
 fn test_biopython_nu_lavender() raises:
@@ -160,7 +197,8 @@ fn test_biopython_nu_lavender() raises:
 
 
 fn test_biopython_nu_lupine() raises:
-    """Biopython lupine.nu: single nucleotide; sequence starts with known prefix."""
+    """Biopython lupine.nu: single nucleotide; sequence starts with known prefix.
+    """
     var records = _parse_fasta_file(test_dir + "lupine.nu")
     assert_true(len(records) >= 1, "lupine.nu should have at least 1 record")
     assert_true(
@@ -173,7 +211,13 @@ fn test_biopython_nu_phlox() raises:
     """Biopython phlox.nu: single nucleotide record."""
     var records = _parse_fasta_file(test_dir + "phlox.nu")
     assert_true(len(records) >= 1, "phlox.nu should have at least 1 record")
-    assert_true(String(records[0].sequence()).find("TCGAAACCTGCCTAGCAGAACGACCCGCGAACTTGTATTCAAAACTTGGGTTGTGCGTGCTTCTGCTTCG") >= 0, "sequence start")
+    assert_true(
+        String(records[0].sequence()).find(
+            "TCGAAACCTGCCTAGCAGAACGACCCGCGAACTTGTATTCAAAACTTGGGTTGTGCGTGCTTCTGCTTCG"
+        )
+        >= 0,
+        "sequence start",
+    )
 
 
 fn test_biopython_nu_sweetpea() raises:
@@ -187,7 +231,13 @@ fn test_biopython_nu_wisteria() raises:
     """Biopython wisteria.nu: single nucleotide record."""
     var records = _parse_fasta_file(test_dir + "wisteria.nu")
     assert_true(len(records) >= 1, "wisteria.nu should have at least 1 record")
-    assert_true(String(records[0].sequence()).find("GCTCCATTTTTTACACATTTCTATGAACTAATTGGTTCATCCATACCATCGGTAGGGTTTGTAAGACCAC") >= 0, "sequence start")
+    assert_true(
+        String(records[0].sequence()).find(
+            "GCTCCATTTTTTACACATTTCTATGAACTAATTGGTTCATCCATACCATCGGTAGGGTTTGTAAGACCAC"
+        )
+        >= 0,
+        "sequence start",
+    )
 
 
 fn main() raises:
