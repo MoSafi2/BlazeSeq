@@ -49,7 +49,7 @@ pre-run:
     echo Running 'mojo doc'...
     mkdir -p docs/src
     pixi run mojo doc -o docs/src/blazeseq.json blazeseq
-    echo Stripping isStabilityTracked for modo compatibility...
+    echo Stripping unknown Mojo doc fields for modo compatibility...
     pixi run python -c "
     import json
     with open('docs/src/blazeseq.json') as f:
@@ -62,7 +62,8 @@ pre-run:
         elif isinstance(obj, list):
             for v in obj:
                 strip_key(v, key)
-    strip_key(d, 'isStabilityTracked')
+    for key in ('isStabilityTracked', 'isStable', 'sinceVersion'):
+        strip_key(d, key)
     with open('docs/src/blazeseq.json', 'w') as f:
         json.dump(d, f, indent=2)
     "
