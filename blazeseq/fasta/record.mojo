@@ -46,6 +46,7 @@ struct FastaRecord(
         self._id = BString(id)
         self._sequence = BString(sequence)
 
+    @always_inline
     fn __init__(
         out self,
         var id: BString,
@@ -77,6 +78,7 @@ struct FastaRecord(
         )
         return StringSlice(unsafe_from_utf8=span)
 
+    @always_inline
     fn definition(self) -> Definition:
         var id_str = self._id.as_string_slice()
         var parts = id_str.split(" ")
@@ -97,6 +99,7 @@ struct FastaRecord(
         """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
+    @always_inline
     fn write[w: Writer](self, mut writer: w, line_width: Int = 60):
         """Write the record in standard FASTA format."""
         writer.write(">")
