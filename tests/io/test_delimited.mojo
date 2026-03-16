@@ -20,7 +20,7 @@ fn test_delimited_reader_basic_tsv_with_header() raises:
 
     var header_opt = delimited.header()
     assert_true(
-        header_opt.value(), "Header should be present when has_header=True"
+        header_opt, "Header should be present when has_header=True"
     )
     var header = header_opt.value().copy()
     assert_equal(len(header), 2, "Header should have 2 columns")
@@ -79,7 +79,7 @@ fn test_delimited_reader_records_for_loop() raises:
     var reader = _memory_reader_from_string(content)
     var delimited = DelimitedReader[MemoryReader](reader^, has_header=True)
 
-    var rows = List[DelimitedRecord]()
+    var rows = List[DelimitedRecord[64]]()
     for record in delimited.records():
         rows.append(record.copy())
 
