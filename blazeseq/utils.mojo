@@ -295,7 +295,7 @@ fn is_posix_space(c: UInt8) -> Bool:
         | (1 << ord("\x1e"))
         | (1 << ord(" "))
     )
-    # If c > 63, it's definitely not one of our space characters.
+    # If c > 32, it's definitely not one of our space characters.
     if c > 32:
         return False
 
