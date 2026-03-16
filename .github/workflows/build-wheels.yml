@@ -51,12 +51,17 @@ jobs:
           cd python
           uv build --wheel --config-setting plat-name=${{ matrix.plat-name }}
 
-      - name: Test wheel
+      - name: Create venv
         run: |
           uv venv .venv
-          . .venv/bin/activate
-          uv pip install python/dist/*.whl
-          python tests/test_python_bindings.py
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install wheel
+        run: uv pip install python/dist/*.whl
+
+      - name: Test wheel
+        run: python tests/test_python_bindings.py
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
