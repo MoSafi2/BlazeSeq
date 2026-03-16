@@ -376,7 +376,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     return (
                         got_record,
                         offsets,
-                        SearchPhase(new_base),
+                        SearchPhase(Int8(new_base)),
                         FastxErrorCode.OK,
                     )
                 else:

@@ -9,7 +9,6 @@ it pass through to a normal reader that is quite fast when paired with a
 """
 
 from std.memory import memset_zero, UnsafePointer, Span, memcpy
-from std.memory.legacy_unsafe_pointer import LegacyUnsafePointer
 import std.ffi as ffi
 from std.sys.info import CompilationTarget
 from std.pathlib import Path
@@ -28,9 +27,11 @@ comptime Z_MEM_ERROR = -4
 comptime Z_BUF_ERROR = -5
 comptime Z_VERSION_ERROR = -6
 
-# Type aliases for C types
-comptime c_void_ptr = LegacyUnsafePointer[mut=False, UInt8]
-comptime c_char_ptr = LegacyUnsafePointer[mut=False, Int8]
+# Type aliases for C types using modern UnsafePointer API.
+# These pointers refer to externally managed C memory; we model that
+# explicitly with MutExternalOrigin so the types are concrete.
+comptime c_void_ptr = UnsafePointer[mut=False, UInt8, MutExternalOrigin]
+comptime c_char_ptr = UnsafePointer[mut=False, Int8, MutExternalOrigin]
 comptime c_uint = UInt32
 comptime c_int = Int32
 
@@ -47,7 +48,7 @@ comptime gzwrite_fn_type = fn(
 ) -> c_int
 
 
-trait Reader(ImplicitlyDestructible):
+trait Reader(ImplicitlyDestructible, Movable):
     """Trait for reading bytes from a source (file, memory, gzip, etc.).
 
     Implement this trait to provide a custom data source to `FastqParser` via
@@ -88,7 +89,7 @@ struct FileReader(Movable, Reader):
     Example:
         ```mojo
         from blazeseq import FileReader, FastqParser
-        from pathlib import Path
+        from std.pathlib import Path
         var r = FileReader(Path("data.fastq"))
         var parser = FastqParser[FileReader](r^, "generic")
         for record in parser.records():

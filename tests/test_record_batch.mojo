@@ -89,10 +89,10 @@ fn test_fastq_batch_get_record_matches_to_records() raises:
         batch.add(records[i])
     # Batch should contain quality bytes 33, 33, 33, 33
     assert_equal(len(batch._quality_bytes), 4)
-    assert_equal(batch._quality_bytes[0], ord("!"))
-    assert_equal(batch._quality_bytes[1], ord("!"))
-    assert_equal(batch._quality_bytes[2], ord("!"))
-    assert_equal(batch._quality_bytes[3], ord("!"))
+    assert_equal(batch._quality_bytes[0], Byte(ord("!")))
+    assert_equal(batch._quality_bytes[1], Byte(ord("!")))
+    assert_equal(batch._quality_bytes[2], Byte(ord("!")))
+    assert_equal(batch._quality_bytes[3], Byte(ord("!")))
     var as_list = batch.to_records()
     for i in range(batch.num_records()):
         var from_get = batch.get_record(i)

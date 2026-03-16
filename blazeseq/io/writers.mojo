@@ -10,7 +10,7 @@ from std.collections.string import String
 from blazeseq.io.readers import ZLib, c_void_ptr, c_uint
 
 
-trait WriterBackend(ImplicitlyDestructible):
+trait WriterBackend(ImplicitlyDestructible, Movable):
     """Trait for writing bytes to various backends.
 
     Similar to `Reader` trait but for writing operations.
@@ -36,7 +36,7 @@ trait WriterBackend(ImplicitlyDestructible):
         """
         ...
 
-    fn __init__(out self, *, take other: Self):
+    fn __init__(out self, *, deinit take: Self):
         """Move constructor for Movable trait compliance."""
         ...
 
@@ -47,8 +47,8 @@ struct FileWriter(Movable, WriterBackend):
     Example:
         ```mojo
         from blazeseq.io.buffered import buffered_writer_for_file
-        from pathlib import Path
-        from collections.string import String
+        from std.pathlib import Path
+        from std.collections.string import String
         var writer = buffered_writer_for_file(Path("out.fastq"))
         var data = List(String("@read1\nACGT\n+\nIIII\n").as_bytes())
         writer.write_bytes(data)
@@ -216,9 +216,10 @@ struct GZWriter(Movable, WriterBackend):
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
-    fn __init__(out self, *, take other: Self):
+    # Move constructor using unified init naming in Mojo 26.2.
+    fn __init__(out self, *, deinit take: Self):
         """Move constructor."""
-        self.handle = other.handle
-        self.lib = other.lib^
-        self.filename = other.filename^
-        self.mode = other.mode^
+        self.handle = take.handle
+        self.lib = take.lib^
+        self.filename = take.filename^
+        self.mode = take.mode^

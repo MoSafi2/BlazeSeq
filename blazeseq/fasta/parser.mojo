@@ -6,7 +6,7 @@ from blazeseq.utils import format_parse_error, _strip_spaces, _check_ascii
 from blazeseq.errors import FastxErrorCode, format_validation_error_from_code
 from blazeseq.byte_string import BString
 from std.memory import Span
-from collections import List
+from std.collections import List
 from std.collections.string import StringSlice, String
 
 
@@ -72,9 +72,12 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
                                              _FastaParserRecordIter)
     """
 
-    comptime IteratorType[
-        mut: Bool, origin: Origin[mut=mut]
-    ] = _FastaParserRecordIter[Self.R, Self.config, origin]
+    # Iterator type alias for `for rec in parser` loops.
+    # Only the origin is relevant here; avoid parameter inference
+    # where one parameter depends on another to satisfy 26.2 rules.
+    comptime IteratorType[origin: Origin] = _FastaParserRecordIter[
+        Self.R, Self.config, origin
+    ]
 
     var lines: LineIterator[Self.R]
     var _record_number: Int  # 1-based record count
@@ -197,9 +200,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
             var id_span = _strip_spaces(trimmed[1:])
             return BString(id_span)
 
-    fn __iter__(
-        ref self,
-    ) -> Self.IteratorType[origin_of(self).mut, origin_of(self)]:
+    fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
         return {Pointer(to=self)}
 
 

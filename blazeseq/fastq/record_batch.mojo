@@ -350,8 +350,8 @@ fn stage_batch_to_host(
 
     return StagedFastqBatch(
         num_records=n,
-        total_seq_bytes=total_bytes,
-        total_id_bytes=total_id_bytes,
+        total_seq_bytes=Int64(total_bytes),
+        total_id_bytes=Int64(total_id_bytes),
         quality_offset=batch.quality_offset(),
         quality_data=quality_data,
         ends=ends,

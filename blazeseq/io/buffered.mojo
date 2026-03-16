@@ -27,8 +27,8 @@ fn memmove[
     T: AnyType
 ](
     *,
-    dest: UnsafePointer[mut=True, T],
-    src: UnsafePointer[mut=False, T],
+    dest: UnsafePointer[mut=True, T, _],
+    src: UnsafePointer[mut=False, T, _],
     count: Int,
 ):
     """Copy `count * size_of[T]()` bytes from src to dest.
@@ -389,18 +389,27 @@ struct BufferedWriter[W: WriterBackend](
         return self._bytes_written
 
     @always_inline
+    fn write_bytes(mut self, data: Span[Byte, _]) raises:
+        """Write bytes from a Span to the buffer, flushing if needed.
+
+        This is the primary entry point; it supports views like List slices
+        and other contiguous byte buffers without copying.
+        """
+        if len(data) == 0:
+            return
+        self._write_bytes_impl(data)
+
+    @always_inline
     fn write_bytes(mut self, data: List[Byte]) raises:
         """Write bytes from a List to the buffer, flushing if needed.
 
-        Args:
-            data: List of bytes to write.
+        Kept for backward compatibility; forwards to the Span overload.
 
         Raises:
             Error: If writing fails.
         """
         if len(data) == 0:
             return
-        # var span = data[:]
         self._write_bytes_impl(data[:])
 
     @always_inline
@@ -442,7 +451,7 @@ struct BufferedWriter[W: WriterBackend](
             self._pos = 0
 
     @always_inline
-    fn _write_bytes_impl(mut self, data: Span[Byte]) raises:
+    fn _write_bytes_impl(mut self, data: Span[Byte, _]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
 
         Args:
@@ -526,9 +535,11 @@ struct LineIterator[R: Reader](Iterable, Movable):
     next iteration or any buffer mutation (same contract as `next_line()`).
     """
 
-    comptime IteratorType[
-        mut: Bool, origin: Origin[mut=mut]
-    ] = _LineIteratorIter[Self.R, origin]
+    # Iterator type alias for `for line in LineIterator` loops.
+    # Only the origin matters for the iterator; we do not need to
+    # parameterize over mutability here, which avoids parameter
+    # inference depending on another parameter.
+    comptime IteratorType[origin: Origin] = _LineIteratorIter[Self.R, origin]
 
     var buffer: BufferedReader[Self.R]
     var _growth_enabled: Bool
