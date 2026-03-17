@@ -63,17 +63,17 @@ fn valid_file_test_fun(file: String, schema: String = "generic") raises:
 
 
 fn valid_file_test_fun_ref(file: String, schema: String = "generic") raises:
-    """Same valid files as valid_file_test_fun but iterate via RefRecord (ref_records()).
+    """Same valid files as valid_file_test_fun but iterate via views() (FastqView path).
     """
     var parser = FastqParser[FileReader](FileReader(test_dir + file), schema)
-    for ref_record in parser.ref_records():
-        _ = ref_record.id()
-        _ = ref_record.sequence()
-        _ = ref_record.quality()
+    for view in parser.views():
+        _ = view.id()
+        _ = view.sequence()
+        _ = view.quality()
 
 
 fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
-    """Same invalid files as invalid_file_test_fun but consume via next_ref() (RefRecord path).
+    """Same invalid files as invalid_file_test_fun but consume via next_view() (FastqView path).
     """
     comptime config_ = ParserConfig(
         check_ascii=True,
@@ -87,7 +87,7 @@ fn invalid_file_test_fun_ref(file: String, msg: String = "") raises:
             FileReader(test_dir + file)
         )
         while True:
-            _ = parser.next_ref()
+            _ = parser.next_view()
     except e:
         raised = True
         err_msg = String(e)
@@ -123,14 +123,14 @@ fn valid_file_test_fun_gz(file_gz: String, schema: String = "generic") raises:
 fn valid_file_test_fun_gz_ref(
     file_gz: String, schema: String = "generic"
 ) raises:
-    """Same as valid_file_test_fun_gz but iterate via ref_records()."""
+    """Same as valid_file_test_fun_gz but iterate via views()."""
     var parser = FastqParser[RapidgzipReader](
         RapidgzipReader(test_dir + file_gz), schema
     )
-    for ref_record in parser.ref_records():
-        _ = ref_record.id()
-        _ = ref_record.sequence()
-        _ = ref_record.quality()
+    for view in parser.views():
+        _ = view.id()
+        _ = view.sequence()
+        _ = view.quality()
 
 
 # ---------------------------------------------------------------------------

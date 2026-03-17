@@ -4,14 +4,15 @@ This example demonstrates:
 1. `FastqParser`: Parsing records one at a time with validation (ASCII + quality schema)
 2. `FastqParser`: Parsing with validation disabled for maximum speed
 
-Use `parser.records()` for owned `FastqRecord`s, `parser.ref_records()` for zero-copy `RefRecord`s,
-or `parser.batches()` for `FastqBatch` (SoA). Direct methods: `next_record()`, `next_ref()`, `next_batch()`.
+Use `parser.records()` for owned `FastqRecord`s, `parser.views()` for zero-copy `FastqView`s,
+or `parser.batches()` for `FastqBatch` (SoA). Direct methods: `next_record()`, `next_view()`, `next_batch()`.
 
 Usage:
     pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 """
 
-from blazeseq import FastqParser, ParserConfig, FileReader
+from blazeseq import FastqParser, FileReader
+from blazeseq.fastq import ParserConfig
 from std.pathlib import Path
 from std.sys import argv
 

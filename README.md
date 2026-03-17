@@ -14,7 +14,7 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
 
 - **SIMD-accelerated scanning** — Vectorized from the ground up using mojo SIMD first-class support.
 - **Three parsing modes** — Choose your trade-off between speed and convenience:
-  - `ref_records()` — Zero-copy views (fastest, borrow semantics)
+  - `views()` — Zero-copy views (fastest, borrow semantics)
   - `records()` — Owned records (thread-safe)
   - `batches()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
@@ -33,7 +33,7 @@ Use BlazeSeq as a Mojo dependency in your project. Install [pixi](https://prefix
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
-Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `ref_records()`, `batches()`, GPU batching).
+Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `views()`, `batches()`, GPU batching).
 
 ## Python bindings (experimental)
 
@@ -74,8 +74,8 @@ from pathlib import Path
 fn main() raises:
     comptime config = ParserConfig(check_ascii=False, check_quality=False)
     var parser = FastqParser[config=config](FileReader(Path("data.fastq")), "generic")
-    for record in parser.ref_records():   # zero-copy
-        _ = len(record)
+    for view in parser.views():   # zero-copy
+        _ = len(view)
 ```
 
 ### Batched (for GPU pipelines)
@@ -109,11 +109,11 @@ for record in parser.records():
 
 | Mode                           | Return Type        | Copies Data? | Use When                                                           |
 | ------------------------------ | ------------------ | ------------ | ------------------------------------------------------------------ |
-| `next_ref()` / `ref_records()` | `RefRecord`        | **No**       | Streaming transforms (QC, filtering) where you process and discard. Not thread-safe |
+| `next_view()` / `views()`      | `FastqView`        | **No**       | Streaming transforms (QC, filtering) where you process and discard. Not thread-safe |
 | `next_record()` / `records()`  | `FastqRecord`      | **Yes**      | Simple scripting, building in-memory collections       |
 | `next_batch()` / `batches()`   | `FastqBatch` (SoA) | **Yes**      | GPU pipelines, parallel CPU operations                |
 
-**Critical**: `RefRecord` spans are only valid untill the next parser operation. Do not store them in collections or use after iteration advances.
+**Critical**: `FastqView` spans are only valid until the next parser operation. Do not store them in collections or use after iteration advances.
 
 ## Benchmarks
 

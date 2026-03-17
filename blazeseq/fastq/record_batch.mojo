@@ -1,4 +1,4 @@
-from blazeseq.fastq.record import FastqRecord, RefRecord
+from blazeseq.fastq.record import FastqRecord, FastqView
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import DEFAULT_BATCH_SIZE
 from std.gpu.host import DeviceContext
@@ -74,7 +74,7 @@ struct FastqBatch(
             self._id_ends.append(Int64(len(record._id)) + self._id_ends[-1])
             self._ends.append(Int64(len(record._quality)) + self._ends[-1])
 
-    fn add[origin: Origin[mut=True]](mut self, record: RefRecord[origin]):
+    fn add[origin: Origin[mut=True]](mut self, record: FastqView[origin]):
         self._quality_bytes.extend(record._quality)
         self._sequence_bytes.extend(record._sequence)
         self._id_bytes.extend(record._id)
@@ -153,7 +153,7 @@ struct FastqBatch(
             Int8(self._quality_offset),
         )
 
-    fn get_ref(self, index: Int) raises -> RefRecord[origin_of(self)]:
+    fn get_ref(self, index: Int) raises -> FastqView[origin_of(self)]:
         var n = self.num_records()
         if index < 0 or index >= n:
             raise Error("FastqBatch.get_ref index out of range")
@@ -188,7 +188,7 @@ struct FastqBatch(
             length=range[1] - range[0],
         )
 
-        return RefRecord[origin=origin_of(self)](
+        return FastqView[origin=origin_of(self)](
             id_span,
             seq_span,
             qual_span,

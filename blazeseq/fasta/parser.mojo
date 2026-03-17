@@ -2,7 +2,7 @@ from blazeseq.fasta.record import FastaRecord
 from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
 from blazeseq.CONSTS import EOF
-from blazeseq.utils import format_parse_error, _strip_spaces, _check_ascii
+from blazeseq.utils import format_parse_error, ParseContext, _strip_spaces, _check_ascii
 from blazeseq.errors import FastxErrorCode, format_validation_error_from_code
 from blazeseq.byte_string import BString
 from std.memory import Span
@@ -102,16 +102,12 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
         return len(self._pending_ids) > 0 or self.lines.has_more()
 
     @always_inline
-    fn _get_record_number(ref self) -> Int:
-        return self._record_number
-
-    @always_inline
-    fn _get_line_number(ref self) -> Int:
-        return self.lines.get_line_number()
-
-    @always_inline
-    fn _get_file_position(ref self) -> Int64:
-        return self.lines.get_file_position()
+    fn _parse_context(ref self) -> ParseContext:
+        return ParseContext(
+            self._record_number,
+            self.lines.get_line_number(),
+            self.lines.get_file_position(),
+        )
 
     @always_inline
     fn get_buffer_position(ref self) -> Int:
@@ -154,13 +150,12 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
 
         self._last_seq_size = seq_buf.size
         if len(seq_buf) == 0:
-            var msg = format_parse_error(
-                "FASTA record has empty sequence",
-                self._record_number + 1,
+            var ctx = ParseContext(
+                self._record_number,
                 seq_start_line,
-                self._get_file_position(),
-                "",
+                self.lines.get_file_position(),
             )
+            var msg = format_parse_error(ctx, "FASTA record has empty sequence", "", 1)
             raise Error(msg)
 
         comptime if Self.config.check_ascii:
@@ -168,6 +163,9 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
 
         self._record_number += 1
         return FastaRecord(id_str^, seq_buf^)
+
+    fn records(ref self) -> Self.IteratorType[origin_of(self)]:
+        return {Pointer(to=self)}
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -189,11 +187,10 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
                 continue
             if trimmed[0] != FASTA_HEADER_BYTE:
                 var msg = format_parse_error(
+                    self._parse_context(),
                     "Sequence id line does not start with '>'",
-                    self._record_number + 1,
-                    self.lines.get_line_number(),
-                    self._get_file_position(),
                     "",
+                    1,
                 )
                 raise Error(msg)
             # Id is text after '>', trimmed of leading/trailing whitespace.
@@ -201,7 +198,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
             return BString(id_span)
 
     fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
-        return {Pointer(to=self)}
+        return self.records()
 
 
 struct _FastaParserRecordIter[R: Reader, cfg: ParserConfig, origin: Origin](

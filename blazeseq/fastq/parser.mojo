@@ -1,4 +1,4 @@
-from blazeseq.fastq.record import FastqRecord, RefRecord, Validator
+from blazeseq.fastq.record import FastqRecord, FastqView, Validator
 from blazeseq.CONSTS import *
 from blazeseq.fastq.quality_schema import QualitySchema, generic_schema
 from blazeseq.io.buffered import EOFError, BufferedReader
@@ -17,6 +17,7 @@ from blazeseq.byte_string import BString
 from blazeseq.utils import (
     _parse_schema,
     format_parse_error,
+    ParseContext,
     _check_end_qual,
     _scan_record,
     _strip_spaces,
@@ -141,30 +142,26 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         self._batch_size = batch_size
 
     @always_inline
-    fn _get_record_number(ref self) -> Int:
-        return self._current_line_number // 4
-
-    @always_inline
-    fn _get_line_number(ref self) -> Int:
-        return self._current_line_number
-
-    @always_inline
-    fn _get_file_position(ref self) -> Int64:
-        return Int64(self.buffer.stream_position())
+    fn _parse_context(ref self) -> ParseContext:
+        return ParseContext(
+            self._current_line_number // 4,
+            self._current_line_number,
+            Int64(self.buffer.stream_position()),
+        )
 
     @always_inline
     fn has_more(self) -> Bool:
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
     @always_inline
-    fn next_ref(mut self) raises -> RefRecord[origin=MutExternalOrigin]:
+    fn next_view(mut self) raises -> FastqView[origin=MutExternalOrigin]:
         var ref_rec = self._find_and_consume_ref_record()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
             raise Error(
                 format_validation_error_from_code(
                     code,
-                    self._get_record_number(),
+                    self._parse_context().record_number,
                     "",
                     self._get_record_snippet(ref_rec),
                 )
@@ -186,20 +183,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             )
         except e:
             raise Error(
-                format_parse_error(
-                    String(e),
-                    self._get_record_number(),
-                    self._get_line_number(),
-                    self._get_file_position(),
-                    "",
-                )
+                format_parse_error(self._parse_context(), String(e))
             )
         var code = self.validator._validate(record)
         if code != FastxErrorCode.OK:
             raise Error(
                 format_validation_error_from_code(
                     code,
-                    self._get_record_number(),
+                    self._parse_context().record_number,
                     "",
                     self._get_record_snippet_from_fastq(record),
                 )
@@ -213,17 +204,17 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var batch = FastqBatch(batch_size=limit)
         while len(batch) < limit and self.has_more():
             try:
-                batch.add(self.next_ref())
+                batch.add(self.next_view())
             except e:
                 if String(e) == EOF or String(e).startswith(EOF):
                     break
                 raise e^
         return batch^
 
-    fn ref_records(
+    fn views(
         ref self,
-    ) -> _FastqParserRefIter[Self.R, Self.config, origin_of(self)]:
-        return _FastqParserRefIter[Self.R, Self.config, origin_of(self)](
+    ) -> _FastqParserViewIter[Self.R, Self.config, origin_of(self)]:
+        return _FastqParserViewIter[Self.R, Self.config, origin_of(self)](
             Pointer(to=self)
         )
 
@@ -254,13 +245,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             or refill_code == FastxErrorCode.SEP_NO_PLUS
             or refill_code == FastxErrorCode.SEQ_QUAL_LEN_MISMATCH
         ):
-            var rec_num = self._current_line_number // 4 + 1
-            var line_num = self._current_line_number + 1
+            var ctx = self._parse_context()
             return format_parse_error_from_code(
                 refill_code,
-                rec_num,
-                line_num,
-                self._get_file_position(),
+                ctx.record_number + 1,
+                ctx.line_number + 1,
+                ctx.file_position,
                 _record_snippet(self.buffer.view(), offsets),
             )
         if refill_code == FastxErrorCode.UNEXPECTED_EOF:
@@ -281,7 +271,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     fn _find_and_consume_ref_record(
         mut self,
-    ) raises -> RefRecord[origin=MutExternalOrigin]:
+    ) raises -> FastqView[origin=MutExternalOrigin]:
         if self.buffer.available() == 0:
             _ = self.buffer.compact_and_fill()
         if not self.has_more():
@@ -301,14 +291,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             scan_view, offsets, phase
         )
         if parse_code != FastxErrorCode.OK:
-            var rec_num = self._current_line_number // 4 + 1
-            var line_num = self._current_line_number + 1
+            var ctx = self._parse_context()
             raise Error(
                 format_parse_error_from_code(
                     parse_code,
-                    rec_num,
-                    line_num,
-                    self._get_file_position(),
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
                     _record_snippet(scan_view, offsets),
                 )
             )
@@ -341,7 +330,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             length=(offsets.record_end - offsets.qual_start),
         )
 
-        var ref_rec = RefRecord[origin=MutExternalOrigin](
+        var ref_rec = FastqView[origin=MutExternalOrigin](
             _strip_spaces(id_span),
             seq_span,
             qual_span,
@@ -427,7 +416,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if complete:
                 return (True, offsets, current_phase, parse_code)
 
-    fn _get_record_snippet(self, record: RefRecord) -> String:
+    fn _get_record_snippet(self, record: FastqView) -> String:
         var snippet = String(capacity=200)
         var id_str = StringSlice(unsafe_from_utf8=record._id)
         if len(id_str) > 0:
@@ -458,10 +447,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return snippet
 
 
-struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
+struct _FastqParserViewIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    comptime Element = RefRecord[origin=MutExternalOrigin]
+    comptime Element = FastqView[origin=MutExternalOrigin]
 
     var _src: Pointer[FastqParser[Self.R, Self.config], Self.origin]
 
@@ -484,7 +473,7 @@ struct _FastqParserRefIter[R: Reader, config: ParserConfig, origin: Origin](
             Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
         try:
-            return mut_ptr[].next_ref()
+            return mut_ptr[].next_view()
         except Error:
             var err_str = String(Error)
             if err_str == EOF:

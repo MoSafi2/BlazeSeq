@@ -280,7 +280,7 @@ def _parse_mode_validation_results(results: list[dict]) -> tuple[list[str], list
             validations.append(validation)
         parsed[(mode, validation)] = (float(r["mean"]), float(r.get("stddev", 0.0)))
 
-    mode_order = [m for m in ("batches", "records", "ref_records") if m in modes]
+    mode_order = [m for m in ("batches", "records", "views") if m in modes]
     mode_order.extend([m for m in modes if m not in mode_order])
     validation_order = [v for v in ("none", "ascii", "ascii_quality") if v in validations]
     validation_order.extend([v for v in validations if v not in validation_order])
@@ -461,7 +461,7 @@ def title_for_basename(basename: str) -> str:
     if basename == "parser_gzip_single":
         return "FASTQ parser benchmark (gzip, single-threaded)"
     if basename == "throughput":
-        return "BlazeSeq throughput: batches vs records vs ref_records"
+        return "BlazeSeq throughput: batches vs records vs views"
     if basename == "throughput_memory":
         return "BlazeSeq in-memory throughput (parse time from Mojo)"
     if basename == "throughput_validation":

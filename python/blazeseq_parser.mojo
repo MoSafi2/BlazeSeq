@@ -21,7 +21,7 @@ from std.os import abort
 from std.memory import UnsafePointer, alloc
 from std.collections.string import StringSlice
 from blazeseq.fastq.parser import FastqParser, ParserConfig
-from blazeseq.fastq.record import FastqRecord, RefRecord
+from blazeseq.fastq.record import FastqRecord, FastqView
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.io.readers import FileReader, RapidgzipReader
 from blazeseq.io.writers import Writer
@@ -136,11 +136,11 @@ struct ParserMethodsPlain:
     fn next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         try:
-            var ref_rec = holder_ptr[]._parser_ptr[].next_ref()
+            var view = holder_ptr[]._parser_ptr[].next_view()
             var record = FastqRecord(
-                ref_rec._id,
-                ref_rec._sequence,
-                ref_rec._quality,
+                view._id,
+                view._sequence,
+                view._quality,
                 Int8(holder_ptr[]._parser_ptr[].quality_schema.OFFSET),
             )
             return PythonObject(alloc=record^)
@@ -197,11 +197,11 @@ struct ParserMethodsGz:
     fn next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         try:
-            var ref_rec = holder_ptr[]._parser_ptr[].next_ref()
+            var view = holder_ptr[]._parser_ptr[].next_view()
             var record = FastqRecord(
-                ref_rec._id,
-                ref_rec._sequence,
-                ref_rec._quality,
+                view._id,
+                view._sequence,
+                view._quality,
                 Int8(holder_ptr[]._parser_ptr[].quality_schema.OFFSET),
             )
             return PythonObject(alloc=record^)

@@ -39,7 +39,7 @@ rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/dow
 rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
 
 [dependencies]
-mojo = "=0.26.2.0"
+mojo = ">=0.26.2.0.dev2026031005,<0.27"
 
 [target.linux-64.dependencies]
 rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
@@ -58,17 +58,17 @@ rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq
     "rbuild",
 ] }
 [pypi-dependencies]
-pymodo = "*"
+pymodo = ">=0.11.12, <0.12"
 
 [feature.docs.dependencies]
-nodejs = ">=20"
+nodejs = ">=25.7.0,<25.8"
 
 [feature.benchmark.dependencies]
-hyperfine = "*"
-rust = "*"
-python = "*"
-matplotlib = "*"
-numpy = "*"
+hyperfine = ">=1.20.0,<2"
+rust = ">=1.94.0,<1.95"
+python = ">=3.14.3,<3.15"
+matplotlib = ">=3.10.8,<4"
+numpy = ">=2.4.2,<3"
 
 [feature.benchmark.tasks]
 benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
