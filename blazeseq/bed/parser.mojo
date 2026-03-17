@@ -32,19 +32,6 @@ from blazeseq.io.readers import Reader
 from blazeseq.utils import format_parse_error, ParseContext
 
 comptime BED_TAB: Byte = 9  # ord('\t')
-comptime BED_VALID_FIELD_COUNTS: Tuple[
-    Int, Int, Int, Int, Int, Int, Int, Int
-] = (
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    12,
-)
-
 
 fn _is_valid_bed_field_count(n: Int) -> Bool:
     return (
