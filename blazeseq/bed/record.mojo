@@ -146,10 +146,7 @@ struct BedView[O: Origin](Movable):
         self._strand = _strand
         self._thick_start = _thick_start
         self._thick_end = _thick_end
-        if _item_rgb:
-            self._item_rgb = Optional(_item_rgb.value().copy())
-        else:
-            self._item_rgb = None
+        self._item_rgb = _item_rgb
         self._block_count = _block_count
         self._block_sizes_span = _block_sizes_span
         self._block_starts_span = _block_starts_span
@@ -485,9 +482,7 @@ struct BedRecord(Copyable, Movable, Writable):
             return
         if self.ItemRgb:
             var rgb = self.ItemRgb.value().copy()
-            writer.write(
-                t"\t{String(rgb.r)},{String(rgb.g)},{String(rgb.b)}"
-            )
+            writer.write(t"\t{String(rgb.r)},{String(rgb.g)},{String(rgb.b)}")
         else:
             writer.write("\t0")
 

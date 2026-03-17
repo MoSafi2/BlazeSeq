@@ -109,12 +109,76 @@ fn _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
         start = end + 1
     if len(parts) != 3:
         raise Error("itemRgb must be 0 or r,g,b")
-    var r = Int(atol(parts[0]))
-    var g = Int(atol(parts[1]))
-    var b = Int(atol(parts[2]))
+    var r = atol(parts[0])
+    var g = atol(parts[1])
+    var b = atol(parts[2])
     if r < 0 or r > 255 or g < 0 or g > 255 or b < 0 or b > 255:
         raise Error("itemRgb components must be 0-255")
     return ItemRgb(UInt8(r), UInt8(g), UInt8(b))
+
+
+# ---------------------------------------------------------------------------
+# Parsed-field structs for next_view helpers
+# ---------------------------------------------------------------------------
+
+
+struct _BedRequiredParsed(Movable):
+    """Result of parsing required BED fields (chrom, chromStart, chromEnd)."""
+
+    var chrom_span: Span[UInt8, MutExternalOrigin]
+    var chrom_start: UInt64
+    var chrom_end: UInt64
+    var num_fields: Int
+
+    fn __init__(
+        out self,
+        *,
+        chrom_span: Span[UInt8, MutExternalOrigin],
+        chrom_start: UInt64,
+        chrom_end: UInt64,
+        num_fields: Int,
+    ):
+        self.chrom_span = chrom_span
+        self.chrom_start = chrom_start
+        self.chrom_end = chrom_end
+        self.num_fields = num_fields
+
+
+struct _BedOptionalFields[O: Origin](Movable):
+    """Parsed optional BED fields (name through blockStarts)."""
+
+    var name: Optional[Span[UInt8, Self.O]]
+    var score: Optional[Int]
+    var strand: Optional[Strand]
+    var thick_start: Optional[UInt64]
+    var thick_end: Optional[UInt64]
+    var item_rgb: Optional[ItemRgb]
+    var block_count: Optional[Int]
+    var block_sizes_span: Optional[Span[UInt8, Self.O]]
+    var block_starts_span: Optional[Span[UInt8, Self.O]]
+
+    fn __init__(
+        out self,
+        *,
+        name: Optional[Span[UInt8, Self.O]],
+        score: Optional[Int],
+        strand: Optional[Strand],
+        thick_start: Optional[UInt64],
+        thick_end: Optional[UInt64],
+        item_rgb: Optional[ItemRgb],
+        block_count: Optional[Int],
+        block_sizes_span: Optional[Span[UInt8, Self.O]],
+        block_starts_span: Optional[Span[UInt8, Self.O]],
+    ):
+        self.name = name
+        self.score = score
+        self.strand = strand
+        self.thick_start = thick_start
+        self.thick_end = thick_end
+        self.item_rgb = item_rgb
+        self.block_count = block_count
+        self.block_sizes_span = block_sizes_span
+        self.block_starts_span = block_starts_span
 
 
 # ---------------------------------------------------------------------------
@@ -169,20 +233,13 @@ struct BedParser[R: Reader](Iterable, Movable):
     fn _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
-    fn next_view(mut self) raises -> BedView[MutExternalOrigin]:
-        """Return the next BED record as a zero-alloc view.
-
-        Raises:
-            EOFError: When no more records.
-            Error: On invalid field count, non-integer coordinates, chromStart > chromEnd,
-                   invalid score/strand/itemRgb/block lists.
+    fn _parse_bed_required(
+        ref self,
+        view: DelimitedView[MutExternalOrigin, 32],
+    ) raises -> _BedRequiredParsed:
+        """Validate field count and parse required BED fields (chrom, chromStart, chromEnd).
         """
-        if not self.has_more():
-            raise EOFError()
-
-        var view = self._rows.next_view()
         var n = view.num_fields()
-
         if not _is_valid_bed_field_count(n):
             var msg = format_parse_error(
                 self._parse_context(),
@@ -192,18 +249,29 @@ struct BedParser[R: Reader](Iterable, Movable):
                 ),
             )
             raise Error(msg)
-
         var chrom_span = view.get_span(0)
         var chrom_start = _parse_uint64_from_span(view.get_span(1))
         var chrom_end = _parse_uint64_from_span(view.get_span(2))
-
         if chrom_start > chrom_end:
             var msg = format_parse_error(
                 self._parse_context(),
                 "chromStart must be <= chromEnd",
             )
             raise Error(msg)
+        return _BedRequiredParsed(
+            chrom_span=chrom_span,
+            chrom_start=chrom_start,
+            chrom_end=chrom_end,
+            num_fields=n,
+        )
 
+    fn _parse_bed_optional_fields(
+        ref self,
+        view: DelimitedView[MutExternalOrigin, 32],
+        n: Int,
+    ) raises -> _BedOptionalFields[MutExternalOrigin]:
+        """Parse optional BED fields (name, score, strand, thick, itemRgb, blocks) based on n.
+        """
         var name_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
         var score_opt: Optional[Int] = None
         var strand_opt: Optional[Strand] = None
@@ -217,26 +285,19 @@ struct BedParser[R: Reader](Iterable, Movable):
         var block_starts_span_opt: Optional[
             Span[UInt8, MutExternalOrigin]
         ] = None
-
         if n >= 4:
             name_opt = view.get_span(3)
         if n >= 5:
             try:
                 score_opt = _parse_score(view.get_span(4))
             except e:
-                var msg = format_parse_error(
-                    self._parse_context(),
-                    String(e),
-                )
+                var msg = format_parse_error(self._parse_context(), String(e))
                 raise Error(msg)
         if n >= 6:
             try:
                 strand_opt = _parse_strand(view.get_span(5))
             except e:
-                var msg = format_parse_error(
-                    self._parse_context(),
-                    String(e),
-                )
+                var msg = format_parse_error(self._parse_context(), String(e))
                 raise Error(msg)
         if n >= 7:
             thick_start_opt = _parse_uint64_from_span(view.get_span(6))
@@ -246,10 +307,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             try:
                 item_rgb_opt = _parse_item_rgb(view.get_span(8))
             except e:
-                var msg = format_parse_error(
-                    self._parse_context(),
-                    String(e),
-                )
+                var msg = format_parse_error(self._parse_context(), String(e))
                 raise Error(msg)
         if n == 12:
             block_count_opt = Int(
@@ -257,21 +315,47 @@ struct BedParser[R: Reader](Iterable, Movable):
             )
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
+        return _BedOptionalFields[MutExternalOrigin](
+            name=name_opt,
+            score=score_opt,
+            strand=strand_opt,
+            thick_start=thick_start_opt,
+            thick_end=thick_end_opt,
+            item_rgb=item_rgb_opt,
+            block_count=block_count_opt,
+            block_sizes_span=block_sizes_span_opt,
+            block_starts_span=block_starts_span_opt,
+        )
 
+    fn next_view(mut self) raises -> BedView[MutExternalOrigin]:
+        """Return the next BED record as a zero-alloc view.
+
+        Raises:
+            EOFError: When no more records.
+            Error: On invalid field count, non-integer coordinates, chromStart > chromEnd,
+                   invalid score/strand/itemRgb/block lists.
+        """
+        if not self.has_more():
+            raise EOFError()
+        var view = self._rows.next_view()
+        var required = self._parse_bed_required(view)
+        var optional = self._parse_bed_optional_fields(
+            view, required.num_fields
+        )
         return BedView[MutExternalOrigin](
-            _chrom=chrom_span,
-            _chrom_start=chrom_start,
-            _chrom_end=chrom_end,
-            _name=name_opt,
-            _score=score_opt,
-            _strand=strand_opt,
-            _thick_start=thick_start_opt,
-            _thick_end=thick_end_opt,
-            _item_rgb=item_rgb_opt,
-            _block_count=block_count_opt,
-            _block_sizes_span=block_sizes_span_opt,
-            _block_starts_span=block_starts_span_opt,
-            _num_fields=n,
+            _chrom=required.chrom_span,
+            _chrom_start=required.chrom_start,
+            _chrom_end=required.chrom_end,
+            _name=optional.name,
+            _score=optional.score,
+            _strand=optional.strand,
+            _thick_start=optional.thick_start,
+            _thick_end=optional.thick_end,
+            _item_rgb=optional.item_rgb,
+            _block_count=optional.block_count,
+            _block_sizes_span=optional.block_sizes_span,
+            _block_starts_span=optional.block_starts_span,
+            _num_fields=required.num_fields,
         )
 
     fn next_record(mut self) raises -> BedRecord:
