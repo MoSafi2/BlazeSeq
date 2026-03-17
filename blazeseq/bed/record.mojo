@@ -47,7 +47,7 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
 # ItemRgb — display color (0 or r,g,b each 0-255)
 # ---------------------------------------------------------------------------
 
-struct ItemRgb(Copyable, Movable, Writable):
+struct ItemRgb(Copyable, Movable, Writable, TrivialRegisterPassable):
     """BED itemRgb: either black (0) or (r,g,b) each 0-255."""
 
     var r: UInt8

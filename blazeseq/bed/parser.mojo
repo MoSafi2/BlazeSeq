@@ -21,8 +21,8 @@ from blazeseq.bed.record import (
     ItemRgb,
     Strand,
 )
-from blazeseq.io.buffered import EOFError, LineIterator
-from blazeseq.io.delimited import DelimitedView
+from blazeseq.io.buffered import EOFError
+from blazeseq.io.delimited import DelimitedReader, DelimitedView, LineAction, LinePolicy
 from blazeseq.io.readers import Reader
 from blazeseq.utils import format_parse_error
 
@@ -112,6 +112,32 @@ fn _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
     return ItemRgb(UInt8(r), UInt8(g), UInt8(b))
 
 
+# ---------------------------------------------------------------------------
+# BedLinePolicy — skip blank and comment lines, yield data rows
+# ---------------------------------------------------------------------------
+
+
+struct BedLinePolicy(
+    Copyable, LinePolicy, Movable, TrivialRegisterPassable
+):
+    """Line policy for BED: skip blank lines and lines starting with #."""
+
+    fn __init__(out self):
+        pass
+
+    @always_inline
+    fn classify(self, line: Span[UInt8, _]) -> LineAction:
+        if len(line) == 0:
+            return LineAction.SKIP
+        if line[0] == UInt8(ord("#")):
+            return LineAction.SKIP
+        return LineAction.YIELD
+
+    @always_inline
+    fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
+        ...
+
+
 struct BedParser[R: Reader](Iterable, Movable):
     """Streaming BED parser over a Reader.
 
@@ -125,41 +151,28 @@ struct BedParser[R: Reader](Iterable, Movable):
 
     comptime IteratorType[origin: Origin] = _BedParserRecordIter[Self.R, origin]
 
-    var _lines: LineIterator[Self.R]
-    var _expected_num_fields: Int
-    var _record_number: Int
+    var _rows: DelimitedReader[Self.R, BedLinePolicy, 64]
 
     fn __init__(out self, var reader: Self.R) raises:
-        self._lines = LineIterator(reader^)
-        self._expected_num_fields = 0
-        self._record_number = 0
+        self._rows = DelimitedReader[Self.R, BedLinePolicy, 64](
+            reader^, delimiter=BED_TAB, has_header=False
+        )
 
     @always_inline
     fn has_more(self) -> Bool:
-        return self._lines.has_more()
+        return self._rows.has_more()
 
     @always_inline
     fn _get_record_number(ref self) -> Int:
-        return self._record_number
+        return self._rows._get_record_number()
 
     @always_inline
     fn _get_line_number(ref self) -> Int:
-        return self._lines.get_line_number()
+        return self._rows._get_line_number()
 
     @always_inline
     fn _get_file_position(ref self) -> Int64:
-        return self._lines.get_file_position()
-
-    fn _next_data_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
-        """Return the next non-empty, non-comment line. Raises EOFError when no more.
-        """
-        while True:
-            var line = self._lines.next_line()
-            if len(line) == 0:
-                continue
-            if line[0] == UInt8(ord("#")):
-                continue
-            return line
+        return self._rows._get_file_position()
 
     fn next_view(mut self) raises -> BedView[MutExternalOrigin]:
         """Return the next BED record as a zero-alloc view.
@@ -172,8 +185,7 @@ struct BedParser[R: Reader](Iterable, Movable):
         if not self.has_more():
             raise EOFError()
 
-        var line = self._next_data_line()
-        var view = DelimitedView[MutExternalOrigin, 64](line, BED_TAB)
+        var view = self._rows.next_view()
         var n = view.num_fields()
 
         if not _is_valid_bed_field_count(n):
@@ -182,24 +194,12 @@ struct BedParser[R: Reader](Iterable, Movable):
                     "BED row must have 3, 4, 5, 6, 7, 8, 9, or 12 fields"
                     " (BED10/BED11 prohibited)"
                 ),
-                self._get_record_number() + 1,
+                self._get_record_number(),
                 self._get_line_number(),
                 self._get_file_position(),
                 "",
             )
             raise Error(msg)
-
-        if self._expected_num_fields != 0 and n != self._expected_num_fields:
-            var msg = format_parse_error(
-                "BED row has inconsistent number of fields",
-                self._get_record_number() + 1,
-                self._get_line_number(),
-                self._get_file_position(),
-                "",
-            )
-            raise Error(msg)
-        if self._expected_num_fields == 0:
-            self._expected_num_fields = n
 
         var chrom_span = view.get_span(0)
         var chrom_start = _parse_int64_from_span(view.get_span(1))
@@ -208,7 +208,7 @@ struct BedParser[R: Reader](Iterable, Movable):
         if chrom_start > chrom_end:
             var msg = format_parse_error(
                 "chromStart must be <= chromEnd",
-                self._get_record_number() + 1,
+                self._get_record_number(),
                 self._get_line_number(),
                 self._get_file_position(),
                 "",
@@ -237,7 +237,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             except e:
                 var msg = format_parse_error(
                     String(e),
-                    self._get_record_number() + 1,
+                    self._get_record_number(),
                     self._get_line_number(),
                     self._get_file_position(),
                     "",
@@ -249,7 +249,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             except e:
                 var msg = format_parse_error(
                     String(e),
-                    self._get_record_number() + 1,
+                    self._get_record_number(),
                     self._get_line_number(),
                     self._get_file_position(),
                     "",
@@ -265,7 +265,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             except e:
                 var msg = format_parse_error(
                     String(e),
-                    self._get_record_number() + 1,
+                    self._get_record_number(),
                     self._get_line_number(),
                     self._get_file_position(),
                     "",
@@ -275,8 +275,6 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_count_opt = Int(_parse_int64_from_span(view.get_span(9)))
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
-
-        self._record_number += 1
 
         return BedView[MutExternalOrigin](
             _chrom=chrom_span,
