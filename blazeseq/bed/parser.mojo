@@ -33,6 +33,7 @@ from blazeseq.utils import format_parse_error, ParseContext
 
 comptime BED_TAB: Byte = 9  # ord('\t')
 
+
 fn _is_valid_bed_field_count(n: Int) -> Bool:
     return (
         n == 3
@@ -47,8 +48,21 @@ fn _is_valid_bed_field_count(n: Int) -> Bool:
 
 
 fn _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
-    var s = StringSlice(unsafe_from_utf8=span)
-    return UInt64(atol(s))
+    var result: UInt64 = 0
+    var n = len(span)
+
+    if n == 0:
+        raise Error("Invalid FAI integer: empty span")
+
+    for i in range(n):
+        var digit = span[i] - 48  # stays UInt8, wraps on underflow
+        if digit > 9:  # single unsigned check catches < '0' and > '9'
+            raise Error(
+                "Invalid FAI integer: unexpected byte " + chr(Int(span[i]))
+            )
+        result = result * 10 + digit.cast[DType.uint64]()
+
+    return result
 
 
 fn _parse_strand(span: Span[UInt8, _]) raises -> Strand:

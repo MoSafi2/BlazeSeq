@@ -94,8 +94,22 @@ struct FaiParser[R: Reader](Iterable, Movable):
             raise Error(msg)
 
         fn _parse_int64_from_span(span: Span[UInt8, _]) raises -> Int64:
-            var s = StringSlice(unsafe_from_utf8=span)
-            return Int64(atol(s))
+            var result: Int64 = 0
+            var n = len(span)
+
+            if n == 0:
+                raise Error("Invalid FAI integer: empty span")
+
+            for i in range(n):
+                var digit = span[i] - 48  # stays UInt8, wraps on underflow
+                if digit > 9:  # single unsigned check catches < '0' and > '9'
+                    raise Error(
+                        "Invalid FAI integer: unexpected byte "
+                        + chr(Int(span[i]))
+                    )
+                result = result * 10 + digit.cast[DType.int64]()
+
+            return result
 
         var length = _parse_int64_from_span(view.get_span(1))
         var offset = _parse_int64_from_span(view.get_span(2))
