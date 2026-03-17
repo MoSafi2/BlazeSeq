@@ -151,10 +151,10 @@ struct BedParser[R: Reader](Iterable, Movable):
 
     comptime IteratorType[origin: Origin] = _BedParserRecordIter[Self.R, origin]
 
-    var _rows: DelimitedReader[Self.R, BedLinePolicy, 64]
+    var _rows: DelimitedReader[Self.R, BedLinePolicy, 32]
 
     fn __init__(out self, var reader: Self.R) raises:
-        self._rows = DelimitedReader[Self.R, BedLinePolicy, 64](
+        self._rows = DelimitedReader[Self.R, BedLinePolicy, 32](
             reader^, delimiter=BED_TAB, has_header=False
         )
 

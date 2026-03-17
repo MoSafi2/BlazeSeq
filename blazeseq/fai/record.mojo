@@ -9,7 +9,7 @@ from blazeseq.io.writers import Writer
 # FaiView — zero-alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
-
+#TODO: Add TrivialRegisterPassable when Optional has conditional conformance
 struct FaiView[O: Origin](Movable, Sized):
     """Zero-copy view over one FAI index row in the parser's buffer.
 

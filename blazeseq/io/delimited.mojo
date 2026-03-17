@@ -294,7 +294,7 @@ struct DelimitedReader[
 ](Movable):
     """Generic delimited-file reader over a `Reader`.
 
-    Supports TSV, CSV, FAI, BED, GFF, and similar formats.
+    Suitable for uncomplicated delimited files without quoting (no quoting, no escaping), FAI, BED, GFF, and similar bioinformatic formats.
 
     The hot path — `next_view()` / `for view in dr.views()` — yields a
     `DelimitedView` with **zero heap allocations** per row: the span
