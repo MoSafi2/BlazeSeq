@@ -22,7 +22,12 @@ from blazeseq.bed.record import (
     Strand,
 )
 from blazeseq.io.buffered import EOFError
-from blazeseq.io.delimited import DelimitedReader, DelimitedView, LineAction, LinePolicy
+from blazeseq.io.delimited import (
+    DelimitedReader,
+    DelimitedView,
+    LineAction,
+    LinePolicy,
+)
 from blazeseq.io.readers import Reader
 from blazeseq.utils import format_parse_error, ParseContext
 
@@ -54,9 +59,9 @@ fn _is_valid_bed_field_count(n: Int) -> Bool:
     )
 
 
-fn _parse_int64_from_span(span: Span[UInt8, _]) raises -> Int64:
+fn _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
     var s = StringSlice(unsafe_from_utf8=span)
-    return Int64(atol(s))
+    return UInt64(atol(s))
 
 
 fn _parse_strand(span: Span[UInt8, _]) raises -> Strand:
@@ -73,7 +78,7 @@ fn _parse_strand(span: Span[UInt8, _]) raises -> Strand:
 
 
 fn _parse_score(span: Span[UInt8, _]) raises -> Int:
-    var v = _parse_int64_from_span(span)
+    var v = _parse_uint64_from_span(span)
     if v < 0 or v > 1000:
         raise Error("score must be in [0, 1000]")
     return Int(v)
@@ -117,9 +122,7 @@ fn _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
 # ---------------------------------------------------------------------------
 
 
-struct BedLinePolicy(
-    Copyable, LinePolicy, Movable, TrivialRegisterPassable
-):
+struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """Line policy for BED: skip blank lines and lines starting with #."""
 
     fn __init__(out self):
@@ -191,8 +194,8 @@ struct BedParser[R: Reader](Iterable, Movable):
             raise Error(msg)
 
         var chrom_span = view.get_span(0)
-        var chrom_start = _parse_int64_from_span(view.get_span(1))
-        var chrom_end = _parse_int64_from_span(view.get_span(2))
+        var chrom_start = _parse_uint64_from_span(view.get_span(1))
+        var chrom_end = _parse_uint64_from_span(view.get_span(2))
 
         if chrom_start > chrom_end:
             var msg = format_parse_error(
@@ -204,8 +207,8 @@ struct BedParser[R: Reader](Iterable, Movable):
         var name_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
         var score_opt: Optional[Int] = None
         var strand_opt: Optional[Strand] = None
-        var thick_start_opt: Optional[Int64] = None
-        var thick_end_opt: Optional[Int64] = None
+        var thick_start_opt: Optional[UInt64] = None
+        var thick_end_opt: Optional[UInt64] = None
         var item_rgb_opt: Optional[ItemRgb] = None
         var block_count_opt: Optional[Int] = None
         var block_sizes_span_opt: Optional[
@@ -236,9 +239,9 @@ struct BedParser[R: Reader](Iterable, Movable):
                 )
                 raise Error(msg)
         if n >= 7:
-            thick_start_opt = _parse_int64_from_span(view.get_span(6))
+            thick_start_opt = _parse_uint64_from_span(view.get_span(6))
         if n >= 8:
-            thick_end_opt = _parse_int64_from_span(view.get_span(7))
+            thick_end_opt = _parse_uint64_from_span(view.get_span(7))
         if n >= 9:
             try:
                 item_rgb_opt = _parse_item_rgb(view.get_span(8))
@@ -249,7 +252,9 @@ struct BedParser[R: Reader](Iterable, Movable):
                 )
                 raise Error(msg)
         if n == 12:
-            block_count_opt = Int(_parse_int64_from_span(view.get_span(9)))
+            block_count_opt = Int(
+                UInt64(_parse_uint64_from_span(view.get_span(9)))
+            )
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
 

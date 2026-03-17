@@ -11,11 +11,13 @@ from std.memory import Span
 
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
+from blazeseq.features import Position, Interval
 
 
 # ---------------------------------------------------------------------------
 # Strand
 # ---------------------------------------------------------------------------
+
 
 struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     """Strand of a BED feature: Plus (+), Minus (-), or Unknown (.)."""
@@ -47,7 +49,8 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
 # ItemRgb — display color (0 or r,g,b each 0-255)
 # ---------------------------------------------------------------------------
 
-struct ItemRgb(Copyable, Movable, Writable, TrivialRegisterPassable):
+
+struct ItemRgb(Copyable, Movable, TrivialRegisterPassable, Writable):
     """BED itemRgb: either black (0) or (r,g,b) each 0-255."""
 
     var r: UInt8
@@ -73,117 +76,19 @@ struct ItemRgb(Copyable, Movable, Writable, TrivialRegisterPassable):
         writer.write(String(self.b))
 
 
-# ---------------------------------------------------------------------------
-# Position — 1-based coordinate (aligned with noodles_core::Position)
-# ---------------------------------------------------------------------------
-
-struct Position(Copyable, Equatable, TrivialRegisterPassable):
-    """1-based genomic coordinate (aligned with noodles_core::Position).
-
-    Valid positions are >= 1. Position 0 is invalid.
-    BED stores 0-based half-open; convert when exposing via start_position/interval.
+fn position_try_from(value: UInt64) -> Optional[Position]:
+    """Create a Position if value >= 1 (1-based), else None (aligned with noodles_core).
     """
-
-    var _value: Int64
-
-    fn __init__(out self, value: Int64) raises:
-        if value < 1:
-            raise Error("Position must be >= 1")
-        self._value = value
-
-    @always_inline
-    fn __init__(out self, value: Int64, _unsafe: Bool):
-        """Internal: use when value is already known to be >= 1 (e.g. from conversion)."""
-        # Keep 1-based invariant: do not store 0
-        self._value = value
-
-    @always_inline
-    fn get(self) -> Int64:
-        """Return the raw 1-based coordinate."""
-        return self._value
-
-    @always_inline
-    fn __eq__(self, other: Self) -> Bool:
-        return self._value == other._value
-
-    @always_inline
-    fn __lt__(self, other: Self) -> Bool:
-        return self._value < other._value
-
-    @always_inline
-    fn __le__(self, other: Self) -> Bool:
-        return self._value <= other._value
-
-    @always_inline
-    fn __gt__(self, other: Self) -> Bool:
-        return self._value > other._value
-
-    @always_inline
-    fn __ge__(self, other: Self) -> Bool:
-        return self._value >= other._value
-
-
-
-# ---------------------------------------------------------------------------
-# Interval — 1-based closed [start, end] (aligned with noodles_core::Interval)
-# ---------------------------------------------------------------------------
-
-struct Interval(Copyable, Equatable, TrivialRegisterPassable):
-    """1-based closed genomic interval [start, end] (aligned with noodles_core::region::Interval).
-
-    Both start and end are 1-based and inclusive. Supports contains(), intersects(), length().
-    """
-
-    var _start: Position
-    var _end: Position
-
-    fn __init__(out self, start: Position, end: Position) raises:
-        if start.get() > end.get():
-            raise Error("Interval start must be <= end")
-        self._start = start
-        self._end = end
-
-    @always_inline
-    fn __init__(out self, start: Position, end: Position, _unsafe: Bool):
-        """Internal: use when start <= end is already guaranteed."""
-        self._start = start
-        self._end = end
-
-    @always_inline
-    fn start(self) -> Position:
-        return self._start
-
-    @always_inline
-    fn end(self) -> Position:
-        return self._end
-
-    @always_inline
-    fn length(self) -> Int64:
-        """Number of bases in the interval (end - start + 1 for closed [start, end])."""
-        return self._end.get() - self._start.get() + 1
-
-    @always_inline
-    fn is_empty(self) -> Bool:
-        return self._start.get() > self._end.get()
-
-    fn contains(self, position: Position) -> Bool:
-        """True if position is in [start, end] (1-based closed)."""
-        return self._start.get() <= position.get() and position.get() <= self._end.get()
-
-    fn intersects(self, other: Self) -> Bool:
-        """True if this interval overlaps other (both 1-based closed)."""
-        return self._start.get() <= other._end.get() and other._start.get() <= self._end.get()
-
-
-fn position_try_from(value: Int64) -> Optional[Position]:
-    """Create a Position if value >= 1 (1-based), else None (aligned with noodles_core)."""
     if value < 1:
         return None
     return Optional(Position(value, True))
 
 
-fn interval_try_from_start_end(start: Int64, end: Int64) -> Optional[Interval]:
-    """Build an Interval from 1-based start and end (closed [start, end]) if valid."""
+fn interval_try_from_start_end(
+    start: UInt64, end: UInt64
+) -> Optional[Interval]:
+    """Build an Interval from 1-based start and end (closed [start, end]) if valid.
+    """
     if start < 1 or end < 1 or start > end:
         return None
     return Optional(Interval(Position(start, True), Position(end, True), True))
@@ -192,6 +97,7 @@ fn interval_try_from_start_end(start: Int64, end: Int64) -> Optional[Interval]:
 # ---------------------------------------------------------------------------
 # BedView — zero-alloc, NOT to be stored
 # ---------------------------------------------------------------------------
+
 
 struct BedView[O: Origin](Movable):
     """Zero-copy view over one BED data line in the parser's buffer.
@@ -203,13 +109,13 @@ struct BedView[O: Origin](Movable):
     """
 
     var _chrom: Span[UInt8, Self.O]
-    var _chrom_start: Int64
-    var _chrom_end: Int64
+    var _chrom_start: UInt64
+    var _chrom_end: UInt64
     var _name: Optional[Span[UInt8, Self.O]]
     var _score: Optional[Int]
     var _strand: Optional[Strand]
-    var _thick_start: Optional[Int64]
-    var _thick_end: Optional[Int64]
+    var _thick_start: Optional[UInt64]
+    var _thick_end: Optional[UInt64]
     var _item_rgb: Optional[ItemRgb]
     var _block_count: Optional[Int]
     var _block_sizes_span: Optional[Span[UInt8, Self.O]]
@@ -219,13 +125,13 @@ struct BedView[O: Origin](Movable):
     fn __init__(
         out self,
         _chrom: Span[UInt8, Self.O],
-        _chrom_start: Int64,
-        _chrom_end: Int64,
+        _chrom_start: UInt64,
+        _chrom_end: UInt64,
         _name: Optional[Span[UInt8, Self.O]],
         _score: Optional[Int],
         _strand: Optional[Strand],
-        _thick_start: Optional[Int64],
-        _thick_end: Optional[Int64],
+        _thick_start: Optional[UInt64],
+        _thick_end: Optional[UInt64],
         _item_rgb: Optional[ItemRgb],
         _block_count: Optional[Int],
         _block_sizes_span: Optional[Span[UInt8, Self.O]],
@@ -254,33 +160,45 @@ struct BedView[O: Origin](Movable):
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._chrom)
 
     @always_inline
-    fn chrom_start(self) -> Int64:
+    fn chrom_start(self) -> UInt64:
         return self._chrom_start
 
     @always_inline
-    fn chrom_end(self) -> Int64:
+    fn chrom_end(self) -> UInt64:
         return self._chrom_end
 
     fn start_position(self) -> Position:
-        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1)."""
+        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
+        """
         return Position(self._chrom_start + 1, True)
 
     fn end_position(self) raises -> Position:
-        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end)."""
+        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
+        """
         if self._chrom_end < 1:
-            raise Error("chrom_end must be >= 1 for 1-based end_position (BED [start,end) has no bases when end is 0)")
+            raise Error(
+                "chrom_end must be >= 1 for 1-based end_position (BED"
+                " [start,end) has no bases when end is 0)"
+            )
         return Position(self._chrom_end, True)
 
     fn interval(self) raises -> Interval:
-        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval)."""
+        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
+        """
         if self._chrom_end < 1:
-            raise Error("chrom_end must be >= 1 for 1-based interval (BED [start,end) has no bases when end is 0)")
+            raise Error(
+                "chrom_end must be >= 1 for 1-based interval (BED [start,end)"
+                " has no bases when end is 0)"
+            )
         return Interval(
-            Position(self._chrom_start + 1, True), Position(self._chrom_end, True), True
+            Position(self._chrom_start + 1, True),
+            Position(self._chrom_end, True),
+            True,
         )
 
     fn thick_interval(self) -> Optional[Interval]:
-        """Thick (coding) extent if fields 7–8 present; else None (1-based closed)."""
+        """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
+        """
         if not self._thick_start or not self._thick_end:
             return None
         var opt = interval_try_from_start_end(
@@ -305,11 +223,11 @@ struct BedView[O: Origin](Movable):
         return self._strand
 
     @always_inline
-    fn thick_start(self) -> Optional[Int64]:
+    fn thick_start(self) -> Optional[UInt64]:
         return self._thick_start
 
     @always_inline
-    fn thick_end(self) -> Optional[Int64]:
+    fn thick_end(self) -> Optional[UInt64]:
         return self._thick_end
 
     fn item_rgb(self) -> Optional[ItemRgb]:
@@ -326,9 +244,10 @@ struct BedView[O: Origin](Movable):
         return self._num_fields
 
     fn to_record(self) raises -> BedRecord:
-        """Materialize an owned BedRecord. Call when the record must outlive the view."""
-        var block_sizes: Optional[List[Int64]] = None
-        var block_starts: Optional[List[Int64]] = None
+        """Materialize an owned BedRecord. Call when the record must outlive the view.
+        """
+        var block_sizes: Optional[List[UInt64]] = None
+        var block_starts: Optional[List[UInt64]] = None
         if self._block_sizes_span and self._block_starts_span:
             block_sizes = _parse_comma_sep_int64_list(
                 self._block_sizes_span.value()
@@ -349,7 +268,9 @@ struct BedView[O: Origin](Movable):
             ThickStart=self._thick_start,
             ThickEnd=self._thick_end,
             ItemRgb=(
-                Optional(self._item_rgb.value().copy()) if self._item_rgb else None
+                Optional(
+                    self._item_rgb.value().copy()
+                ) if self._item_rgb else None
             ),
             BlockSizes=block_sizes^ if block_sizes else None,
             BlockStarts=block_starts^ if block_starts else None,
@@ -357,9 +278,9 @@ struct BedView[O: Origin](Movable):
         )
 
 
-fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[Int64]:
+fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
     """Parse comma-separated list of integers (e.g. blockSizes, blockStarts)."""
-    var out = List[Int64]()
+    var out = List[UInt64]()
     var start: Int = 0
     var n = len(span)
     while start < n:
@@ -369,7 +290,7 @@ fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[Int64]:
         var part = span[start:end]
         if len(part) > 0:
             var s = StringSlice(unsafe_from_utf8=part)
-            out.append(Int64(atol(s)))
+            out.append(UInt64(atol(s)))
         start = end + 1
     return out^
 
@@ -378,21 +299,22 @@ fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[Int64]:
 # BedRecord — owned, storeable
 # ---------------------------------------------------------------------------
 
+
 @fieldwise_init
 struct BedRecord(Copyable, Movable, Writable):
     """Single BED feature (owned). Coordinates are 0-based, half-open."""
 
     var Chrom: BString
-    var ChromStart: Int64
-    var ChromEnd: Int64
+    var ChromStart: UInt64
+    var ChromEnd: UInt64
     var Name: Optional[BString]
     var Score: Optional[Int]
     var Strand: Optional[Strand]
-    var ThickStart: Optional[Int64]
-    var ThickEnd: Optional[Int64]
+    var ThickStart: Optional[UInt64]
+    var ThickEnd: Optional[UInt64]
     var ItemRgb: Optional[ItemRgb]
-    var BlockSizes: Optional[List[Int64]]
-    var BlockStarts: Optional[List[Int64]]
+    var BlockSizes: Optional[List[UInt64]]
+    var BlockStarts: Optional[List[UInt64]]
     var NumFields: Int
 
     @always_inline
@@ -400,33 +322,45 @@ struct BedRecord(Copyable, Movable, Writable):
         return self.Chrom.to_string()
 
     @always_inline
-    fn chrom_start(self) -> Int64:
+    fn chrom_start(self) -> UInt64:
         return self.ChromStart
 
     @always_inline
-    fn chrom_end(self) -> Int64:
+    fn chrom_end(self) -> UInt64:
         return self.ChromEnd
 
     fn start_position(self) -> Position:
-        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1)."""
+        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
+        """
         return Position(self.ChromStart + 1, True)
 
     fn end_position(self) raises -> Position:
-        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end)."""
+        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
+        """
         if self.ChromEnd < 1:
-            raise Error("ChromEnd must be >= 1 for 1-based end_position (BED [start,end) has no bases when end is 0)")
+            raise Error(
+                "ChromEnd must be >= 1 for 1-based end_position (BED"
+                " [start,end) has no bases when end is 0)"
+            )
         return Position(self.ChromEnd, True)
 
     fn interval(self) raises -> Interval:
-        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval)."""
+        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
+        """
         if self.ChromEnd < 1:
-            raise Error("ChromEnd must be >= 1 for 1-based interval (BED [start,end) has no bases when end is 0)")
+            raise Error(
+                "ChromEnd must be >= 1 for 1-based interval (BED [start,end)"
+                " has no bases when end is 0)"
+            )
         return Interval(
-            Position(self.ChromStart + 1, True), Position(self.ChromEnd, True), True
+            Position(self.ChromStart + 1, True),
+            Position(self.ChromEnd, True),
+            True,
         )
 
     fn thick_interval(ref self) -> Optional[Interval]:
-        """Thick (coding) extent if fields 7–8 present; else None (1-based closed)."""
+        """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
+        """
         if not self.ThickStart or not self.ThickEnd:
             return None
         var opt = interval_try_from_start_end(
@@ -451,11 +385,11 @@ struct BedRecord(Copyable, Movable, Writable):
         return self.Strand
 
     @always_inline
-    fn thick_start(self) -> Optional[Int64]:
+    fn thick_start(self) -> Optional[UInt64]:
         return self.ThickStart
 
     @always_inline
-    fn thick_end(self) -> Optional[Int64]:
+    fn thick_end(self) -> Optional[UInt64]:
         return self.ThickEnd
 
     fn item_rgb(ref self) -> Optional[ItemRgb]:
@@ -463,12 +397,12 @@ struct BedRecord(Copyable, Movable, Writable):
             return None
         return Optional(self.ItemRgb.value().copy())
 
-    fn block_sizes(ref self) -> Optional[List[Int64]]:
+    fn block_sizes(ref self) -> Optional[List[UInt64]]:
         if self.BlockSizes:
             return Optional(self.BlockSizes.value().copy())
         return None
 
-    fn block_starts(ref self) -> Optional[List[Int64]]:
+    fn block_starts(ref self) -> Optional[List[UInt64]]:
         if self.BlockStarts:
             return Optional(self.BlockStarts.value().copy())
         return None
@@ -478,7 +412,8 @@ struct BedRecord(Copyable, Movable, Writable):
         return self.NumFields
 
     fn write_to[w: Writer](ref self, mut writer: w):
-        """Write this record as one TAB-delimited line (same column count as parsed)."""
+        """Write this record as one TAB-delimited line (same column count as parsed).
+        """
         writer.write(self.Chrom.to_string())
         writer.write("\t")
         writer.write(String(self.ChromStart))
@@ -486,14 +421,10 @@ struct BedRecord(Copyable, Movable, Writable):
         writer.write(String(self.ChromEnd))
         if self.NumFields >= 4:
             writer.write("\t")
-            writer.write(
-                self.Name.value().to_string() if self.Name else "."
-            )
+            writer.write(self.Name.value().to_string() if self.Name else ".")
         if self.NumFields >= 5:
             writer.write("\t")
-            writer.write(
-                String(self.Score.value()) if self.Score else "0"
-            )
+            writer.write(String(self.Score.value()) if self.Score else "0")
         if self.NumFields >= 6:
             var c: String
             if self.Strand:
@@ -510,16 +441,16 @@ struct BedRecord(Copyable, Movable, Writable):
         if self.NumFields >= 7:
             writer.write("\t")
             writer.write(
-                String(self.ThickStart.value())
-                if self.ThickStart
-                else String(self.ChromStart)
+                String(self.ThickStart.value()) if self.ThickStart else String(
+                    self.ChromStart
+                )
             )
         if self.NumFields >= 8:
             writer.write("\t")
             writer.write(
-                String(self.ThickEnd.value())
-                if self.ThickEnd
-                else String(self.ChromEnd)
+                String(self.ThickEnd.value()) if self.ThickEnd else String(
+                    self.ChromEnd
+                )
             )
         if self.NumFields >= 9:
             writer.write("\t")
