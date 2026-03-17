@@ -16,6 +16,77 @@ from blazeseq.utils import memchr, format_parse_error
 # ---------------------------------------------------------------------------
 
 
+trait LinePolicy(
+    Copyable,
+    ImplicitlyDestructible,
+    Movable,
+    TrivialRegisterPassable,
+):
+    """Classify a raw line before it reaches the data-row path.
+
+    The DelimitedReader calls `classify()` on every line. The returned
+    `LineDisposition` controls what happens next:
+
+      YIELD    — hand the line to the field-splitting path as a normal row.
+      SKIP     — discard the line and advance.
+      METADATA — route the line to `handle_metadata()` then advance.
+      HEADER   — parse the line as column names then advance.
+      STOP     — terminate iteration immediately (e.g. embedded FASTA block).
+    """
+
+    fn __init__(out self):
+        ...
+
+    @always_inline
+    fn classify(self, line: Span[UInt8, _]) -> LineAction:
+        ...
+
+    @always_inline
+    fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
+        """Called when classify() returns METADATA. Default: no-op."""
+        ...
+
+
+@fieldwise_init
+struct LineAction(
+    Copyable, Equatable, Movable, TrivialRegisterPassable, Writable
+):
+    """The action a LinePolicy returns for a given line."""
+
+    var _tag: UInt8
+
+    comptime YIELD = Self(0)  # pass to caller as a data row
+    comptime SKIP = Self(1)  # discard silently
+    comptime METADATA = Self(2)  # structured content; route to metadata handler
+    comptime HEADER = Self(3)  # column-name line; parse field names from it
+    comptime STOP = Self(4)  # terminate iteration (e.g. ##FASTA in GFF3)
+
+    fn __eq__(self, other: Self) -> Bool:
+        return self._tag == other._tag
+
+
+struct DefaultLinePolicy(
+    Copyable, LinePolicy, Movable, TrivialRegisterPassable
+):
+    """The default line policy for delimited readers.
+
+    Skips blank lines (SKIP) and yields all non-empty lines (YIELD).
+    """
+
+    fn __init__(out self):
+        pass
+
+    @always_inline
+    fn classify(self, line: Span[UInt8, _]) -> LineAction:
+        if len(line) == 0:
+            return LineAction.SKIP
+        return LineAction.YIELD
+
+    @always_inline
+    fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
+        ...
+
+
 struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
     """Stack-allocated flat array of (start, end) byte pairs for up to MAX fields.
 
@@ -218,7 +289,9 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
 # ---------------------------------------------------------------------------
 
 
-struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
+struct DelimitedReader[
+    R: Reader, P: LinePolicy = DefaultLinePolicy, MAX: Int = 64
+](Movable):
     """Generic delimited-file reader over a `Reader`.
 
     Supports TSV, CSV, FAI, BED, GFF, and similar formats.
@@ -242,14 +315,15 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
         var reader = FileReader(Path("data.tsv"))
         var dr = DelimitedReader[FileReader](reader^, has_header=True)
         var results = List[DelimitedRecord[64]]()
-        for view in dr.views():
+        while dr.has_more():
+            var view = dr.next_view()
             if String(view.get_span(2)) == "homo_sapiens":
-                var rec = view.to_record()
-                results.append(rec.copy())  # alloc only on match
+                results.append(view^.to_record())  # alloc only on match
         ```
     """
 
     var lines: LineIterator[Self.R]
+    var policy: Self.P
     var _delimiter: UInt8
     var _record_number: Int
     var _has_header: Bool
@@ -268,13 +342,11 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
         self._has_header = has_header
         self._header = None
         self._expected_num_fields = 0
+        self.policy = Self.P()
 
         if self._has_header and self.lines.has_more():
-            # Header must survive the whole session, so always materialize.
-            var line = self._next_nonempty_line()
-            self._header = DelimitedView[MutExternalOrigin, Self.MAX](
-                line, self._delimiter
-            ).to_record()
+            var line = self._next_data_line()
+            self._parse_header_from(line)
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -314,7 +386,7 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
         if not self.has_more():
             raise EOFError()
 
-        var line = self._next_nonempty_line()
+        var line = self._next_data_line()
         var view = DelimitedView[MutExternalOrigin, Self.MAX](
             line, self._delimiter
         )
@@ -340,23 +412,23 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
 
     fn views(
         ref self,
-    ) -> _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)]:
+    ) -> _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
         """Iterator yielding zero-alloc `DelimitedView`s."""
-        return _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)](
+        return _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)](
             Pointer(to=self)
         )
 
     fn records(
         ref self,
-    ) -> _DelimitedRecordIter[Self.R, Self.MAX, origin_of(self)]:
+    ) -> _DelimitedRecordIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
         """Iterator yielding owned `DelimitedRecord`s."""
-        return _DelimitedRecordIter[Self.R, Self.MAX, origin_of(self)](
+        return _DelimitedRecordIter[Self.R, Self.P, Self.MAX, origin_of(self)](
             Pointer(to=self)
         )
 
     fn __iter__(
         ref self,
-    ) -> _DelimitedViewIter[Self.R, Self.MAX, origin_of(self)]:
+    ) -> _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
         """Default iteration yields zero-alloc views."""
         return self.views()
 
@@ -364,14 +436,41 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    @always_inline
-    fn _next_nonempty_line(
+    fn _next_data_line(
         mut self,
     ) raises -> Span[UInt8, MutExternalOrigin]:
+        """Return the next line to treat as a data row.
+
+        Dispatches on policy.classify(): YIELD -> return; SKIP -> continue;
+        METADATA -> handle_metadata then continue; HEADER -> _parse_header_from
+        then continue; STOP -> raise EOFError.
+        """
         while True:
-            var line = self.lines.next_line()  # raises EOFError at end-of-file
-            if len(line) > 0:
+            var line = self.lines.next_line()  # raises EOFError at EOF
+            var action = self.policy.classify(line)
+            if action == LineAction.YIELD:
                 return line
+            elif action == LineAction.SKIP:
+                continue
+            elif action == LineAction.METADATA:
+                self.policy.handle_metadata(line)
+                continue
+            elif action == LineAction.HEADER:
+                self._parse_header_from(line)
+                continue
+            else:
+                raise EOFError()
+
+    fn _parse_header_from(
+        mut self, line: Span[UInt8, MutExternalOrigin]
+    ) raises:
+        """Parse a line as column names and store as header. Sets _expected_num_fields.
+        """
+        var view = DelimitedView[MutExternalOrigin, Self.MAX](
+            line, self._delimiter
+        )
+        self._expected_num_fields = view.num_fields()
+        self._header = view^.to_record()
 
     @always_inline
     fn _check_field_count(mut self, n: Int) raises:
@@ -396,6 +495,7 @@ struct DelimitedReader[R: Reader, MAX: Int = 64](Movable):
 
 struct _DelimitedViewIter[
     R: Reader,
+    P: LinePolicy,
     MAX: Int,
     origin: Origin,
 ](Iterator):
@@ -403,11 +503,11 @@ struct _DelimitedViewIter[
 
     comptime Element = DelimitedView[MutExternalOrigin, Self.MAX]
 
-    var _src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin]
+    var _src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin]
 
     fn __init__(
         out self,
-        src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin],
+        src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin],
     ):
         self._src = src
 
@@ -421,7 +521,9 @@ struct _DelimitedViewIter[
     @always_inline
     fn __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
-            Pointer[DelimitedReader[Self.R, Self.MAX], MutExternalOrigin]
+            Pointer[
+                DelimitedReader[Self.R, Self.P, Self.MAX], MutExternalOrigin
+            ]
         ](self._src)
         try:
             return mut_ptr[].next_view()
@@ -441,6 +543,7 @@ struct _DelimitedViewIter[
 
 struct _DelimitedRecordIter[
     R: Reader,
+    P: LinePolicy,
     MAX: Int,
     origin: Origin,
 ](Iterator):
@@ -448,11 +551,11 @@ struct _DelimitedRecordIter[
 
     comptime Element = DelimitedRecord[Self.MAX]
 
-    var _src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin]
+    var _src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin]
 
     fn __init__(
         out self,
-        src: Pointer[DelimitedReader[Self.R, Self.MAX], Self.origin],
+        src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin],
     ):
         self._src = src
 
@@ -466,7 +569,9 @@ struct _DelimitedRecordIter[
     @always_inline
     fn __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
-            Pointer[DelimitedReader[Self.R, Self.MAX], MutExternalOrigin]
+            Pointer[
+                DelimitedReader[Self.R, Self.P, Self.MAX], MutExternalOrigin
+            ]
         ](self._src)
         try:
             return mut_ptr[].next_record()
@@ -477,3 +582,5 @@ struct _DelimitedRecordIter[
             else:
                 print(msg)
                 raise StopIteration()
+
+
