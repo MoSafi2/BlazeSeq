@@ -88,18 +88,18 @@ fn _assert_invariants_for_file(path: String, expected_fields: Int) raises:
     var count: Int = 0
     for view in parser.views():
         count += 1
-        assert_equal(view.num_fields(), expected_fields, "field count")
+        assert_equal(view.num_fields, expected_fields, "field count")
         assert_true(len(String(view.chrom())) > 0, "chrom non-empty")
-        assert_true(view.chrom_start() <= view.chrom_end(), "start <= end")
+        assert_true(view.chrom_start <= view.chrom_end, "start <= end")
 
         if expected_fields >= 5:
-            assert_true(view.score(), "score present for BED5+")
-            var sc = view.score().value()
+            assert_true(view.score, "score present for BED5+")
+            var sc = view.score.value()
             assert_true(sc >= 0 and sc <= 1000, "score in [0,1000]")
 
         if expected_fields >= 6:
-            assert_true(view.strand(), "strand present for BED6+")
-            var st = view.strand().value()
+            assert_true(view.strand, "strand present for BED6+")
+            var st = view.strand.value()
             assert_true(
                 st == Strand.Plus or st == Strand.Minus or st == Strand.Unknown,
                 "strand value",
@@ -110,7 +110,7 @@ fn _assert_invariants_for_file(path: String, expected_fields: Int) raises:
             assert_true(view.item_rgb(), "itemRgb present for BED9+")
 
         if expected_fields == 12:
-            assert_true(view.block_count(), "blockCount present for BED12")
+            assert_true(view.block_count, "blockCount present for BED12")
             var rec = view.to_record()
             assert_true(rec.BlockSizes, "BlockSizes present for BED12")
             assert_true(rec.BlockStarts, "BlockStarts present for BED12")
@@ -119,7 +119,7 @@ fn _assert_invariants_for_file(path: String, expected_fields: Int) raises:
             assert_equal(sizes_len, starts_len, "block list lengths match")
             assert_equal(
                 sizes_len,
-                view.block_count().value(),
+                view.block_count.value(),
                 "block list length equals blockCount",
             )
 

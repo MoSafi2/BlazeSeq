@@ -109,97 +109,89 @@ struct BedView[O: Origin](Movable):
     """
 
     var _chrom: Span[UInt8, Self.O]
-    var _chrom_start: UInt64
-    var _chrom_end: UInt64
+    var chrom_start: UInt64
+    var chrom_end: UInt64
     var _name: Optional[Span[UInt8, Self.O]]
-    var _score: Optional[Int]
-    var _strand: Optional[Strand]
-    var _thick_start: Optional[UInt64]
-    var _thick_end: Optional[UInt64]
+    var score: Optional[Int]
+    var strand: Optional[Strand]
+    var thick_start: Optional[UInt64]
+    var thick_end: Optional[UInt64]
     var _item_rgb: Optional[ItemRgb]
-    var _block_count: Optional[Int]
+    var block_count: Optional[Int]
     var _block_sizes_span: Optional[Span[UInt8, Self.O]]
     var _block_starts_span: Optional[Span[UInt8, Self.O]]
-    var _num_fields: Int
+    var num_fields: Int
 
     fn __init__(
         out self,
         _chrom: Span[UInt8, Self.O],
-        _chrom_start: UInt64,
-        _chrom_end: UInt64,
+        chrom_start: UInt64,
+        chrom_end: UInt64,
         _name: Optional[Span[UInt8, Self.O]],
-        _score: Optional[Int],
-        _strand: Optional[Strand],
-        _thick_start: Optional[UInt64],
-        _thick_end: Optional[UInt64],
+        score: Optional[Int],
+        strand: Optional[Strand],
+        thick_start: Optional[UInt64],
+        thick_end: Optional[UInt64],
         _item_rgb: Optional[ItemRgb],
-        _block_count: Optional[Int],
+        block_count: Optional[Int],
         _block_sizes_span: Optional[Span[UInt8, Self.O]],
         _block_starts_span: Optional[Span[UInt8, Self.O]],
-        _num_fields: Int,
+        num_fields: Int,
     ):
         self._chrom = _chrom
-        self._chrom_start = _chrom_start
-        self._chrom_end = _chrom_end
+        self.chrom_start = chrom_start
+        self.chrom_end = chrom_end
         self._name = _name
-        self._score = _score
-        self._strand = _strand
-        self._thick_start = _thick_start
-        self._thick_end = _thick_end
+        self.score = score
+        self.strand = strand
+        self.thick_start = thick_start
+        self.thick_end = thick_end
         self._item_rgb = _item_rgb
-        self._block_count = _block_count
+        self.block_count = block_count
         self._block_sizes_span = _block_sizes_span
         self._block_starts_span = _block_starts_span
-        self._num_fields = _num_fields
+        self.num_fields = num_fields
 
     @always_inline
     fn chrom(self) -> StringSlice[origin=Self.O]:
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._chrom)
 
-    @always_inline
-    fn chrom_start(self) -> UInt64:
-        return self._chrom_start
-
-    @always_inline
-    fn chrom_end(self) -> UInt64:
-        return self._chrom_end
-
     fn start_position(self) -> Position:
         """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
         """
-        return Position(self._chrom_start + 1, True)
+        return Position(self.chrom_start + 1, True)
 
     fn end_position(self) raises -> Position:
         """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
         """
-        if self._chrom_end < 1:
+        if self.chrom_end < 1:
             raise Error(
                 "chrom_end must be >= 1 for 1-based end_position (BED"
                 " [start,end) has no bases when end is 0)"
             )
-        return Position(self._chrom_end, True)
+        return Position(self.chrom_end, True)
 
     fn interval(self) raises -> Interval:
         """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
         """
-        if self._chrom_end < 1:
+        if self.chrom_end < 1:
             raise Error(
                 "chrom_end must be >= 1 for 1-based interval (BED [start,end)"
                 " has no bases when end is 0)"
             )
         return Interval(
-            Position(self._chrom_start + 1, True),
-            Position(self._chrom_end, True),
+            Position(self.chrom_start + 1, True),
+            Position(self.chrom_end, True),
             True,
         )
 
     fn thick_interval(self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
         """
-        if not self._thick_start or not self._thick_end:
+        if not self.thick_start or not self.thick_end:
             return None
         var opt = interval_try_from_start_end(
-            self._thick_start.value() + 1, self._thick_end.value()
+            self.thick_start.value() + 1, self.thick_end.value()
         )
         if not opt:
             return None
@@ -211,34 +203,10 @@ struct BedView[O: Origin](Movable):
             return None
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._name.value())
 
-    @always_inline
-    fn score(self) -> Optional[Int]:
-        return self._score
-
-    @always_inline
-    fn strand(self) -> Optional[Strand]:
-        return self._strand
-
-    @always_inline
-    fn thick_start(self) -> Optional[UInt64]:
-        return self._thick_start
-
-    @always_inline
-    fn thick_end(self) -> Optional[UInt64]:
-        return self._thick_end
-
     fn item_rgb(self) -> Optional[ItemRgb]:
         if not self._item_rgb:
             return None
         return Optional(self._item_rgb.value().copy())
-
-    @always_inline
-    fn block_count(self) -> Optional[Int]:
-        return self._block_count
-
-    @always_inline
-    fn num_fields(self) -> Int:
-        return self._num_fields
 
     fn to_record(self) raises -> BedRecord:
         """Materialize an owned BedRecord. Call when the record must outlive the view.
@@ -257,13 +225,13 @@ struct BedView[O: Origin](Movable):
             name_opt = BString(self._name.value())
         return BedRecord(
             Chrom=BString(self._chrom),
-            ChromStart=self._chrom_start,
-            ChromEnd=self._chrom_end,
+            ChromStart=self.chrom_start,
+            ChromEnd=self.chrom_end,
             Name=name_opt^ if name_opt else None,
-            Score=self._score,
-            Strand=self._strand,
-            ThickStart=self._thick_start,
-            ThickEnd=self._thick_end,
+            Score=self.score,
+            Strand=self.strand,
+            ThickStart=self.thick_start,
+            ThickEnd=self.thick_end,
             ItemRgb=(
                 Optional(
                     self._item_rgb.value().copy()
@@ -271,7 +239,7 @@ struct BedView[O: Origin](Movable):
             ),
             BlockSizes=block_sizes^ if block_sizes else None,
             BlockStarts=block_starts^ if block_starts else None,
-            NumFields=self._num_fields,
+            NumFields=self.num_fields,
         )
 
 
@@ -341,14 +309,6 @@ struct BedRecord(Copyable, Movable, Writable):
     fn chrom(ref[_] self) -> String:
         return self.Chrom.to_string()
 
-    @always_inline
-    fn chrom_start(self) -> UInt64:
-        return self.ChromStart
-
-    @always_inline
-    fn chrom_end(self) -> UInt64:
-        return self.ChromEnd
-
     fn start_position(self) -> Position:
         """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
         """
@@ -396,22 +356,6 @@ struct BedRecord(Copyable, Movable, Writable):
             return None
         return self.Name.value().to_string()
 
-    @always_inline
-    fn score(self) -> Optional[Int]:
-        return self.Score
-
-    @always_inline
-    fn strand(self) -> Optional[Strand]:
-        return self.Strand
-
-    @always_inline
-    fn thick_start(self) -> Optional[UInt64]:
-        return self.ThickStart
-
-    @always_inline
-    fn thick_end(self) -> Optional[UInt64]:
-        return self.ThickEnd
-
     fn item_rgb(ref self) -> Optional[ItemRgb]:
         if not self.ItemRgb:
             return None
@@ -426,10 +370,6 @@ struct BedRecord(Copyable, Movable, Writable):
         if self.BlockStarts:
             return Optional(self.BlockStarts.value().copy())
         return None
-
-    @always_inline
-    fn num_fields(self) -> Int:
-        return self.NumFields
 
     fn write_to[w: Writer](ref self, mut writer: w):
         """Write this record as one TAB-delimited line (same column count as parsed).

@@ -344,18 +344,18 @@ struct BedParser[R: Reader](Iterable, Movable):
         )
         return BedView[MutExternalOrigin](
             _chrom=required.chrom_span,
-            _chrom_start=required.chrom_start,
-            _chrom_end=required.chrom_end,
+            chrom_start=required.chrom_start,
+            chrom_end=required.chrom_end,
             _name=optional.name,
-            _score=optional.score,
-            _strand=optional.strand,
-            _thick_start=optional.thick_start,
-            _thick_end=optional.thick_end,
+            score=optional.score,
+            strand=optional.strand,
+            thick_start=optional.thick_start,
+            thick_end=optional.thick_end,
             _item_rgb=optional.item_rgb,
-            _block_count=optional.block_count,
+            block_count=optional.block_count,
             _block_sizes_span=optional.block_sizes_span,
             _block_starts_span=optional.block_starts_span,
-            _num_fields=required.num_fields,
+            num_fields=required.num_fields,
         )
 
     fn next_record(mut self) raises -> BedRecord:
