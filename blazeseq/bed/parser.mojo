@@ -4,7 +4,7 @@ BED is TAB-delimited with 3 required fields (chrom, chromStart, chromEnd)
 and 9 optional fields. Comment lines (start with #) and blank lines are skipped.
 Valid column counts: 3, 4, 5, 6, 7, 8, 9, 12 (BED10 and BED11 are prohibited).
 
-Use `next_record_view()` / `views()` for zero-allocation parsing; the view is
+Use `next_view()` / `views()` for zero-allocation parsing; the view is
 invalidated on the next advance. Call `.to_record()` on a view or use
 `next_record()` / `records()` for owned records.
 """
@@ -17,12 +17,12 @@ from std.memory import Span
 from blazeseq.CONSTS import EOF
 from blazeseq.bed.record import (
     BedRecord,
-    BedRecordView,
+    BedView,
     ItemRgb,
     Strand,
 )
 from blazeseq.io.buffered import EOFError, LineIterator
-from blazeseq.io.delimited import DelimitedRecordView
+from blazeseq.io.delimited import DelimitedView
 from blazeseq.io.readers import Reader
 from blazeseq.utils import format_parse_error
 
@@ -117,10 +117,10 @@ struct BedParser[R: Reader](Iterable, Movable):
 
     Skips comment lines (starting with #) and blank lines.
     API:
-        - next_record_view() -> BedRecordView (zero-alloc; invalidated on next advance)
+        - next_view() -> BedView (zero-alloc; invalidated on next advance)
         - next_record() -> BedRecord (materialized; raises EOFError when exhausted)
         - for rec in parser / records() -> BedRecord
-        - for view in parser.views() -> BedRecordView
+        - for view in parser.views() -> BedView
     """
 
     comptime IteratorType[origin: Origin] = _BedParserRecordIter[Self.R, origin]
@@ -161,7 +161,7 @@ struct BedParser[R: Reader](Iterable, Movable):
                 continue
             return line
 
-    fn next_record_view(mut self) raises -> BedRecordView[MutExternalOrigin]:
+    fn next_view(mut self) raises -> BedView[MutExternalOrigin]:
         """Return the next BED record as a zero-alloc view.
 
         Raises:
@@ -173,7 +173,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             raise EOFError()
 
         var line = self._next_data_line()
-        var view = DelimitedRecordView[MutExternalOrigin, 64](line, BED_TAB)
+        var view = DelimitedView[MutExternalOrigin, 64](line, BED_TAB)
         var n = view.num_fields()
 
         if not _is_valid_bed_field_count(n):
@@ -278,7 +278,7 @@ struct BedParser[R: Reader](Iterable, Movable):
 
         self._record_number += 1
 
-        return BedRecordView[MutExternalOrigin](
+        return BedView[MutExternalOrigin](
             _chrom=chrom_span,
             _chrom_start=chrom_start,
             _chrom_end=chrom_end,
@@ -296,10 +296,10 @@ struct BedParser[R: Reader](Iterable, Movable):
 
     fn next_record(mut self) raises -> BedRecord:
         """Return the next BED record as an owned BedRecord."""
-        return self.next_record_view().to_record()
+        return self.next_view().to_record()
 
     fn views(ref self) -> _BedParserViewIter[Self.R, origin_of(self)]:
-        """Iterator yielding zero-alloc BedRecordViews."""
+        """Iterator yielding zero-alloc BedViews."""
         return _BedParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
 
     fn records(ref self) -> _BedParserRecordIter[Self.R, origin_of(self)]:
@@ -311,7 +311,7 @@ struct BedParser[R: Reader](Iterable, Movable):
 
 
 struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
-    comptime Element = BedRecordView[MutExternalOrigin]
+    comptime Element = BedView[MutExternalOrigin]
 
     var _src: Pointer[BedParser[Self.R], Self.origin]
 
@@ -331,7 +331,7 @@ struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
             self._src
         )
         try:
-            return mut_ptr[].next_record_view()
+            return mut_ptr[].next_view()
         except e:
             var msg = String(e)
             if msg == EOF or msg.startswith(EOF):

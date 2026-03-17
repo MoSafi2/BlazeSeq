@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Throughput benchmark: BlazeSeq batches vs records vs ref_records.
+# Throughput benchmark: BlazeSeq batches vs records vs views.
 # Generates 3GB synthetic FASTQ on a tmpfs/ramfs mount, runs each mode with hyperfine.
 # Run from repository root: ./benchmark/throughput/run_throughput_benchmarks.sh [--ramfs|--tmpfs]
 # Requires: pixi, hyperfine. On Linux: sudo for ramfs/tmpfs mount/umount.
@@ -124,7 +124,7 @@ fi
 # --- Optional: verify all modes agree on record/base count (non-fatal) ---
 echo "Verifying mode outputs..."
 ref=""
-for mode in batches records ref_records; do
+for mode in batches records views; do
     out=$("$RUNNER_BIN" "$BENCH_FILE" "$mode" 2>/dev/null) || out=""
     if [ -z "$out" ]; then
         echo "Warning: $mode produced no output"
@@ -144,9 +144,9 @@ hyperfine_cmd \
     --runs "${HYPERFINE_RUNS}" \
     --export-markdown "$REPO_ROOT/throughput_benchmark_results.md" \
     --export-json "$REPO_ROOT/throughput_benchmark_results.json" \
-    -n batches     "$RUNNER_BIN $BENCH_FILE batches" \
-    -n records     "$RUNNER_BIN $BENCH_FILE records" \
-    -n ref_records "$RUNNER_BIN $BENCH_FILE ref_records"
+    -n batches "$RUNNER_BIN $BENCH_FILE batches" \
+    -n records "$RUNNER_BIN $BENCH_FILE records" \
+    -n views   "$RUNNER_BIN $BENCH_FILE views"
 
 echo ""
 echo "Results written to throughput_benchmark_results.md and throughput_benchmark_results.json"

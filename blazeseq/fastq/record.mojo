@@ -24,7 +24,7 @@ struct Validator(Copyable):
     Structure (@, +, seq/qual length) is validated in the parser hot loop; this
     validator only runs optional ASCII and quality-range checks when enabled via
     ParserConfig (check_ascii, check_quality). Used by FastqParser when those flags
-    are True; can also be used standalone on FastqRecord or RefRecord.
+    are True; can also be used standalone on FastqRecord or FastqView.
 
     Attributes:
         check_ascii: If True, validate() requires all record bytes to be ASCII.
@@ -63,8 +63,8 @@ struct Validator(Copyable):
                 snippet = snippet[:97] + "..."
         return snippet
 
-    fn id_snippet(self, record: RefRecord) -> String:
-        """Extract id snippet from RefRecord for error messages."""
+    fn id_snippet(self, record: FastqView) -> String:
+        """Extract id snippet from FastqView for error messages."""
         var snippet = String(capacity=100)
         var id_str = StringSlice(unsafe_from_utf8=record._id)
         if len(id_str) > 0:
@@ -74,7 +74,7 @@ struct Validator(Copyable):
         return snippet
 
     @always_inline
-    fn _validate_quality_range(self, record: RefRecord) -> FastxErrorCode:
+    fn _validate_quality_range(self, record: FastqView) -> FastxErrorCode:
         """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
         """
         var ptr = record._quality.unsafe_ptr()
@@ -104,7 +104,7 @@ struct Validator(Copyable):
         return FastxErrorCode.OK
 
     @always_inline
-    fn _validate_ascii(self, record: RefRecord) -> FastxErrorCode:
+    fn _validate_ascii(self, record: FastqView) -> FastxErrorCode:
         """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
         """
         var c = _check_ascii(record._id)
@@ -160,7 +160,7 @@ struct Validator(Copyable):
         return _check_ascii(record._quality.as_span())
 
     @always_inline
-    fn _validate(self, record: RefRecord) -> FastxErrorCode:
+    fn _validate(self, record: FastqView) -> FastxErrorCode:
         """Run configured validations; returns error code. Used by parser hot path.
         """
         if self.check_ascii:
@@ -205,7 +205,7 @@ struct Validator(Copyable):
             )
 
     fn validate(
-        self, record: RefRecord, record_number: Int = 0, line_number: Int = 0
+        self, record: FastqView, record_number: Int = 0, line_number: Int = 0
     ) raises:
         """Run configured validations (ASCII and/or quality) for a parsed FASTQ record.
 
@@ -213,7 +213,7 @@ struct Validator(Copyable):
         check_quality are applied when enabled.
 
         Args:
-            record: The RefRecord to validate.
+            record: The FastqView to validate.
             record_number: Optional 1-indexed record number for error context (0 if unknown).
             line_number: Optional 1-indexed line number for error context (0 if unknown).
         """
@@ -236,7 +236,7 @@ struct FastqRecord(
 ):
     """A single FASTQ record (four lines: @id, sequence, +, quality).
 
-    Owned representation; safe to store in collections and reuse. Use `RefRecord`
+    Owned representation; safe to store in collections and reuse. Use `FastqView`
     for zero-copy parsing when consuming immediately. The plus line is emitted as "+"
     when writing; only id, sequence, and quality are stored. `phred_offset` is the
     Phred offset (33 or 64) used to decode quality scores.
@@ -429,7 +429,7 @@ struct FastqRecord(
 
 
 @align(64)
-struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
+struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
     ImplicitlyDestructible, Movable, Sized, TrivialRegisterPassable, Writable
 ):
     """Zero-copy reference to a FASTQ record inside the parser's buffer.
@@ -448,9 +448,9 @@ struct RefRecord[mut: Bool, //, origin: Origin[mut=mut]](
         from blazeseq import FastqParser, FileReader
         from std.pathlib import Path
         var parser = FastqParser[FileReader](FileReader(Path("data.fastq")), "generic")
-        for record_ref in parser.ref_records():
-            _ = record_ref.id()
-            _ = record_ref.sequence()
+        for view in parser.views():
+            _ = view.id()
+            _ = view.sequence()
         ```
     """
 

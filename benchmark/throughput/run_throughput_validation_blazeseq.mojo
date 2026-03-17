@@ -6,7 +6,7 @@ verification. Used by run_throughput_validation_benchmarks.sh with hyperfine.
 
 Usage:
     pixi run mojo run -I . benchmark/throughput/run_throughput_validation_blazeseq.mojo <path.fastq> <mode> <validation>
-    mode: batches | records | ref_records
+    mode: batches | records | views
     validation: none | ascii | ascii_quality
 """
 
@@ -36,12 +36,12 @@ fn run_mode_none(path: String, mode: String) raises -> Tuple[Int, Int]:
         for record in parser.records():
             total_reads += 1
             total_base_pairs += len(record)
-    elif mode == "ref_records":
-        for ref_ in parser.ref_records():
+    elif mode == "views":
+        for view in parser.views():
             total_reads += 1
-            total_base_pairs += len(ref_)
+            total_base_pairs += len(view)
     else:
-        raise Error("Unknown mode: " + mode + ". Use batches | records | ref_records")
+        raise Error("Unknown mode: " + mode + ". Use batches | records | views")
     return (total_reads, total_base_pairs)
 
 
@@ -64,12 +64,12 @@ fn run_mode_ascii(path: String, mode: String) raises -> Tuple[Int, Int]:
         for record in parser.records():
             total_reads += 1
             total_base_pairs += len(record)
-    elif mode == "ref_records":
-        for ref_ in parser.ref_records():
+    elif mode == "views":
+        for view in parser.views():
             total_reads += 1
-            total_base_pairs += len(ref_)
+            total_base_pairs += len(view)
     else:
-        raise Error("Unknown mode: " + mode + ". Use batches | records | ref_records")
+        raise Error("Unknown mode: " + mode + ". Use batches | records | views")
     return (total_reads, total_base_pairs)
 
 
@@ -93,12 +93,12 @@ fn run_mode_ascii_quality(path: String, mode: String) raises -> Tuple[Int, Int]:
         for record in parser.records():
             total_reads += 1
             total_base_pairs += len(record)
-    elif mode == "ref_records":
-        for ref_ in parser.ref_records():
+    elif mode == "views":
+        for view in parser.views():
             total_reads += 1
-            total_base_pairs += len(ref_)
+            total_base_pairs += len(view)
     else:
-        raise Error("Unknown mode: " + mode + ". Use batches | records | ref_records")
+        raise Error("Unknown mode: " + mode + ". Use batches | records | views")
     return (total_reads, total_base_pairs)
 
 
@@ -108,7 +108,7 @@ fn main() raises:
         print(
             "Usage: run_throughput_validation_blazeseq.mojo <path.fastq> <mode> <validation>"
         )
-        print("  mode: batches | records | ref_records")
+        print("  mode: batches | records | views")
         print("  validation: none | ascii | ascii_quality")
         return
 

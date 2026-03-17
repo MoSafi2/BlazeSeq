@@ -6,11 +6,11 @@ from blazeseq.io.writers import Writer
 
 
 # ---------------------------------------------------------------------------
-# FaiRecordView — zero-alloc, NOT to be stored
+# FaiView — zero-alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
 
-struct FaiRecordView[O: Origin](Movable, Sized):
+struct FaiView[O: Origin](Movable, Sized):
     """Zero-copy view over one FAI index row in the parser's buffer.
 
     Lifetime: Valid only until the next parser read. Do not store in

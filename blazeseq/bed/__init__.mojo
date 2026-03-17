@@ -1,6 +1,6 @@
 from blazeseq.bed.record import (
     BedRecord,
-    BedRecordView,
+    BedView,
     Interval,
     ItemRgb,
     Position,

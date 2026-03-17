@@ -169,6 +169,9 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
         self._record_number += 1
         return FastaRecord(id_str^, seq_buf^)
 
+    fn records(ref self) -> Self.IteratorType[origin_of(self)]:
+        return {Pointer(to=self)}
+
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #
@@ -201,7 +204,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
             return BString(id_span)
 
     fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
-        return {Pointer(to=self)}
+        return self.records()
 
 
 struct _FastaParserRecordIter[R: Reader, cfg: ParserConfig, origin: Origin](

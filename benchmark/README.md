@@ -6,8 +6,8 @@ This document describes all benchmarking options for BlazeSeq. Benchmark numbers
 
 | Benchmark | Command | Description |
 |-----------|---------|-------------|
-| **BlazeSeq throughput** (file) | `pixi run -e benchmark benchmark-throughput` | ~3 GB on tmpfs/ramfs, batches/records/ref_records with hyperfine |
-| **BlazeSeq throughput** (validation regimes) | `pixi run -e benchmark benchmark-throughput-validation` | 3x3 comparison: mode (`batches`/`records`/`ref_records`) vs validation (`none`/`ascii`/`ascii_quality`) |
+| **BlazeSeq throughput** (file) | `pixi run -e benchmark benchmark-throughput` | ~3 GB on tmpfs/ramfs, batches/records/views with hyperfine |
+| **BlazeSeq throughput** (validation regimes) | `pixi run -e benchmark benchmark-throughput-validation` | 3x3 comparison: mode (`batches`/`records`/`views`) vs validation (`none`/`ascii`/`ascii_quality`) |
 | **BlazeSeq throughput** (memory) | `pixi run -e benchmark benchmark-throughput-memory` | In-process FASTQ, parse-only timing, JSON + plots |
 | **Parser comparison** (plain) | `pixi run -e benchmark benchmark-plain` | BlazeSeq vs needletail, seq_io, kseq on 3 GB plain FASTQ |
 | **Parser comparison** (gzip) | `pixi run -e benchmark benchmark-gzip` | Decompress + parse; BlazeSeq multi-threaded (default 4 threads) |
@@ -61,7 +61,7 @@ pixi install -e benchmark
 
 ### File-based (hyperfine)
 
-Generates ~3 GB synthetic FASTQ on tmpfs/ramfs, then runs batches / records / ref_records with hyperfine:
+Generates ~3 GB synthetic FASTQ on tmpfs/ramfs, then runs batches / records / views with hyperfine:
 
 ```bash
 pixi run -e benchmark benchmark-throughput
@@ -76,13 +76,13 @@ pixi run -e benchmark benchmark-throughput-memory
 ```
 
 - Override size and runs: `SIZE_GB=1 BENCH_RUNS=3 ./benchmark/throughput/run_throughput_memory_benchmarks.sh`
-- Run once (default 3 GB): `pixi run mojo run -I . benchmark/throughput/run_throughput_memory_blazeseq.mojo [size_gb] <mode>` (mode: `batches` | `records` | `ref_records`).
+- Run once (default 3 GB): `pixi run mojo run -I . benchmark/throughput/run_throughput_memory_blazeseq.mojo [size_gb] <mode>` (mode: `batches` | `records` | `views`).
 
 ### Validation-regime comparison (file-based, hyperfine)
 
 Runs all 9 combinations of parser mode and validation regime:
 
-- Modes: `batches`, `records`, `ref_records`
+- Modes: `batches`, `records`, `views`
 - Validation: `none`, `ascii`, `ascii_quality` (quality check with ASCII enabled)
 
 ```bash

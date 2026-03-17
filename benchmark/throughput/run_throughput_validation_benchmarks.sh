@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Throughput benchmark: validation regimes across batches/records/ref_records.
+# Throughput benchmark: validation regimes across batches/records/views.
 # Generates 3GB synthetic FASTQ on a tmpfs/ramfs mount and runs all 9
 # mode x validation combinations with hyperfine.
 #
@@ -123,7 +123,7 @@ fi
 # --- Optional output consistency check (non-fatal) ---
 echo "Verifying mode/validation outputs..."
 ref=""
-for mode in batches records ref_records; do
+for mode in batches records views; do
     for validation in none ascii ascii_quality; do
         out=$("$RUNNER_BIN" "$BENCH_FILE" "$mode" "$validation" 2>/dev/null) || out=""
         if [ -z "$out" ]; then
@@ -154,9 +154,9 @@ hyperfine_cmd \
     -n "records/none"          "$RUNNER_BIN $BENCH_FILE records none" \
     -n "records/ascii"         "$RUNNER_BIN $BENCH_FILE records ascii" \
     -n "records/ascii_quality" "$RUNNER_BIN $BENCH_FILE records ascii_quality" \
-    -n "ref_records/none"      "$RUNNER_BIN $BENCH_FILE ref_records none" \
-    -n "ref_records/ascii"     "$RUNNER_BIN $BENCH_FILE ref_records ascii" \
-    -n "ref_records/ascii_quality" "$RUNNER_BIN $BENCH_FILE ref_records ascii_quality"
+    -n "views/none"      "$RUNNER_BIN $BENCH_FILE views none" \
+    -n "views/ascii"     "$RUNNER_BIN $BENCH_FILE views ascii" \
+    -n "views/ascii_quality" "$RUNNER_BIN $BENCH_FILE views ascii_quality"
 
 echo ""
 echo "Results written to throughput_validation_benchmark_results.md and throughput_validation_benchmark_results.json"

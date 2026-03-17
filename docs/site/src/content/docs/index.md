@@ -23,10 +23,10 @@ from pathlib import Path
 fn main() raises:
     var parser = FastqParser(FileReader(Path("reads.fastq")), "sanger")
 
-    # Zero-copy ref iteration
-    for record in parser.ref_records():
-        _ = record.header_slice()
-        _ = len(record)
+    # Zero-copy view iteration
+    for view in parser.views():
+        _ = view.id()
+        _ = len(view)
 
     # Batched for GPU pipelines
     for batch in parser.batches(1024):
@@ -39,5 +39,5 @@ See the [API Reference](/api/blazeseq/) for full documentation.
 
 - **Configurable parsing** — Buffer size, validation (ASCII and quality schema), optional batch size.
 - **High throughput** — Targets several GB/s from disk.
-- **Unified API** — `ref_records()`, `records()`, or `batches()`.
+- **Unified API** — `views()`, `records()`, or `batches()`.
 - **GPU support** — `FastqBatch`, `DeviceFastqBatch`, device upload.

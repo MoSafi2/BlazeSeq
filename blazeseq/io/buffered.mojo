@@ -104,7 +104,7 @@ struct LineIteratorError(
 struct EOFError(TrivialRegisterPassable, Writable):
     """Raised when no more input is available (end of file or stream).
 
-    `FastqParser` and `LineIterator` raise `EOFError` when `next_ref()/next_record()`
+    `FastqParser` and `LineIterator` raise `EOFError` when `next_view()/next_record()`
     or `next_line()` is called and there is no more data. Iterators catch it
     and raise StopIteration instead.
     """

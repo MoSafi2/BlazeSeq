@@ -1,14 +1,14 @@
 """BlazeSeq in-memory throughput runner: generate ~3 GB FASTQ, keep in process, parse via MemoryReader.
 
 Generates synthetic FASTQ in memory (no disk I/O), wraps the buffer in MemoryReader,
-runs the chosen iteration mode (batches / records / ref_records), and prints
+runs the chosen iteration mode (batches / records / views), and prints
 "records base_pairs" on one line for verification. Used with hyperfine for
 throughput benchmarking without file I/O.
 
 Usage:
     pixi run mojo run -I . benchmark/throughput/run_throughput_memory_blazeseq.mojo [size_gb] <mode>
     size_gb: optional, default 3 (target size in GB).
-    mode: batches | records | ref_records
+    mode: batches | records | views
 """
 
 from std.sys import argv
@@ -23,7 +23,7 @@ fn main() raises:
     if len(args) < 2:
         print("Usage: run_throughput_memory_blazeseq.mojo [size_gb] <mode>")
         print("  size_gb: optional (default 3), target FASTQ size in GB")
-        print("  mode: batches | records | ref_records")
+        print("  mode: batches | records | views")
         return
 
     var size_gb: Int = 3
@@ -65,12 +65,12 @@ fn main() raises:
         for record in parser.records():
             total_reads += 1
             total_base_pairs += len(record)
-    elif mode == "ref_records":
-        for ref_ in parser.ref_records():
+    elif mode == "views":
+        for view in parser.views():
             total_reads += 1
-            total_base_pairs += len(ref_)
+            total_base_pairs += len(view)
     else:
-        print("Unknown mode: ", mode, ". Use batches | records | ref_records")
+        print("Unknown mode: ", mode, ". Use batches | records | views")
         return
     var end_ns = perf_counter_ns()
 

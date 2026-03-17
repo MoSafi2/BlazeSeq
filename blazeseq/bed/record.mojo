@@ -190,10 +190,10 @@ fn interval_try_from_start_end(start: Int64, end: Int64) -> Optional[Interval]:
 
 
 # ---------------------------------------------------------------------------
-# BedRecordView — zero-alloc, NOT to be stored
+# BedView — zero-alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
-struct BedRecordView[O: Origin](Movable):
+struct BedView[O: Origin](Movable):
     """Zero-copy view over one BED data line in the parser's buffer.
 
     Lifetime: Valid only until the next parser read. Do not store;
