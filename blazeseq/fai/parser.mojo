@@ -28,7 +28,7 @@ from blazeseq.fai.record import FaiRecord, FaiView
 from blazeseq.io.buffered import EOFError
 from blazeseq.io.delimited import DelimitedReader, DelimitedView
 from blazeseq.io.readers import Reader
-from blazeseq.utils import format_parse_error
+from blazeseq.utils import format_parse_error, ParseContext
 
 
 struct FaiParser[R: Reader](Iterable, Movable):
@@ -61,16 +61,8 @@ struct FaiParser[R: Reader](Iterable, Movable):
         return self._rows.has_more()
 
     @always_inline
-    fn _get_record_number(ref self) -> Int:
-        return self._rows._get_record_number()
-
-    @always_inline
-    fn _get_line_number(ref self) -> Int:
-        return self._rows._get_line_number()
-
-    @always_inline
-    fn _get_file_position(ref self) -> Int64:
-        return self._rows._get_file_position()
+    fn _parse_context(ref self) -> ParseContext:
+        return self._rows._parse_context()
 
     # ------------------------------------------------------------------ #
     # Record API                                                         #
@@ -94,11 +86,10 @@ struct FaiParser[R: Reader](Iterable, Movable):
         var n_fields = view.num_fields()
         if n_fields != 5 and n_fields != 6:
             var msg = format_parse_error(
+                self._parse_context(),
                 "FAI row must have 5 or 6 TAB-delimited columns",
-                self._get_record_number() + 1,
-                self._get_line_number(),
-                self._get_file_position(),
                 "",
+                1,
             )
             raise Error(msg)
 

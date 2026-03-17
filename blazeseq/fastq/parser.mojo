@@ -17,6 +17,7 @@ from blazeseq.byte_string import BString
 from blazeseq.utils import (
     _parse_schema,
     format_parse_error,
+    ParseContext,
     _check_end_qual,
     _scan_record,
     _strip_spaces,
@@ -141,16 +142,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         self._batch_size = batch_size
 
     @always_inline
-    fn _get_record_number(ref self) -> Int:
-        return self._current_line_number // 4
-
-    @always_inline
-    fn _get_line_number(ref self) -> Int:
-        return self._current_line_number
-
-    @always_inline
-    fn _get_file_position(ref self) -> Int64:
-        return Int64(self.buffer.stream_position())
+    fn _parse_context(ref self) -> ParseContext:
+        return ParseContext(
+            self._current_line_number // 4,
+            self._current_line_number,
+            Int64(self.buffer.stream_position()),
+        )
 
     @always_inline
     fn has_more(self) -> Bool:
@@ -164,7 +161,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             raise Error(
                 format_validation_error_from_code(
                     code,
-                    self._get_record_number(),
+                    self._parse_context().record_number,
                     "",
                     self._get_record_snippet(ref_rec),
                 )
@@ -186,20 +183,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             )
         except e:
             raise Error(
-                format_parse_error(
-                    String(e),
-                    self._get_record_number(),
-                    self._get_line_number(),
-                    self._get_file_position(),
-                    "",
-                )
+                format_parse_error(self._parse_context(), String(e))
             )
         var code = self.validator._validate(record)
         if code != FastxErrorCode.OK:
             raise Error(
                 format_validation_error_from_code(
                     code,
-                    self._get_record_number(),
+                    self._parse_context().record_number,
                     "",
                     self._get_record_snippet_from_fastq(record),
                 )
@@ -254,13 +245,12 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             or refill_code == FastxErrorCode.SEP_NO_PLUS
             or refill_code == FastxErrorCode.SEQ_QUAL_LEN_MISMATCH
         ):
-            var rec_num = self._current_line_number // 4 + 1
-            var line_num = self._current_line_number + 1
+            var ctx = self._parse_context()
             return format_parse_error_from_code(
                 refill_code,
-                rec_num,
-                line_num,
-                self._get_file_position(),
+                ctx.record_number + 1,
+                ctx.line_number + 1,
+                ctx.file_position,
                 _record_snippet(self.buffer.view(), offsets),
             )
         if refill_code == FastxErrorCode.UNEXPECTED_EOF:
@@ -301,14 +291,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             scan_view, offsets, phase
         )
         if parse_code != FastxErrorCode.OK:
-            var rec_num = self._current_line_number // 4 + 1
-            var line_num = self._current_line_number + 1
+            var ctx = self._parse_context()
             raise Error(
                 format_parse_error_from_code(
                     parse_code,
-                    rec_num,
-                    line_num,
-                    self._get_file_position(),
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
                     _record_snippet(scan_view, offsets),
                 )
             )

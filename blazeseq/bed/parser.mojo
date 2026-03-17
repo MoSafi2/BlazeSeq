@@ -24,7 +24,7 @@ from blazeseq.bed.record import (
 from blazeseq.io.buffered import EOFError
 from blazeseq.io.delimited import DelimitedReader, DelimitedView, LineAction, LinePolicy
 from blazeseq.io.readers import Reader
-from blazeseq.utils import format_parse_error
+from blazeseq.utils import format_parse_error, ParseContext
 
 comptime BED_TAB: Byte = 9  # ord('\t')
 comptime BED_VALID_FIELD_COUNTS: Tuple[
@@ -163,16 +163,8 @@ struct BedParser[R: Reader](Iterable, Movable):
         return self._rows.has_more()
 
     @always_inline
-    fn _get_record_number(ref self) -> Int:
-        return self._rows._get_record_number()
-
-    @always_inline
-    fn _get_line_number(ref self) -> Int:
-        return self._rows._get_line_number()
-
-    @always_inline
-    fn _get_file_position(ref self) -> Int64:
-        return self._rows._get_file_position()
+    fn _parse_context(ref self) -> ParseContext:
+        return self._rows._parse_context()
 
     fn next_view(mut self) raises -> BedView[MutExternalOrigin]:
         """Return the next BED record as a zero-alloc view.
@@ -190,14 +182,11 @@ struct BedParser[R: Reader](Iterable, Movable):
 
         if not _is_valid_bed_field_count(n):
             var msg = format_parse_error(
+                self._parse_context(),
                 (
                     "BED row must have 3, 4, 5, 6, 7, 8, 9, or 12 fields"
                     " (BED10/BED11 prohibited)"
                 ),
-                self._get_record_number(),
-                self._get_line_number(),
-                self._get_file_position(),
-                "",
             )
             raise Error(msg)
 
@@ -207,11 +196,8 @@ struct BedParser[R: Reader](Iterable, Movable):
 
         if chrom_start > chrom_end:
             var msg = format_parse_error(
+                self._parse_context(),
                 "chromStart must be <= chromEnd",
-                self._get_record_number(),
-                self._get_line_number(),
-                self._get_file_position(),
-                "",
             )
             raise Error(msg)
 
@@ -236,11 +222,8 @@ struct BedParser[R: Reader](Iterable, Movable):
                 score_opt = _parse_score(view.get_span(4))
             except e:
                 var msg = format_parse_error(
+                    self._parse_context(),
                     String(e),
-                    self._get_record_number(),
-                    self._get_line_number(),
-                    self._get_file_position(),
-                    "",
                 )
                 raise Error(msg)
         if n >= 6:
@@ -248,11 +231,8 @@ struct BedParser[R: Reader](Iterable, Movable):
                 strand_opt = _parse_strand(view.get_span(5))
             except e:
                 var msg = format_parse_error(
+                    self._parse_context(),
                     String(e),
-                    self._get_record_number(),
-                    self._get_line_number(),
-                    self._get_file_position(),
-                    "",
                 )
                 raise Error(msg)
         if n >= 7:
@@ -264,11 +244,8 @@ struct BedParser[R: Reader](Iterable, Movable):
                 item_rgb_opt = _parse_item_rgb(view.get_span(8))
             except e:
                 var msg = format_parse_error(
+                    self._parse_context(),
                     String(e),
-                    self._get_record_number(),
-                    self._get_line_number(),
-                    self._get_file_position(),
-                    "",
                 )
                 raise Error(msg)
         if n == 12:

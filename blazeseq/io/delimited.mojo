@@ -8,7 +8,7 @@ from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
 from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
-from blazeseq.utils import memchr, format_parse_error
+from blazeseq.utils import memchr, format_parse_error, ParseContext
 
 
 # ---------------------------------------------------------------------------
@@ -353,16 +353,12 @@ struct DelimitedReader[
         return self.lines.has_more()
 
     @always_inline
-    fn _get_record_number(ref self) -> Int:
-        return self._record_number
-
-    @always_inline
-    fn _get_line_number(ref self) -> Int:
-        return self.lines.get_line_number()
-
-    @always_inline
-    fn _get_file_position(ref self) -> Int64:
-        return self.lines.get_file_position()
+    fn _parse_context(ref self) -> ParseContext:
+        return ParseContext(
+            self._record_number,
+            self.lines.get_line_number(),
+            self.lines.get_file_position(),
+        )
 
     fn header(ref self) -> Optional[DelimitedRecord[Self.MAX]]:
         """Copy of the stored header record, if present."""
@@ -479,11 +475,10 @@ struct DelimitedReader[
         elif n != self._expected_num_fields:
             raise Error(
                 format_parse_error(
+                    self._parse_context(),
                     "Delimited row has inconsistent number of fields",
-                    self._get_record_number() + 1,
-                    self._get_line_number(),
-                    self._get_file_position(),
                     "",
+                    1,
                 )
             )
 
