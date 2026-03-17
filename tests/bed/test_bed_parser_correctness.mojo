@@ -10,7 +10,7 @@ from std.collections import List
 from std.collections.string import String, StringSlice
 from std.pathlib import Path
 from std.testing import assert_equal, assert_true, TestSuite
-import os
+import std.os
 
 comptime test_dir = "tests/test_data/bed_parser/"
 
@@ -177,4 +177,3 @@ fn test_bed_detection_regardless_of_extension() raises:
 
 fn main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
-
