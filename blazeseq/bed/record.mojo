@@ -295,11 +295,34 @@ fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
     return out^
 
 
+fn _strand_to_char(strand: Optional[Strand]) -> String:
+    """Format strand as BED character: +, -, or ."""
+    if not strand:
+        return "."
+    if strand.value() == Strand.Plus:
+        return "+"
+    if strand.value() == Strand.Minus:
+        return "-"
+    return "."
+
+
+fn _comma_sep_u64_list(values: List[UInt64]) -> String:
+    """Format list of UInt64 as comma-separated string."""
+    var out = String()
+    for i in range(len(values)):
+        if i > 0:
+            out += ","
+        out += String(values[i])
+    return out^
+
+
 # ---------------------------------------------------------------------------
 # BedRecord — owned, storeable
 # ---------------------------------------------------------------------------
 
 
+# The convesion from Bed to Position and Interval is a mine-field with mismatches between 1-based closed and 0-based half-open coordinates.
+# Fix later, for now focus on Reading and writing BED files with InterOp coming later.
 @fieldwise_init
 struct BedRecord(Copyable, Movable, Writable):
     """Single BED feature (owned). Coordinates are 0-based, half-open."""
@@ -414,67 +437,65 @@ struct BedRecord(Copyable, Movable, Writable):
     fn write_to[w: Writer](ref self, mut writer: w):
         """Write this record as one TAB-delimited line (same column count as parsed).
         """
-        writer.write(self.Chrom.to_string())
-        writer.write("\t")
-        writer.write(String(self.ChromStart))
-        writer.write("\t")
-        writer.write(String(self.ChromEnd))
-        if self.NumFields >= 4:
-            writer.write("\t")
-            writer.write(self.Name.value().to_string() if self.Name else ".")
-        if self.NumFields >= 5:
-            writer.write("\t")
-            writer.write(String(self.Score.value()) if self.Score else "0")
-        if self.NumFields >= 6:
-            var c: String
-            if self.Strand:
-                if self.Strand.value() == Strand.Plus:
-                    c = "+"
-                elif self.Strand.value() == Strand.Minus:
-                    c = "-"
-                else:
-                    c = "."
-            else:
-                c = "."
-            writer.write("\t")
-            writer.write(c)
+        self._write_core_fields(writer)
+        self._write_name_field(writer)
+        self._write_score_field(writer)
+        self._write_strand_field(writer)
+        self._write_thick_fields(writer)
+        self._write_item_rgb_field(writer)
+        self._write_block_fields(writer)
+
+    fn _write_core_fields[w: Writer](ref self, mut writer: w):
+        writer.write(
+            t"{self.Chrom.to_string()}\t{String(self.ChromStart)}\t{String(self.ChromEnd)}"
+        )
+
+    fn _write_name_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 4:
+            return
+        var name_str = self.Name.value().to_string() if self.Name else "."
+        writer.write(t"\t{name_str}")
+
+    fn _write_score_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 5:
+            return
+        var score_str = String(self.Score.value()) if self.Score else "0"
+        writer.write(t"\t{score_str}")
+
+    fn _write_strand_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 6:
+            return
+        var c = _strand_to_char(self.Strand)
+        writer.write(t"\t{c}")
+
+    fn _write_thick_fields[w: Writer](ref self, mut writer: w):
         if self.NumFields >= 7:
-            writer.write("\t")
-            writer.write(
-                String(self.ThickStart.value()) if self.ThickStart else String(
-                    self.ChromStart
-                )
-            )
+            var thick_start_str = String(
+                self.ThickStart.value()
+            ) if self.ThickStart else String(self.ChromStart)
+            writer.write(t"\t{thick_start_str}")
         if self.NumFields >= 8:
-            writer.write("\t")
+            var thick_end_str = String(
+                self.ThickEnd.value()
+            ) if self.ThickEnd else String(self.ChromEnd)
+            writer.write(t"\t{thick_end_str}")
+
+    fn _write_item_rgb_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 9:
+            return
+        if self.ItemRgb:
+            var rgb = self.ItemRgb.value().copy()
             writer.write(
-                String(self.ThickEnd.value()) if self.ThickEnd else String(
-                    self.ChromEnd
-                )
+                t"\t{String(rgb.r)},{String(rgb.g)},{String(rgb.b)}"
             )
-        if self.NumFields >= 9:
-            writer.write("\t")
-            if self.ItemRgb:
-                var rgb = self.ItemRgb.value().copy()
-                writer.write(String(rgb.r))
-                writer.write(",")
-                writer.write(String(rgb.g))
-                writer.write(",")
-                writer.write(String(rgb.b))
-            else:
-                writer.write("0")
-        if self.NumFields >= 12 and self.BlockSizes and self.BlockStarts:
-            writer.write("\t")
-            writer.write(String(len(self.BlockSizes.value())))
-            writer.write("\t")
-            var sizes = self.BlockSizes.value().copy()
-            for i in range(len(sizes)):
-                if i > 0:
-                    writer.write(",")
-                writer.write(String(sizes[i]))
-            writer.write("\t")
-            var starts = self.BlockStarts.value().copy()
-            for i in range(len(starts)):
-                if i > 0:
-                    writer.write(",")
-                writer.write(String(starts[i]))
+        else:
+            writer.write("\t0")
+
+    fn _write_block_fields[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 12 or not self.BlockSizes or not self.BlockStarts:
+            return
+        var sizes = self.BlockSizes.value().copy()
+        var starts = self.BlockStarts.value().copy()
+        writer.write(t"\t{String(len(sizes))}")
+        writer.write(t"\t{_comma_sep_u64_list(sizes)}")
+        writer.write(t"\t{_comma_sep_u64_list(starts)}")
