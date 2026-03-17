@@ -84,7 +84,7 @@ fn test_fastq_fai_example() raises:
 
 
 fn test_collect_helper() raises:
-    """collect() reads all rows into a list."""
+    """Collect() reads all rows into a list."""
     var data = "one\t10\t0\t10\t11\ntwo\t20\t100\t10\t11\n"
     var reader = MemoryReader(_bytes(data))
     var parser = FaiParser[MemoryReader](reader^)
@@ -113,7 +113,7 @@ fn test_non_integer_field() raises:
 
 
 fn test_iterator_over_records() raises:
-    """for-in iteration over FaiParser yields all records."""
+    """For-in iteration over FaiParser yields all records."""
     var data = (
         "one\t10\t0\t10\t11\ntwo\t20\t100\t10\t11\nthree\t30\t200\t10\t11\n"
     )
@@ -129,7 +129,7 @@ fn test_iterator_over_records() raises:
 
 
 fn test_next_record_view_and_to_record() raises:
-    """next_view() returns a view; view.to_record() equals next_record()."""
+    """Next_view() returns a view; view.to_record() equals next_record()."""
     # Use consistent column count (6) so DelimitedReader accepts both rows.
     var data = "seq1\t100\t0\t80\t81\t90\nseq2\t200\t500\t80\t81\t600\n"
     var reader = MemoryReader(_bytes(data))
