@@ -160,7 +160,7 @@ fn test_biopython_bed12() raises:
 
 fn test_bed_detection_regardless_of_extension() raises:
     """Scan all files; if content looks like BED, it must parse as BED."""
-    for name in os.listdir(test_dir):
+    for name in std.os.listdir(test_dir):
         var path = test_dir + String(name)
         var txt_opt = _read_text_if_possible(path)
         if not txt_opt:

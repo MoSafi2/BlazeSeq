@@ -232,11 +232,7 @@ struct BedView[O: Origin](Movable):
             Strand=self.strand,
             ThickStart=self.thick_start,
             ThickEnd=self.thick_end,
-            ItemRgb=(
-                Optional(
-                    self._item_rgb.value().copy()
-                ) if self._item_rgb else None
-            ),
+            ItemRgb=self._item_rgb,
             BlockSizes=block_sizes^ if block_sizes else None,
             BlockStarts=block_starts^ if block_starts else None,
             NumFields=self.num_fields,
