@@ -16,6 +16,7 @@
 # Arguments:
 #   --mode <plain|gzip|gzip-single|batch-vs-paraseq>   (default: plain)
 #   --ramfs | --tmpfs                                  (default: tmpfs)
+#   --input <path>                                    (use an existing FASTQ instead of generating synthetic)
 #   --threads <N>                                      (gzip modes only; BlazeSeq rapidgzip parallelism)
 #   --batch-size <N>                                  (batch-vs-paraseq only)
 #
@@ -26,6 +27,7 @@
 #   GZIP_BLAZESEQ_THREADS    (default: 4; gzip modes only, unless overridden by --threads)
 #   GZIP_BENCH_PARALLELISM  (if set to 1 or "single", forces gzip-single when mode is gzip*)
 #   BATCH_SIZE               (default: 4096; used for batch-vs-paraseq unless overridden by --batch-size)
+#   FASTQ_INPUT             same as `--input`
 #
 # Python integration / stdout contract:
 # - This script writes all human/log output to stderr.
@@ -57,6 +59,8 @@ MODE="plain"
 BENCH_FS="tmpfs"
 THREADS=""
 BATCH_SIZE="${BATCH_SIZE:-4096}"
+INPUT_PATH="${FASTQ_INPUT:-}"
+input_source="synthetic"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -78,6 +82,10 @@ while [ $# -gt 0 ]; do
             ;;
         --batch-size)
             BATCH_SIZE="${2:?--batch-size requires a value}"
+            shift 2
+            ;;
+        --input)
+            INPUT_PATH="${2:?--input requires a value}"
             shift 2
             ;;
         *)
@@ -244,10 +252,16 @@ case "${MODE}" in
     plain)
         set_output_files "benchmark_results"
 
-        echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
-        if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
-            echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)." >&2
-            exit 1
+        if [ -n "$INPUT_PATH" ]; then
+            input_source="provided"
+            BENCH_FILE="$INPUT_PATH"
+            echo "Using provided FASTQ for plain mode: $BENCH_FILE" >&2
+        else
+            echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
+            if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
+                echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)." >&2
+                exit 1
+            fi
         fi
 
         # --- Build Rust runners (native CPU for consistent benchmarks) ---
@@ -353,22 +367,46 @@ case "${MODE}" in
         fi
         threads_used="$GZIP_BLAZESEQ_THREADS"
 
-        echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
-        if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
-            echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)." >&2
-            exit 1
-        fi
+        CLEANUP_PLAIN_FASTQ=0
+        BENCH_GZ=""
+        if [ -n "$INPUT_PATH" ]; then
+            if [[ "$INPUT_PATH" == *.gz ]]; then
+                input_source="provided"
+                BENCH_GZ="$INPUT_PATH"
+                echo "Using provided gzip FASTQ for gzip mode: $BENCH_GZ" >&2
+            else
+                input_source="provided"
+                CLEANUP_PLAIN_FASTQ=0
+                echo "Compressing provided FASTQ to gzip: $INPUT_PATH -> (temp) $BENCH_DIR/*" >&2
+                BENCH_GZ="${BENCH_DIR}/blazeseq_input.fastq.gz"
+                if ! gzip -1 -c "$INPUT_PATH" > "${BENCH_GZ}.tmp"; then
+                    rm -f "${BENCH_GZ}.tmp" 2>/dev/null || true
+                    echo "gzip failed" >&2
+                    exit 1
+                fi
+                mv "${BENCH_GZ}.tmp" "${BENCH_GZ}"
+            fi
+        else
+            echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
+            if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
+                echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)." >&2
+                exit 1
+            fi
+            CLEANUP_PLAIN_FASTQ=1
 
-        # --- Compress to gzip and remove plain file to free space ---
-        echo "Compressing to ${BENCH_FILE}.gz ..."
-        if ! gzip -1 -c "$BENCH_FILE" > "${BENCH_FILE}.gz.tmp"; then
-            rm -f "${BENCH_FILE}.gz.tmp" 2>/dev/null || true
-            echo "gzip failed" >&2
-            exit 1
+            # --- Compress to gzip and remove plain file to free space ---
+            echo "Compressing to ${BENCH_FILE}.gz ..."
+            if ! gzip -1 -c "$BENCH_FILE" > "${BENCH_FILE}.gz.tmp"; then
+                rm -f "${BENCH_FILE}.gz.tmp" 2>/dev/null || true
+                echo "gzip failed" >&2
+                exit 1
+            fi
+            mv "${BENCH_FILE}.gz.tmp" "${BENCH_FILE}.gz"
+            if [ "$CLEANUP_PLAIN_FASTQ" = "1" ]; then
+                rm -f "$BENCH_FILE"
+            fi
+            BENCH_GZ="${BENCH_FILE}.gz"
         fi
-        mv "${BENCH_FILE}.gz.tmp" "${BENCH_FILE}.gz"
-        rm -f "$BENCH_FILE"
-        BENCH_GZ="${BENCH_FILE}.gz"
 
         # --- Build kseq gzip runner (C + zlib) ---
         KSEQ_GZIP_BIN="$SCRIPT_DIR/kseq_runner/kseq_gzip_runner"
@@ -479,10 +517,16 @@ case "${MODE}" in
     batch-vs-paraseq)
         set_output_files "benchmark_results_batch_vs_paraseq"
 
-        echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
-        if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
-            echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)." >&2
-            exit 1
+        if [ -n "$INPUT_PATH" ]; then
+            input_source="provided"
+            BENCH_FILE="$INPUT_PATH"
+            echo "Using provided FASTQ for batch-vs-paraseq mode: $BENCH_FILE" >&2
+        else
+            echo "Generating ${FASTQ_SIZE_GB}GB synthetic FASTQ at $BENCH_FILE ..."
+            if ! pixi run mojo run -I . "$SCRIPT_DIR/generate_synthetic_fastq.mojo" "$BENCH_FILE" "$FASTQ_SIZE_GB"; then
+                echo "Failed to generate ${FASTQ_SIZE_GB}GB FASTQ at $BENCH_FILE (check space on mounted ramfs)." >&2
+                exit 1
+            fi
         fi
 
         # --- Build runners (native CPU for consistent benchmarks) ---
@@ -576,6 +620,7 @@ if command -v python >/dev/null 2>&1; then
     OUT_MODE="${MODE}" OUT_MD="${output_md}" OUT_JSON="${output_json}" REF="${ref:-}" \
     WARMUP="${WARMUP_RUNS}" RUNS="${HYPERFINE_RUNS}" SIZE_GB="${FASTQ_SIZE_GB}" \
     BENCH_FS="${BENCH_FS}" THREADS_USED="${threads_used}" RECORDS="${records_val}" BASE_PAIRS="${base_pairs_val}" \
+    INPUT_SOURCE="${input_source}" INPUT_PATH="${INPUT_PATH:-}" \
     python - <<'PY' >&3
 import json, os
 mode = os.environ["OUT_MODE"]
@@ -587,6 +632,8 @@ runs = int(os.environ["RUNS"])
 size_gb = float(os.environ["SIZE_GB"])
 bench_fs = os.environ["BENCH_FS"]
 threads_used = os.environ.get("THREADS_USED", "") or None
+input_source = os.environ.get("INPUT_SOURCE", "")
+input_path = os.environ.get("INPUT_PATH", "") or None
 
 records_raw = os.environ.get("RECORDS", "null")
 base_pairs_raw = os.environ.get("BASE_PAIRS", "null")
@@ -617,6 +664,8 @@ summary = {
     "warmup_runs": warmup_runs,
     "runs": runs,
     "threads_used": threads_used,
+    "input_source": input_source,
+    "input_path": input_path,
     "counts": {
         "records": records,
         "base_pairs": base_pairs,
