@@ -72,6 +72,7 @@ numpy = ">=2.4.2,<3"
 
 [feature.benchmark.tasks]
 benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
+benchmark-fastq-batch-vs-paraseq = "bash -c './benchmark/fastq-parser/run_benchmarks_batch_vs_paraseq.sh'"
 benchmark-gzip = "bash -c './benchmark/fastq-parser/run_benchmarks_gzip.sh'"
 benchmark-gzip-single = "bash -c 'GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"

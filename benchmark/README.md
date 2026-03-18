@@ -10,6 +10,7 @@ This document describes all benchmarking options for BlazeSeq. Benchmark numbers
 | **BlazeSeq throughput** (validation regimes) | `pixi run -e benchmark benchmark-throughput-validation` | 3x3 comparison: mode (`batches`/`records`/`views`) vs validation (`none`/`ascii`/`ascii_quality`) |
 | **BlazeSeq throughput** (memory) | `pixi run -e benchmark benchmark-throughput-memory` | In-process FASTQ, parse-only timing, JSON + plots |
 | **Parser comparison** (plain) | `pixi run -e benchmark benchmark-plain` | BlazeSeq vs needletail, seq_io, kseq on 3 GB plain FASTQ |
+| **FASTQ batch vs record-set** | `pixi run -e benchmark benchmark-fastq-batch-vs-paraseq` | BlazeSeq batches vs paraseq RecordSets vs seq_io RecordSets on 3 GB FASTQ |
 | **Parser comparison** (gzip) | `pixi run -e benchmark benchmark-gzip` | Decompress + parse; BlazeSeq multi-threaded (default 4 threads) |
 | **Parser comparison** (gzip, 1 thread) | `pixi run -e benchmark benchmark-gzip-single` | Fair single-threaded comparison |
 | **Plot results** | `pixi run -e benchmark benchmark-plot` | Generate PNGs from JSON in `assets/` |

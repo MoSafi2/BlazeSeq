@@ -1,0 +1,19 @@
+[package]
+name = "seq_io_recordset_runner"
+version = "0.1.0"
+edition = "2021"
+description = "FASTQ parser benchmark runner using seq_io FASTQ RecordSet"
+
+[[bin]]
+name = "seq_io_recordset_runner"
+path = "src/main.rs"
+
+[dependencies]
+seq_io = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+

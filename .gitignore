@@ -40,6 +40,7 @@ benchmark/throughput/run_throughput_memory_blazeseq
 benchmark/fastq-parser/kseq_runner/kseq_runner
 benchmark/fastq-parser/kseq_runner/kseq_gzip_runner
 benchmark/fastq-parser/run_blazeseq
+benchmark/fastq-parser/run_blazeseq_batch
 benchmark/fastq-parser/run_blazeseq_gzip
 blazeseq_mojo_sources.txt
 benchmark/throughput/run_throughput_validation_blazeseq
