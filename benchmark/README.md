@@ -36,9 +36,9 @@ File-based benchmark scripts (plain comparison, gzip comparison, throughput) acc
 Examples (from repository root):
 
 ```bash
-./benchmark/fastq-parser/run_benchmarks.sh --ramfs
-./benchmark/fastq-parser/run_benchmarks.sh --tmpfs
-./benchmark/fastq-parser/run_benchmarks_gzip.sh --ramfs 8
+./benchmark/fastq-parser/run_benchmarks.sh --mode plain --ramfs
+./benchmark/fastq-parser/run_benchmarks.sh --mode plain --tmpfs
+./benchmark/fastq-parser/run_benchmarks.sh --mode gzip --ramfs --threads 8
 ./benchmark/throughput/run_throughput_benchmarks.sh --tmpfs
 ```
 
@@ -134,7 +134,7 @@ Compares **decompress + parse** across kseq (C + zlib), seq_io (Rust, flate2), n
 | Parser | Backend | Concurrency |
 |--------|---------|-------------|
 | kseq, needletail, seq_io | zlib / flate2 | **Single-threaded** |
-| BlazeSeq | rapidgzip | **Multi-threaded** (default 4 threads; override with script arg or `GZIP_BLAZESEQ_THREADS`) |
+| BlazeSeq | rapidgzip | **Multi-threaded** (default 4 threads; override with `--threads` or `GZIP_BLAZESEQ_THREADS`) |
 
 So the default gzip benchmark is **multi-threaded (BlazeSeq) vs single-threaded (others)**. For a fair single-threaded comparison, use the single-threaded gzip benchmark.
 
@@ -154,7 +154,7 @@ pixi run -e benchmark benchmark-gzip 0   # all available threads
 pixi run -e benchmark benchmark-gzip-single
 ```
 
-Or: `GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh`
+Or: `./benchmark/fastq-parser/run_benchmarks.sh --mode gzip-single --ramfs`
 
 ---
 
