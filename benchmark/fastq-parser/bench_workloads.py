@@ -95,7 +95,9 @@ def run_gzip_thread_scaling_benchmarks() -> dict[int, dict]:
     return results
 
 
-def run_real_dataset_benchmarks(file_path: Path, threads: int) -> dict:
+def run_real_dataset_benchmarks(
+    file_path: Path, threads: int, write_artifacts: bool
+) -> dict:
     print("Running real dataset benchmarks...")
     return run_benchmark_once(
         workload="parser",
@@ -109,7 +111,7 @@ def run_real_dataset_benchmarks(file_path: Path, threads: int) -> dict:
         batch_size=4096,
         disable_hyperthreading=False,
         plot=False,
-        write_artifacts=False,
+        write_artifacts=write_artifacts,
     )
 
 
