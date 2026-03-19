@@ -27,12 +27,13 @@ PROJ_PATH = Path("/home/mohamed/Documents/Projects/BlazeSeq")
 
 def run_benchmarks(
     mode: Literal["plain", "gzip", "gzip-single", "batch-vs-paraseq"],
-    fs: Literal["tempfs", "ramfs"],
+    fs: Literal["tmpfs", "ramfs"],
     fastq_size: float,
     runs: int,
     warmup: int,
     threads: int,
     batchsize: int,
+    disable_hyperthreading: bool,
     input_file: Path | None = None,
 ):
     # --- Environment setup ---
@@ -40,6 +41,10 @@ def run_benchmarks(
     environ["HYPERFINE_RUNS"] = str(runs)
     environ["WARMUP_RUNS"] = str(warmup)
     environ["GZIP_BLAZESEQ_THREADS"] = str(threads)
+    if disable_hyperthreading:
+        environ["DISABLE_HYPERTHREADING"] = "1"
+    else:
+        environ["DISABLE_HYPERTHREADING"] = "0"
 
     # --- Command construction ---
     cmd = [
@@ -112,3 +117,35 @@ def run_benchmarks(
         raise RuntimeError(f"Failed to parse JSON output:\n{full_stdout}") from e
 
     return result
+
+
+def run_plain_benchmarks():
+    print("Running plain benchmarks...")
+    SYNTH_PLAIN_DICT = {
+        "mode": "plain",
+        "fs": "tmpfs",
+        "fastq_size": 0,
+        "runs": 5,
+        "warmup": 2,
+        "threads": 1,
+        "batchsize": 4096,
+        "disable_hyperthreading": False,
+        "input_file": None,
+    }
+    # [0.01, 0.1, 0.5, 1, 3, 5, 10]
+    FASTQ_SIZES_GB = [0.01, 0.1, 0.5, 1, 3, 5, 10]
+    RESULTS_PLAIN: dict[int, dict[str, str]] = {}
+    for size in FASTQ_SIZES_GB:
+        SYNTH_PLAIN_DICT["fastq_size"] = size
+        result = run_benchmarks(**SYNTH_PLAIN_DICT)
+        RESULTS_PLAIN[size] = result
+
+    with open(
+        PROJ_PATH / "benchmark/bench_results/benchmark_results_plain_1_thread.json",
+        "w",
+    ) as f:
+        json.dump(RESULTS_PLAIN, f)
+
+
+if __name__ == "__main__":
+    run_plain_benchmarks()

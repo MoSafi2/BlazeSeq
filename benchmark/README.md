@@ -188,9 +188,10 @@ To reduce timing variation (frequency scaling and turbo can cause ~5–15% varia
 
 1. **Performance governor**: `cpupower frequency-set -g performance` (requires `cpupower`, e.g. `linux-tools-common`).
 2. **Disable turbo** (Intel): `echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo`. Not applied on AMD or if the path is missing.
-3. **Pin to cores**: Hyperfine runs under `taskset -c "$BENCH_CPUS"` (default core `0`). Override with `BENCH_CPUS=0-3` etc.
+3. **Disable hyperthreading / SMT** (optional): set `DISABLE_HYPERTHREADING=1` (or `true|yes|on`). Best-effort and only applies if `/sys/devices/system/cpu/smt/control` exists; requires `sudo` to write the setting.
+4. **Pin to cores**: Hyperfine runs under `taskset -c "$BENCH_CPUS"` (default core `0`). Override with `BENCH_CPUS=0-3` etc.
 
-Governor and turbo state are **restored on exit**. If `cpupower` or `taskset` is missing, the scripts still run but skip the corresponding step.
+Governor, turbo, and SMT state are **restored on exit**. If `cpupower`/`taskset` is missing, the scripts still run but skip the corresponding step.
 
 ---
 

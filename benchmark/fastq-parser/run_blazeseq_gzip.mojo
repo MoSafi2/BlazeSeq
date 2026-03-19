@@ -8,8 +8,8 @@ Usage:
     pixi run mojo run -I . benchmark/fastq-parser/run_blazeseq_gzip.mojo <path.fastq.gz>
 """
 
-from sys import argv
-from pathlib import Path
+from std.sys import argv
+from std.pathlib import Path
 from blazeseq.io.readers import RapidgzipReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 

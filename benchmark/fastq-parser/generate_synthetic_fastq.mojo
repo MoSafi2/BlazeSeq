@@ -36,9 +36,7 @@ fn main() raises:
     var target_size = Int(size_gb * Float64(GB))
     var num_reads = compute_num_reads_for_size(target_size, 100, 100)
     print(t"Generating {num_reads} reads (~{size_gb} GB)...")
-    var writer = buffered_writer_for_file(
-        Path(output_path), capacity=4 * 1024 * 1024
-    )
+    var writer = buffered_writer_for_file(Path(output_path))
     generate_synthetic_fastq_to_writer(
         writer, num_reads, 100, 100, 33, 73, "generic"
     )
