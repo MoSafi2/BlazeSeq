@@ -8,7 +8,7 @@
 #   BENCH_FORMAT          (plain | gz)   [batch_vs_paraseq requires plain]
 #   BENCH_WORKER_MODE     (plain | gzip | batch-vs-paraseq)
 #   BENCH_GZIP_THREADS    (gzip parallelism; threads==1 selects single-thread gzip)
-#   BENCH_FS              (tmpfs | ramfs)
+#   BENCH_FS              (tmpfs | ramfs | local)
 #   BENCH_INPUT_PATH     (optional; existing FASTQ file path)
 #   BENCH_FASTQ_SIZE_GB  (default: 3; used when BENCH_INPUT_PATH is empty)
 #   BENCH_WARMUP_RUNS     (default: 3)
@@ -189,10 +189,26 @@ case "${BENCH_WORKER_MODE}" in
         ;;
 esac
 
-# --- Ramfs/tmpfs mount (minimize disk I/O; no swap) ---
-BENCH_DIR="$(mktemp -d)"
-BENCH_FILE="${BENCH_DIR}/${BENCH_FILE_BASENAME}"
+# --- Storage selection ---
+# - tmpfs/ramfs: create temporary benchmark directory and optionally mount RAM-backed FS.
+# - local: use BENCH_INPUT_PATH directly; do not create temp dirs/mounts.
+BENCH_DIR=""
+BENCH_FILE=""
 MOUNTED=0
+if [ "${BENCH_FS}" = "local" ]; then
+    if [ -z "${INPUT_PATH}" ]; then
+        echo "BENCH_FS=local requires BENCH_INPUT_PATH to be set." >&2
+        exit 2
+    fi
+    if [ ! -f "${INPUT_PATH}" ]; then
+        echo "BENCH_INPUT_PATH does not exist or is not a file: ${INPUT_PATH}" >&2
+        exit 2
+    fi
+    BENCH_FILE="${INPUT_PATH}"
+else
+    BENCH_DIR="$(mktemp -d)"
+    BENCH_FILE="${BENCH_DIR}/${BENCH_FILE_BASENAME}"
+fi
 
 cleanup_mount() {
     if [ "$MOUNTED" = 1 ]; then
@@ -201,43 +217,45 @@ cleanup_mount() {
         else
             rmdir "$BENCH_DIR" 2>/dev/null || true
         fi
-    else
+    elif [ -n "$BENCH_DIR" ]; then
         rm -rf "$BENCH_DIR"
     fi
 }
 trap 'cleanup_mount; rm -f "${hyperfine_json_path:-}" 2>/dev/null || true; cpu_bench_teardown >&2' EXIT
 
-case "$(uname -s)" in
-    Linux)
-        if [ "$BENCH_FS" = "tmpfs" ]; then
-            # tmpfs requires an explicit size. We derive it from the requested FASTQ size,
-            # then add a small overhead and enforce a minimum to account for buffers/headers.
-            TMPFS_MIN_SIZE_GB="${TMPFS_MIN_SIZE_GB:-5}"
-            TMPFS_OVERHEAD_GB="${TMPFS_OVERHEAD_GB:-1}"
-            TMPFS_SIZE_GB="$(awk "BEGIN {x=${FASTQ_SIZE_GB}+${TMPFS_OVERHEAD_GB}; if (x<${TMPFS_MIN_SIZE_GB}) x=${TMPFS_MIN_SIZE_GB}; printf \"%d\", int(x+0.999999)}")"
-            _mount_cmd="sudo mount -t tmpfs -o size=${TMPFS_SIZE_GB}G tmpfs $BENCH_DIR"
-        else
-            _mount_cmd="sudo mount -t ramfs ramfs $BENCH_DIR"
-        fi
-        if $_mount_cmd 2>/dev/null; then
-            MOUNTED=1
-            sudo chown "$(id -u):$(id -g)" "$BENCH_DIR"
-        else
-            echo "Failed to mount $BENCH_FS on $BENCH_DIR. Ensure sudo is available." >&2
-            echo "Fallback: using /dev/shm (no mount)." >&2
-            rmdir "$BENCH_DIR" 2>/dev/null || true
-            BENCH_DIR="/dev/shm/${BENCH_DIR_PREFIX}_$$"
-            mkdir -p "$BENCH_DIR"
-            BENCH_FILE="${BENCH_DIR}/${BENCH_FILE_BASENAME}"
-        fi
-        ;;
-    Darwin)
-        echo "macOS: using temporary directory (not a ramdisk). See Benchmarking.md for ramdisk setup." >&2
-        ;;
-    *)
-        echo "Unknown OS: using temporary directory." >&2
-        ;;
-esac
+if [ "${BENCH_FS}" != "local" ]; then
+    case "$(uname -s)" in
+        Linux)
+            if [ "$BENCH_FS" = "tmpfs" ]; then
+                # tmpfs requires an explicit size. We derive it from the requested FASTQ size,
+                # then add a small overhead and enforce a minimum to account for buffers/headers.
+                TMPFS_MIN_SIZE_GB="${TMPFS_MIN_SIZE_GB:-5}"
+                TMPFS_OVERHEAD_GB="${TMPFS_OVERHEAD_GB:-1}"
+                TMPFS_SIZE_GB="$(awk "BEGIN {x=${FASTQ_SIZE_GB}+${TMPFS_OVERHEAD_GB}; if (x<${TMPFS_MIN_SIZE_GB}) x=${TMPFS_MIN_SIZE_GB}; printf \"%d\", int(x+0.999999)}")"
+                _mount_cmd="sudo mount -t tmpfs -o size=${TMPFS_SIZE_GB}G tmpfs $BENCH_DIR"
+            else
+                _mount_cmd="sudo mount -t ramfs ramfs $BENCH_DIR"
+            fi
+            if $_mount_cmd 2>/dev/null; then
+                MOUNTED=1
+                sudo chown "$(id -u):$(id -g)" "$BENCH_DIR"
+            else
+                echo "Failed to mount $BENCH_FS on $BENCH_DIR. Ensure sudo is available." >&2
+                echo "Fallback: using /dev/shm (no mount)." >&2
+                rmdir "$BENCH_DIR" 2>/dev/null || true
+                BENCH_DIR="/dev/shm/${BENCH_DIR_PREFIX}_$$"
+                mkdir -p "$BENCH_DIR"
+                BENCH_FILE="${BENCH_DIR}/${BENCH_FILE_BASENAME}"
+            fi
+            ;;
+        Darwin)
+            echo "macOS: using temporary directory (not a ramdisk). See Benchmarking.md for ramdisk setup." >&2
+            ;;
+        *)
+            echo "Unknown OS: using temporary directory." >&2
+            ;;
+    esac
+fi
 
 ref=""
 hyperfine_json_path=""
@@ -352,6 +370,10 @@ case "${BENCH_WORKER_MODE}" in
                 BENCH_GZ="$INPUT_PATH"
                 echo "Using provided gzip FASTQ for gzip mode: $BENCH_GZ" >&2
             else
+                if [ "${BENCH_FS}" = "local" ]; then
+                    echo "BENCH_FS=local with gzip mode requires a .gz input file (no temp compression)." >&2
+                    exit 2
+                fi
                 input_source="provided"
                 CLEANUP_PLAIN_FASTQ=0
                 echo "Compressing provided FASTQ to gzip: $INPUT_PATH -> (temp) $BENCH_DIR/*" >&2
