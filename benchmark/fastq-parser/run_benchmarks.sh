@@ -24,6 +24,7 @@
 #   FASTQ_SIZE_GB            (default: 3)
 #   WARMUP_RUNS              (default: 3)
 #   HYPERFINE_RUNS           (default: 15)
+#   DISABLE_HYPERTHREADING  (if set to 1/true/yes/on, best-effort disables SMT via /sys/devices/system/cpu/smt/control; requires sudo)
 #   GZIP_BLAZESEQ_THREADS    (default: 4; gzip modes only, unless overridden by --threads)
 #   GZIP_BENCH_PARALLELISM  (if set to 1 or "single", forces gzip-single when mode is gzip*)
 #   BATCH_SIZE               (default: 4096; used for batch-vs-paraseq unless overridden by --batch-size)
@@ -210,7 +211,12 @@ trap 'cleanup_mount; cpu_bench_teardown >&2' EXIT
 case "$(uname -s)" in
     Linux)
         if [ "$BENCH_FS" = "tmpfs" ]; then
-            _mount_cmd="sudo mount -t tmpfs -o size=5G tmpfs $BENCH_DIR"
+            # tmpfs requires an explicit size. We derive it from the requested FASTQ size,
+            # then add a small overhead and enforce a minimum to account for buffers/headers.
+            TMPFS_MIN_SIZE_GB="${TMPFS_MIN_SIZE_GB:-5}"
+            TMPFS_OVERHEAD_GB="${TMPFS_OVERHEAD_GB:-1}"
+            TMPFS_SIZE_GB="$(awk "BEGIN {x=${FASTQ_SIZE_GB}+${TMPFS_OVERHEAD_GB}; if (x<${TMPFS_MIN_SIZE_GB}) x=${TMPFS_MIN_SIZE_GB}; printf \"%d\", int(x+0.999999)}")"
+            _mount_cmd="sudo mount -t tmpfs -o size=${TMPFS_SIZE_GB}G tmpfs $BENCH_DIR"
         else
             _mount_cmd="sudo mount -t ramfs ramfs $BENCH_DIR"
         fi
