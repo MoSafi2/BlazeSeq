@@ -34,7 +34,10 @@ def run_plain_benchmarks() -> dict[float, dict]:
             write_artifacts=False,
         )
 
-    _write_json(REPO_ROOT / "benchmark/bench_results/benchmark_results_plain_1_thread.json", results)
+    _write_json(
+        REPO_ROOT / "benchmark/bench_results/benchmark_results_plain_1_thread.json",
+        results,
+    )
     return results
 
 
@@ -58,7 +61,10 @@ def run_gzip_benchmarks() -> dict[float, dict]:
             write_artifacts=False,
         )
 
-    _write_json(REPO_ROOT / "benchmark/bench_results/benchmark_results_gzipped_4_threads.json", results)
+    _write_json(
+        REPO_ROOT / "benchmark/bench_results/benchmark_results_gzipped_4_threads.json",
+        results,
+    )
     return results
 
 
@@ -82,7 +88,8 @@ def run_gzip_thread_scaling_benchmarks() -> dict[int, dict]:
         )
 
     _write_json(
-        REPO_ROOT / "benchmark/bench_results/benchmark_results_gzipped_thread_scaling.json",
+        REPO_ROOT
+        / "benchmark/bench_results/benchmark_results_gzipped_thread_scaling.json",
         results,
     )
     return results
@@ -107,6 +114,6 @@ def run_real_dataset_benchmarks(file_path: Path) -> dict:
 
 
 if __name__ == "__main__":
+    pass
     # Kept for convenience during local experiments.
-    run_plain_benchmarks()
-
+    # run_plain_benchmarks()
