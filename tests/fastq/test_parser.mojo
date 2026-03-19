@@ -7,7 +7,11 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import FileReader, MemoryReader
-from blazeseq.utils import generate_synthetic_fastq_buffer
+from blazeseq.io.buffered import buffered_writer_for_memory
+from blazeseq.utils import (
+    generate_synthetic_fastq_buffer,
+    generate_synthetic_fastq_to_writer,
+)
 from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq.CONSTS import EOF
@@ -249,6 +253,39 @@ fn test_generate_synthetic_fastq_buffer() raises:
                 "Record sequence length in [min_length, max_length]",
             )
     assert_equal(total, num_reads, "Total records equals num_reads")
+
+
+fn test_generate_synthetic_fastq_writer_matches_buffer() raises:
+    """Streaming FASTQ writer path should match in-memory generator output."""
+    var num_reads = 12
+    var min_len = 5
+    var max_len = 11
+    var min_phred = 2
+    var max_phred = 40
+
+    var expected = generate_synthetic_fastq_buffer(
+        num_reads, min_len, max_len, min_phred, max_phred, "generic"
+    )
+
+    var writer = buffered_writer_for_memory(capacity=128)
+    generate_synthetic_fastq_to_writer(
+        writer,
+        num_reads,
+        min_len,
+        max_len,
+        min_phred,
+        max_phred,
+        "generic",
+    )
+    writer.flush()
+    var streamed = writer.writer.get_data()
+
+    assert_equal(
+        len(streamed),
+        len(expected),
+        "Streamed and in-memory outputs should have same byte length",
+    )
+    assert_equal(streamed, expected, "Streamed bytes should match generated buffer")
 
 
 comptime ref_parser_large_config = ParserConfig(buffer_capacity=256)
