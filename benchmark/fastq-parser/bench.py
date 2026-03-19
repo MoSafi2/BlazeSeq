@@ -147,5 +147,64 @@ def run_plain_benchmarks():
         json.dump(RESULTS_PLAIN, f)
 
 
+def run_gzip_benchmarks():
+    print("Running gzip benchmarks...")
+    GZIPPED_SYNTH_PLAIN_DICT = {
+        "mode": "gzip",
+        "fs": "tmpfs",
+        "fastq_size": 0,
+        "runs": 5,
+        "warmup": 2,
+        "threads": 4,
+        "batchsize": 4096,
+        "disable_hyperthreading": False,
+        "input_file": None,
+    }
+    GZIIPED_RESULTS = {}
+    for size in [0.01, 0.1, 0.5, 1, 3, 5, 10]:
+        GZIPPED_SYNTH_PLAIN_DICT["fastq_size"] = size
+        result = run_benchmarks(**GZIPPED_SYNTH_PLAIN_DICT)
+        GZIIPED_RESULTS[size] = result
+
+    with open(
+        PROJ_PATH / "benchmark/bench_results/benchmark_results_gzipped_4_threads.json",
+        "w",
+    ) as f:
+        json.dump(GZIIPED_RESULTS, f)
+
+
+def run_gzip_thread_scaling_benchmarks():
+    print("Running gzip thread scaling benchmarks...")
+    GZIPPED_SYNTH_PLAIN_DICT = {
+        "mode": "gzip",
+        "fs": "tmpfs",
+        "fastq_size": 0,
+        "runs": 5,
+        "warmup": 2,
+    }
+    GZIIPED_RESULTS = {}
+    for threads in [1, 2, 4, 8, 16]:
+        GZIPPED_SYNTH_PLAIN_DICT["threads"] = threads
+        result = run_benchmarks(**GZIPPED_SYNTH_PLAIN_DICT)
+        GZIIPED_RESULTS[threads] = result
+
+    with open(
+        PROJ_PATH
+        / "benchmark/bench_results/benchmark_results_gzipped_thread_scaling.json",
+        "w",
+    ) as f:
+        json.dump(GZIIPED_RESULTS, f)
+
+
+def run_batch_vs_paraseq_benchmarks():
+    print("Running batch vs paraseq benchmarks...")
+    BATCH_VS_PARASEQ_SYNTH_PLAIN_DICT = {
+        "mode": "batch-vs-paraseq",
+        "fs": "tmpfs",
+        "fastq_size": 0,
+        "runs": 5,
+        "warmup": 2,
+    }
+
 if __name__ == "__main__":
     run_plain_benchmarks()
