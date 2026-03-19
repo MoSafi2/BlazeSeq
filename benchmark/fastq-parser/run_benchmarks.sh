@@ -1,34 +1,20 @@
 #!/usr/bin/env bash
 # Consolidated FASTQ-parser benchmark launcher.
 #
-# Modes:
-#   plain           -> benchmark_results.md/json (plain FASTQ)
-#   gzip            -> benchmark_results_gzip.md/json (decompress + parse, multi-threaded BlazeSeq)
-#   gzip-single    -> benchmark_results_gzip_single.md/json (single-threaded comparison)
-#   batch-vs-paraseq -> benchmark_results_batch_vs_paraseq.md/json (batch parsing vs record-set parsers)
+# Env-driven worker (no CLI args).
 #
-# Usage (from repo root):
-#   ./benchmark/fastq-parser/run_benchmarks.sh --mode plain --ramfs
-#   ./benchmark/fastq-parser/run_benchmarks.sh --mode gzip --ramfs --threads 8
-#   ./benchmark/fastq-parser/run_benchmarks.sh --mode gzip-single --ramfs
-#   ./benchmark/fastq-parser/run_benchmarks.sh --mode batch-vs-paraseq --ramfs --batch-size 4096
-#
-# Arguments:
-#   --mode <plain|gzip|gzip-single|batch-vs-paraseq>   (default: plain)
-#   --ramfs | --tmpfs                                  (default: tmpfs)
-#   --input <path>                                    (use an existing FASTQ instead of generating synthetic)
-#   --threads <N>                                      (gzip modes only; BlazeSeq rapidgzip parallelism)
-#   --batch-size <N>                                  (batch-vs-paraseq only)
-#
-# Environment variables (all optional):
-#   FASTQ_SIZE_GB            (default: 3)
-#   WARMUP_RUNS              (default: 3)
-#   HYPERFINE_RUNS           (default: 15)
-#   DISABLE_HYPERTHREADING  (if set to 1/true/yes/on, best-effort disables SMT via /sys/devices/system/cpu/smt/control; requires sudo)
-#   GZIP_BLAZESEQ_THREADS    (default: 4; gzip modes only, unless overridden by --threads)
-#   GZIP_BENCH_PARALLELISM  (if set to 1 or "single", forces gzip-single when mode is gzip*)
-#   BATCH_SIZE               (default: 4096; used for batch-vs-paraseq unless overridden by --batch-size)
-#   FASTQ_INPUT             same as `--input`
+# Dispatch is performed by `benchmark/fastq-parser/bench.py`, which sets:
+#   BENCH_WORKLOAD        (parser | batch_vs_paraseq)
+#   BENCH_FORMAT          (plain | gz)   [batch_vs_paraseq requires plain]
+#   BENCH_WORKER_MODE     (plain | gzip | batch-vs-paraseq)
+#   BENCH_GZIP_THREADS    (gzip parallelism; threads==1 selects single-thread gzip)
+#   BENCH_FS              (tmpfs | ramfs)
+#   BENCH_INPUT_PATH     (optional; existing FASTQ file path)
+#   BENCH_FASTQ_SIZE_GB  (default: 3; used when BENCH_INPUT_PATH is empty)
+#   BENCH_WARMUP_RUNS     (default: 3)
+#   BENCH_HYPERFINE_RUNS   (default: 15)
+#   BENCH_BATCH_SIZE     (default: 4096; used for batch_vs_paraseq)
+#   DISABLE_HYPERTHREADING (best-effort; disables SMT when available, requires sudo)
 #
 # Python integration / stdout contract:
 # - This script writes all human/log output to stderr.
@@ -45,10 +31,10 @@
 #   PY
 #
 # Output files (stable names for plotting / downstream automation):
-#   plain:           benchmark_results.md + benchmark_results.json
-#   gzip:            benchmark_results_gzip.md + benchmark_results_gzip.json
-#   gzip-single:    benchmark_results_gzip_single.md + benchmark_results_gzip_single.json
-#   batch-vs-paraseq: benchmark_results_batch_vs_paraseq.md + benchmark_results_batch_vs_paraseq.json
+#   parser/plain:                 benchmark_results.md + benchmark_results.json
+#   parser/gz + threads==1:      benchmark_results_gzip_single.md + benchmark_results_gzip_single.json
+#   parser/gz + threads!=1:      benchmark_results_gzip.md + benchmark_results_gzip.json
+#   batch_vs_paraseq:            benchmark_results_batch_vs_paraseq.md + benchmark_results_batch_vs_paraseq.json
 
 set -euo pipefail
 
@@ -56,62 +42,74 @@ set -euo pipefail
 exec 3>&1
 exec 1>&2
 
-MODE="plain"
-BENCH_FS="tmpfs"
-THREADS=""
-BATCH_SIZE="${BATCH_SIZE:-4096}"
-INPUT_PATH="${FASTQ_INPUT:-}"
+if [ "$#" -gt 0 ]; then
+    echo "run_benchmarks.sh is env-driven only; unexpected args: $*" >&2
+    exit 2
+fi
+
 input_source="synthetic"
 
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --mode)
-            MODE="${2:?--mode requires a value (plain|gzip|gzip-single|batch-vs-paraseq)}"
-            shift 2
-            ;;
-        --ramfs)
-            BENCH_FS="ramfs"
-            shift
-            ;;
-        --tmpfs)
-            BENCH_FS="tmpfs"
-            shift
-            ;;
-        --threads)
-            THREADS="${2:?--threads requires a value}"
-            shift 2
-            ;;
-        --batch-size)
-            BATCH_SIZE="${2:?--batch-size requires a value}"
-            shift 2
-            ;;
-        --input)
-            INPUT_PATH="${2:?--input requires a value}"
-            shift 2
-            ;;
-        *)
-            break
-            ;;
-    esac
-done
+BENCH_WORKLOAD="${BENCH_WORKLOAD:?BENCH_WORKLOAD must be set to 'parser' or 'batch_vs_paraseq'}"
+BENCH_FORMAT="${BENCH_FORMAT:-plain}" # parser only; batch_vs_paraseq requires 'plain'
+BENCH_FS="${BENCH_FS:-tmpfs}"
 
-# Back-compat: allow `run_benchmarks.sh --mode gzip ... <threads>` (used by older pixi invocations).
-if [ -z "${THREADS}" ] && [ "${MODE}" = "gzip" ] && [ -n "${1:-}" ]; then
-    case "$1" in
-        ''|*[!0-9]*)
+BENCH_INPUT_PATH="${BENCH_INPUT_PATH:-}"
+BENCH_GZIP_THREADS="${BENCH_GZIP_THREADS:-4}"
+
+BATCH_SIZE="${BENCH_BATCH_SIZE:-4096}"
+
+INPUT_PATH="${BENCH_INPUT_PATH}"
+
+# bench.py should set BENCH_WORKER_MODE; for compatibility we keep a small fallback mapping
+# when running with raw env vars.
+BENCH_WORKER_MODE="${BENCH_WORKER_MODE:-}"
+if [ -z "${BENCH_WORKER_MODE}" ]; then
+    case "${BENCH_WORKLOAD}" in
+        parser)
+            case "${BENCH_FORMAT}" in
+                plain) BENCH_WORKER_MODE="plain" ;;
+                gz) BENCH_WORKER_MODE="gzip" ;;
+                *)
+                    echo "Invalid BENCH_FORMAT='${BENCH_FORMAT}' (expected 'plain' or 'gz')" >&2
+                    exit 2
+                    ;;
+            esac
+            ;;
+        batch_vs_paraseq)
+            if [ "${BENCH_FORMAT}" != "plain" ]; then
+                echo "batch_vs_paraseq requires BENCH_FORMAT=plain (got '${BENCH_FORMAT}')" >&2
+                exit 2
+            fi
+            BENCH_WORKER_MODE="batch-vs-paraseq"
             ;;
         *)
-            THREADS="$1"
-            shift
+            echo "Invalid BENCH_WORKLOAD='${BENCH_WORKLOAD}' (expected 'parser' or 'batch_vs_paraseq')" >&2
+            exit 2
             ;;
     esac
 fi
 
-# Back-compat: older gzip single-thread selection relied on this env var.
-if [ "${GZIP_BENCH_PARALLELISM:-}" = "1" ] || [ "${GZIP_BENCH_PARALLELISM:-}" = "single" ]; then
-    if [ "${MODE}" = "gzip" ] || [ "${MODE}" = "gzip-single" ]; then
-        MODE="gzip-single"
-    fi
+case "${BENCH_WORKER_MODE}" in
+    plain|gzip|batch-vs-paraseq) ;;
+    *)
+        echo "Invalid BENCH_WORKER_MODE='${BENCH_WORKER_MODE}' (expected 'plain' | 'gzip' | 'batch-vs-paraseq')" >&2
+        exit 2
+        ;;
+esac
+
+FASTQ_IS_GZ=0
+if [ -n "${INPUT_PATH}" ] && [[ "${INPUT_PATH}" == *.gz ]]; then
+    FASTQ_IS_GZ=1
+fi
+
+# Fail fast on clearly wrong combinations to avoid long runner builds.
+if [ "${FASTQ_IS_GZ}" = "1" ] && [ "${BENCH_WORKER_MODE}" = "plain" ]; then
+    echo "Input looks gzipped (*.gz) but worker is BENCH_FORMAT=plain. Use BENCH_FORMAT=gz (bench.py dispatches this automatically)." >&2
+    exit 2
+fi
+if [ "${FASTQ_IS_GZ}" = "1" ] && [ "${BENCH_WORKER_MODE}" = "batch-vs-paraseq" ]; then
+    echo "batch_vs_paraseq does not support gz inputs. Provide a plain FASTQ (bench.py validates this)." >&2
+    exit 2
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -140,14 +138,15 @@ check_cmd pixi      || missing+=(pixi)
 check_cmd hyperfine || missing+=(hyperfine)
 check_cmd cargo     || missing+=(cargo)
 check_cmd rustc     || missing+=(rustc)
+check_cmd python   || missing+=(python)
 
-case "${MODE}" in
+case "${BENCH_WORKER_MODE}" in
     plain)
         if ! check_cmd gcc && ! check_cmd clang; then
             missing+=(gcc or clang)
         fi
         ;;
-    gzip|gzip-single)
+    gzip)
         check_cmd gcc   || missing+=(gcc)
         check_cmd gzip  || missing+=(gzip)
         ;;
@@ -155,7 +154,7 @@ case "${MODE}" in
         # No C compiler required (all runners are Rust/Mojo).
         ;;
     *)
-        echo "Unknown --mode: ${MODE}" >&2
+        echo "Unknown BENCH_WORKER_MODE: ${BENCH_WORKER_MODE}" >&2
         exit 2
         ;;
 esac
@@ -171,21 +170,21 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 # --- Hyperfine configuration ---
-WARMUP_RUNS="${WARMUP_RUNS:-3}"
-HYPERFINE_RUNS="${HYPERFINE_RUNS:-15}"
+WARMUP_RUNS="${BENCH_WARMUP_RUNS:-3}"
+HYPERFINE_RUNS="${BENCH_HYPERFINE_RUNS:-15}"
 
 # --- FASTQ size (GB) ---
-FASTQ_SIZE_GB="${FASTQ_SIZE_GB:-3}"
+FASTQ_SIZE_GB="${BENCH_FASTQ_SIZE_GB:-3}"
 
 # Use stable temp names for easier debugging when sudo/mount isn't available.
 BENCH_FILE_BASENAME="blazeseq_bench_${FASTQ_SIZE_GB}g.fastq"
 BENCH_DIR_PREFIX="blazeseq_bench"
-case "${MODE}" in
+case "${BENCH_WORKER_MODE}" in
     batch-vs-paraseq)
         BENCH_FILE_BASENAME="blazeseq_batch_vs_paraseq_${FASTQ_SIZE_GB}g.fastq"
         BENCH_DIR_PREFIX="blazeseq_batch_vs_paraseq"
         ;;
-    gzip|gzip-single)
+    gzip)
         BENCH_DIR_PREFIX="blazeseq_bench_gzip"
         ;;
 esac
@@ -206,7 +205,7 @@ cleanup_mount() {
         rm -rf "$BENCH_DIR"
     fi
 }
-trap 'cleanup_mount; cpu_bench_teardown >&2' EXIT
+trap 'cleanup_mount; rm -f "${hyperfine_json_path:-}" 2>/dev/null || true; cpu_bench_teardown >&2' EXIT
 
 case "$(uname -s)" in
     Linux)
@@ -241,22 +240,12 @@ case "$(uname -s)" in
 esac
 
 ref=""
-output_stem=""
-output_json=""
-output_md=""
+hyperfine_json_path=""
 threads_used=""
 
-set_output_files() {
-    # Keep JSON/MD filenames aligned by deriving them from one stem.
-    local stem="$1"
-    output_stem="$stem"
-    output_md="$REPO_ROOT/${output_stem}.md"
-    output_json="$REPO_ROOT/${output_stem}.json"
-}
-
-case "${MODE}" in
+case "${BENCH_WORKER_MODE}" in
     plain)
-        set_output_files "benchmark_results"
+        hyperfine_json_path="$(mktemp -t hyperfine_fastq_parser_plain_XXXX.json)"
 
         if [ -n "$INPUT_PATH" ]; then
             input_source="provided"
@@ -335,41 +324,23 @@ case "${MODE}" in
         hyperfine_cmd \
             --warmup "${WARMUP_RUNS}" \
             --runs "${HYPERFINE_RUNS}" \
-            --export-markdown "$output_md" \
-            --export-json "$output_json" \
+            --export-json "$hyperfine_json_path" \
             -n BlazeSeq    "$BLAZESEQ_BIN $BENCH_FILE" \
             -n needletail  "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
             -n seq_io      "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
             -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE"
 
-        echo "Results written to $(basename "$output_md") and $(basename "$output_json")"
-
-        # Plot results to assets/ (best-effort)
-        if command -v python >/dev/null 2>&1; then
-            RECORDS="${ref%% *}"
-            python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" \
-                --repo-root "$REPO_ROOT" \
-                --assets-dir "$REPO_ROOT/assets" \
-                --json "$output_json" \
-                --runs "${HYPERFINE_RUNS}" \
-                --size-gb "$FASTQ_SIZE_GB" \
-                --reads "${RECORDS:-0}" >/dev/null 2>/dev/null || true
-        fi
+        echo "Worker produced hyperfine JSON at ${hyperfine_json_path}"
         ;;
 
-    gzip|gzip-single)
-        if [ "${MODE}" = "gzip-single" ]; then
-            set_output_files "benchmark_results_gzip_single"
+    gzip)
+        hyperfine_json_path="$(mktemp -t hyperfine_fastq_parser_gzip_XXXX.json)"
+        if [ "${BENCH_GZIP_THREADS}" = "1" ]; then
             GZIP_SINGLE_THREAD=1
             GZIP_BLAZESEQ_THREADS=1
         else
-            set_output_files "benchmark_results_gzip"
             GZIP_SINGLE_THREAD=0
-            if [ -n "${THREADS}" ]; then
-                GZIP_BLAZESEQ_THREADS="$THREADS"
-            else
-                GZIP_BLAZESEQ_THREADS="${GZIP_BLAZESEQ_THREADS:-4}"
-            fi
+            GZIP_BLAZESEQ_THREADS="${BENCH_GZIP_THREADS:-4}"
         fi
         threads_used="$GZIP_BLAZESEQ_THREADS"
 
@@ -483,8 +454,7 @@ case "${MODE}" in
             hyperfine_cmd \
                 --warmup "${WARMUP_RUNS}" \
                 --runs "${HYPERFINE_RUNS}" \
-                --export-markdown "$output_md" \
-                --export-json "$output_json" \
+                --export-json "$hyperfine_json_path" \
                 -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
                 -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
                 -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
@@ -494,34 +464,18 @@ case "${MODE}" in
             hyperfine \
                 --warmup "${WARMUP_RUNS}" \
                 --runs "${HYPERFINE_RUNS}" \
-                --export-markdown "$output_md" \
-                --export-json "$output_json" \
+                --export-json "$hyperfine_json_path" \
                 -n kseq      "$KSEQ_GZIP_BIN $BENCH_GZ" \
                 -n seq_io    "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_gzip_runner $BENCH_GZ" \
                 -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_GZ" \
                 -n BlazeSeq  "$BLAZESEQ_GZIP_BIN $_blazeseq_args"
         fi
 
-        echo "Results written to $(basename "$output_md") and $(basename "$output_json")"
-
-        # Plot results to assets/ (best-effort)
-        if command -v python >/dev/null 2>&1; then
-            RECORDS="${ref%% *}"
-            PLOT_ARGS=(
-                --repo-root "$REPO_ROOT"
-                --assets-dir "$REPO_ROOT/assets"
-                --json "$output_json"
-                --runs "${HYPERFINE_RUNS}"
-                --size-gb "$FASTQ_SIZE_GB"
-                --reads "${RECORDS:-0}"
-                --threads "${GZIP_BLAZESEQ_THREADS}"
-            )
-            python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" "${PLOT_ARGS[@]}" >/dev/null 2>/dev/null || true
-        fi
+        echo "Worker produced hyperfine JSON at ${hyperfine_json_path}"
         ;;
 
     batch-vs-paraseq)
-        set_output_files "benchmark_results_batch_vs_paraseq"
+        hyperfine_json_path="$(mktemp -t hyperfine_fastq_parser_batch_XXXX.json)"
 
         if [ -n "$INPUT_PATH" ]; then
             input_source="provided"
@@ -592,25 +546,12 @@ case "${MODE}" in
         hyperfine_cmd \
             --warmup "${WARMUP_RUNS}" \
             --runs "${HYPERFINE_RUNS}" \
-            --export-markdown "$output_md" \
-            --export-json "$output_json" \
+            --export-json "$hyperfine_json_path" \
             -n BlazeSeqBatch     "$BLAZESEQ_BATCH_BIN $BENCH_FILE $BATCH_SIZE" \
             -n paraseq            "$PARASEQ_BIN $BENCH_FILE $BATCH_SIZE" \
             -n seq_io_recordset  "$SEQ_IO_RECORDSET_BIN $BENCH_FILE $BATCH_SIZE"
 
-        echo "Results written to $(basename "$output_md") and $(basename "$output_json")"
-
-        # Plot results to assets/ (best-effort)
-        if command -v python >/dev/null 2>&1; then
-            RECORDS="${ref%% *}"
-            python "$REPO_ROOT/benchmark/scripts/plot_benchmark_results.py" \
-                --repo-root "$REPO_ROOT" \
-                --assets-dir "$REPO_ROOT/assets" \
-                --json "$output_json" \
-                --runs "${HYPERFINE_RUNS}" \
-                --size-gb "$FASTQ_SIZE_GB" \
-                --reads "${RECORDS:-0}" >/dev/null 2>/dev/null || true
-        fi
+        echo "Worker produced hyperfine JSON at ${hyperfine_json_path}"
         ;;
 esac
 
@@ -623,21 +564,22 @@ if [ -n "$ref" ] && [[ "$ref" == *" "* ]]; then
 fi
 
 if command -v python >/dev/null 2>&1; then
-    OUT_MODE="${MODE}" OUT_MD="${output_md}" OUT_JSON="${output_json}" REF="${ref:-}" \
+    OUT_WORKLOAD="${BENCH_WORKLOAD}" OUT_FORMAT="${BENCH_FORMAT}" HYPERFINE_JSON_PATH="${hyperfine_json_path}" REF="${ref:-}" \
     WARMUP="${WARMUP_RUNS}" RUNS="${HYPERFINE_RUNS}" SIZE_GB="${FASTQ_SIZE_GB}" \
-    BENCH_FS="${BENCH_FS}" THREADS_USED="${threads_used}" RECORDS="${records_val}" BASE_PAIRS="${base_pairs_val}" \
+    BENCH_FS="${BENCH_FS}" GZIP_THREADS="${threads_used}" RECORDS="${records_val}" BASE_PAIRS="${base_pairs_val}" \
     INPUT_SOURCE="${input_source}" INPUT_PATH="${INPUT_PATH:-}" \
     python - <<'PY' >&3
 import json, os
-mode = os.environ["OUT_MODE"]
-output_md = os.environ["OUT_MD"]
-output_json = os.environ["OUT_JSON"]
+workload = os.environ["OUT_WORKLOAD"]
+fmt = os.environ["OUT_FORMAT"]
+hyperfine_json_path = os.environ["HYPERFINE_JSON_PATH"]
 ref = os.environ.get("REF", "")
 warmup_runs = int(os.environ["WARMUP"])
 runs = int(os.environ["RUNS"])
 size_gb = float(os.environ["SIZE_GB"])
 bench_fs = os.environ["BENCH_FS"]
-threads_used = os.environ.get("THREADS_USED", "") or None
+gzip_threads_raw = os.environ.get("GZIP_THREADS", "") or ""
+gzip_threads = int(gzip_threads_raw) if gzip_threads_raw.strip() else None
 input_source = os.environ.get("INPUT_SOURCE", "")
 input_path = os.environ.get("INPUT_PATH", "") or None
 
@@ -655,21 +597,20 @@ def parse_num(x):
 records = parse_num(records_raw)
 base_pairs = parse_num(base_pairs_raw)
 
+hyperfine_json = None
 hyperfine_results = None
-try:
-    with open(output_json, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    hyperfine_results = data.get("results")
-except Exception:
-    hyperfine_results = None
+with open(hyperfine_json_path, "r", encoding="utf-8") as f:
+    hyperfine_json = json.load(f)
+hyperfine_results = hyperfine_json.get("results") if isinstance(hyperfine_json, dict) else None
 
 summary = {
-    "mode": mode,
+    "workload": workload,
+    "format": fmt,
     "bench_fs": bench_fs,
     "fastq_size_gb": size_gb,
     "warmup_runs": warmup_runs,
     "runs": runs,
-    "threads_used": threads_used,
+    "gzip_threads": gzip_threads,
     "input_source": input_source,
     "input_path": input_path,
     "counts": {
@@ -677,8 +618,7 @@ summary = {
         "base_pairs": base_pairs,
         "raw_ref": ref if ref else None,
     },
-    "output_md": output_md,
-    "output_json": output_json,
+    "hyperfine_json": hyperfine_json,
     "hyperfine_results": hyperfine_results,
 }
 
@@ -691,6 +631,6 @@ else
         # Assumes ref has no embedded quotes (runner output is numeric "records base_pairs").
         raw_ref_json="\"${ref}\""
     fi
-    python_missing_stub="{\"mode\":\"${MODE}\",\"bench_fs\":\"${BENCH_FS}\",\"fastq_size_gb\":${FASTQ_SIZE_GB},\"warmup_runs\":${WARMUP_RUNS},\"runs\":${HYPERFINE_RUNS},\"threads_used\":\"${threads_used}\",\"counts\":{\"records\":${records_val},\"base_pairs\":${base_pairs_val},\"raw_ref\":${raw_ref_json}},\"output_md\":\"${output_md}\",\"output_json\":\"${output_json}\"}"
+    python_missing_stub=\"{\\\"workload\\\":\\\"${BENCH_WORKLOAD}\\\",\\\"format\\\":\\\"${BENCH_FORMAT}\\\",\\\"bench_fs\\\":\\\"${BENCH_FS}\\\",\\\"fastq_size_gb\\\":${FASTQ_SIZE_GB},\\\"warmup_runs\\\":${WARMUP_RUNS},\\\"runs\\\":${HYPERFINE_RUNS},\\\"gzip_threads\\\":${threads_used:-null},\\\"counts\\\":{\\\"records\\\":${records_val},\\\"base_pairs\\\":${base_pairs_val},\\\"raw_ref\\\":${raw_ref_json}},\\\"hyperfine_json\\\":null,\\\"hyperfine_results\\\":null}\"
     echo "$python_missing_stub" >&3
 fi

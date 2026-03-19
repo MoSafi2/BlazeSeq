@@ -76,10 +76,10 @@ seaborn = ">=0.13.2,<0.14"
 
 
 [feature.benchmark.tasks]
-benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh --mode plain --ramfs'"
-benchmark-fastq-batch-vs-paraseq = "bash -c './benchmark/fastq-parser/run_benchmarks.sh --mode batch-vs-paraseq --ramfs'"
-benchmark-gzip = "bash -c './benchmark/fastq-parser/run_benchmarks.sh --mode gzip --ramfs ${1:-}'"
-benchmark-gzip-single = "bash -c './benchmark/fastq-parser/run_benchmarks.sh --mode gzip-single --ramfs'"
+benchmark-plain = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs --plot'"
+benchmark-fastq-batch-vs-paraseq = "bash -c 'python benchmark/fastq-parser/bench.py run --workload batch_vs_paraseq --format plain --fs ramfs --plot'"
+benchmark-gzip = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads ${1:-4} --plot'"
+benchmark-gzip-single = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads 1 --plot'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"
 benchmark-throughput-validation = "bash -c './benchmark/throughput/run_throughput_validation_benchmarks.sh'"
 benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_benchmarks.sh"

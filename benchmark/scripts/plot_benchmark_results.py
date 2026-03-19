@@ -149,7 +149,8 @@ def plot_one(
 
     names = [r["command"] for r in results]
     means = np.array([r["mean"] for r in results])
-    stddevs = np.array([r.get("stddev", 0.0) for r in results])
+    # hyperfine can emit `"stddev": null` when runs==1; treat missing/None as 0 for error bars.
+    stddevs = np.array([float(r.get("stddev", 0.0) or 0.0) for r in results], dtype=float)
 
     n = len(names)
     x = np.arange(n)
@@ -212,7 +213,7 @@ def plot_throughput_gbps(
 
     names = [r["command"] for r in results]
     means_s = np.array([r["mean"] for r in results])
-    stddevs_s = np.array([r.get("stddev", 0.0) for r in results])
+    stddevs_s = np.array([float(r.get("stddev", 0.0) or 0.0) for r in results], dtype=float)
 
     # GB/s = data_size_gb / time_s; uncertainty via delta method: d(rate) ≈ rate * (stddev/mean)
     rates = data_size_gb / means_s
@@ -278,7 +279,8 @@ def _parse_mode_validation_results(results: list[dict]) -> tuple[list[str], list
             modes.append(mode)
         if validation not in validations:
             validations.append(validation)
-        parsed[(mode, validation)] = (float(r["mean"]), float(r.get("stddev", 0.0)))
+        stddev_raw = r.get("stddev", 0.0) or 0.0
+        parsed[(mode, validation)] = (float(r["mean"]), float(stddev_raw))
 
     mode_order = [m for m in ("batches", "records", "views") if m in modes]
     mode_order.extend([m for m in modes if m not in mode_order])
