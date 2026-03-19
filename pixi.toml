@@ -69,6 +69,11 @@ rust = ">=1.94.0,<1.95"
 python = ">=3.14.3,<3.15"
 matplotlib = ">=3.10.8,<4"
 numpy = ">=2.4.2,<3"
+ipykernel = "*"
+pandas = ">=3.0.1,<4"
+seaborn = ">=0.13.2,<0.14"
+
+
 
 [feature.benchmark.tasks]
 benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh --mode plain --ramfs'"
