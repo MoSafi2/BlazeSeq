@@ -37,7 +37,10 @@ def resolve_effective_format(
     format_requested: Literal["auto", "plain", "gz"],
 ) -> Format:
     if workload == "batch_vs_paraseq":
-        if input_path is not None and infer_format_from_input_path(input_path) != "plain":
+        if (
+            input_path is not None
+            and infer_format_from_input_path(input_path) != "plain"
+        ):
             raise ValueError("batch_vs_paraseq does not support gz inputs.")
         return "plain"
 
@@ -116,17 +119,25 @@ def validate_result(
 ) -> None:
     for k in ("workload", "format", "counts", "hyperfine_json"):
         if k not in result:
-            raise RuntimeError(f"Worker JSON missing key '{k}'. Got keys: {sorted(result.keys())}")
+            raise RuntimeError(
+                f"Worker JSON missing key '{k}'. Got keys: {sorted(result.keys())}"
+            )
 
     if result["workload"] != expected_workload:
         raise RuntimeError(
             f"Worker JSON workload mismatch: expected {expected_workload}, got {result['workload']}"
         )
     if result["format"] != expected_format:
-        raise RuntimeError(f"Worker JSON format mismatch: expected {expected_format}, got {result['format']}")
+        raise RuntimeError(
+            f"Worker JSON format mismatch: expected {expected_format}, got {result['format']}"
+        )
 
     counts = result["counts"]
-    if not isinstance(counts, dict) or "records" not in counts or "base_pairs" not in counts:
+    if (
+        not isinstance(counts, dict)
+        or "records" not in counts
+        or "base_pairs" not in counts
+    ):
         raise RuntimeError("Worker JSON counts must include 'records' and 'base_pairs'")
 
     if expected_format == "gz":
@@ -134,10 +145,14 @@ def validate_result(
         if gz_threads is None:
             raise RuntimeError("Worker JSON missing gzip_threads for gz benchmark")
         if int(gz_threads) != int(expected_gzip_threads):
-            raise RuntimeError(f"gzip_threads mismatch: expected {expected_gzip_threads}, got {gz_threads}")
+            raise RuntimeError(
+                f"gzip_threads mismatch: expected {expected_gzip_threads}, got {gz_threads}"
+            )
     else:
         if result.get("gzip_threads", None) is not None:
-            raise RuntimeError("Expected gzip_threads to be null/None for plain benchmark")
+            raise RuntimeError(
+                "Expected gzip_threads to be null/None for plain benchmark"
+            )
 
 
 def expected_artifact_stem(
@@ -151,7 +166,11 @@ def expected_artifact_stem(
     if effective_format == "plain":
         return "benchmark_results"
     # effective_format == "gz"
-    return "benchmark_results_gzip_single" if int(gzip_threads) == 1 else "benchmark_results_gzip"
+    return (
+        "benchmark_results_gzip_single"
+        if int(gzip_threads) == 1
+        else "benchmark_results_gzip"
+    )
 
 
 def run_benchmark_once(
@@ -159,7 +178,7 @@ def run_benchmark_once(
     workload: Workload,
     input_path: Path | None,
     format_requested: Literal["auto", "plain", "gz"],
-    fs: Literal["tmpfs", "ramfs"],
+    fs: Literal["tmpfs", "ramfs", "local"],
     gzip_threads: int,
     fastq_size_gb: float,
     runs: int,
@@ -169,6 +188,16 @@ def run_benchmark_once(
     plot: bool,
     write_artifacts: bool,
 ) -> dict:
+    if fs == "local" and input_path is None:
+        raise ValueError("fs='local' requires --input to point to an existing FASTQ file.")
+    if fs == "local" and input_path is not None:
+        if not input_path.exists():
+            raise FileNotFoundError(
+                f"fs='local' input file does not exist: '{input_path}'"
+            )
+        if not input_path.is_file():
+            raise ValueError(f"fs='local' input path is not a file: '{input_path}'")
+
     effective_format = resolve_effective_format(
         workload=workload,
         input_path=input_path,
@@ -217,7 +246,9 @@ def run_benchmark_once(
         threads = gzip_threads if effective_format == "gz" else None
 
         stem = expected_artifact_stem(
-            workload=workload, effective_format=effective_format, gzip_threads=gzip_threads
+            workload=workload,
+            effective_format=effective_format,
+            gzip_threads=gzip_threads,
         )
 
         hyperfine_json = result["hyperfine_json"]
@@ -261,7 +292,9 @@ def run_benchmark_once(
 
     if write_artifacts:
         stem = expected_artifact_stem(
-            workload=workload, effective_format=effective_format, gzip_threads=gzip_threads
+            workload=workload,
+            effective_format=effective_format,
+            gzip_threads=gzip_threads,
         )
         out_path = REPO_ROOT / f"{stem}.json"
         out_path.write_text(json.dumps(result["hyperfine_json"]), encoding="utf-8")
@@ -269,21 +302,36 @@ def run_benchmark_once(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Dispatcher/validator for FASTQ parser benchmarks.")
+    p = argparse.ArgumentParser(
+        description="Dispatcher/validator for FASTQ parser benchmarks."
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     run_p = sub.add_parser("run", help="Run a single benchmark.")
-    run_p.add_argument("--workload", choices=["parser", "batch_vs_paraseq"], default="parser")
+    run_p.add_argument(
+        "--workload", choices=["parser", "batch_vs_paraseq"], default="parser"
+    )
     run_p.add_argument("--input", type=Path, default=None, help="Optional FASTQ path.")
-    run_p.add_argument("--format", choices=["auto", "plain", "gz"], default="auto", help="Synthetic format.")
-    run_p.add_argument("--fs", choices=["tmpfs", "ramfs"], default="ramfs")
-    run_p.add_argument("--gzip-threads", type=int, default=4, help="Only used for gz benchmarks.")
+    run_p.add_argument(
+        "--format",
+        choices=["auto", "plain", "gz"],
+        default="auto",
+        help="Synthetic format.",
+    )
+    run_p.add_argument("--fs", choices=["tmpfs", "ramfs", "local"], default="ramfs")
+    run_p.add_argument(
+        "--gzip-threads", type=int, default=4, help="Only used for gz benchmarks."
+    )
     run_p.add_argument("--fastq-size-gb", type=float, default=3.0)
     run_p.add_argument("--warmup-runs", type=int, default=3)
     run_p.add_argument("--runs", type=int, default=15)
     run_p.add_argument("--batch-size", type=int, default=4096)
     run_p.add_argument("--disable-hyperthreading", action="store_true")
-    run_p.add_argument("--plot", action="store_true", help="Generate plots (best-effort) after successful run.")
+    run_p.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate plots (best-effort) after successful run.",
+    )
     run_p.add_argument(
         "--write-artifacts",
         action="store_true",

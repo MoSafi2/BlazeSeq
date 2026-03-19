@@ -95,14 +95,14 @@ def run_gzip_thread_scaling_benchmarks() -> dict[int, dict]:
     return results
 
 
-def run_real_dataset_benchmarks(file_path: Path) -> dict:
+def run_real_dataset_benchmarks(file_path: Path, threads: int) -> dict:
     print("Running real dataset benchmarks...")
     return run_benchmark_once(
         workload="parser",
         input_path=file_path,
         format_requested="auto",
         fs="tmpfs",
-        gzip_threads=1,
+        gzip_threads=threads,
         fastq_size_gb=0.0,
         runs=5,
         warmup_runs=2,
