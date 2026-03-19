@@ -36,9 +36,9 @@ File-based benchmark scripts (plain comparison, gzip comparison, throughput) acc
 Examples (from repository root):
 
 ```bash
-./benchmark/fastq-parser/run_benchmarks.sh --mode plain --ramfs
-./benchmark/fastq-parser/run_benchmarks.sh --mode plain --tmpfs
-./benchmark/fastq-parser/run_benchmarks.sh --mode gzip --ramfs --threads 8
+python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs
+python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs tmpfs
+python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads 8
 ./benchmark/throughput/run_throughput_benchmarks.sh --tmpfs
 ```
 
@@ -115,7 +115,7 @@ pixi run -e benchmark benchmark-plain
 Or run the script directly:
 
 ```bash
-pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
+pixi run -e benchmark python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs
 ```
 
 Results: `benchmark_results.md`, `benchmark_results.json`. Ensure at least ~5 GB RAM for the 3 GB file and tmpfs.
@@ -154,7 +154,7 @@ pixi run -e benchmark benchmark-gzip 0   # all available threads
 pixi run -e benchmark benchmark-gzip-single
 ```
 
-Or: `./benchmark/fastq-parser/run_benchmarks.sh --mode gzip-single --ramfs`
+Or: `python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads 1`
 
 ---
 
