@@ -21,13 +21,6 @@ benchmark_results.json
 benchmark_results_gzip.md
 benchmark_results_gzip.json
 
-# Throughput benchmarks (benchmark/throughput/)
-benchmark/throughput_benchmark_results.json
-benchmark/throughput_benchmark_results.md
-benchmark/throughput_memory_benchmark_results.json
-benchmark/throughput_memory_benchmark_results.md
-benchmark/throughput/run_throughput_blazeseq
-benchmark/throughput/run_throughput_memory_blazeseq
 
 # Rust (Cargo) build output — avoid watching build dirs
 **/target/
@@ -36,15 +29,6 @@ benchmark/throughput/run_throughput_memory_blazeseq
 .pixi/envs/
 .cursor/
 
-# Benchmark binaries (fastq-parser)
-benchmark/fastq-parser/kseq_runner/kseq_runner
-benchmark/fastq-parser/kseq_runner/kseq_gzip_runner
-benchmark/fastq-parser/run_blazeseq
-benchmark/fastq-parser/run_blazeseq_batch
-benchmark/fastq-parser/run_blazeseq_gzip
-blazeseq_mojo_sources.txt
-benchmark/throughput/run_throughput_validation_blazeseq
-benchmark/fastq-parser/bench_runs.ipynb
 *.pyc
 test_file_fused.mojo
 test_file_sequential.mojo

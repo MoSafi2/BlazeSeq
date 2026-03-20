@@ -1,1 +1,17 @@
 bench_results/*
+fastq-parser/kseq_runner/kseq_runner
+fastq-parser/kseq_runner/kseq_gzip_runner
+fastq-parser/run_blazeseq
+fastq-parser/run_blazeseq_batch
+fastq-parser/run_blazeseq_gzip
+throughput/run_throughput_validation_blazeseq
+fastq-parser/bench_runs.ipynb
+
+
+# Throughput benchmarks (benchmark/throughput/)
+throughput_benchmark_results.json
+throughput_benchmark_results.md
+throughput_memory_benchmark_results.json
+throughput_memory_benchmark_results.md
+throughput/run_throughput_blazeseq
+throughput/run_throughput_memory_blazeseq
