@@ -426,9 +426,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if len(snippet) < 200 and len(record._sequence) > 0:
             var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
             var seq_len = min(len(seq_str), 200 - len(snippet))
-            snippet += String(seq_str[:seq_len])
+            snippet += String(seq_str[byte=0:seq_len])
         if len(snippet) > 200:
-            snippet = snippet[:197] + "..."
+            snippet = snippet[byte=0:197] + "..."
         return snippet
 
     fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
@@ -441,9 +441,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if len(snippet) < 200:
             var seq_str = record.sequence()
             var seq_len = min(len(seq_str), 200 - len(snippet))
-            snippet += String(seq_str[:seq_len])
+            snippet += String(seq_str[byte=0:seq_len])
         if len(snippet) > 200:
-            snippet = snippet[:197] + "..."
+            snippet = snippet[byte=0:197] + "..."
         return snippet
 
 

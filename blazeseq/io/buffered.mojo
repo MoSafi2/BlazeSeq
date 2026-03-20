@@ -16,7 +16,6 @@ from blazeseq.utils import memchr, memchr_scalar
 
 
 from std.sys import (
-    is_run_in_comptime_interpreter,
     llvm_intrinsic,
     size_of,
 )
@@ -44,7 +43,7 @@ fn memmove[
         count: The number of elements to copy.
     """
     var n = count * size_of[T]()
-    if is_run_in_comptime_interpreter():
+    if __is_run_in_comptime_interpreter:
         for i in range(n):
             (dest.bitcast[Byte]() + i).store((src.bitcast[Byte]() + i).load())
     else:
