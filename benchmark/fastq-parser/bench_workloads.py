@@ -99,7 +99,7 @@ def run_real_dataset_benchmarks(
     file_path: Path, threads: int, write_artifacts: bool
 ) -> dict:
     print("Running real dataset benchmarks...")
-    return run_benchmark_once(
+    results = run_benchmark_once(
         workload="parser",
         input_path=file_path,
         format_requested="auto",
@@ -114,8 +114,18 @@ def run_real_dataset_benchmarks(
         write_artifacts=write_artifacts,
     )
 
+    _write_json(
+        REPO_ROOT
+        / f"benchmark/bench_results/benchmark_results_real_dataset_{file_path.name}.json",
+        results,
+    )
+
+    return results
+
 
 if __name__ == "__main__":
     pass
     # Kept for convenience during local experiments.
-    run_plain_benchmarks()
+    # run_plain_benchmarks()
+    # run_real_dataset_benchmarks(REPO_ROOT / "data/SRR16012060.fastq", 1, False)
+    run_real_dataset_benchmarks(REPO_ROOT / "data/SRR4381933_1.fastq", 1, False)
