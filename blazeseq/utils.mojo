@@ -192,11 +192,11 @@ fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
 
     comptime CASCADE = build_cascade[simd_width]()
 
-    if (len(haystack) - start) < simd_width:
-        for i in range(start, len(haystack)):
-            if haystack[i] == chr:
-                return i
-        return -1
+    # if (len(haystack) - start) < simd_width:
+    #     for i in range(start, len(haystack)):
+    #         if haystack[i] == chr:
+    #             return i
+    #     return -1
 
     # Do an unaligned initial read, it doesn't matter that this will overlap the next portion
     var ptr = haystack[start:].unsafe_ptr()
