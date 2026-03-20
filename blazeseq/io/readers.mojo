@@ -223,7 +223,7 @@ struct MemoryReader(Movable, Reader):
         self.position = take.position
 
 
-@doc_private
+@doc_hidden
 @fieldwise_init
 struct ZLib(Movable):
     """Wrapper for zlib library functions."""
@@ -250,12 +250,12 @@ struct ZLib(Movable):
 
         # Call the function (cast to MutExternalOrigin for FFI - Mojo 26.2 requires explicit origin for indirect calls)
         var result = func(
-            filename.as_c_string_slice().unsafe_ptr().unsafe_origin_cast[
-                MutExternalOrigin
-            ](),
-            mode.as_c_string_slice().unsafe_ptr().unsafe_origin_cast[
-                MutExternalOrigin
-            ](),
+            filename.as_c_string_slice()
+            .unsafe_ptr()
+            .unsafe_origin_cast[MutExternalOrigin](),
+            mode.as_c_string_slice()
+            .unsafe_ptr()
+            .unsafe_origin_cast[MutExternalOrigin](),
         )
 
         return result
@@ -355,7 +355,7 @@ struct GZFile(Movable, Reader):
 
         return UInt64(bytes_read)
 
-    @doc_private
+    @doc_hidden
     fn unbuffered_read[](
         mut self, buffer: Span[UInt8, MutExternalOrigin]
     ) raises -> Int:

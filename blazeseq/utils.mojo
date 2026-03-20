@@ -34,7 +34,7 @@ from blazeseq.io.writers import WriterBackend
 from blazeseq.errors import ParseError, FastxErrorCode
 
 
-@doc_private
+@doc_hidden
 @align(64)
 struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
     """
@@ -93,7 +93,7 @@ struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
         return self.record_end != 0
 
 
-@doc_private
+@doc_hidden
 @fieldwise_init
 struct SearchPhase(
     Copyable, Equatable, Movable, TrivialRegisterPassable, Writable
@@ -128,17 +128,18 @@ struct SearchPhase(
         writer.write(self.value)
 
 
-@doc_private
+@doc_hidden
 @fieldwise_init
 struct ParseContext(Copyable, Movable, TrivialRegisterPassable):
-    """Parser position context: record number, line number, file position. Used for error reporting."""
+    """Parser position context: record number, line number, file position. Used for error reporting.
+    """
 
     var record_number: Int
     var line_number: Int
     var file_position: Int64
 
 
-@doc_private
+@doc_hidden
 fn format_parse_error(
     ctx: ParseContext,
     message: String,
@@ -157,7 +158,7 @@ fn format_parse_error(
     return String(parse_err)
 
 
-@doc_private
+@doc_hidden
 fn format_parse_error(
     message: String,
     record_number: Int,
@@ -176,7 +177,7 @@ fn format_parse_error(
 
 # From extramojo pacakge, skipping version problems
 @always_inline("nodebug")
-@doc_private
+@doc_hidden
 fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Function to find the next occurrence of character.
@@ -236,7 +237,7 @@ fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     return -1
 
 
-@doc_private
+@doc_hidden
 fn build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
     var result = List[Int]()
@@ -247,7 +248,7 @@ fn build_cascade[W: Int]() -> List[Int]:
     return result^
 
 
-@doc_private
+@doc_hidden
 @always_inline("nodebug")
 fn memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
@@ -260,7 +261,7 @@ fn memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     return -1
 
 
-@doc_private
+@doc_hidden
 @always_inline
 fn _strip_spaces[
     mut: Bool, //, o: Origin[mut=mut]
@@ -284,7 +285,7 @@ fn _strip_spaces[
     return in_slice[start:end]
 
 
-@doc_private
+@doc_hidden
 @always_inline
 fn _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
@@ -306,7 +307,7 @@ fn _check_ascii[
 
 
 # Optimized posix_space check using bitmask lookup
-@doc_private
+@doc_hidden
 @always_inline
 fn is_posix_space(c: UInt8) -> Bool:
     """Return True if `c` is one of the POSIX whitespace characters."""
@@ -332,7 +333,7 @@ fn is_posix_space(c: UInt8) -> Bool:
 
 
 @always_inline
-@doc_private
+@doc_hidden
 fn _check_end_qual(
     buf: BufferedReader,
     base: Int,
@@ -372,7 +373,7 @@ fn _check_end_qual(
 
 
 @always_inline
-@doc_private
+@doc_hidden
 fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
     """Return the relative-to-base offset at which to resume scanning.
 
@@ -401,7 +402,7 @@ fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
 
 
 @always_inline
-@doc_private
+@doc_hidden
 fn _phase_to_count(phase: SearchPhase) -> Int:
     """Return how many newlines have already been found given the current phase.
 
@@ -420,7 +421,7 @@ fn _phase_to_count(phase: SearchPhase) -> Int:
 
 
 @always_inline
-@doc_private
+@doc_hidden
 fn _count_to_phase(found: Int) -> SearchPhase:
     """Convert a found-newlines count back to the SearchPhase we are now in.
 
@@ -448,7 +449,7 @@ fn _count_to_phase(found: Int) -> SearchPhase:
 
 
 @always_inline
-@doc_private
+@doc_hidden
 fn _store_newline_offset(
     mut offsets: RecordOffsets,
     found: Int,  # 1-indexed: which newline this is (1..4)
@@ -474,7 +475,7 @@ fn _store_newline_offset(
         )  # record_end is inclusive last qual byte
 
 
-@doc_private
+@doc_hidden
 fn _record_snippet[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets) -> String:
@@ -487,7 +488,7 @@ fn _record_snippet[
     return String(StringSlice(unsafe_from_utf8=sp))
 
 
-@doc_private
+@doc_hidden
 fn _validate_fastq_structure[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
@@ -510,7 +511,7 @@ fn _validate_fastq_structure[
 
 
 @always_inline
-@doc_private
+@doc_hidden
 fn _scan_record[
     o: Origin
 ](
@@ -624,7 +625,7 @@ fn _find_newline_from(
     return _from + pos + 1  # relative to base; +1 skips past the '\n'
 
 
-@doc_private
+@doc_hidden
 @always_inline
 fn _parse_schema(quality_format: String) -> QualitySchema:
     """Parse quality schema string into QualitySchema."""
@@ -693,7 +694,7 @@ fn compute_num_reads_for_size(
     return target_size_bytes // bytes_per_record
 
 
-@doc_private
+@doc_hidden
 fn _validate_synthetic_fastq_args(
     num_reads: Int,
     min_length: Int,
@@ -719,7 +720,7 @@ fn _validate_synthetic_fastq_args(
         )
 
 
-@doc_private
+@doc_hidden
 fn _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
     # Base LUT: 8 entries so index selects bases with configurable GC probability.
     # With gc_bias = 0.5: 2 G, 2 C, 2 A, 2 T (equal). Bias shifts the G/C vs A/T split.
@@ -748,7 +749,7 @@ fn _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
     return base_lut^
 
 
-@doc_private
+@doc_hidden
 fn _build_synthetic_fastq_record(
     i: Int,
     min_length: Int,
@@ -792,7 +793,9 @@ fn _build_synthetic_fastq_record(
         lcg_state = (
             lcg_state * 6364136223846793005 + 1442695040888963407
         ) & 0x7FFFFFFFFFFFFFFF
-        var slot = (lcg_state >> 33) % 8  # use upper bits for better distribution
+        var slot = (
+            lcg_state >> 33
+        ) % 8  # use upper bits for better distribution
         record.append(base_lut[slot])
     record.append(newline)
 
@@ -930,7 +933,9 @@ fn generate_synthetic_fastq_buffer(
     return out^
 
 
-fn generate_synthetic_fastq_to_writer[W: WriterBackend](
+fn generate_synthetic_fastq_to_writer[
+    W: WriterBackend
+](
     mut writer: BufferedWriter[W],
     num_reads: Int,
     min_length: Int,

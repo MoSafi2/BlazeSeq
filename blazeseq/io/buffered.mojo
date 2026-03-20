@@ -58,7 +58,7 @@ fn memmove[
 
 
 @fieldwise_init
-@doc_private
+@doc_hidden
 struct LineIteratorError(
     Copyable,
     Equatable,
@@ -483,7 +483,7 @@ struct BufferedWriter[W: WriterBackend](
             self._ptr.free()
 
 
-@doc_private
+@doc_hidden
 fn buffered_writer_for_file(
     path: Path, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[FileWriter]:
@@ -491,7 +491,7 @@ fn buffered_writer_for_file(
     return BufferedWriter[FileWriter](FileWriter(path), capacity)
 
 
-@doc_private
+@doc_hidden
 fn buffered_writer_for_memory(
     capacity: Int = DEFAULT_CAPACITY,
 ) raises -> BufferedWriter[MemoryWriter]:
@@ -499,7 +499,7 @@ fn buffered_writer_for_memory(
     return BufferedWriter[MemoryWriter](MemoryWriter(), capacity)
 
 
-@doc_private
+@doc_hidden
 fn buffered_writer_for_gzip(
     filename: String, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[GZWriter]:
@@ -507,7 +507,7 @@ fn buffered_writer_for_gzip(
     return BufferedWriter[GZWriter](GZWriter(filename), capacity)
 
 
-@doc_private
+@doc_hidden
 @always_inline
 fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     """
