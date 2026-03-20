@@ -175,7 +175,7 @@ fn format_parse_error(
     )
 
 
-# From extramojo pacakge, skipping version problems
+# # From extramojo pacakge, skipping version problems
 @always_inline()
 @doc_hidden
 fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
@@ -563,13 +563,9 @@ fn _scan_record[
     # ── SIMD aligned section ──────────────────────────────────────────────────
     var i = 0
     var aligned = math.align_down(avail, W)
-
     while i < aligned and found < 4:
         var v = ptr.load[width=W](i)
         var mask = pack_bits(v.eq(nl_splat))
-
-        # Drain all set bits from this SIMD word before moving to the next.
-        # Inner loop is ≤ 4 iterations total across the whole outer loop.
         while mask != 0 and found < 4:
             var bit = Int(count_trailing_zeros(mask))
             var abs_pos = start_rel + i + bit + 1  # first byte of next line
