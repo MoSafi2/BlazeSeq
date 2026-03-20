@@ -206,13 +206,15 @@ fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     var aligned_end = math.align_down(haystack_len, simd_width)
 
     # Now do aligned reads all through
-    for s in range(0, aligned_end, simd_width):
-        var v = ptr.load[width=simd_width](s)
+    i = 0
+    while i < aligned_end:
+        var v = ptr.load[width=simd_width](i)
         var mask = v.eq(chr)
         var packed = pack_bits(mask)
         if packed:
             var index = Int(count_trailing_zeros(packed))
-            return s + index + start
+            return i + index + start
+        i += simd_width
 
     var tail_start = aligned_end  # relative to ptr base (haystack[start:])
     var tail_len = len(haystack) - (start + tail_start)
