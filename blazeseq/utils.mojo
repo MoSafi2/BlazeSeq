@@ -176,7 +176,7 @@ fn format_parse_error(
 
 
 # From extramojo pacakge, skipping version problems
-@always_inline("nodebug")
+@always_inline()
 @doc_hidden
 fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
@@ -238,6 +238,7 @@ fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
 
 
 @doc_hidden
+@always_inline()
 fn build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
     var result = List[Int]()
@@ -596,6 +597,37 @@ fn _scan_record[
         var code = _validate_fastq_structure(view, offsets)
         return (True, offsets, _count_to_phase(found), code)
     return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
+
+
+@always_inline
+@doc_hidden
+fn _scan_record_memchr_seq[
+    o: Origin
+](
+    view: Span[Byte, o],
+    mut offsets: RecordOffsets,
+    phase: SearchPhase,
+) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
+    """Locate FASTQ record newlines using sequential memchr calls.
+
+    Mirrors `_scan_record` semantics but searches for each remaining newline
+    one-by-one with `memchr`.
+    """
+    var search_from = _phase_start_offset(offsets, phase)
+    var found = _phase_to_count(phase)
+
+    while found < 4:
+        var pos = memchr(haystack=view, chr=new_line, start=search_from)
+        if pos < 0:
+            return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
+
+        var abs_pos = pos + 1
+        found += 1
+        _store_newline_offset(offsets, found, abs_pos)
+        search_from = abs_pos
+
+    var code = _validate_fastq_structure(view, offsets)
+    return (True, offsets, SearchPhase.HEADER, code)
 
 
 @always_inline

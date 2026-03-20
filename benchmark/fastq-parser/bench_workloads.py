@@ -35,7 +35,7 @@ def run_plain_benchmarks() -> dict[float, dict]:
         )
 
     _write_json(
-        REPO_ROOT / "benchmark/bench_results/benchmark_results_plain_1_thread.json",
+        REPO_ROOT / "benchmark/bench_results/benchmark_results_plain_1_thread2.json",
         results,
     )
     return results
@@ -118,4 +118,4 @@ def run_real_dataset_benchmarks(
 if __name__ == "__main__":
     pass
     # Kept for convenience during local experiments.
-    # run_plain_benchmarks()
+    run_plain_benchmarks()
