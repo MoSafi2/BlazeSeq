@@ -45,3 +45,4 @@ benchmark/fastq-parser/run_blazeseq_gzip
 blazeseq_mojo_sources.txt
 benchmark/throughput/run_throughput_validation_blazeseq
 benchmark/fastq-parser/bench_runs.ipynb
+*.pyc

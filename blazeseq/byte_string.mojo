@@ -40,12 +40,12 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
         self.size = UInt32(len(s))
         self.cap = UInt32(len(s))
 
-    @doc_private
+    @doc_hidden
     @always_inline
     fn __del__(deinit self):
         self.ptr.free()
 
-    @doc_private
+    @doc_hidden
     @always_inline
     fn __init__(out self, *, copy: Self):
         self.cap = copy.cap
