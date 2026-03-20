@@ -46,3 +46,5 @@ blazeseq_mojo_sources.txt
 benchmark/throughput/run_throughput_validation_blazeseq
 benchmark/fastq-parser/bench_runs.ipynb
 *.pyc
+test_file_fused.mojo
+test_file_sequential.mojo
