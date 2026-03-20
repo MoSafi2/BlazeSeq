@@ -48,3 +48,5 @@ benchmark/fastq-parser/bench_runs.ipynb
 *.pyc
 test_file_fused.mojo
 test_file_sequential.mojo
+test_file_fused
+test_file_sequential
