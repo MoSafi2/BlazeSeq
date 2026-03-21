@@ -126,6 +126,6 @@ def run_real_dataset_benchmarks(
 if __name__ == "__main__":
     pass
     # Kept for convenience during local experiments.
-    # run_plain_benchmarks()
+    run_plain_benchmarks()
     # run_real_dataset_benchmarks(REPO_ROOT / "data/SRR16012060.fastq", 1, False)
-    run_real_dataset_benchmarks(REPO_ROOT / "data/SRR4381933_1.fastq", 1, False)
+    # run_real_dataset_benchmarks(REPO_ROOT / "data/SRR4381933_1.fastq", 1, False)
