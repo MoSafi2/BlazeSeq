@@ -269,7 +269,7 @@ struct FastqRecordMethods:
         var py_list = Python.evaluate("[]")
         for i in range(len(scores)):
             var append_def = py_list.__getattr__("append")
-            append_fn(Int(scores[i]))
+            append_def(Int(scores[i]))
         return py_list
 
 
