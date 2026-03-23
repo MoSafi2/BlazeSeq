@@ -51,18 +51,15 @@ rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 [tasks]
 build = "mojo package blazeseq -o BlazeSeq.mojopkg"
 test = { cmd = "sh -c 'find ./tests -name \"test_*.mojo\" | xargs -I % pixi run mojo run -I . -D ASSERT=all %'" }
-test-python-wheel = { cmd = "bash -c 'set -euo pipefail; mojo build -I . --emit shared-lib -o python/blazeseq/_extension/blazeseq_parser.so python/blazeseq_parser.mojo; cd python; uv build --wheel --config-setting plat-name=${1:-manylinux2014_x86_64}'" }
-docs = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run build"
-docs-serve = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run dev"
-rbuild = "pixi build"
-rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq-0.3.0-0.conda", depends-on = [
-    "rbuild",
-] }
 [pypi-dependencies]
 pymodo = ">=0.11.12, <0.12"
 
 [feature.docs.dependencies]
 nodejs = ">=25.7.0,<25.8"
+
+[feature.docs.tasks]
+docs = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run build"
+docs-serve = "modo build && cd docs/site && npm install && node scripts/add-frontmatter.mjs && npm run dev"
 
 [feature.benchmark.dependencies]
 hyperfine = ">=1.20.0,<2"
@@ -86,6 +83,23 @@ benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_b
 benchmark-fasta = "bash -c './benchmark/fasta-parser/run_benchmarks.sh'"
 benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets'"
 
+[feature.dev.dependencies]
+python = ">=3.12,<3.13"
+uv = ">=0.8,<1"
+pytest = ">=8.4,<9"
+act = ">=0.2.84,<0.3"
+
+
+[feature.dev.tasks]
+test-python-wheel-build = { cmd = "bash -c 'set -euo pipefail; mojo build -I . --emit shared-lib -o python/blazeseq/_extension/blazeseq_parser.so python/blazeseq_parser.mojo; cd python; uv build --wheel --config-setting plat-name=${1:-manylinux2014_x86_64}'" }
+test-python-wheel-install = { cmd = "bash -c 'set -euo pipefail; wheel=$(python -c \"from pathlib import Path; ws=sorted(Path(\\\"python/dist\\\").glob(\\\"*.whl\\\"), key=lambda p: p.stat().st_mtime); print(ws[-1])\"); uv venv .venv --clear; . .venv/bin/activate; uv pip install pytest \"$wheel\"; pytest -q tests/test_python_bindings.py'" }
+test-workflow-local = { cmd = "act --workflows .github/workflows/build-wheels.yml --job build-wheel" }
+rbuild = "pixi build"
+rtest = { cmd = "rattler-build test --package-file .pixi/build/linux-64/blazeseq-0.3.0-0.conda", depends-on = [
+    "rbuild",
+] }
+
 [environments]
 docs = ["default", "docs"]
 benchmark = ["default", "benchmark"]
+dev = ["default", "dev"]

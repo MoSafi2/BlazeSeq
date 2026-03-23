@@ -35,33 +35,13 @@ jobs:
           cache: true
 
       - name: Install Mojo and dependencies
-        run: pixi install
-
-      - name: Build Mojo extension
-        run: |
-          pixi run mojo build -I . --emit shared-lib \
-            -o python/blazeseq/_extension/blazeseq_parser.so \
-            python/blazeseq_parser.mojo
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        run: pixi install -e dev
 
       - name: Build wheel
-        run: |
-          cd python
-          uv build --wheel --config-setting plat-name=${{ matrix.plat-name }}
-
-      - name: Create venv
-        run: |
-          uv venv .venv
-          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
-
-      - name: Install wheel
-        run: uv pip install python/dist/*.whl
+        run: pixi run -e dev test-python-wheel-build -- ${{ matrix.plat-name }}
 
       - name: Test wheel
-        run: python tests/test_python_bindings.py
+        run: pixi run -e dev test-python-wheel-install
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
