@@ -18,7 +18,7 @@ from blazeseq.CONSTS import EOF
 from blazeseq.io.readers import FileReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("Usage: run_blazeseq.mojo <path.fastq> [scan_mode]")

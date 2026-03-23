@@ -28,7 +28,7 @@ struct FastaRecord(
     var _sequence: BString
 
     @always_inline
-    fn __init__(
+    def __init__(
         out self,
         id: String,
         sequence: String,
@@ -38,7 +38,7 @@ struct FastaRecord(
         self._sequence = BString(sequence)
 
     @always_inline
-    fn __init__(
+    def __init__(
         out self,
         id: Span[Byte, _],
         sequence: Span[Byte, _],
@@ -47,7 +47,7 @@ struct FastaRecord(
         self._sequence = BString(sequence)
 
     @always_inline
-    fn __init__(
+    def __init__(
         out self,
         var id: BString,
         var sequence: BString,
@@ -56,7 +56,7 @@ struct FastaRecord(
         self._sequence = sequence^
 
     @always_inline
-    fn sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    def sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
             ptr=self._sequence.ptr.unsafe_mut_cast[
@@ -67,7 +67,7 @@ struct FastaRecord(
         return StringSlice(unsafe_from_utf8=span)
 
     @always_inline
-    fn id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    def id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the read identifier (id without leading '>') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
@@ -79,7 +79,7 @@ struct FastaRecord(
         return StringSlice(unsafe_from_utf8=span)
 
     @always_inline
-    fn definition(self) -> Definition:
+    def definition(self) -> Definition:
         var id_str = self._id.as_string_slice()
         var parts = id_str.split(" ")
         var id = parts[0].strip()
@@ -94,13 +94,13 @@ struct FastaRecord(
         return Definition(Id=id_ascii^, Description=None)
 
     @always_inline
-    fn byte_len(self) -> Int:
+    def byte_len(self) -> Int:
         """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\").
         """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
     @always_inline
-    fn write[w: Writer](self, mut writer: w, line_width: Int = 60):
+    def write[w: Writer](self, mut writer: w, line_width: Int = 60):
         """Write the record in standard FASTA format."""
         var width = line_width
         if width <= 0:
@@ -119,26 +119,26 @@ struct FastaRecord(
             i = j
 
     @always_inline
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         self.write(writer)
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
         return len(self._sequence)
 
     @always_inline
-    fn __hash__[H: Hasher](self, mut hasher: H):
+    def __hash__[H: Hasher](self, mut hasher: H):
         hasher.update(self._sequence.as_string_slice())
 
     @always_inline
-    fn __eq__(self, other: Self) -> Bool:
+    def __eq__(self, other: Self) -> Bool:
         return self._sequence == other._sequence
 
-    fn __ne__(self, other: Self) -> Bool:
+    def __ne__(self, other: Self) -> Bool:
         return not self.__eq__(other)
 
-    fn __repr__(self) -> String:
+    def __repr__(self) -> String:
         var string = String()
         self.write_to(string)
         return string

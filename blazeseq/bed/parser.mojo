@@ -34,7 +34,7 @@ from blazeseq.utils import format_parse_error, ParseContext
 comptime BED_TAB: Byte = 9  # ord('\t')
 
 
-fn _is_valid_bed_field_count(n: Int) -> Bool:
+def _is_valid_bed_field_count(n: Int) -> Bool:
     return (
         n == 3
         or n == 4
@@ -47,7 +47,7 @@ fn _is_valid_bed_field_count(n: Int) -> Bool:
     )
 
 
-fn _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
+def _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
     var result: UInt64 = 0
     var n = len(span)
 
@@ -65,7 +65,7 @@ fn _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
     return result
 
 
-fn _parse_strand(span: Span[UInt8, _]) raises -> Strand:
+def _parse_strand(span: Span[UInt8, _]) raises -> Strand:
     if len(span) != 1:
         raise Error("strand must be one character: +, -, or .")
     var c = span[0]
@@ -78,14 +78,14 @@ fn _parse_strand(span: Span[UInt8, _]) raises -> Strand:
     raise Error("strand must be +, -, or .")
 
 
-fn _parse_score(span: Span[UInt8, _]) raises -> Int:
+def _parse_score(span: Span[UInt8, _]) raises -> Int:
     var v = _parse_uint64_from_span(span)
     if v < 0 or v > 1000:
         raise Error("score must be in [0, 1000]")
     return Int(v)
 
 
-fn _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
+def _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
     var s = StringSlice(unsafe_from_utf8=span)
     var trimmed = s.strip()
     if trimmed == "0":
@@ -131,7 +131,7 @@ struct _BedRequiredParsed(Movable):
     var chrom_end: UInt64
     var num_fields: Int
 
-    fn __init__(
+    def __init__(
         out self,
         *,
         chrom_span: Span[UInt8, MutExternalOrigin],
@@ -158,7 +158,7 @@ struct _BedOptionalFields[O: Origin](Movable):
     var block_sizes_span: Optional[Span[UInt8, Self.O]]
     var block_starts_span: Optional[Span[UInt8, Self.O]]
 
-    fn __init__(
+    def __init__(
         out self,
         *,
         name: Optional[Span[UInt8, Self.O]],
@@ -190,11 +190,11 @@ struct _BedOptionalFields[O: Origin](Movable):
 struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """Line policy for BED: skip blank lines and lines starting with #."""
 
-    fn __init__(out self):
+    def __init__(out self):
         pass
 
     @always_inline
-    fn classify(self, line: Span[UInt8, _]) -> LineAction:
+    def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
         if line[0] == UInt8(ord("#")):
@@ -202,7 +202,7 @@ struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
         return LineAction.YIELD
 
     @always_inline
-    fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
+    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
         ...
 
 
@@ -221,20 +221,20 @@ struct BedParser[R: Reader](Iterable, Movable):
 
     var _rows: DelimitedReader[Self.R, BedLinePolicy, 32]
 
-    fn __init__(out self, var reader: Self.R) raises:
+    def __init__(out self, var reader: Self.R) raises:
         self._rows = DelimitedReader[Self.R, BedLinePolicy, 32](
             reader^, delimiter=BED_TAB, has_header=False
         )
 
     @always_inline
-    fn has_more(self) -> Bool:
+    def has_more(self) -> Bool:
         return self._rows.has_more()
 
     @always_inline
-    fn _parse_context(ref self) -> ParseContext:
+    def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
-    fn _parse_bed_required(
+    def _parse_bed_required(
         ref self,
         view: DelimitedView[MutExternalOrigin, 32],
     ) raises -> _BedRequiredParsed:
@@ -266,7 +266,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             num_fields=n,
         )
 
-    fn _parse_bed_optional_fields(
+    def _parse_bed_optional_fields(
         ref self,
         view: DelimitedView[MutExternalOrigin, 32],
         n: Int,
@@ -328,7 +328,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_starts_span=block_starts_span_opt,
         )
 
-    fn next_view(mut self) raises -> BedView[MutExternalOrigin]:
+    def next_view(mut self) raises -> BedView[MutExternalOrigin]:
         """Return the next BED record as a zero-alloc view.
 
         Raises:
@@ -359,19 +359,19 @@ struct BedParser[R: Reader](Iterable, Movable):
             num_fields=required.num_fields,
         )
 
-    fn next_record(mut self) raises -> BedRecord:
+    def next_record(mut self) raises -> BedRecord:
         """Return the next BED record as an owned BedRecord."""
         return self.next_view().to_record()
 
-    fn views(ref self) -> _BedParserViewIter[Self.R, origin_of(self)]:
+    def views(ref self) -> _BedParserViewIter[Self.R, origin_of(self)]:
         """Iterator yielding zero-alloc BedViews."""
         return _BedParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
 
-    fn records(ref self) -> _BedParserRecordIter[Self.R, origin_of(self)]:
+    def records(ref self) -> _BedParserRecordIter[Self.R, origin_of(self)]:
         """Iterator yielding owned BedRecords."""
         return _BedParserRecordIter[Self.R, origin_of(self)](Pointer(to=self))
 
-    fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
         return self.records()
 
 
@@ -380,18 +380,18 @@ struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
 
     var _src: Pointer[BedParser[Self.R], Self.origin]
 
-    fn __init__(out self, src: Pointer[BedParser[Self.R], Self.origin]):
+    def __init__(out self, src: Pointer[BedParser[Self.R], Self.origin]):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[BedParser[Self.R], MutExternalOrigin]](
             self._src
         )
@@ -411,18 +411,18 @@ struct _BedParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     var _src: Pointer[BedParser[Self.R], Self.origin]
 
-    fn __init__(out self, src: Pointer[BedParser[Self.R], Self.origin]):
+    def __init__(out self, src: Pointer[BedParser[Self.R], Self.origin]):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[BedParser[Self.R], MutExternalOrigin]](
             self._src
         )

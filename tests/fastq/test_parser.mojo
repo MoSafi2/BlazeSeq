@@ -20,7 +20,7 @@ from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 comptime test_dir = "tests/test_data/fastq_parser/"
 
 
-fn create_non_ascii_fastq_data() -> List[Byte]:
+def create_non_ascii_fastq_data() -> List[Byte]:
     var data = List[Byte]()
     data.append(Byte(ord("@")))
     data.append(Byte(ord("r")))
@@ -39,7 +39,7 @@ fn create_non_ascii_fastq_data() -> List[Byte]:
     return data^
 
 
-fn test_record_parser_for_loop() raises:
+def test_record_parser_for_loop() raises:
     """Basic ``for record in parser.records()`` iteration."""
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
     var reader = MemoryReader(content.as_bytes())
@@ -67,7 +67,7 @@ fn test_record_parser_for_loop() raises:
     )
 
 
-fn test_record_parser_for_loop_stop_iteration() raises:
+def test_record_parser_for_loop_stop_iteration() raises:
     """Iterator raises StopIteration at EOF; second loop yields no records."""
     var content = "@r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
@@ -84,7 +84,7 @@ fn test_record_parser_for_loop_stop_iteration() raises:
     assert_equal(count_after, 0, "Should not iterate after EOF")
 
 
-fn test_record_parser_ascii_validation_enabled() raises:
+def test_record_parser_ascii_validation_enabled() raises:
     """Non-ASCII bytes should fail when ParserConfig(check_ascii=True)."""
     var content = create_non_ascii_fastq_data()
     var reader = MemoryReader(content^)
@@ -97,7 +97,7 @@ fn test_record_parser_ascii_validation_enabled() raises:
         _ = parser.next_record()
 
 
-fn test_record_parser_ascii_validation_disabled() raises:
+def test_record_parser_ascii_validation_disabled() raises:
     """Non-ASCII bytes should parse when ParserConfig(check_ascii=False)."""
     var content = create_non_ascii_fastq_data()
     var reader = MemoryReader(content^)
@@ -119,7 +119,7 @@ fn test_record_parser_ascii_validation_disabled() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_batched_parser_for_loop() raises:
+def test_batched_parser_for_loop() raises:
     """FastqParser.batches() yields FastqBatch with correct record count."""
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n@r3\nNNNN\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
@@ -138,7 +138,7 @@ fn test_batched_parser_for_loop() raises:
     assert_equal(len(batches[1]), 1, "Second batch should have 1 record")
 
 
-fn test_batched_parser_batch_size_respected() raises:
+def test_batched_parser_batch_size_respected() raises:
     """Custom batch_size limits records per batch."""
     var content = (
         "@a\nA\n+\n!\n@b\nB\n+\n!\n@c\nC\n+\n!\n@d\nD\n+\n!\n@e\nE\n+\n!\n"
@@ -160,7 +160,7 @@ fn test_batched_parser_batch_size_respected() raises:
     )
 
 
-fn test_batched_parser_single_batch_content() raises:
+def test_batched_parser_single_batch_content() raises:
     """Batch content matches parsed records (get_record / header and sequence).
     """
     var content = "@seq1\nACGT\n+\n!!!!\n"
@@ -177,7 +177,7 @@ fn test_batched_parser_single_batch_content() raises:
     assert_equal(rec._quality.to_string(), "!!!!", "Quality should match")
 
 
-fn test_batched_parser_empty_input() raises:
+def test_batched_parser_empty_input() raises:
     """Empty FASTQ input yields no batches (iterator produces nothing)."""
     var content = ""
     var reader = MemoryReader(content.as_bytes())
@@ -191,7 +191,7 @@ fn test_batched_parser_empty_input() raises:
     assert_equal(count, 0, "No batches from empty input")
 
 
-fn test_batched_parser_has_more() raises:
+def test_batched_parser_has_more() raises:
     """`has_more()` is True before consumption and False after all records consumed.
     """
     var content = "@r1\nA\n+\n!\n"
@@ -208,7 +208,7 @@ fn test_batched_parser_has_more() raises:
     )
 
 
-fn test_batched_parser_schema() raises:
+def test_batched_parser_schema() raises:
     """FastqParser accepts quality schema string (e.g. sanger) and parses correctly.
     """
     var content = "@id\nACGT\n+\n!!!!\n"
@@ -225,7 +225,7 @@ fn test_batched_parser_schema() raises:
     )
 
 
-fn test_generate_synthetic_fastq_buffer() raises:
+def test_generate_synthetic_fastq_buffer() raises:
     """Synthetic FASTQ buffer from utils produces valid FASTQ; MemoryReader + FastqParser.batches() yield expected counts and lengths.
     """
     var num_reads = 20
@@ -255,7 +255,7 @@ fn test_generate_synthetic_fastq_buffer() raises:
     assert_equal(total, num_reads, "Total records equals num_reads")
 
 
-fn test_generate_synthetic_fastq_writer_matches_buffer() raises:
+def test_generate_synthetic_fastq_writer_matches_buffer() raises:
     """Streaming FASTQ writer path should match in-memory generator output."""
     var num_reads = 12
     var min_len = 5
@@ -291,7 +291,7 @@ fn test_generate_synthetic_fastq_writer_matches_buffer() raises:
 comptime ref_parser_large_config = ParserConfig(buffer_capacity=256)
 
 
-fn test_ref_parser_fast_path_all_lines_in_buffer() raises:
+def test_ref_parser_fast_path_all_lines_in_buffer() raises:
     """FastqParser.next_view() parses records when all four lines fit in buffer (fast path).
     """
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n!!!!\n"
@@ -324,7 +324,7 @@ comptime ref_parser_growth_config = ParserConfig(
 )
 
 
-fn test_ref_parser_fallback_record_span_chunks() raises:
+def test_ref_parser_fallback_record_span_chunks() raises:
     """FastqParser.next_view() parses correctly when record spans two chunks (fallback path).
     """
     var content = "@r1\nACGT\n+\n!!!!\n"
@@ -346,7 +346,7 @@ fn test_ref_parser_fallback_record_span_chunks() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_record_parser_fallback_record_span_chunks() raises:
+def test_record_parser_fallback_record_span_chunks() raises:
     """FastqParser.next_record() parses correctly when record spans two chunks.
     """
     var content = "@r1\nACGT\n+\n!!!!\n"
@@ -361,7 +361,7 @@ fn test_record_parser_fallback_record_span_chunks() raises:
         _ = parser.next_record()
 
 
-fn test_record_parser_multiple_records_span_chunks() raises:
+def test_record_parser_multiple_records_span_chunks() raises:
     """FastqParser.next_record(): multiple records with small buffer so lines span chunks.
     """
     var content = "@r1\nA\n+\n!\n@r2\nB\n+\n!\n@r3\nC\n+\n!\n"
@@ -383,7 +383,7 @@ fn test_record_parser_multiple_records_span_chunks() raises:
         _ = parser.next_record()
 
 
-fn test_record_parser_records_iterator_span_chunks() raises:
+def test_record_parser_records_iterator_span_chunks() raises:
     """FastqParser.records() yields correct records when parsing across chunks.
     """
     var content = "@a\nAC\n+\n!!\n@b\nTG\n+\n##\n"
@@ -403,7 +403,7 @@ fn test_record_parser_records_iterator_span_chunks() raises:
     assert_equal(records[1]._quality.to_string(), "##", "Second record quality")
 
 
-fn test_ref_parser_multiple_records_next_loop() raises:
+def test_ref_parser_multiple_records_next_loop() raises:
     """FastqParser: two records via next_view(), then EOF (mirror records() for-loop).
     """
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
@@ -422,7 +422,7 @@ fn test_ref_parser_multiple_records_next_loop() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_for_loop_iteration() raises:
+def test_ref_parser_for_loop_iteration() raises:
     """FastqParser: for view in parser.views() yields records; count and content match.
     """
     var content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
@@ -443,7 +443,7 @@ fn test_ref_parser_for_loop_iteration() raises:
     assert_equal(last_seq, "TGCA", "Last record sequence")
 
 
-fn test_ref_parser_eof_after_one_record() raises:
+def test_ref_parser_eof_after_one_record() raises:
     """FastqParser: single record, second next_view() raises EOF."""
     var content = "@r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
@@ -457,7 +457,7 @@ fn test_ref_parser_eof_after_one_record() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_empty_input() raises:
+def test_ref_parser_empty_input() raises:
     """FastqParser: empty input, first next_view() raises EOF."""
     var content = ""
     var reader = MemoryReader(content.as_bytes())
@@ -467,7 +467,7 @@ fn test_ref_parser_empty_input() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_invalid_header() raises:
+def test_ref_parser_invalid_header() raises:
     """FastqParser: first line not starting with @ raises."""
     var content = "r1\nACGT\n+\n!!!!\n"
     var reader = MemoryReader(content.as_bytes())
@@ -477,7 +477,7 @@ fn test_ref_parser_invalid_header() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_mismatched_seq_qual_length() raises:
+def test_ref_parser_mismatched_seq_qual_length() raises:
     """FastqParser: seq and qual line length mismatch raises in hot loop."""
     var content = "@r1\nACGT\n+\n!!!\n"
     var reader = MemoryReader(content.as_bytes())
@@ -489,7 +489,7 @@ fn test_ref_parser_mismatched_seq_qual_length() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_multiple_records_span_chunks() raises:
+def test_ref_parser_multiple_records_span_chunks() raises:
     """FastqParser: three records with small buffer so at least one spans chunks.
     """
     var content = "@r1\nA\n+\n!\n@r2\nB\n+\n!\n@r3\nC\n+\n!\n"
@@ -511,7 +511,7 @@ fn test_ref_parser_multiple_records_span_chunks() raises:
         _ = parser.next_view()
 
 
-fn _ref_parser_long_record_content() -> String:
+def _ref_parser_long_record_content() -> String:
     """One FASTQ record with sequence and quality length 20 (longer than small buffer).
     """
     var seq = String("")
@@ -524,7 +524,7 @@ fn _ref_parser_long_record_content() -> String:
 
 
 # Disabled for now
-fn test_ref_parser_long_line_with_growth() raises:
+def test_ref_parser_long_line_with_growth() raises:
     """FastqParser: one record with line longer than buffer, buffer_growth_enabled=True.
     """
     var content = _ref_parser_long_record_content()
@@ -543,7 +543,7 @@ fn test_ref_parser_long_line_with_growth() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_long_line_without_growth() raises:
+def test_ref_parser_long_line_without_growth() raises:
     """FastqParser: line longer than buffer and buffer_growth_enabled=False raises.
     """
     var content = _ref_parser_long_record_content()
@@ -558,7 +558,7 @@ fn test_ref_parser_long_line_without_growth() raises:
         _ = parser.next_view()
 
 
-fn test_ref_parser_ascii_validation_enabled() raises:
+def test_ref_parser_ascii_validation_enabled() raises:
     """FastqParser: non-ASCII bytes fail when ParserConfig(check_ascii=True)."""
     var content = create_non_ascii_fastq_data()
     var reader = MemoryReader(content^)
@@ -572,7 +572,7 @@ fn test_ref_parser_ascii_validation_enabled() raises:
 
 
 # Failing Test, TODO: Fix
-# fn test_ref_parser_ascii_validation_disabled() raises:
+# def test_ref_parser_ascii_validation_disabled() raises:
 #     """FastqParser: non-ASCII bytes parse when ParserConfig(check_ascii=False).
 #     """
 #     var content = create_non_ascii_fastq_data()
@@ -596,7 +596,7 @@ comptime ref_parser_file_config = ParserConfig(
 )
 
 
-fn test_ref_parser_valid_file_parity() raises:
+def test_ref_parser_valid_file_parity() raises:
     """FastqParser: parse valid test_data file, count records and spot-check first.
     """
     var parser = FastqParser[FileReader, ref_parser_file_config](
@@ -618,5 +618,5 @@ fn test_ref_parser_valid_file_parity() raises:
     assert_true(count >= 1, "At least one record from valid file")
 
 
-fn main() raises:
+def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

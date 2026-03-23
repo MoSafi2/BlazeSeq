@@ -25,7 +25,7 @@ from blazeseq.io.readers import Reader
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn _bytes(s: String) -> List[Byte]:
+def _bytes(s: String) -> List[Byte]:
     """Convert a String literal to an owned List[Byte] for MemoryReader."""
     var out = List[Byte]()
     for b in s.as_bytes():
@@ -45,17 +45,17 @@ struct ChunkedMemoryReader(Movable, Reader):
     var position: Int
     var chunk_size: Int
 
-    fn __init__(out self, var data: List[Byte], chunk_size: Int):
+    def __init__(out self, var data: List[Byte], chunk_size: Int):
         self.data = data^
         self.position = 0
         self.chunk_size = chunk_size
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         self.data = take.data^
         self.position = take.position
         self.chunk_size = take.chunk_size
 
-    fn read_to_buffer(
+    def read_to_buffer(
         mut self,
         mut buf: Span[Byte, MutExternalOrigin],
         amt: Int,
@@ -87,7 +87,7 @@ struct ChunkedMemoryReader(Movable, Reader):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn test_single_record_single_line() raises:
+def test_single_record_single_line() raises:
     """Single-record, single-line sequence."""
     var data = ">id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -106,7 +106,7 @@ fn test_single_record_single_line() raises:
     _ = rec
 
 
-fn test_single_record_multiline() raises:
+def test_single_record_multiline() raises:
     """Single-record, multi-line sequence is normalized to a single line."""
     var data = ">id1\nACG\nTTA\nGG\n"
     var reader = MemoryReader(_bytes(data))
@@ -120,7 +120,7 @@ fn test_single_record_multiline() raises:
     _ = rec
 
 
-fn test_multiple_records_back_to_back() raises:
+def test_multiple_records_back_to_back() raises:
     """Multiple records where the next header immediately follows a sequence."""
     var data = ">id1\nACGT\n>id2\nTTAA\n"
     var reader = MemoryReader(_bytes(data))
@@ -137,7 +137,7 @@ fn test_multiple_records_back_to_back() raises:
     _ = rec1
 
 
-fn test_record_end_at_eof_without_newline() raises:
+def test_record_end_at_eof_without_newline() raises:
     """Record ending at EOF without a terminal newline is accepted."""
     var data = ">id1\nACGT"
     var reader = MemoryReader(_bytes(data))
@@ -150,7 +150,7 @@ fn test_record_end_at_eof_without_newline() raises:
     _ = rec
 
 
-fn test_invalid_first_line_not_header() raises:
+def test_invalid_first_line_not_header() raises:
     """A first non-empty line not starting with '>' must raise a parse error."""
     var data = "ACGT\n>id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -172,7 +172,7 @@ fn test_invalid_first_line_not_header() raises:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn _fasta_bytes_with_non_ascii_in_id() -> List[Byte]:
+def _fasta_bytes_with_non_ascii_in_id() -> List[Byte]:
     """FASTA with non-ASCII byte (0x80) in the id line after '>'."""
     var data = List[Byte]()
     data.append(Byte(ord(">")))
@@ -188,7 +188,7 @@ fn _fasta_bytes_with_non_ascii_in_id() -> List[Byte]:
     return data^
 
 
-fn _fasta_bytes_with_non_ascii_in_sequence() -> List[Byte]:
+def _fasta_bytes_with_non_ascii_in_sequence() -> List[Byte]:
     """FASTA with non-ASCII byte (0x80) in the sequence."""
     var data = List[Byte]()
     data.append(Byte(ord(">")))
@@ -205,7 +205,7 @@ fn _fasta_bytes_with_non_ascii_in_sequence() -> List[Byte]:
     return data^
 
 
-fn test_ascii_validation_non_ascii_in_id() raises:
+def test_ascii_validation_non_ascii_in_id() raises:
     """Non-ASCII byte in FASTA id line raises with 'Non ASCII' message."""
     var data = _fasta_bytes_with_non_ascii_in_id()
     var reader = MemoryReader(data^)
@@ -216,7 +216,7 @@ fn test_ascii_validation_non_ascii_in_id() raises:
         _ = parser.next_record()
 
 
-fn test_ascii_validation_non_ascii_in_sequence() raises:
+def test_ascii_validation_non_ascii_in_sequence() raises:
     """Non-ASCII byte in FASTA sequence raises with 'Non ASCII' message."""
     var data = _fasta_bytes_with_non_ascii_in_sequence()
     var reader = MemoryReader(data^)
@@ -227,7 +227,7 @@ fn test_ascii_validation_non_ascii_in_sequence() raises:
         _ = parser.next_record()
 
 
-fn test_records_iterator() raises:
+def test_records_iterator() raises:
     """For-in iterator over FastaParser yields all records with correct data."""
     var data = ">id1\nAC\nGT\n>id2\nTT\nAA\n"
     var reader = MemoryReader(_bytes(data))
@@ -249,7 +249,7 @@ fn test_records_iterator() raises:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn test_iterator_ten_records() raises:
+def test_iterator_ten_records() raises:
     """`for-in` iterator yields exactly ten records with correct sequences."""
     var data = String("")
     for i in range(10):
@@ -266,7 +266,7 @@ fn test_iterator_ten_records() raises:
     assert_equal(count, 10, "Iterator should yield exactly 10 records")
 
 
-fn test_next_record_loop_ten_records() raises:
+def test_next_record_loop_ten_records() raises:
     """`next_record()` with `has_more()` correctly reads ten records in a loop.
     """
     var data = String("")
@@ -286,7 +286,7 @@ fn test_next_record_loop_ten_records() raises:
     assert_equal(count, 10, "next_record loop should yield exactly 10 records")
 
 
-fn test_next_record_exhausted_raises_eof() raises:
+def test_next_record_exhausted_raises_eof() raises:
     """`next_record()` raises EOFError once all records have been consumed."""
     var data = ">id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -304,7 +304,7 @@ fn test_next_record_exhausted_raises_eof() raises:
     assert_true(raised, "Expected EOFError after all records consumed")
 
 
-fn test_has_more_semantics() raises:
+def test_has_more_semantics() raises:
     """Has_more() is True before reads and False after all records consumed."""
     var data = ">id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -317,7 +317,7 @@ fn test_has_more_semantics() raises:
     )
 
 
-fn test_get_record_number_tracking() raises:
+def test_get_record_number_tracking() raises:
     """Record count is tracked: after reading N records, has_more() is False when done.
     """
     var data = ">id1\nACGT\n>id2\nTTAA\n>id3\nGGCC\n"
@@ -333,7 +333,7 @@ fn test_get_record_number_tracking() raises:
     )
 
 
-fn test_iterator_five_records_ids_and_sequences() raises:
+def test_iterator_five_records_ids_and_sequences() raises:
     """Iterator yields correct IDs and sequences for 5 heterogeneous records."""
     var data = ">alpha\nAAAA\n>beta\nCCCC\n>gamma\nGGGG\n>delta\nTTTT\n>epsilon\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -369,7 +369,7 @@ fn test_iterator_five_records_ids_and_sequences() raises:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn test_record_broken_across_chunks() raises:
+def test_record_broken_across_chunks() raises:
     """A record is correctly parsed when data arrives 4 bytes at a time.
 
     With chunk_size=4 the BufferedReader must call compact_and_fill() several
@@ -390,7 +390,7 @@ fn test_record_broken_across_chunks() raises:
     _ = rec
 
 
-fn test_header_broken_across_chunks() raises:
+def test_header_broken_across_chunks() raises:
     """A long header line spanning multiple chunk deliveries is parsed correctly.
     """
     # ">long_identifier_name\n" is 22 bytes; chunk_size=5 forces 5 refills.
@@ -409,7 +409,7 @@ fn test_header_broken_across_chunks() raises:
     _ = rec
 
 
-fn test_sequence_larger_than_chunk_size() raises:
+def test_sequence_larger_than_chunk_size() raises:
     """A 100-base sequence delivered 7 bytes at a time is accumulated correctly.
     """
     var seq = String("")
@@ -430,7 +430,7 @@ fn test_sequence_larger_than_chunk_size() raises:
     _ = rec
 
 
-fn test_large_multiline_sequence_with_chunks() raises:
+def test_large_multiline_sequence_with_chunks() raises:
     """A multi-line sequence totalling 60 bases, delivered 8 bytes at a time.
 
     Tests that _AppendState correctly persists across multiple chunk deliveries
@@ -451,7 +451,7 @@ fn test_large_multiline_sequence_with_chunks() raises:
     _ = rec
 
 
-fn test_multiple_records_broken_across_chunks() raises:
+def test_multiple_records_broken_across_chunks() raises:
     """Three records are correctly parsed with 6-byte chunk delivery."""
     var data = ">r1\nAAAA\n>r2\nCCCC\n>r3\nGGGG\n"
     var reader = ChunkedMemoryReader(_bytes(data), chunk_size=6)
@@ -470,7 +470,7 @@ fn test_multiple_records_broken_across_chunks() raises:
     assert_equal(seqs[2], "GGGG")
 
 
-fn test_chunk_boundary_on_newline() raises:
+def test_chunk_boundary_on_newline() raises:
     """Chunk boundary lands exactly on the newline separating header from sequence.
     """
     # ">ab\n" = 4 bytes exactly; with chunk_size=4 first chunk ends on '\n'.
@@ -483,7 +483,7 @@ fn test_chunk_boundary_on_newline() raises:
     _ = rec
 
 
-fn test_chunk_boundary_splits_sequence_line() raises:
+def test_chunk_boundary_splits_sequence_line() raises:
     """Chunk boundary falls in the middle of a sequence line."""
     # ">id\n" = 4 bytes, "ACGT" = 4 bytes, "\n" = 1 byte
     # chunk_size=3: ">id", "\nAC", "GT\n" – boundary inside both header and sequence.
@@ -496,7 +496,7 @@ fn test_chunk_boundary_splits_sequence_line() raises:
     _ = rec
 
 
-fn test_record_larger_than_many_chunks() raises:
+def test_record_larger_than_many_chunks() raises:
     """A single record whose total byte size exceeds many chunk deliveries."""
     # Build a record with a 200-base single-line sequence.
     var seq = String("")
@@ -524,7 +524,7 @@ fn test_record_larger_than_many_chunks() raises:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn test_format_valid_leading_blank_lines() raises:
+def test_format_valid_leading_blank_lines() raises:
     """Blank lines before the first record header are silently skipped."""
     var data = "\n\n\n>id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -535,7 +535,7 @@ fn test_format_valid_leading_blank_lines() raises:
     _ = rec
 
 
-fn test_format_valid_blank_lines_between_records() raises:
+def test_format_valid_blank_lines_between_records() raises:
     """Blank lines separating records do not corrupt subsequent records."""
     var data = ">id1\nACGT\n\n\n>id2\nTTAA\n"
     var reader = MemoryReader(_bytes(data))
@@ -550,7 +550,7 @@ fn test_format_valid_blank_lines_between_records() raises:
     _ = rec2
 
 
-fn test_format_valid_crlf_line_endings() raises:
+def test_format_valid_crlf_line_endings() raises:
     """Windows-style CRLF line endings are accepted and stripped from ID/sequence.
     """
     var data = ">id1\r\nACGT\r\n"
@@ -562,7 +562,7 @@ fn test_format_valid_crlf_line_endings() raises:
     _ = rec
 
 
-fn test_format_valid_crlf_multiple_records() raises:
+def test_format_valid_crlf_multiple_records() raises:
     """CRLF line endings work correctly across multiple records."""
     var data = ">id1\r\nACGT\r\n>id2\r\nTTAA\r\n"
     var reader = MemoryReader(_bytes(data))
@@ -575,7 +575,7 @@ fn test_format_valid_crlf_multiple_records() raises:
     _ = rec2
 
 
-fn test_format_valid_id_leading_spaces_trimmed() raises:
+def test_format_valid_id_leading_spaces_trimmed() raises:
     """Leading spaces after '>' are stripped from the record ID."""
     var data = ">  spaced_id\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -589,7 +589,7 @@ fn test_format_valid_id_leading_spaces_trimmed() raises:
     _ = rec
 
 
-fn test_format_valid_id_trailing_spaces_trimmed() raises:
+def test_format_valid_id_trailing_spaces_trimmed() raises:
     """Trailing spaces in the ID line are stripped."""
     var data = ">seq_id   \nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -603,7 +603,7 @@ fn test_format_valid_id_trailing_spaces_trimmed() raises:
     _ = rec
 
 
-fn test_format_valid_id_tabs_trimmed() raises:
+def test_format_valid_id_tabs_trimmed() raises:
     """Tab characters surrounding the ID are stripped."""
     var data = ">\ttab_id\t\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -617,7 +617,7 @@ fn test_format_valid_id_tabs_trimmed() raises:
     _ = rec
 
 
-fn test_format_valid_empty_id() raises:
+def test_format_valid_empty_id() raises:
     """A header consisting of only '>' produces an empty ID."""
     var data = ">\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -628,7 +628,7 @@ fn test_format_valid_empty_id() raises:
     _ = rec
 
 
-fn test_format_valid_single_char_sequence() raises:
+def test_format_valid_single_char_sequence() raises:
     """A sequence consisting of a single nucleotide is valid."""
     var data = ">id1\nA\n"
     var reader = MemoryReader(_bytes(data))
@@ -639,7 +639,7 @@ fn test_format_valid_single_char_sequence() raises:
     _ = rec
 
 
-fn test_format_valid_lowercase_sequence() raises:
+def test_format_valid_lowercase_sequence() raises:
     """The parser accepts lowercase nucleotides (no content validation)."""
     var data = ">id1\nacgt\n"
     var reader = MemoryReader(_bytes(data))
@@ -649,7 +649,7 @@ fn test_format_valid_lowercase_sequence() raises:
     _ = rec
 
 
-fn test_format_valid_mixed_case_sequence() raises:
+def test_format_valid_mixed_case_sequence() raises:
     """Mixed-case sequences are stored exactly as they appear."""
     var data = ">id1\nAcGtAcGt\n"
     var reader = MemoryReader(_bytes(data))
@@ -659,7 +659,7 @@ fn test_format_valid_mixed_case_sequence() raises:
     _ = rec
 
 
-fn test_format_valid_many_single_base_lines() raises:
+def test_format_valid_many_single_base_lines() raises:
     """A sequence split into many single-base lines is normalised correctly."""
     var data = ">id1\nA\nC\nG\nT\nA\nC\nG\nT\n"
     var reader = MemoryReader(_bytes(data))
@@ -673,7 +673,7 @@ fn test_format_valid_many_single_base_lines() raises:
     _ = rec
 
 
-fn test_format_valid_no_trailing_newline_multiline() raises:
+def test_format_valid_no_trailing_newline_multiline() raises:
     """Multi-line sequence whose last line has no trailing newline is accepted.
     """
     var data = ">id1\nACG\nTTA"
@@ -692,7 +692,7 @@ fn test_format_valid_no_trailing_newline_multiline() raises:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn test_format_invalid_first_line_not_header() raises:
+def test_format_invalid_first_line_not_header() raises:
     """A first non-blank line not starting with '>' raises a parse error."""
     var data = "ACGT\n>id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -711,7 +711,7 @@ fn test_format_invalid_first_line_not_header() raises:
     )
 
 
-fn test_format_invalid_empty_sequence_at_eof() raises:
+def test_format_invalid_empty_sequence_at_eof() raises:
     """A header at EOF with no following sequence raises an empty-sequence error.
     """
     var data = ">id1\n"
@@ -731,7 +731,7 @@ fn test_format_invalid_empty_sequence_at_eof() raises:
     )
 
 
-fn test_format_invalid_empty_sequence_before_next_header() raises:
+def test_format_invalid_empty_sequence_before_next_header() raises:
     """A header immediately followed by another header raises empty-sequence error.
     """
     var data = ">id1\n>id2\nACGT\n"
@@ -754,7 +754,7 @@ fn test_format_invalid_empty_sequence_before_next_header() raises:
     )
 
 
-fn test_format_invalid_empty_file() raises:
+def test_format_invalid_empty_file() raises:
     """An empty file raises EOFError on the first next_record() call."""
     var data = ""
     var reader = MemoryReader(_bytes(data))
@@ -771,7 +771,7 @@ fn test_format_invalid_empty_file() raises:
     assert_true(raised, "Expected EOFError for empty file")
 
 
-fn test_format_invalid_whitespace_only_file() raises:
+def test_format_invalid_whitespace_only_file() raises:
     """A file containing only whitespace/blank lines raises EOFError."""
     var data = "\n\n   \n\t\n"
     var reader = MemoryReader(_bytes(data))
@@ -788,7 +788,7 @@ fn test_format_invalid_whitespace_only_file() raises:
     assert_true(raised, "Expected EOFError for whitespace-only file")
 
 
-fn test_format_invalid_sequence_only_no_header() raises:
+def test_format_invalid_sequence_only_no_header() raises:
     """Data with no header marker at all raises a parse error."""
     var data = "ACGTACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -807,7 +807,7 @@ fn test_format_invalid_sequence_only_no_header() raises:
     )
 
 
-fn test_format_invalid_second_record_empty_sequence() raises:
+def test_format_invalid_second_record_empty_sequence() raises:
     """The second record in a file having an empty sequence raises an error."""
     var data = ">id1\nACGT\n>id2\n>id3\nGGGG\n"
     var reader = MemoryReader(_bytes(data))
@@ -832,7 +832,7 @@ fn test_format_invalid_second_record_empty_sequence() raises:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-fn test_record_byte_len() raises:
+def test_record_byte_len() raises:
     """`byte_len()` equals 1 + len(id) + 1 + len(seq) + 1 (the FASTA on-disk size).
     """
     var data = ">abc\nACGT\n"
@@ -846,7 +846,7 @@ fn test_record_byte_len() raises:
     _ = rec
 
 
-fn test_record_sequence_len() raises:
+def test_record_sequence_len() raises:
     """`len(rec)` returns the number of bases in the normalised sequence."""
     var data = ">id1\nACGT\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -856,7 +856,7 @@ fn test_record_sequence_len() raises:
     _ = rec
 
 
-fn test_record_write_format() raises:
+def test_record_write_format() raises:
     """`String(rec)` produces standard '>id\\nsequence\\n' FASTA text."""
     var data = ">id1\nACGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -870,7 +870,7 @@ fn test_record_write_format() raises:
     _ = rec
 
 
-fn test_record_equality_same_sequence() raises:
+def test_record_equality_same_sequence() raises:
     """Two records with identical sequences compare equal regardless of ID."""
     var r1 = FastaRecord("id1", "ACGT")
     var r2 = FastaRecord("id2", "ACGT")
@@ -883,7 +883,7 @@ fn test_record_equality_same_sequence() raises:
     )
 
 
-fn test_record_inequality_different_sequence() raises:
+def test_record_inequality_different_sequence() raises:
     """Two records with different sequences compare unequal."""
     var r1 = FastaRecord("id1", "ACGT")
     var r2 = FastaRecord("id1", "TTAA")
@@ -892,7 +892,7 @@ fn test_record_inequality_different_sequence() raises:
     )
 
 
-fn test_record_byte_len_multiline_normalised() raises:
+def test_record_byte_len_multiline_normalised() raises:
     """`byte_len()` reflects the normalised (single-line) sequence length."""
     var data = ">id\nAC\nGT\n"
     var reader = MemoryReader(_bytes(data))
@@ -903,7 +903,7 @@ fn test_record_byte_len_multiline_normalised() raises:
     _ = rec
 
 
-fn test_record_accessors_consistent() raises:
+def test_record_accessors_consistent() raises:
     """`id()`, `sequence()`, `__len__()`, and `byte_len()` are internally consistent.
     """
     var data = ">myid\nGATTACA\n"
@@ -928,12 +928,12 @@ struct _RoundtripResult:
     var original: List[FastaRecord]
     var roundtrip: List[FastaRecord]
 
-    fn __init__(out self, var original: List[FastaRecord], var roundtrip: List[FastaRecord]):
+    def __init__(out self, var original: List[FastaRecord], var roundtrip: List[FastaRecord]):
         self.original = original^
         self.roundtrip = roundtrip^
 
 
-fn _roundtrip_records(data: String) raises -> _RoundtripResult:
+def _roundtrip_records(data: String) raises -> _RoundtripResult:
     """Parse data, write all records to a string, parse again; return original and roundtrip lists.
     """
     var reader = MemoryReader(_bytes(data))
@@ -954,7 +954,7 @@ fn _roundtrip_records(data: String) raises -> _RoundtripResult:
     return _RoundtripResult(original^, roundtrip^)
 
 
-fn test_roundtrip_single_record() raises:
+def test_roundtrip_single_record() raises:
     """Read -> write -> read preserves a single record's id and sequence."""
     var result = _roundtrip_records(">id1\nACGT\n")
     assert_equal(len(result.original), 1, "single record input")
@@ -963,7 +963,7 @@ fn test_roundtrip_single_record() raises:
     assert_equal(String(result.original[0].sequence()), String(result.roundtrip[0].sequence()))
 
 
-fn test_roundtrip_multiple_records() raises:
+def test_roundtrip_multiple_records() raises:
     """Read -> write -> read preserves multiple records in order."""
     var result = _roundtrip_records(">id1\nACGT\n>id2\nTTAA\n>id3\nGGCC\n")
     assert_equal(len(result.original), 3)
@@ -981,7 +981,7 @@ fn test_roundtrip_multiple_records() raises:
         )
 
 
-fn test_roundtrip_preserves_definition_line() raises:
+def test_roundtrip_preserves_definition_line() raises:
     """Round-trip preserves full definition line (id and optional description).
     """
     var result = _roundtrip_records(">id1 description here\nACGT\n")
@@ -995,7 +995,7 @@ fn test_roundtrip_preserves_definition_line() raises:
     )
 
 
-fn test_roundtrip_multiline_sequence() raises:
+def test_roundtrip_multiline_sequence() raises:
     """Round-trip preserves multi-line sequence (normalized to one line in memory).
     """
     var result = _roundtrip_records(">seq1\nACG\nTTA\nGG\n")
@@ -1006,7 +1006,7 @@ fn test_roundtrip_multiline_sequence() raises:
     assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
 
 
-fn test_roundtrip_long_sequence_wrapping() raises:
+def test_roundtrip_long_sequence_wrapping() raises:
     """Round-trip with default line wrapping: long sequence written as 60-char lines.
     """
     var seq = String("")
@@ -1023,6 +1023,6 @@ fn test_roundtrip_long_sequence_wrapping() raises:
     assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
 
 
-fn main() raises:
+def main() raises:
     var suite = TestSuite.discover_tests[__functions_in_module()]().run()
     # test_single_record_single_line()

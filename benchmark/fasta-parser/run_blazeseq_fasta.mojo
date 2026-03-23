@@ -13,7 +13,7 @@ from pathlib import Path
 from blazeseq.io.readers import FileReader
 from blazeseq.fasta.parser import FastaParser
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("Usage: run_blazeseq_fasta.mojo <path.fasta>")

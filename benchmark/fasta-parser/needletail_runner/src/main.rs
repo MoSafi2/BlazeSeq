@@ -6,7 +6,7 @@ use needletail::parse_fastx_file;
 use std::env;
 use std::process;
 
-fn main() {
+def main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("Usage: needletail_fasta_runner <path.fasta>");

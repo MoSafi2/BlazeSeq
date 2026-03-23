@@ -15,11 +15,11 @@ import std.os
 comptime test_dir = "tests/test_data/bed_parser/"
 
 
-fn _parse_int64(s: String) raises -> Int64:
+def _parse_int64(s: String) raises -> Int64:
     return Int64(atol(StringSlice(s).strip()))
 
 
-fn _sniff_bed_first_line(content: String) raises -> Bool:
+def _sniff_bed_first_line(content: String) raises -> Bool:
     """Heuristically detect BED from the first data line.
 
     Conservative rules:
@@ -65,7 +65,7 @@ fn _sniff_bed_first_line(content: String) raises -> Bool:
     return True
 
 
-fn _read_text_if_possible(path: String) -> Optional[String]:
+def _read_text_if_possible(path: String) -> Optional[String]:
     try:
         var f = open(path, "r")
         var content = String(f.read())
@@ -75,14 +75,14 @@ fn _read_text_if_possible(path: String) -> Optional[String]:
         return None
 
 
-fn _parse_bed_file(path: String) raises:
+def _parse_bed_file(path: String) raises:
     var reader = FileReader(Path(path))
     var parser = BedParser[FileReader](reader^)
     for _ in parser.views():
         pass
 
 
-fn _assert_invariants_for_file(path: String, expected_fields: Int) raises:
+def _assert_invariants_for_file(path: String, expected_fields: Int) raises:
     var reader = FileReader(Path(path))
     var parser = BedParser[FileReader](reader^)
     var count: Int = 0
@@ -126,39 +126,39 @@ fn _assert_invariants_for_file(path: String, expected_fields: Int) raises:
     assert_true(count >= 1, "expected at least one record: " + path)
 
 
-fn test_biopython_bed3() raises:
+def test_biopython_bed3() raises:
     _assert_invariants_for_file(test_dir + "bed3.bed", 3)
 
 
-fn test_biopython_bed4() raises:
+def test_biopython_bed4() raises:
     _assert_invariants_for_file(test_dir + "bed4.bed", 4)
 
 
-fn test_biopython_bed5() raises:
+def test_biopython_bed5() raises:
     _assert_invariants_for_file(test_dir + "bed5.bed", 5)
 
 
-fn test_biopython_bed6() raises:
+def test_biopython_bed6() raises:
     _assert_invariants_for_file(test_dir + "bed6.bed", 6)
 
 
-fn test_biopython_bed7() raises:
+def test_biopython_bed7() raises:
     _assert_invariants_for_file(test_dir + "bed7.bed", 7)
 
 
-fn test_biopython_bed8() raises:
+def test_biopython_bed8() raises:
     _assert_invariants_for_file(test_dir + "bed8.bed", 8)
 
 
-fn test_biopython_bed9() raises:
+def test_biopython_bed9() raises:
     _assert_invariants_for_file(test_dir + "bed9.bed", 9)
 
 
-fn test_biopython_bed12() raises:
+def test_biopython_bed12() raises:
     _assert_invariants_for_file(test_dir + "bed12.bed", 12)
 
 
-fn test_bed_detection_regardless_of_extension() raises:
+def test_bed_detection_regardless_of_extension() raises:
     """Scan all files; if content looks like BED, it must parse as BED."""
     for name in std.os.listdir(test_dir):
         var path = test_dir + String(name)
@@ -175,5 +175,5 @@ fn test_bed_detection_regardless_of_extension() raises:
             _parse_bed_file(path)
 
 
-fn main() raises:
+def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

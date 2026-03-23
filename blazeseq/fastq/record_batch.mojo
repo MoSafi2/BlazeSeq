@@ -9,10 +9,10 @@ from std.collections.string import String
 
 
 trait GpuMovableBatch:
-    fn num_records(self) -> Int:
+    def num_records(self) -> Int:
         ...
 
-    fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
+    def to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         ...
 
 
@@ -26,7 +26,7 @@ struct FastqBatch(
     var _ends: List[Int64]
     var _quality_offset: UInt8
 
-    fn __init__(
+    def __init__(
         out self,
         batch_size: Int = DEFAULT_BATCH_SIZE,
         avg_record_size: Int = 150,
@@ -41,7 +41,7 @@ struct FastqBatch(
         self._ends = List[Int64](capacity=batch_size)
         self._quality_offset = quality_offset
 
-    fn __init__(
+    def __init__(
         out self,
         records: List[FastqRecord],
         avg_record_size: Int = 150,
@@ -62,7 +62,7 @@ struct FastqBatch(
         for i in range(batch_size):
             self.add(records[i])
 
-    fn add(mut self, record: FastqRecord):
+    def add(mut self, record: FastqRecord):
         self._quality_bytes.extend(record._quality.as_span())
         self._sequence_bytes.extend(record._sequence.as_span())
         self._id_bytes.extend(record._id.as_span())
@@ -74,7 +74,7 @@ struct FastqBatch(
             self._id_ends.append(Int64(len(record._id)) + self._id_ends[-1])
             self._ends.append(Int64(len(record._quality)) + self._ends[-1])
 
-    fn add[origin: Origin[mut=True]](mut self, record: FastqView[origin]):
+    def add[origin: Origin[mut=True]](mut self, record: FastqView[origin]):
         self._quality_bytes.extend(record._quality)
         self._sequence_bytes.extend(record._sequence)
         self._id_bytes.extend(record._id)
@@ -86,25 +86,25 @@ struct FastqBatch(
             self._id_ends.append(Int64(len(record._id)) + self._id_ends[-1])
             self._ends.append(Int64(len(record._quality)) + self._ends[-1])
 
-    fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
+    def to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         return upload_batch_to_device(self, ctx)
 
-    fn stage(self, ctx: DeviceContext) raises -> StagedFastqBatch:
+    def stage(self, ctx: DeviceContext) raises -> StagedFastqBatch:
         return stage_batch_to_host(self, ctx)
 
-    fn num_records(self) -> Int:
+    def num_records(self) -> Int:
         return len(self._ends)
 
-    fn seq_len(self) -> Int:
+    def seq_len(self) -> Int:
         return Int(self._ends[-1])
 
-    fn quality_offset(self) -> UInt8:
+    def quality_offset(self) -> UInt8:
         return self._quality_offset
 
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         return self.num_records()
 
-    fn __repr__(self) -> String:
+    def __repr__(self) -> String:
         return (
             "FastqBatch(records="
             + String(self.num_records())
@@ -113,17 +113,17 @@ struct FastqBatch(
             + ")"
         )
 
-    fn get_record(self, index: Int) raises -> FastqRecord:
+    def get_record(self, index: Int) raises -> FastqRecord:
         var n = self.num_records()
         if index < 0 or index >= n:
             raise Error("FastqBatch.get_record index out of range")
 
-        fn get_offsets(ends: List[Int64], idx: Int) -> Tuple[Int, Int]:
+        def get_offsets(ends: List[Int64], idx: Int) -> Tuple[Int, Int]:
             var start = Int(0) if idx == 0 else Int(ends[idx - 1])
             var end = Int(ends[idx])
             return start, end
 
-        fn unsafe_span_to_ascii_string[
+        def unsafe_span_to_ascii_string[
             origin: Origin
         ](bs: Span[Byte, origin]) -> BString:
             var len_bs = len(bs)
@@ -153,12 +153,12 @@ struct FastqBatch(
             Int8(self._quality_offset),
         )
 
-    fn get_ref(self, index: Int) raises -> FastqView[origin_of(self)]:
+    def get_ref(self, index: Int) raises -> FastqView[origin_of(self)]:
         var n = self.num_records()
         if index < 0 or index >= n:
             raise Error("FastqBatch.get_ref index out of range")
 
-        fn get_offsets(ends: List[Int64], idx: Int) -> Tuple[Int, Int]:
+        def get_offsets(ends: List[Int64], idx: Int) -> Tuple[Int, Int]:
             var start = Int(0) if idx == 0 else Int(ends[idx - 1])
             var end = Int(ends[idx])
             return start, end
@@ -195,14 +195,14 @@ struct FastqBatch(
             UInt8(self._quality_offset),
         )
 
-    fn to_records(self) raises -> List[FastqRecord]:
+    def to_records(self) raises -> List[FastqRecord]:
         var n = self.num_records()
         var out = List[FastqRecord](capacity=n)
         for i in range(n):
             out.append(self.get_record(i))
         return out^
 
-    fn write_to(self, mut w: Some[Writer]) raises:
+    def write_to(self, mut w: Some[Writer]) raises:
         for i in range(self.num_records()):
             self.get_ref(i).write_to(w)
 
@@ -219,7 +219,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
     var id_buffer: DeviceBuffer[DType.uint8]
     var id_ends: DeviceBuffer[DType.int64]
 
-    fn copy_to_host(self, ctx: DeviceContext) raises -> FastqBatch:
+    def copy_to_host(self, ctx: DeviceContext) raises -> FastqBatch:
         var staged = download_device_batch_to_staged(self, ctx)
         var batch = FastqBatch(quality_offset=self.quality_offset, batch_size=0)
 
@@ -240,7 +240,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
 
         return batch^
 
-    fn to_records(self, ctx: DeviceContext) raises -> List[FastqRecord]:
+    def to_records(self, ctx: DeviceContext) raises -> List[FastqRecord]:
         return self.copy_to_host(ctx).to_records()
 
 
@@ -259,12 +259,12 @@ struct StagedFastqBatch:
     var ends: HostBuffer[DType.int64]
     var id_ends: HostBuffer[DType.int64]
 
-    fn to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
+    def to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         return move_staged_to_device(self, ctx, self.quality_offset)
 
 
 @doc_hidden
-fn download_device_batch_to_staged(
+def download_device_batch_to_staged(
     device_batch: DeviceFastqBatch, ctx: DeviceContext
 ) raises -> StagedFastqBatch:
     var n = device_batch.num_records
@@ -306,7 +306,7 @@ fn download_device_batch_to_staged(
 
 
 @doc_hidden
-fn stage_batch_to_host(
+def stage_batch_to_host(
     batch: FastqBatch, ctx: DeviceContext
 ) raises -> StagedFastqBatch:
     var n = batch.num_records()
@@ -362,7 +362,7 @@ fn stage_batch_to_host(
 
 
 @doc_hidden
-fn move_staged_to_device(
+def move_staged_to_device(
     staged: StagedFastqBatch, ctx: DeviceContext, quality_offset: UInt8
 ) raises -> DeviceFastqBatch:
     var quality_buffer = ctx.enqueue_create_buffer[DType.uint8](
@@ -401,7 +401,7 @@ fn move_staged_to_device(
     )
 
 
-fn upload_batch_to_device(
+def upload_batch_to_device(
     batch: FastqBatch,
     ctx: DeviceContext,
 ) raises -> DeviceFastqBatch:

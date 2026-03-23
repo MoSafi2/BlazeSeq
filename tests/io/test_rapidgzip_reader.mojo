@@ -16,7 +16,7 @@ from blazeseq.fastq.record import FastqRecord
 # ============================================================================
 
 
-fn create_gz_file(path: String, content: List[Byte]) raises:
+def create_gz_file(path: String, content: List[Byte]) raises:
     """Create a gzip file with the given content."""
     var writer = GZWriter(path)
     var buf = alloc[Byte](len(content))
@@ -26,7 +26,7 @@ fn create_gz_file(path: String, content: List[Byte]) raises:
     buf.free()
 
 
-fn create_fastq_gz_file(path: String, content: String) raises:
+def create_fastq_gz_file(path: String, content: String) raises:
     """Create a .fastq.gz file with the given FASTQ content."""
     var writer = buffered_writer_for_gzip(path)
     var bytes = List(content.as_bytes())
@@ -39,7 +39,7 @@ fn create_fastq_gz_file(path: String, content: String) raises:
 # ============================================================================
 
 
-fn test_rapidgzip_reader_init() raises:
+def test_rapidgzip_reader_init() raises:
     """Test RapidgzipReader initialization."""
     var content = List[Byte]()
     content.append(72)  # 'H'
@@ -62,7 +62,7 @@ fn test_rapidgzip_reader_init() raises:
     print("✓ test_rapidgzip_reader_init passed")
 
 
-fn test_rapidgzip_reader_init_path() raises:
+def test_rapidgzip_reader_init_path() raises:
     """Test RapidgzipReader initialization with Path."""
     var content = List[Byte]()
     content.append(65)  # 'A'
@@ -83,7 +83,7 @@ fn test_rapidgzip_reader_init_path() raises:
     print("✓ test_rapidgzip_reader_init_path passed")
 
 
-fn test_rapidgzip_reader_read_to_buffer() raises:
+def test_rapidgzip_reader_read_to_buffer() raises:
     """Test RapidgzipReader read_to_buffer basic functionality."""
     var content = List[Byte]()
     for i in range(20):
@@ -103,7 +103,7 @@ fn test_rapidgzip_reader_read_to_buffer() raises:
     print("✓ test_rapidgzip_reader_read_to_buffer passed")
 
 
-fn test_rapidgzip_reader_read_to_buffer_partial() raises:
+def test_rapidgzip_reader_read_to_buffer_partial() raises:
     """Test RapidgzipReader read_to_buffer with partial reads."""
     var content = List[Byte]()
     for i in range(10):
@@ -129,7 +129,7 @@ fn test_rapidgzip_reader_read_to_buffer_partial() raises:
     print("✓ test_rapidgzip_reader_read_to_buffer_partial passed")
 
 
-fn test_rapidgzip_reader_eof() raises:
+def test_rapidgzip_reader_eof() raises:
     """Test RapidgzipReader returns 0 at EOF."""
     var content = List[Byte]()
     content.append(1)
@@ -149,7 +149,7 @@ fn test_rapidgzip_reader_eof() raises:
     print("✓ test_rapidgzip_reader_eof passed")
 
 
-fn test_rapidgzip_reader_with_buffered_reader() raises:
+def test_rapidgzip_reader_with_buffered_reader() raises:
     """Test RapidgzipReader works with BufferedReader (same as GZFile)."""
     var content = "Hello World\nLine 2\n"
     var content_bytes = List(content.as_bytes())
@@ -166,7 +166,7 @@ fn test_rapidgzip_reader_with_buffered_reader() raises:
     print("✓ test_rapidgzip_reader_with_buffered_reader passed")
 
 
-fn test_rapidgzip_reader_fastq_parser() raises:
+def test_rapidgzip_reader_fastq_parser() raises:
     """Test FastqParser with RapidgzipReader on .fastq.gz file."""
     var fastq_content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
     create_fastq_gz_file("tests/test_data/test_rapidgzip_fastq.fastq.gz", fastq_content)
@@ -186,7 +186,7 @@ fn test_rapidgzip_reader_fastq_parser() raises:
     print("✓ test_rapidgzip_reader_fastq_parser passed")
 
 
-fn test_rapidgzip_reader_init_nonexistent() raises:
+def test_rapidgzip_reader_init_nonexistent() raises:
     """Test RapidgzipReader initialization with nonexistent file."""
     with assert_raises():
         var reader = RapidgzipReader("tests/test_data/nonexistent_rapidgzip.gz")
@@ -200,7 +200,7 @@ fn test_rapidgzip_reader_init_nonexistent() raises:
 # ============================================================================
 
 
-fn cleanup_rapidgzip_test_files() raises:
+def cleanup_rapidgzip_test_files() raises:
     """Remove test files created by RapidgzipReader tests."""
     var names = List[String]()
     names.append("test_rapidgzip_init.gz")
@@ -222,7 +222,7 @@ fn cleanup_rapidgzip_test_files() raises:
 # ============================================================================
 
 
-fn main() raises:
+def main() raises:
     """Run all RapidgzipReader tests."""
     print("Running RapidgzipReader tests...\n")
     TestSuite.discover_tests[__functions_in_module()]().run()

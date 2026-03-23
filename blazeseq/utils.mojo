@@ -61,7 +61,7 @@ struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
     var record_end: Int  # set after QUAL phase newline is found (or EOF)
 
     @always_inline
-    fn __init__(
+    def __init__(
         out self,
         header_start: Int = 0,
         seq_start: Int = 0,
@@ -89,7 +89,7 @@ struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
         self.record_end = record_end
 
     @always_inline
-    fn is_complete(self) -> Bool:
+    def is_complete(self) -> Bool:
         return self.record_end != 0
 
 
@@ -117,14 +117,14 @@ struct SearchPhase(
     comptime QUAL = Self(3)
 
     @always_inline
-    fn __eq__(self, other: Self) -> Bool:
+    def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
     @always_inline
-    fn __le__(self, other: Self) -> Bool:
+    def __le__(self, other: Self) -> Bool:
         return self.value <= other.value
 
-    fn write_to(self, mut writer: Some[Writer]):
+    def write_to(self, mut writer: Some[Writer]):
         writer.write(self.value)
 
 
@@ -140,7 +140,7 @@ struct ParseContext(Copyable, Movable, TrivialRegisterPassable):
 
 
 @doc_hidden
-fn format_parse_error(
+def format_parse_error(
     ctx: ParseContext,
     message: String,
     record_snippet: String = "",
@@ -159,7 +159,7 @@ fn format_parse_error(
 
 
 @doc_hidden
-fn format_parse_error(
+def format_parse_error(
     message: String,
     record_number: Int,
     line_number: Int,
@@ -178,7 +178,7 @@ fn format_parse_error(
 # # From extramojo pacakge, skipping version problems
 @always_inline()
 @doc_hidden
-fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
+def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Function to find the next occurrence of character.
     Args:
@@ -241,7 +241,7 @@ fn memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
 
 @doc_hidden
 @always_inline()
-fn build_cascade[W: Int]() -> List[Int]:
+def build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
     var result = List[Int]()
     var w = W // 2
@@ -253,7 +253,7 @@ fn build_cascade[W: Int]() -> List[Int]:
 
 @doc_hidden
 @always_inline("nodebug")
-fn memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
+def memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Scalar (non-SIMD) variant of memchr. Find first occurrence of byte in haystack.
     Returns index or -1 if not found.
@@ -266,7 +266,7 @@ fn memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
 
 @doc_hidden
 @always_inline
-fn _strip_spaces[
+def _strip_spaces[
     mut: Bool, //, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) -> Span[Byte, o]:
     """Trim leading and trailing POSIX whitespace from a byte span."""
@@ -290,7 +290,7 @@ fn _strip_spaces[
 
 @doc_hidden
 @always_inline
-fn _check_ascii[
+def _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
 ](buffer: Span[Byte, o]) -> FastxErrorCode:
     """Validate that all bytes in `buffer` are 7-bit ASCII (high bit not set). Returns OK or ASCII_INVALID.
@@ -312,7 +312,7 @@ fn _check_ascii[
 # Optimized posix_space check using bitmask lookup
 @doc_hidden
 @always_inline
-fn is_posix_space(c: UInt8) -> Bool:
+def is_posix_space(c: UInt8) -> Bool:
     """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
     # Bits set: 9(\t), 10(\n), 11(\v), 12(\f), 13(\r), 28(FS), 29(GS), 30(RS), 32(Space)
@@ -337,7 +337,7 @@ fn is_posix_space(c: UInt8) -> Bool:
 
 @always_inline
 @doc_hidden
-fn _check_end_qual(
+def _check_end_qual(
     buf: BufferedReader,
     base: Int,
     mut offsets: RecordOffsets,
@@ -377,7 +377,7 @@ fn _check_end_qual(
 
 @always_inline
 @doc_hidden
-fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
+def _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
     """Return the relative-to-base offset at which to resume scanning.
 
     When resuming a partially-scanned record (phase > HEADER), we start from
@@ -406,7 +406,7 @@ fn _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
 
 @always_inline
 @doc_hidden
-fn _phase_to_count(phase: SearchPhase) -> Int:
+def _phase_to_count(phase: SearchPhase) -> Int:
     """Return how many newlines have already been found given the current phase.
 
     The phase describes which newline we are *currently seeking*:
@@ -425,7 +425,7 @@ fn _phase_to_count(phase: SearchPhase) -> Int:
 
 @always_inline
 @doc_hidden
-fn _count_to_phase(found: Int) -> SearchPhase:
+def _count_to_phase(found: Int) -> SearchPhase:
     """Convert a found-newlines count back to the SearchPhase we are now in.
 
     After finding `found` newlines we are seeking the (found+1)-th newline,
@@ -453,7 +453,7 @@ fn _count_to_phase(found: Int) -> SearchPhase:
 
 @always_inline
 @doc_hidden
-fn _store_newline_offset(
+def _store_newline_offset(
     mut offsets: RecordOffsets,
     found: Int,  # 1-indexed: which newline this is (1..4)
     abs_pos: Int,  # relative-to-base position AFTER the '\n'
@@ -479,7 +479,7 @@ fn _store_newline_offset(
 
 
 @doc_hidden
-fn _record_snippet[
+def _record_snippet[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets) -> String:
     """First 200 bytes of the record for ParseError snippet."""
@@ -492,7 +492,7 @@ fn _record_snippet[
 
 
 @doc_hidden
-fn _validate_fastq_structure[
+def _validate_fastq_structure[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
     """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code.
@@ -515,7 +515,7 @@ fn _validate_fastq_structure[
 
 @always_inline
 @doc_hidden
-fn _scan_record[
+def _scan_record[
     o: Origin
 ](
     view: Span[Byte, o],
@@ -599,7 +599,7 @@ fn _scan_record[
 
 @always_inline
 @doc_hidden
-fn _scan_record_memchr_seq[
+def _scan_record_memchr_seq[
     o: Origin
 ](
     view: Span[Byte, o],
@@ -629,7 +629,7 @@ fn _scan_record_memchr_seq[
 
 
 @always_inline
-fn _find_newline_from(
+def _find_newline_from(
     buf: BufferedReader,
     base: Int,  # absolute _ptr offset of view()[0] (buf._head at scan start)
     _from: Int,  # relative offset from base to start searching
@@ -657,7 +657,7 @@ fn _find_newline_from(
 
 @doc_hidden
 @always_inline
-fn _parse_schema(quality_format: String) -> QualitySchema:
+def _parse_schema(quality_format: String) -> QualitySchema:
     """Parse quality schema string into QualitySchema."""
     var schema: QualitySchema
 
@@ -683,7 +683,7 @@ fn _parse_schema(quality_format: String) -> QualitySchema:
     return schema
 
 
-fn compute_num_reads_for_size(
+def compute_num_reads_for_size(
     target_size_bytes: Int,
     min_length: Int,
     max_length: Int,
@@ -725,7 +725,7 @@ fn compute_num_reads_for_size(
 
 
 @doc_hidden
-fn _validate_synthetic_fastq_args(
+def _validate_synthetic_fastq_args(
     num_reads: Int,
     min_length: Int,
     max_length: Int,
@@ -751,7 +751,7 @@ fn _validate_synthetic_fastq_args(
 
 
 @doc_hidden
-fn _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
+def _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
     # Base LUT: 8 entries so index selects bases with configurable GC probability.
     # With gc_bias = 0.5: 2 G, 2 C, 2 A, 2 T (equal). Bias shifts the G/C vs A/T split.
     # We use 8 slots: floor(gc_bias * 8) slots get G/C, rest get A/T.
@@ -780,7 +780,7 @@ fn _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
 
 
 @doc_hidden
-fn _build_synthetic_fastq_record(
+def _build_synthetic_fastq_record(
     i: Int,
     min_length: Int,
     max_length: Int,
@@ -874,7 +874,7 @@ fn _build_synthetic_fastq_record(
     return record^
 
 
-fn generate_synthetic_fastq_buffer(
+def generate_synthetic_fastq_buffer(
     num_reads: Int,
     min_length: Int,
     max_length: Int,
@@ -963,7 +963,7 @@ fn generate_synthetic_fastq_buffer(
     return out^
 
 
-fn generate_synthetic_fastq_to_writer[
+def generate_synthetic_fastq_to_writer[
     W: WriterBackend
 ](
     mut writer: BufferedWriter[W],
@@ -1032,7 +1032,7 @@ fn generate_synthetic_fastq_to_writer[
         writer.write_bytes(record)
 
 
-fn compute_num_fasta_reads_for_size(
+def compute_num_fasta_reads_for_size(
     target_size_bytes: Int,
     min_length: Int,
     max_length: Int,
@@ -1071,7 +1071,7 @@ fn compute_num_fasta_reads_for_size(
     return target_size_bytes // bytes_per_record
 
 
-fn generate_synthetic_fasta_buffer(
+def generate_synthetic_fasta_buffer(
     num_reads: Int,
     min_length: Int,
     max_length: Int,

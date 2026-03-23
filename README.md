@@ -55,7 +55,7 @@ pixi run mojo run examples/nw_gpu/main.mojo
 from blazeseq import FastqParser, FileReader
 from pathlib import Path
 
-fn main() raises:
+def main() raises:
     var parser = FastqParser(FileReader(Path("data.fastq")), "sanger")
     var reads = 0
     var bases = 0
@@ -71,7 +71,7 @@ fn main() raises:
 from blazeseq import FastqParser, ParserConfig, FileReader
 from pathlib import Path
 
-fn main() raises:
+def main() raises:
     comptime config = ParserConfig(check_ascii=False, check_quality=False)
     var parser = FastqParser[config=config](FileReader(Path("data.fastq")), "generic")
     for view in parser.views():   # zero-copy

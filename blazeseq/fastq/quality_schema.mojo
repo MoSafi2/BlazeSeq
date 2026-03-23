@@ -12,7 +12,7 @@ struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable, TrivialReg
     var UPPER: UInt8
     var OFFSET: UInt8
 
-    fn write_to[w: Writer](self, mut writer: w) -> None:
+    def write_to[w: Writer](self, mut writer: w) -> None:
         writer.write("Quality schema: ")
         writer.write(self.SCHEMA)
         writer.write("\nLower: ")

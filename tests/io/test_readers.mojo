@@ -13,7 +13,7 @@ from std.testing import TestSuite
 # ============================================================================
 
 
-fn create_test_file(path: Path, content: String) raises -> Path:
+def create_test_file(path: Path, content: String) raises -> Path:
     """Helper function to create test files."""
     new_path = Path("tests/test_data") / path
     with open(new_path, "w") as f:
@@ -21,7 +21,7 @@ fn create_test_file(path: Path, content: String) raises -> Path:
     return new_path
 
 
-fn create_memory_reader_from_string(content: String) -> MemoryReader:
+def create_memory_reader_from_string(content: String) -> MemoryReader:
     """Helper function to create MemoryReader from string content."""
     var content_bytes = content.as_bytes()
     return MemoryReader(content_bytes)
@@ -32,7 +32,7 @@ fn create_memory_reader_from_string(content: String) -> MemoryReader:
 # ============================================================================
 
 
-fn test_memory_reader_init_from_list() raises:
+def test_memory_reader_init_from_list() raises:
     """Test MemoryReader initialization from List[Byte]."""
     var data = List[Byte]()
     data.append(72)  # 'H'
@@ -56,7 +56,7 @@ fn test_memory_reader_init_from_list() raises:
     print("✓ test_memory_reader_init_from_list passed")
 
 
-fn test_memory_reader_init_from_span() raises:
+def test_memory_reader_init_from_span() raises:
     """Test MemoryReader initialization from Span[Byte]."""
     var data = "Hello World"
     var data_bytes = data.as_bytes()
@@ -76,7 +76,7 @@ fn test_memory_reader_init_from_span() raises:
     print("✓ test_memory_reader_init_from_span passed")
 
 
-fn test_memory_reader_init_from_string() raises:
+def test_memory_reader_init_from_string() raises:
     """Test MemoryReader initialization from string helper."""
     var content = "Test content\n"
     var reader = create_memory_reader_from_string(content)
@@ -86,7 +86,7 @@ fn test_memory_reader_init_from_string() raises:
     print("✓ test_memory_reader_init_from_string passed")
 
 
-fn test_memory_reader_init_empty() raises:
+def test_memory_reader_init_empty() raises:
     """Test MemoryReader initialization with empty data."""
     var data = List[Byte]()
     var reader = MemoryReader(data^)
@@ -109,7 +109,7 @@ fn test_memory_reader_init_empty() raises:
 # ============================================================================
 
 
-fn test_memory_reader_read_to_buffer_basic() raises:
+def test_memory_reader_read_to_buffer_basic() raises:
     """Test basic read_to_buffer functionality."""
     var content = "Hello World"
     var reader = create_memory_reader_from_string(content)
@@ -129,7 +129,7 @@ fn test_memory_reader_read_to_buffer_basic() raises:
     print("✓ test_memory_reader_read_to_buffer_basic passed")
 
 
-fn test_memory_reader_read_to_buffer_partial() raises:
+def test_memory_reader_read_to_buffer_partial() raises:
     """Test reading partial data."""
     var content = "Hello World"
     var reader = create_memory_reader_from_string(content)
@@ -149,7 +149,7 @@ fn test_memory_reader_read_to_buffer_partial() raises:
     print("✓ test_memory_reader_read_to_buffer_partial passed")
 
 
-fn test_memory_reader_read_to_buffer_with_pos() raises:
+def test_memory_reader_read_to_buffer_with_pos() raises:
     """Test read_to_buffer with position offset."""
     var content = "Hello World"
     var reader = create_memory_reader_from_string(content)
@@ -171,7 +171,7 @@ fn test_memory_reader_read_to_buffer_with_pos() raises:
     print("✓ test_memory_reader_read_to_buffer_with_pos passed")
 
 
-fn test_memory_reader_read_to_buffer_multiple_reads() raises:
+def test_memory_reader_read_to_buffer_multiple_reads() raises:
     """Test multiple sequential reads."""
     var content = "Hello World"
     var reader = create_memory_reader_from_string(content)
@@ -193,7 +193,7 @@ fn test_memory_reader_read_to_buffer_multiple_reads() raises:
     print("✓ test_memory_reader_read_to_buffer_multiple_reads passed")
 
 
-fn test_memory_reader_read_to_buffer_eof() raises:
+def test_memory_reader_read_to_buffer_eof() raises:
     """Test reading past EOF."""
     var content = "Hello"
     var reader = create_memory_reader_from_string(content)
@@ -215,7 +215,7 @@ fn test_memory_reader_read_to_buffer_eof() raises:
     print("✓ test_memory_reader_read_to_buffer_eof passed")
 
 
-fn test_memory_reader_read_to_buffer_large_content() raises:
+def test_memory_reader_read_to_buffer_large_content() raises:
     """Test reading large content."""
     var content = String("")
     for _ in range(1000):
@@ -244,7 +244,7 @@ fn test_memory_reader_read_to_buffer_large_content() raises:
 # ============================================================================
 
 
-fn test_memory_reader_read_to_buffer_invalid_pos() raises:
+def test_memory_reader_read_to_buffer_invalid_pos() raises:
     """Test read_to_buffer with invalid position."""
     var content = "Hello"
     var reader = create_memory_reader_from_string(content)
@@ -259,7 +259,7 @@ fn test_memory_reader_read_to_buffer_invalid_pos() raises:
     print("✓ test_memory_reader_read_to_buffer_invalid_pos passed")
 
 
-fn test_memory_reader_read_to_buffer_negative_amt() raises:
+def test_memory_reader_read_to_buffer_negative_amt() raises:
     """Test read_to_buffer with negative amount."""
     var content = "Hello"
     var reader = create_memory_reader_from_string(content)
@@ -274,7 +274,7 @@ fn test_memory_reader_read_to_buffer_negative_amt() raises:
     print("✓ test_memory_reader_read_to_buffer_negative_amt passed")
 
 
-fn test_memory_reader_read_to_buffer_amt_too_large() raises:
+def test_memory_reader_read_to_buffer_amt_too_large() raises:
     """Test read_to_buffer with amount larger than buffer space."""
     var content = "Hello"
     var reader = create_memory_reader_from_string(content)
@@ -289,7 +289,7 @@ fn test_memory_reader_read_to_buffer_amt_too_large() raises:
     print("✓ test_memory_reader_read_to_buffer_amt_too_large passed")
 
 
-fn test_memory_reader_read_to_buffer_amt_too_large_with_pos() raises:
+def test_memory_reader_read_to_buffer_amt_too_large_with_pos() raises:
     """Test read_to_buffer with amount larger than remaining buffer space."""
     var content = "Hello"
     var reader = create_memory_reader_from_string(content)
@@ -309,7 +309,7 @@ fn test_memory_reader_read_to_buffer_amt_too_large_with_pos() raises:
 # ============================================================================
 
 
-fn test_file_reader_init() raises:
+def test_file_reader_init() raises:
     """Test FileReader initialization."""
     var test_path = create_test_file(Path("test_file_reader_init.txt"), "Hello World\n")
     
@@ -326,7 +326,7 @@ fn test_file_reader_init() raises:
     print("✓ test_file_reader_init passed")
 
 
-fn test_file_reader_init_nonexistent_file() raises:
+def test_file_reader_init_nonexistent_file() raises:
     """Test FileReader initialization with nonexistent file."""
     var nonexistent_path = Path("tests/test_data/nonexistent_file.txt")
     
@@ -342,7 +342,7 @@ fn test_file_reader_init_nonexistent_file() raises:
 # ============================================================================
 
 
-fn test_file_reader_read_bytes() raises:
+def test_file_reader_read_bytes() raises:
     """Test FileReader read_bytes method."""
     var content = "Hello World\n"
     var test_path = create_test_file(Path("test_file_reader_read_bytes.txt"), content)
@@ -357,7 +357,7 @@ fn test_file_reader_read_bytes() raises:
     print("✓ test_file_reader_read_bytes passed")
 
 
-fn test_file_reader_read_bytes_partial() raises:
+def test_file_reader_read_bytes_partial() raises:
     """Test FileReader read_bytes with specific amount."""
     var content = "Hello World\n"
     var test_path = create_test_file(Path("test_file_reader_read_bytes_partial.txt"), content)
@@ -372,7 +372,7 @@ fn test_file_reader_read_bytes_partial() raises:
     print("✓ test_file_reader_read_bytes_partial passed")
 
 
-fn test_file_reader_read_bytes_empty_file() raises:
+def test_file_reader_read_bytes_empty_file() raises:
     """Test FileReader read_bytes on empty file."""
     var test_path = create_test_file(Path("test_file_reader_read_bytes_empty.txt"), "")
     
@@ -384,7 +384,7 @@ fn test_file_reader_read_bytes_empty_file() raises:
     print("✓ test_file_reader_read_bytes_empty_file passed")
 
 
-fn test_file_reader_read_bytes_large_file() raises:
+def test_file_reader_read_bytes_large_file() raises:
     """Test FileReader read_bytes on large file."""
     var content = String("")
     for _ in range(1000):
@@ -407,7 +407,7 @@ fn test_file_reader_read_bytes_large_file() raises:
 # ============================================================================
 
 
-fn test_file_reader_read_to_buffer_basic() raises:
+def test_file_reader_read_to_buffer_basic() raises:
     """Test FileReader read_to_buffer basic functionality."""
     var content = "Hello World\n"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_basic.txt"), content)
@@ -428,7 +428,7 @@ fn test_file_reader_read_to_buffer_basic() raises:
     print("✓ test_file_reader_read_to_buffer_basic passed")
 
 
-fn test_file_reader_read_to_buffer_partial() raises:
+def test_file_reader_read_to_buffer_partial() raises:
     """Test FileReader read_to_buffer with partial read."""
     var content = "Hello World\n"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_partial.txt"), content)
@@ -449,7 +449,7 @@ fn test_file_reader_read_to_buffer_partial() raises:
     print("✓ test_file_reader_read_to_buffer_partial passed")
 
 
-fn test_file_reader_read_to_buffer_with_pos() raises:
+def test_file_reader_read_to_buffer_with_pos() raises:
     """Test FileReader read_to_buffer with position offset."""
     var content = "Hello World\n"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_with_pos.txt"), content)
@@ -475,7 +475,7 @@ fn test_file_reader_read_to_buffer_with_pos() raises:
     print("✓ test_file_reader_read_to_buffer_with_pos passed")
 
 
-fn test_file_reader_read_to_buffer_multiple_reads() raises:
+def test_file_reader_read_to_buffer_multiple_reads() raises:
     """Test FileReader multiple sequential reads."""
     var content = "Hello World\n"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_multiple.txt"), content)
@@ -497,7 +497,7 @@ fn test_file_reader_read_to_buffer_multiple_reads() raises:
     print("✓ test_file_reader_read_to_buffer_multiple_reads passed")
 
 
-fn test_file_reader_read_to_buffer_large_file() raises:
+def test_file_reader_read_to_buffer_large_file() raises:
     """Test FileReader read_to_buffer on large file."""
     var content = String("")
     for _ in range(2000):
@@ -526,7 +526,7 @@ fn test_file_reader_read_to_buffer_large_file() raises:
 # ============================================================================
 
 
-fn test_file_reader_read_to_buffer_invalid_pos() raises:
+def test_file_reader_read_to_buffer_invalid_pos() raises:
     """Test FileReader read_to_buffer with invalid position."""
     var content = "Hello"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_invalid_pos.txt"), content)
@@ -543,7 +543,7 @@ fn test_file_reader_read_to_buffer_invalid_pos() raises:
     print("✓ test_file_reader_read_to_buffer_invalid_pos passed")
 
 
-fn test_file_reader_read_to_buffer_negative_amt() raises:
+def test_file_reader_read_to_buffer_negative_amt() raises:
     """Test FileReader read_to_buffer with negative amount."""
     var content = "Hello"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_negative_amt.txt"), content)
@@ -560,7 +560,7 @@ fn test_file_reader_read_to_buffer_negative_amt() raises:
     print("✓ test_file_reader_read_to_buffer_negative_amt passed")
 
 
-fn test_file_reader_read_to_buffer_amt_too_large() raises:
+def test_file_reader_read_to_buffer_amt_too_large() raises:
     """Test FileReader read_to_buffer with amount larger than buffer space."""
     var content = "Hello"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_amt_too_large.txt"), content)
@@ -577,7 +577,7 @@ fn test_file_reader_read_to_buffer_amt_too_large() raises:
     print("✓ test_file_reader_read_to_buffer_amt_too_large passed")
 
 
-fn test_file_reader_read_to_buffer_amt_too_large_with_pos() raises:
+def test_file_reader_read_to_buffer_amt_too_large_with_pos() raises:
     """Test FileReader read_to_buffer with amount larger than remaining buffer space."""
     var content = "Hello"
     var test_path = create_test_file(Path("test_file_reader_read_to_buffer_amt_too_large_with_pos.txt"), content)
@@ -599,7 +599,7 @@ fn test_file_reader_read_to_buffer_amt_too_large_with_pos() raises:
 # ============================================================================
 
 
-fn cleanup_reader_test_files() raises:
+def cleanup_reader_test_files() raises:
     """Remove all files created by create_test_file (ignore missing files)."""
     var names = List[String]()
     names.append("test_file_reader_init.txt")
@@ -628,7 +628,7 @@ fn cleanup_reader_test_files() raises:
 # ============================================================================
 
 
-fn main() raises:
+def main() raises:
     """Run all tests."""
     print("Running FileReader and MemoryReader tests...\n")
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -24,7 +24,7 @@ from std.testing import (
 # ---------------------------------------------------------------------------
 
 
-fn get_fastq_records() raises -> List[String]:
+def get_fastq_records() raises -> List[String]:
     """Load first 4 lines of tests/test_data/fastq_parser/example.fastq as one FASTQ record.
     """
     var records = List[String]()
@@ -37,7 +37,7 @@ fn get_fastq_records() raises -> List[String]:
     return records^
 
 
-fn _validator_structure_only() -> Validator:
+def _validator_structure_only() -> Validator:
     """Validator that only runs structure checks (no ASCII, no quality schema).
     """
     return Validator(False, False, materialize[generic_schema]())
@@ -48,7 +48,7 @@ fn _validator_structure_only() -> Validator:
 # ---------------------------------------------------------------------------
 
 
-fn test_fastq_record_construction_never_validates() raises:
+def test_fastq_record_construction_never_validates() raises:
     """FastqRecord construction accepts any three strings (id, sequence, quality); it never raises for invalid structure.
     """
     # Invalid structure by FASTQ rules; construction must still succeed.
@@ -59,7 +59,7 @@ fn test_fastq_record_construction_never_validates() raises:
     _ = FastqRecord("@id", "ACGT", "!!!!")
 
 
-fn test_fastq_record_getters_and_length() raises:
+def test_fastq_record_getters_and_length() raises:
     """Accessors and length methods return correct values."""
     var record = FastqRecord("@test_seq", "ATCGATCGG", "!!!!!!!!!")
 
@@ -72,7 +72,7 @@ fn test_fastq_record_getters_and_length() raises:
     assert_equal(record.byte_len(), 1 + 9 + 9 + 9 + 5)
 
 
-fn test_fastq_record_equality() raises:
+def test_fastq_record_equality() raises:
     """Equality is based on sequence only (ids ignored)."""
     var record1 = FastqRecord("@test1", "ATCG", "!!!!")
     var record2 = FastqRecord("@test2", "ATCG", "!!!!")
@@ -83,7 +83,7 @@ fn test_fastq_record_equality() raises:
     assert_true(record1 != record3)
 
 
-fn test_fastq_record_string_representation() raises:
+def test_fastq_record_string_representation() raises:
     """String(record) produces four lines (\"@\" + id, seq, +, qual)."""
     var record = FastqRecord("id", "ACGT", "!!!!")
     var s = String(record)
@@ -91,7 +91,7 @@ fn test_fastq_record_string_representation() raises:
     assert_true(s.startswith(String("@id")))
 
 
-fn test_fastq_record_from_file_data() raises:
+def test_fastq_record_from_file_data() raises:
     """Record built from file lines has expected shape; validate() (ASCII/quality only when disabled) passes.
     """
     var lines = get_fastq_records()
@@ -110,7 +110,7 @@ fn test_fastq_record_from_file_data() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_validator_structure_valid_passes() raises:
+def test_validator_structure_valid_passes() raises:
     """Validator.validate() does not raise when no optional checks (ASCII/quality) are enabled.
     """
     var v = _validator_structure_only()
@@ -123,14 +123,14 @@ fn test_validator_structure_valid_passes() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_validator_ascii_valid_passes() raises:
+def test_validator_ascii_valid_passes() raises:
     """With check_ascii=True, validate() does not raise for all-ASCII record."""
     var v = Validator(True, False, materialize[generic_schema]())
     var record = FastqRecord("@id", "ACGT", "!!!!")
     v.validate(record)
 
 
-fn test_validator_ascii_invalid_raises() raises:
+def test_validator_ascii_invalid_raises() raises:
     """With check_ascii=True, validate() raises when a field contains non-ASCII.
     """
     var v = Validator(True, False, materialize[generic_schema]())
@@ -156,7 +156,7 @@ fn test_validator_ascii_invalid_raises() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_validator_quality_schema_valid_passes() raises:
+def test_validator_quality_schema_valid_passes() raises:
     """With check_quality=True, validate() does not raise when quality bytes are in schema range.
     """
     var v = Validator(False, True, materialize[generic_schema]())
@@ -164,7 +164,7 @@ fn test_validator_quality_schema_valid_passes() raises:
     v.validate(record)
 
 
-fn test_validator_quality_schema_invalid_raises() raises:
+def test_validator_quality_schema_invalid_raises() raises:
     """With check_quality=True, validate() raises when a quality byte is outside schema [LOWER,UPPER].
     """
     var v = Validator(False, True, materialize[generic_schema]())
@@ -181,7 +181,7 @@ fn test_validator_quality_schema_invalid_raises() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_validator_full_valid_passes() raises:
+def test_validator_full_valid_passes() raises:
     """Validator with check_ascii=True and check_quality=True accepts valid record.
     """
     var v = Validator(True, True, materialize[generic_schema]())
@@ -189,5 +189,5 @@ fn test_validator_full_valid_passes() raises:
     v.validate(record)
 
 
-fn main() raises:
+def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

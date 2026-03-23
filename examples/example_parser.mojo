@@ -22,7 +22,7 @@ from std.sys import argv
 # ---------------------------------------------------------------------------
 
 
-fn example_record_parser(file_path: String) raises:
+def example_record_parser(file_path: String) raises:
     """
     Example using FastqParser to parse records one at a time via parser.records().
     Useful for streaming processing or when you need to process records individually.
@@ -60,7 +60,7 @@ fn example_record_parser(file_path: String) raises:
 # ---------------------------------------------------------------------------
 
 
-fn example_record_parser_no_validation(file_path: String) raises:
+def example_record_parser_no_validation(file_path: String) raises:
     """
     Example using FastqParser with validation disabled for maximum speed.
     Use when you trust the input data format.
@@ -101,7 +101,7 @@ fn example_record_parser_no_validation(file_path: String) raises:
 # ---------------------------------------------------------------------------
 
 
-fn example_batched_parser(file_path: String) raises:
+def example_batched_parser(file_path: String) raises:
     """
     Example using FastqParser for parsing in batches.
     Use parser.batches() for FastqBatch (SoA) when you need batch processing.
@@ -143,7 +143,7 @@ fn example_batched_parser(file_path: String) raises:
 # ---------------------------------------------------------------------------
 
 
-fn main() raises:
+def main() raises:
     """Main function that runs FastqParser examples."""
 
     var args = argv()

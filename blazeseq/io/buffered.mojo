@@ -22,7 +22,7 @@ from std.sys import (
 
 
 @always_inline
-fn memmove[
+def memmove[
     T: AnyType
 ](
     *,
@@ -81,10 +81,10 @@ struct LineIteratorError(
     comptime EMPTY_BUFFER = Self(4)
     comptime SUCCESS = Self(5)
 
-    fn __eq__(self, other: Self) -> Bool:
+    def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    fn write_to(self, mut writer: Some[Writer]):
+    def write_to(self, mut writer: Some[Writer]):
         var msg: String
         if self.value == 0:
             msg = "LineIteratorError: EOF"
@@ -108,7 +108,7 @@ struct EOFError(TrivialRegisterPassable, Writable):
     and raise StopIteration instead.
     """
 
-    fn write_to(self, mut writer: Some[Writer]):
+    def write_to(self, mut writer: Some[Writer]):
         writer.write(EOF)
 
 
@@ -134,7 +134,7 @@ struct BufferedReader[R: Reader](
     var _is_eof: Bool
     var _stream_position: Int  # Bytes consumed/discarded from stream so far
 
-    fn __init__(
+    def __init__(
         out self, var reader: Self.R, capacity: Int = DEFAULT_CAPACITY
     ) raises:
         """Wrap a Reader with a buffer of given capacity. Reads once to fill buffer.
@@ -149,12 +149,12 @@ struct BufferedReader[R: Reader](
         _ = self._fill_buffer()
 
     @always_inline
-    fn available(self) -> Int:
+    def available(self) -> Int:
         """Current number of bytes in the buffer (same as `__len__`)."""
         return self._end - self._head
 
     @always_inline
-    fn consume(mut self, size: Int) -> Int:
+    def consume(mut self, size: Int) -> Int:
         """
         Advance read position by `size`. Must not exceed `available()`.
         Does not compact; caller must call `compact_from()` when needed.
@@ -164,7 +164,7 @@ struct BufferedReader[R: Reader](
         return cons_size
 
     @always_inline
-    fn unconsume(mut self, size: Int):
+    def unconsume(mut self, size: Int):
         """
         Unconsume `size` bytes. `_head` tracks position relative to compacted data;
         must not unconsume past the start (size <= _head). Use debug build with
@@ -174,7 +174,7 @@ struct BufferedReader[R: Reader](
         self._head -= size
 
     @always_inline
-    fn stream_position(self) -> Int:
+    def stream_position(self) -> Int:
         """
         Current logical position in the stream that parser is reading.
         Use for error messages: \"Parse error at byte N\".
@@ -182,22 +182,22 @@ struct BufferedReader[R: Reader](
         return self._stream_position + self._head
 
     @always_inline
-    fn buffer_position(self) -> Int:
+    def buffer_position(self) -> Int:
         """Current read offset in the buffer (for parser `compact_from`)."""
         return self._head
 
     @always_inline
-    fn is_eof(self) -> Bool:
+    def is_eof(self) -> Bool:
         """True when underlying read returned no more data."""
         return self._is_eof
 
     @always_inline
-    fn capacity(self) -> Int:
+    def capacity(self) -> Int:
         """Return the buffer capacity in bytes."""
         return self._len
 
     @always_inline
-    fn grow_buffer(mut self, additional: Int, max_capacity: Int) raises:
+    def grow_buffer(mut self, additional: Int, max_capacity: Int) raises:
         """
         Grow buffer by `additional` bytes, not exceeding max_capacity.
         Compacts first to maximize usable space and avoid unnecessary growth.
@@ -208,7 +208,7 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn resize_buffer(mut self, additional: Int, max_capacity: Int) raises:
+    def resize_buffer(mut self, additional: Int, max_capacity: Int) raises:
         """
         Resize buffer by `additional` bytes, not exceeding max_capacity.
         Does nott compact the buffer before resizing.
@@ -217,17 +217,17 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    fn view(ref[_] self) -> Span[Byte, MutExternalOrigin]:
+    def view(ref[_] self) -> Span[Byte, MutExternalOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutExternalOrigin](
             ptr=self._ptr + self._head, length=self._end - self._head
         )
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
 
     @always_inline
-    fn peek(ref self, amt: Int) -> Span[Byte, MutExternalOrigin]:
+    def peek(ref self, amt: Int) -> Span[Byte, MutExternalOrigin]:
         """
         Peek at the next `amt` bytes in the buffer without consuming them.
         """
@@ -237,7 +237,7 @@ struct BufferedReader[R: Reader](
         )
 
     @always_inline
-    fn _compact_from(mut self, from_pos: Int = 0):
+    def _compact_from(mut self, from_pos: Int = 0):
         """
         Discard bytes [0, from_pos) and shift remaining data to [0, end - from_pos).
         Resets head if it was before from_pos (parser record-boundary use case).
@@ -260,7 +260,7 @@ struct BufferedReader[R: Reader](
         self._end = remaining
 
     @always_inline
-    fn _fill_buffer(mut self) raises -> UInt64:
+    def _fill_buffer(mut self) raises -> UInt64:
         """Returns the number of bytes read into the buffer. Caller must call `compact_from()` when buffer is full to make room.
         """
         if self._is_eof:
@@ -280,7 +280,7 @@ struct BufferedReader[R: Reader](
 
         return amt
 
-    fn compact_and_fill(mut self) raises -> UInt64:
+    def compact_and_fill(mut self) raises -> UInt64:
         """
         Compact the buffer by discarding consumed bytes and shifting remaining data
         to the start, then fill the buffer with more data from the source.
@@ -290,7 +290,7 @@ struct BufferedReader[R: Reader](
         return self._fill_buffer()
 
     @always_inline
-    fn _resize_internal(mut self, new_len: Int) -> Bool:
+    def _resize_internal(mut self, new_len: Int) -> Bool:
         var new_ptr = alloc[Byte](new_len)
         memcpy(dest=new_ptr, src=self._ptr, count=self._len)
         self._ptr.free()
@@ -299,18 +299,18 @@ struct BufferedReader[R: Reader](
         return True
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         return self._end - self._head
 
     @always_inline
-    fn __getitem__(self, index: Int) -> Byte:
+    def __getitem__(self, index: Int) -> Byte:
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
         Indices are not validated; out-of-bounds access is undefined behavior.
         """
         return self._ptr[self._head + index]
 
     @always_inline
-    fn __getitem__(
+    def __getitem__(
         ref self, sl: ContiguousSlice
     ) -> Span[Byte, MutExternalOrigin]:
         """
@@ -342,7 +342,7 @@ struct BufferedWriter[W: WriterBackend](
     var _pos: Int  # Current write position in buffer
     var _bytes_written: Int  # Total bytes written
 
-    fn __init__(
+    def __init__(
         out self, var writer: Self.W, capacity: Int = DEFAULT_CAPACITY
     ) raises:
         """Initialize BufferedWriter with a Writer backend.
@@ -367,22 +367,22 @@ struct BufferedWriter[W: WriterBackend](
         self._bytes_written = 0
 
     @always_inline
-    fn capacity(self) -> Int:
+    def capacity(self) -> Int:
         """Return the buffer capacity."""
         return self._len
 
     @always_inline
-    fn available_space(self) -> Int:
+    def available_space(self) -> Int:
         """Return available space in buffer."""
         return self._len - self._pos
 
     @always_inline
-    fn bytes_written(self) -> Int:
+    def bytes_written(self) -> Int:
         """Return total bytes written to file."""
         return self._bytes_written
 
     @always_inline
-    fn write_bytes(mut self, data: Span[Byte, _]) raises:
+    def write_bytes(mut self, data: Span[Byte, _]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
 
         This is the primary entry point; it supports views like List slices
@@ -393,7 +393,7 @@ struct BufferedWriter[W: WriterBackend](
         self._write_bytes_impl(data)
 
     @always_inline
-    fn write_bytes(mut self, data: List[Byte]) raises:
+    def write_bytes(mut self, data: List[Byte]) raises:
         """Write bytes from a List to the buffer, flushing if needed.
 
         Kept for backward compatibility; forwards to the Span overload.
@@ -406,7 +406,7 @@ struct BufferedWriter[W: WriterBackend](
         self._write_bytes_impl(data[:])
 
     @always_inline
-    fn write_string(mut self, string: StringSlice):
+    def write_string(mut self, string: StringSlice):
         """Write a StringSlice to this Writer. Required by the builtin `Writer` trait.
         """
         try:
@@ -417,7 +417,7 @@ struct BufferedWriter[W: WriterBackend](
         except:
             pass  # Writer trait does not allow raises; use write_bytes() to handle errors
 
-    fn write[*Ts: Writable](mut self, *args: *Ts):
+    def write[*Ts: Writable](mut self, *args: *Ts):
         """Write a sequence of Writable arguments. Required by the builtin `Writer` trait.
         """
 
@@ -425,7 +425,7 @@ struct BufferedWriter[W: WriterBackend](
             args[i].write_to(self)
 
     @always_inline
-    fn flush(mut self) raises:
+    def flush(mut self) raises:
         """Flush the buffer to disk.
 
         Ensures all buffered data is written to the file.
@@ -433,7 +433,7 @@ struct BufferedWriter[W: WriterBackend](
         self._flush_buffer()
 
     @always_inline
-    fn _flush_buffer(mut self) raises:
+    def _flush_buffer(mut self) raises:
         """Internal method to flush buffer to writer backend."""
         if self._pos > 0:
             var span = Span[Byte, MutExternalOrigin](
@@ -444,7 +444,7 @@ struct BufferedWriter[W: WriterBackend](
             self._pos = 0
 
     @always_inline
-    fn _write_bytes_impl(mut self, data: Span[Byte, _]) raises:
+    def _write_bytes_impl(mut self, data: Span[Byte, _]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
 
         Args:
@@ -472,7 +472,7 @@ struct BufferedWriter[W: WriterBackend](
             offset += to_write
             remaining -= to_write
 
-    fn __del__(deinit self):
+    def __del__(deinit self):
         """Destructor: flush buffer."""
         try:
             self._flush_buffer()
@@ -483,7 +483,7 @@ struct BufferedWriter[W: WriterBackend](
 
 
 @doc_hidden
-fn buffered_writer_for_file(
+def buffered_writer_for_file(
     path: Path, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[FileWriter]:
     """Create BufferedWriter for a file."""
@@ -491,7 +491,7 @@ fn buffered_writer_for_file(
 
 
 @doc_hidden
-fn buffered_writer_for_memory(
+def buffered_writer_for_memory(
     capacity: Int = DEFAULT_CAPACITY,
 ) raises -> BufferedWriter[MemoryWriter]:
     """Create BufferedWriter for memory."""
@@ -499,7 +499,7 @@ fn buffered_writer_for_memory(
 
 
 @doc_hidden
-fn buffered_writer_for_gzip(
+def buffered_writer_for_gzip(
     filename: String, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[GZWriter]:
     """Create BufferedWriter for a gzipped file."""
@@ -508,7 +508,7 @@ fn buffered_writer_for_gzip(
 
 @doc_hidden
 @always_inline
-fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
+def _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     """
     Return the exclusive end index for line content, trimming a single trailing \\r.
     Use when the line may end with \\r (e.g. before \\n or at EOF).
@@ -540,7 +540,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     var _current_line_number: Int  # Track current line number (1-indexed)
     var _file_position: Int64  # Track byte position in file
 
-    fn __init__(
+    def __init__(
         out self,
         var reader: Self.R,
         capacity: Int = DEFAULT_CAPACITY,
@@ -562,18 +562,18 @@ struct LineIterator[R: Reader](Iterable, Movable):
         self._file_position = 0
 
     @always_inline
-    fn stream_position(self) -> Int:
+    def stream_position(self) -> Int:
         """Logical byte position of next line start (for errors and compaction).
         """
         return self.buffer.stream_position()
 
     @always_inline
-    fn buffer_position(self) -> Int:
+    def buffer_position(self) -> Int:
         """Current read offset in the buffer (for parser `compact_from`)."""
         return self.buffer.buffer_position()
 
     @always_inline
-    fn get_line_number(self) -> Int:
+    def get_line_number(self) -> Int:
         """Return the current line number (1-indexed).
 
         Returns:
@@ -582,7 +582,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         return self._current_line_number
 
     @always_inline
-    fn get_file_position(self) -> Int64:
+    def get_file_position(self) -> Int64:
         """Return the current byte position in the file.
 
         Returns:
@@ -591,13 +591,13 @@ struct LineIterator[R: Reader](Iterable, Movable):
         return self._file_position
 
     @always_inline
-    fn has_more(self) -> Bool:
+    def has_more(self) -> Bool:
         """True if there is at least one more line (data in buffer or more can be read).
         """
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
     @always_inline
-    fn next_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
+    def next_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
         """
         Next line as span excluding newline (and trimming trailing \\r). None at EOF.
         Invalidated by next `next_line()` or any buffer mutation.
@@ -638,7 +638,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
             self.buffer._compact_from(self.buffer.buffer_position())
 
     @always_inline
-    fn next_complete_line(
+    def next_complete_line(
         mut self,
     ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
@@ -677,7 +677,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         self._current_line_number += 1
         return span
 
-    fn peek(self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
+    def peek(self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
         """
         Peek at the next `amt` bytes in the buffer without consuming them.
         """
@@ -685,7 +685,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
     # Does not support buffer growth yet.
     @always_inline
-    fn read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
+    def read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
         """
         Read exactly `size` bytes. Refills and compacts the buffer as needed.
         Raises EOFError if the stream ends before `size` bytes are available.
@@ -705,7 +705,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         return result
 
     @always_inline
-    fn consume_line_scalar(
+    def consume_line_scalar(
         mut self,
     ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
@@ -738,7 +738,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         return span
 
     @always_inline
-    fn _handle_line_exceeds_capacity(mut self) raises:
+    def _handle_line_exceeds_capacity(mut self) raises:
         """
         Line does not fit in current buffer. Either raise (no growth or at max)
         or grow the buffer so the caller can retry.
@@ -764,7 +764,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         )
 
     @always_inline
-    fn _handle_eof_line(
+    def _handle_eof_line(
         mut self, view: Span[Byte, MutExternalOrigin]
     ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
         """
@@ -778,7 +778,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
             return span
         raise LineIteratorError.EOF
 
-    fn __iter__(
+    def __iter__(
         ref self,
     ) -> _LineIteratorIter[Self.R, origin_of(self)]:
         """Return an iterator for use in `for line in self`."""
@@ -797,16 +797,16 @@ struct _LineIteratorIter[R: Reader, origin: Origin](Iterator):
 
     var _src: Pointer[LineIterator[Self.R], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[LineIterator[Self.R], Self.origin],
     ):
         self._src = src
 
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[LineIterator[Self.R], MutExternalOrigin]](
             self._src
         )

@@ -4,7 +4,7 @@ from blazeseq import FastqParser, ParserConfig
 from std.pathlib import Path
 
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("Usage: pixi run mojo run examples/biofast_example.mojo /path/to/file.fastq")

@@ -15,7 +15,7 @@ from std.memory import Span, alloc, memcpy
 from std.collections.string import String
 
 
-fn test_file_writer_basic() raises:
+def test_file_writer_basic() raises:
     """Test FileWriter basic functionality."""
     var test_path = Path("tests/test_data") / Path("test_file_writer.txt")
     var writer = FileWriter(test_path)
@@ -42,7 +42,7 @@ fn test_file_writer_basic() raises:
     print("✓ test_file_writer_basic passed")
 
 
-fn test_file_writer_partial_write() raises:
+def test_file_writer_partial_write() raises:
     """Test FileWriter with partial buffer write."""
     var test_path = Path("tests/test_data") / Path(
         "test_file_writer_partial.txt"
@@ -71,7 +71,7 @@ fn test_file_writer_partial_write() raises:
     print("✓ test_file_writer_partial_write passed")
 
 
-fn test_file_writer_with_offset() raises:
+def test_file_writer_with_offset() raises:
     """Test FileWriter with offset position."""
     var test_path = Path("tests/test_data") / Path(
         "test_file_writer_offset.txt"
@@ -101,7 +101,7 @@ fn test_file_writer_with_offset() raises:
     print("✓ test_file_writer_with_offset passed")
 
 
-fn test_memory_writer_basic() raises:
+def test_memory_writer_basic() raises:
     """Test MemoryWriter basic functionality."""
     var writer = MemoryWriter()
 
@@ -128,7 +128,7 @@ fn test_memory_writer_basic() raises:
     print("✓ test_memory_writer_basic passed")
 
 
-fn test_memory_writer_multiple_writes() raises:
+def test_memory_writer_multiple_writes() raises:
     """Test MemoryWriter with multiple writes."""
     var writer = MemoryWriter()
 
@@ -164,7 +164,7 @@ fn test_memory_writer_multiple_writes() raises:
     print("✓ test_memory_writer_multiple_writes passed")
 
 
-fn test_memory_writer_clear() raises:
+def test_memory_writer_clear() raises:
     """Test MemoryWriter clear functionality."""
     var writer = MemoryWriter()
 
@@ -187,7 +187,7 @@ fn test_memory_writer_clear() raises:
     print("✓ test_memory_writer_clear passed")
 
 
-fn test_gz_writer_basic() raises:
+def test_gz_writer_basic() raises:
     """Test GZWriter basic functionality."""
     var test_path = "tests/test_data/test_gz_writer.gz"
 
@@ -222,7 +222,7 @@ fn test_gz_writer_basic() raises:
     print("✓ test_gz_writer_basic passed")
 
 
-fn test_buffered_writer_with_file_writer() raises:
+def test_buffered_writer_with_file_writer() raises:
     """Test BufferedWriter with FileWriter backend."""
     var test_path = Path("tests/test_data") / Path("test_buffered_file.txt")
     var file_writer = FileWriter(test_path)
@@ -246,7 +246,7 @@ fn test_buffered_writer_with_file_writer() raises:
     print("✓ test_buffered_writer_with_file_writer passed")
 
 
-fn test_buffered_writer_with_memory_writer() raises:
+def test_buffered_writer_with_memory_writer() raises:
     """Test BufferedWriter with MemoryWriter backend."""
     var mem_writer = MemoryWriter()
     var buf_writer = BufferedWriter(mem_writer^)
@@ -265,7 +265,7 @@ fn test_buffered_writer_with_memory_writer() raises:
     print("✓ test_buffered_writer_with_memory_writer passed")
 
 
-fn test_buffered_writer_convenience_constructors() raises:
+def test_buffered_writer_convenience_constructors() raises:
     """Test BufferedWriter convenience constructors."""
     var test_path = Path("tests/test_data") / Path("test_convenience.txt")
 
@@ -299,7 +299,7 @@ fn test_buffered_writer_convenience_constructors() raises:
     print("✓ test_buffered_writer_convenience_constructors passed")
 
 
-fn test_buffered_writer_auto_flush() raises:
+def test_buffered_writer_auto_flush() raises:
     """Test BufferedWriter auto-flush when buffer is full."""
     var mem_writer = MemoryWriter()
     # Use small buffer to trigger auto-flush
@@ -318,7 +318,7 @@ fn test_buffered_writer_auto_flush() raises:
     print("✓ test_buffered_writer_auto_flush passed")
 
 
-fn test_writer_error_handling() raises:
+def test_writer_error_handling() raises:
     """Test Writer error handling for invalid parameters."""
     var writer = MemoryWriter()
 
@@ -356,7 +356,7 @@ fn test_writer_error_handling() raises:
     print("✓ test_writer_error_handling passed")
 
 
-fn cleanup_writer_test_files() raises:
+def cleanup_writer_test_files() raises:
     """Remove all files created by writer tests (ignore missing files)."""
     var base = Path("tests/test_data")
     var names = List[String]()
@@ -374,7 +374,7 @@ fn cleanup_writer_test_files() raises:
             pass
 
 
-fn main() raises:
+def main() raises:
     """Run all writer tests."""
     try:
         print("Running Writer trait and backend tests...")

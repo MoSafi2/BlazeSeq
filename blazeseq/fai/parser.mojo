@@ -47,7 +47,7 @@ struct FaiParser[R: Reader](Iterable, Movable):
 
     var _rows: DelimitedReader[Self.R]
 
-    fn __init__(out self, var reader: Self.R) raises:
+    def __init__(out self, var reader: Self.R) raises:
         self._rows = DelimitedReader[Self.R](
             reader^, delimiter=9, has_header=False
         )
@@ -57,18 +57,18 @@ struct FaiParser[R: Reader](Iterable, Movable):
     # ------------------------------------------------------------------ #
 
     @always_inline
-    fn has_more(self) -> Bool:
+    def has_more(self) -> Bool:
         return self._rows.has_more()
 
     @always_inline
-    fn _parse_context(ref self) -> ParseContext:
+    def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
     # ------------------------------------------------------------------ #
     # Record API                                                         #
     # ------------------------------------------------------------------ #
 
-    fn next_view(mut self) raises -> FaiView[MutExternalOrigin]:
+    def next_view(mut self) raises -> FaiView[MutExternalOrigin]:
         """Return the next FAI index row as a zero-alloc `FaiView`.
 
         The view borrows from the reader's buffer and is invalidated on the
@@ -93,7 +93,7 @@ struct FaiParser[R: Reader](Iterable, Movable):
             )
             raise Error(msg)
 
-        fn _parse_int64_from_span(span: Span[UInt8, _]) raises -> Int64:
+        def _parse_int64_from_span(span: Span[UInt8, _]) raises -> Int64:
             var result: Int64 = 0
             var n = len(span)
 
@@ -129,7 +129,7 @@ struct FaiParser[R: Reader](Iterable, Movable):
             _qual_offset=qual_offset,
         )
 
-    fn next_record(mut self) raises -> FaiRecord:
+    def next_record(mut self) raises -> FaiRecord:
         """Return the next FAI index row as a `FaiRecord`.
 
         Convenience wrapper around `next_view().to_record()`.
@@ -140,7 +140,7 @@ struct FaiParser[R: Reader](Iterable, Movable):
         """
         return self.next_view().to_record()
 
-    fn collect(mut self) raises -> List[FaiRecord]:
+    def collect(mut self) raises -> List[FaiRecord]:
         """Read all rows from this index into memory."""
         var out = List[FaiRecord]()
         while True:
@@ -154,15 +154,15 @@ struct FaiParser[R: Reader](Iterable, Movable):
                 raise e^
         return out^
 
-    fn views(ref self) -> _FaiParserViewIter[Self.R, origin_of(self)]:
+    def views(ref self) -> _FaiParserViewIter[Self.R, origin_of(self)]:
         """Iterator yielding zero-alloc `FaiView`s."""
         return _FaiParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
 
-    fn records(ref self) -> _FaiParserRecordIter[Self.R, origin_of(self)]:
+    def records(ref self) -> _FaiParserRecordIter[Self.R, origin_of(self)]:
         """Iterator yielding owned `FaiRecord`s."""
         return {Pointer(to=self)}
 
-    fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
         return self.records()
 
 
@@ -173,18 +173,18 @@ struct _FaiParserViewIter[R: Reader, origin: Origin](Iterator):
 
     var _src: Pointer[FaiParser[Self.R], Self.origin]
 
-    fn __init__(out self, src: Pointer[FaiParser[Self.R], Self.origin]):
+    def __init__(out self, src: Pointer[FaiParser[Self.R], Self.origin]):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutExternalOrigin]](
             self._src
         )
@@ -206,21 +206,21 @@ struct _FaiParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     var _src: Pointer[FaiParser[Self.R], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[FaiParser[Self.R], Self.origin],
     ):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutExternalOrigin]](
             self._src
         )

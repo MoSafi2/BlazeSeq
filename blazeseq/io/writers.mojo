@@ -18,7 +18,7 @@ trait WriterBackend(ImplicitlyDestructible, Movable):
     from a buffer to the underlying storage.
     """
 
-    fn write_from_buffer(
+    def write_from_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Write bytes from a buffer to the underlying storage.
@@ -36,7 +36,7 @@ trait WriterBackend(ImplicitlyDestructible, Movable):
         """
         ...
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         """Move constructor for Movable trait compliance."""
         ...
 
@@ -58,7 +58,7 @@ struct FileWriter(Movable, WriterBackend):
 
     var handle: FileHandle
 
-    fn __init__(out self, path: Path) raises:
+    def __init__(out self, path: Path) raises:
         """Initialize FileWriter with a file path.
 
         Args:
@@ -70,7 +70,7 @@ struct FileWriter(Movable, WriterBackend):
         self.handle = open(path, "w")
 
     @always_inline
-    fn write_from_buffer(
+    def write_from_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Write bytes from buffer to file."""
@@ -95,7 +95,7 @@ struct FileWriter(Movable, WriterBackend):
         self.handle.write_bytes(bytes_list)
         return UInt64(amt)
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         """Move constructor."""
         self.handle = take.handle^
 
@@ -109,12 +109,12 @@ struct MemoryWriter(Movable, WriterBackend):
 
     var data: List[Byte]
 
-    fn __init__(out self):
+    def __init__(out self):
         """Initialize MemoryWriter with an empty buffer."""
         self.data = List[Byte]()
 
     @always_inline
-    fn write_from_buffer(
+    def write_from_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Write bytes from buffer to memory."""
@@ -137,21 +137,21 @@ struct MemoryWriter(Movable, WriterBackend):
         self.data.extend(write_span)
         return UInt64(amt)
 
-    fn get_data(self) -> List[Byte]:
+    def get_data(self) -> List[Byte]:
         """Get a copy of the written data."""
         return self.data.copy()
 
-    fn get_data_ref(self) -> Span[Byte, origin_of(self.data)]:
+    def get_data_ref(self) -> Span[Byte, origin_of(self.data)]:
         """Get owned reference to the written data."""
         return Span[Byte, origin_of(self.data)](
             ptr=self.data.unsafe_ptr(), length=len(self.data)
         )
 
-    fn clear(mut self):
+    def clear(mut self):
         """Clear the buffer."""
         self.data.clear()
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         """Move constructor."""
         self.data = take.data^
 
@@ -164,7 +164,7 @@ struct GZWriter(Movable, WriterBackend):
     var filename: String
     var mode: String
 
-    fn __init__(out self, filename: String, mode: String = "wb") raises:
+    def __init__(out self, filename: String, mode: String = "wb") raises:
         """Initialize GZWriter with a file path.
 
         Args:
@@ -182,7 +182,7 @@ struct GZWriter(Movable, WriterBackend):
             raise Error("Failed to open gzip file for writing: " + filename)
 
     @always_inline
-    fn write_from_buffer(
+    def write_from_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Write bytes from buffer to compressed file."""
@@ -211,13 +211,13 @@ struct GZWriter(Movable, WriterBackend):
 
         return UInt64(bytes_written)
 
-    fn __del__(deinit self):
+    def __del__(deinit self):
         """Close the file when the object is destroyed."""
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
     # Move constructor using unified init naming in Mojo 26.2.
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         """Move constructor."""
         self.handle = take.handle
         self.lib = take.lib^

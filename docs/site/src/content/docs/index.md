@@ -20,7 +20,7 @@ Then `pixi install` and import in Mojo:
 from blazeseq import FastqParser, FileReader
 from pathlib import Path
 
-fn main() raises:
+def main() raises:
     var parser = FastqParser(FileReader(Path("reads.fastq")), "sanger")
 
     # Zero-copy view iteration

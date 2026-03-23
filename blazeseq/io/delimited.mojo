@@ -34,15 +34,15 @@ trait LinePolicy(
       STOP     — terminate iteration immediately (e.g. embedded FASTA block).
     """
 
-    fn __init__(out self):
+    def __init__(out self):
         ...
 
     @always_inline
-    fn classify(self, line: Span[UInt8, _]) -> LineAction:
+    def classify(self, line: Span[UInt8, _]) -> LineAction:
         ...
 
     @always_inline
-    fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
+    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
         """Called when classify() returns METADATA. Default: no-op."""
         ...
 
@@ -61,7 +61,7 @@ struct LineAction(
     comptime HEADER = Self(3)  # column-name line; parse field names from it
     comptime STOP = Self(4)  # terminate iteration (e.g. ##FASTA in GFF3)
 
-    fn __eq__(self, other: Self) -> Bool:
+    def __eq__(self, other: Self) -> Bool:
         return self._tag == other._tag
 
 
@@ -73,17 +73,17 @@ struct DefaultLinePolicy(
     Skips blank lines (SKIP) and yields all non-empty lines (YIELD).
     """
 
-    fn __init__(out self):
+    def __init__(out self):
         pass
 
     @always_inline
-    fn classify(self, line: Span[UInt8, _]) -> LineAction:
+    def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
         return LineAction.YIELD
 
     @always_inline
-    fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
+    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
         ...
 
 
@@ -98,24 +98,24 @@ struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
     var _num_fields: Int
 
     @always_inline
-    fn __init__(out self):
+    def __init__(out self):
         self._data = InlineArray[Int, self.MAX * 2](fill=0)
         self._num_fields = 0
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         return self._num_fields
 
     @always_inline
-    fn start(self, i: Int) -> Int:
+    def start(self, i: Int) -> Int:
         return self._data[i * 2]
 
     @always_inline
-    fn end(self, i: Int) -> Int:
+    def end(self, i: Int) -> Int:
         return self._data[i * 2 + 1]
 
     @always_inline
-    fn _push(mut self, start: Int, end: Int):
+    def _push(mut self, start: Int, end: Int):
         if self._num_fields < Self.MAX:
             self._data[self._num_fields * 2] = start
             self._data[self._num_fields * 2 + 1] = end
@@ -128,7 +128,7 @@ struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
 
 
 @always_inline
-fn _fill_offsets[
+def _fill_offsets[
     O: Origin, MAX: Int
 ](line: Span[Byte, O], delimiter: Byte, mut offsets: FieldOffsets[MAX]):
     """Scan `line` for `delimiter` and write field boundaries into `offsets`.
@@ -180,33 +180,33 @@ struct DelimitedView[
     var _delimiter: Byte
 
     @always_inline
-    fn __init__(out self, line: Span[UInt8, Self.O], delimiter: UInt8):
+    def __init__(out self, line: Span[UInt8, Self.O], delimiter: UInt8):
         self._line = line
         self._offsets = FieldOffsets[Self.MAX]()
         _fill_offsets(line, delimiter, self._offsets)
         self._delimiter = delimiter
 
     @always_inline
-    fn num_fields(self) -> Int:
+    def num_fields(self) -> Int:
         return len(self._offsets)
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         return len(self._offsets)
 
     @always_inline
-    fn get_span(self, idx: Int) -> Span[UInt8, Self.O]:
+    def get_span(self, idx: Int) -> Span[UInt8, Self.O]:
         """Zero-copy view of field `idx`. Same lifetime as this view."""
         return self._line[self._offsets.start(idx) : self._offsets.end(idx)]
 
     @always_inline
-    fn get(self, idx: Int) -> Optional[Span[UInt8, Self.O]]:
+    def get(self, idx: Int) -> Optional[Span[UInt8, Self.O]]:
         if idx < 0 or idx >= len(self._offsets):
             return None
         return self.get_span(idx)
 
     @always_inline
-    fn to_record(deinit self) -> DelimitedRecord[Self.MAX]:
+    def to_record(deinit self) -> DelimitedRecord[Self.MAX]:
         """Copy the backing bytes and offsets into an owned `DelimitedRecord`.
 
         One `BString` allocation; offsets are copied by value (stack to stack).
@@ -214,7 +214,7 @@ struct DelimitedView[
         """
         return DelimitedRecord[Self.MAX](self^)
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         for i in range(len(self._offsets)):
             if i > 0:
                 writer.write(self._delimiter)
@@ -240,12 +240,12 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
     var _offsets: FieldOffsets[Self.MAX]
 
     @always_inline
-    fn __init__(out self):
+    def __init__(out self):
         self._line = BString()
         self._offsets = FieldOffsets[Self.MAX]()
 
     @always_inline
-    fn __init__(out self, var view: DelimitedView[_, Self.MAX]):
+    def __init__(out self, var view: DelimitedView[_, Self.MAX]):
         """Materialize from a view — one `BString` alloc, offsets copied by value.
         """
         # TODO: use Move instead of a copy, Lifetime Issue here
@@ -253,31 +253,31 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
         self._offsets = view._offsets.copy()
 
     @always_inline
-    fn num_fields(self) -> Int:
+    def num_fields(self) -> Int:
         return len(self._offsets)
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         return len(self._offsets)
 
     @always_inline
-    fn get_span(ref self, idx: Int) -> Span[UInt8, origin_of(self._line)]:
+    def get_span(ref self, idx: Int) -> Span[UInt8, origin_of(self._line)]:
         """Zero-copy view of field `idx`. Lifetime tied to this record."""
         return self._line.as_span()[
             self._offsets.start(idx) : self._offsets.end(idx)
         ]
 
     @always_inline
-    fn __getitem__(ref self, idx: Int) -> BString:
+    def __getitem__(ref self, idx: Int) -> BString:
         """Owned copy of field `idx`. Prefer `get_span()` in hot paths."""
         return BString(self.get_span(idx))
 
-    fn get(ref self, idx: Int) -> Optional[BString]:
+    def get(ref self, idx: Int) -> Optional[BString]:
         if idx < 0 or idx >= len(self._offsets):
             return None
         return BString(self.get_span(idx))
 
-    fn write_to[w: Writer](ref self, mut writer: w):
+    def write_to[w: Writer](ref self, mut writer: w):
         for i in range(len(self._offsets)):
             if i > 0:
                 writer.write("\t")
@@ -330,7 +330,7 @@ struct DelimitedReader[
     var _header: Optional[DelimitedRecord[Self.MAX]]
     var _expected_num_fields: Int
 
-    fn __init__(
+    def __init__(
         out self,
         var reader: Self.R,
         delimiter: Byte = Byte(ord("\t")),  # ord("\t")
@@ -349,18 +349,18 @@ struct DelimitedReader[
             self._parse_header_from(line)
 
     @always_inline
-    fn has_more(self) -> Bool:
+    def has_more(self) -> Bool:
         return self.lines.has_more()
 
     @always_inline
-    fn _parse_context(ref self) -> ParseContext:
+    def _parse_context(ref self) -> ParseContext:
         return ParseContext(
             self._record_number,
             self.lines.get_line_number(),
             self.lines.get_file_position(),
         )
 
-    fn header(ref self) -> Optional[DelimitedRecord[Self.MAX]]:
+    def header(ref self) -> Optional[DelimitedRecord[Self.MAX]]:
         """Copy of the stored header record, if present."""
         return self._header.copy()
 
@@ -368,7 +368,7 @@ struct DelimitedReader[
     # Hot path: zero-alloc view
     # ------------------------------------------------------------------
 
-    fn next_view(
+    def next_view(
         mut self,
     ) raises -> DelimitedView[MutExternalOrigin, Self.MAX]:
         """Return the next row as a zero-alloc `DelimitedView`.
@@ -394,7 +394,7 @@ struct DelimitedReader[
     # Convenience: owned record (one BString alloc per row)
     # ------------------------------------------------------------------
 
-    fn next_record(mut self) raises -> DelimitedRecord[Self.MAX]:
+    def next_record(mut self) raises -> DelimitedRecord[Self.MAX]:
         """Return the next row as an owned `DelimitedRecord`.
 
         Convenience wrapper around `next_view().to_record()`.
@@ -406,7 +406,7 @@ struct DelimitedReader[
     # Iterators
     # ------------------------------------------------------------------
 
-    fn views(
+    def views(
         ref self,
     ) -> _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
         """Iterator yielding zero-alloc `DelimitedView`s."""
@@ -414,7 +414,7 @@ struct DelimitedReader[
             Pointer(to=self)
         )
 
-    fn records(
+    def records(
         ref self,
     ) -> _DelimitedRecordIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
         """Iterator yielding owned `DelimitedRecord`s."""
@@ -422,7 +422,7 @@ struct DelimitedReader[
             Pointer(to=self)
         )
 
-    fn __iter__(
+    def __iter__(
         ref self,
     ) -> _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
         """Default iteration yields zero-alloc views."""
@@ -432,7 +432,7 @@ struct DelimitedReader[
     # Internal helpers
     # ------------------------------------------------------------------
 
-    fn _next_data_line(
+    def _next_data_line(
         mut self,
     ) raises -> Span[UInt8, MutExternalOrigin]:
         """Return the next line to treat as a data row.
@@ -457,7 +457,7 @@ struct DelimitedReader[
             else:
                 raise EOFError()
 
-    fn _parse_header_from(
+    def _parse_header_from(
         mut self, line: Span[UInt8, MutExternalOrigin]
     ) raises:
         """Parse a line as column names and store as header. Sets _expected_num_fields.
@@ -469,7 +469,7 @@ struct DelimitedReader[
         self._header = view^.to_record()
 
     @always_inline
-    fn _check_field_count(mut self, n: Int) raises:
+    def _check_field_count(mut self, n: Int) raises:
         if self._expected_num_fields == 0:
             self._expected_num_fields = n
         elif n != self._expected_num_fields:
@@ -500,21 +500,21 @@ struct _DelimitedViewIter[
 
     var _src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin],
     ):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[
                 DelimitedReader[Self.R, Self.P, Self.MAX], MutExternalOrigin
@@ -548,21 +548,21 @@ struct _DelimitedRecordIter[
 
     var _src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin],
     ):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[
                 DelimitedReader[Self.R, Self.P, Self.MAX], MutExternalOrigin

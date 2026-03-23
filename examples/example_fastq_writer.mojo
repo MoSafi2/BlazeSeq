@@ -31,7 +31,7 @@ from blazeseq.io.buffered import (
 # ---------------------------------------------------------------------------
 
 
-fn write_fastq_records[
+def write_fastq_records[
     W: WriterBackend
 ](mut writer: BufferedWriter[W], records: List[FastqRecord]) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""
@@ -47,7 +47,7 @@ fn write_fastq_records[
 # ---------------------------------------------------------------------------
 
 
-fn example_write_sample_to_plain_and_gzip() raises:
+def example_write_sample_to_plain_and_gzip() raises:
     """
     Build a few FastqRecords in code and write them to both a plain .fastq
     and a .fastq.gz file.
@@ -97,7 +97,7 @@ fn example_write_sample_to_plain_and_gzip() raises:
 # ---------------------------------------------------------------------------
 
 
-fn example_read_then_write_plain_and_gzip(input_path: String) raises:
+def example_read_then_write_plain_and_gzip(input_path: String) raises:
     """
     Parse FASTQ from an input file (plain or .gz), then write the same
     records to both a plain .fastq and a .fastq.gz file.
@@ -154,7 +154,7 @@ fn example_read_then_write_plain_and_gzip(input_path: String) raises:
 # ---------------------------------------------------------------------------
 
 
-fn main() raises:
+def main() raises:
     """Run FASTQ writing examples."""
 
     var args = argv()

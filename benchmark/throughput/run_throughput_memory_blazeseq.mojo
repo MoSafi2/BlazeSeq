@@ -18,7 +18,7 @@ from blazeseq.io.readers import MemoryReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.utils import generate_synthetic_fastq_buffer, compute_num_reads_for_size
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("Usage: run_throughput_memory_blazeseq.mojo [size_gb] <mode>")
