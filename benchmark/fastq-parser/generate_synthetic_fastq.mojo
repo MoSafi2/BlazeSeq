@@ -12,8 +12,12 @@ Usage:
 from std.sys import argv
 from std.pathlib import Path
 from blazeseq.CONSTS import GB
-from blazeseq.utils import generate_synthetic_fastq_buffer, compute_num_reads_for_size
+from blazeseq.utils import (
+    generate_synthetic_fastq_to_writer,
+    compute_num_reads_for_size,
+)
 from blazeseq.io.buffered import buffered_writer_for_file
+
 
 fn main() raises:
     var args = argv()
@@ -22,22 +26,19 @@ fn main() raises:
         return
 
     var output_path = args[1]
-    var size_gb: Int = 1
+    var size_gb: Float64 = 1.0
     if len(args) >= 3:
-        size_gb = atol(args[2])
+        size_gb = atof(args[2])
     if size_gb <= 0:
         print("size_gb must be positive")
         return
 
-    var target_size = size_gb * GB
+    var target_size = Int(size_gb * Float64(GB))
     var num_reads = compute_num_reads_for_size(target_size, 100, 100)
     print(t"Generating {num_reads} reads (~{size_gb} GB)...")
-    var data = generate_synthetic_fastq_buffer(
-        num_reads, 100, 100, 33, 73, "generic"
+    var writer = buffered_writer_for_file(Path(output_path))
+    generate_synthetic_fastq_to_writer(
+        writer, num_reads, 100, 100, 33, 73, "generic"
     )
-    print(t"Buffer size: {len(data)} bytes")
-
-    var writer = buffered_writer_for_file(Path(output_path), capacity=4 * 1024 * 1024)
-    writer.write_bytes(data)
     writer.flush()
     print(t"Wrote {output_path}")

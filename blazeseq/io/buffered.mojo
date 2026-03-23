@@ -16,7 +16,6 @@ from blazeseq.utils import memchr, memchr_scalar
 
 
 from std.sys import (
-    is_run_in_comptime_interpreter,
     llvm_intrinsic,
     size_of,
 )
@@ -44,7 +43,7 @@ fn memmove[
         count: The number of elements to copy.
     """
     var n = count * size_of[T]()
-    if is_run_in_comptime_interpreter():
+    if __is_run_in_comptime_interpreter:
         for i in range(n):
             (dest.bitcast[Byte]() + i).store((src.bitcast[Byte]() + i).load())
     else:
@@ -58,7 +57,7 @@ fn memmove[
 
 
 @fieldwise_init
-@doc_private
+@doc_hidden
 struct LineIteratorError(
     Copyable,
     Equatable,
@@ -483,7 +482,7 @@ struct BufferedWriter[W: WriterBackend](
             self._ptr.free()
 
 
-@doc_private
+@doc_hidden
 fn buffered_writer_for_file(
     path: Path, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[FileWriter]:
@@ -491,7 +490,7 @@ fn buffered_writer_for_file(
     return BufferedWriter[FileWriter](FileWriter(path), capacity)
 
 
-@doc_private
+@doc_hidden
 fn buffered_writer_for_memory(
     capacity: Int = DEFAULT_CAPACITY,
 ) raises -> BufferedWriter[MemoryWriter]:
@@ -499,7 +498,7 @@ fn buffered_writer_for_memory(
     return BufferedWriter[MemoryWriter](MemoryWriter(), capacity)
 
 
-@doc_private
+@doc_hidden
 fn buffered_writer_for_gzip(
     filename: String, capacity: Int = DEFAULT_CAPACITY
 ) raises -> BufferedWriter[GZWriter]:
@@ -507,7 +506,7 @@ fn buffered_writer_for_gzip(
     return BufferedWriter[GZWriter](GZWriter(filename), capacity)
 
 
-@doc_private
+@doc_hidden
 @always_inline
 fn _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     """

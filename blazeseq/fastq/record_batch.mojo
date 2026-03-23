@@ -244,7 +244,7 @@ struct DeviceFastqBatch(ImplicitlyDestructible, Movable):
         return self.copy_to_host(ctx).to_records()
 
 
-@doc_private
+@doc_hidden
 @fieldwise_init
 struct StagedFastqBatch:
     var num_records: Int
@@ -263,7 +263,7 @@ struct StagedFastqBatch:
         return move_staged_to_device(self, ctx, self.quality_offset)
 
 
-@doc_private
+@doc_hidden
 fn download_device_batch_to_staged(
     device_batch: DeviceFastqBatch, ctx: DeviceContext
 ) raises -> StagedFastqBatch:
@@ -305,7 +305,7 @@ fn download_device_batch_to_staged(
     )
 
 
-@doc_private
+@doc_hidden
 fn stage_batch_to_host(
     batch: FastqBatch, ctx: DeviceContext
 ) raises -> StagedFastqBatch:
@@ -361,7 +361,7 @@ fn stage_batch_to_host(
     )
 
 
-@doc_private
+@doc_hidden
 fn move_staged_to_device(
     staged: StagedFastqBatch, ctx: DeviceContext, quality_offset: UInt8
 ) raises -> DeviceFastqBatch:

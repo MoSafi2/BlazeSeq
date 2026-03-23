@@ -22,11 +22,11 @@ fn test_fasta_write_wraps_long_lines_default_width() raises:
 
     var expected = (
         ">id1\n"
-        + seq[:60]
+        + seq[byte=0:60]
         + "\n"
-        + seq[60:120]
+        + seq[byte=60:120]
         + "\n"
-        + seq[120:]
+        + seq[byte=120:]
         + "\n"
     )
     assert_equal(String(out), expected)
@@ -41,7 +41,7 @@ fn test_fasta_write_exact_multiple_of_width() raises:
     var out = String()
     rec.write(out, line_width=60)
 
-    var expected = ">id2\n" + seq[:60] + "\n" + seq[60:] + "\n"
+    var expected = ">id2\n" + seq[byte=0:60] + "\n" + seq[byte=60:] + "\n"
     assert_equal(String(out), expected)
 
 

@@ -10,6 +10,7 @@ This document describes all benchmarking options for BlazeSeq. Benchmark numbers
 | **BlazeSeq throughput** (validation regimes) | `pixi run -e benchmark benchmark-throughput-validation` | 3x3 comparison: mode (`batches`/`records`/`views`) vs validation (`none`/`ascii`/`ascii_quality`) |
 | **BlazeSeq throughput** (memory) | `pixi run -e benchmark benchmark-throughput-memory` | In-process FASTQ, parse-only timing, JSON + plots |
 | **Parser comparison** (plain) | `pixi run -e benchmark benchmark-plain` | BlazeSeq vs needletail, seq_io, kseq on 3 GB plain FASTQ |
+| **FASTQ batch vs record-set** | `pixi run -e benchmark benchmark-fastq-batch-vs-paraseq` | BlazeSeq batches vs paraseq RecordSets vs seq_io RecordSets on 3 GB FASTQ |
 | **Parser comparison** (gzip) | `pixi run -e benchmark benchmark-gzip` | Decompress + parse; BlazeSeq multi-threaded (default 4 threads) |
 | **Parser comparison** (gzip, 1 thread) | `pixi run -e benchmark benchmark-gzip-single` | Fair single-threaded comparison |
 | **Plot results** | `pixi run -e benchmark benchmark-plot` | Generate PNGs from JSON in `assets/` |
@@ -35,9 +36,9 @@ File-based benchmark scripts (plain comparison, gzip comparison, throughput) acc
 Examples (from repository root):
 
 ```bash
-./benchmark/fastq-parser/run_benchmarks.sh --ramfs
-./benchmark/fastq-parser/run_benchmarks.sh --tmpfs
-./benchmark/fastq-parser/run_benchmarks_gzip.sh --ramfs 8
+python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs
+python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs tmpfs
+python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads 8
 ./benchmark/throughput/run_throughput_benchmarks.sh --tmpfs
 ```
 
@@ -114,7 +115,7 @@ pixi run -e benchmark benchmark-plain
 Or run the script directly:
 
 ```bash
-pixi run -e benchmark ./benchmark/fastq-parser/run_benchmarks.sh
+pixi run -e benchmark python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs
 ```
 
 Results: `benchmark_results.md`, `benchmark_results.json`. Ensure at least ~5 GB RAM for the 3 GB file and tmpfs.
@@ -133,7 +134,7 @@ Compares **decompress + parse** across kseq (C + zlib), seq_io (Rust, flate2), n
 | Parser | Backend | Concurrency |
 |--------|---------|-------------|
 | kseq, needletail, seq_io | zlib / flate2 | **Single-threaded** |
-| BlazeSeq | rapidgzip | **Multi-threaded** (default 4 threads; override with script arg or `GZIP_BLAZESEQ_THREADS`) |
+| BlazeSeq | rapidgzip | **Multi-threaded** (default 4 threads; override with `--threads` or `GZIP_BLAZESEQ_THREADS`) |
 
 So the default gzip benchmark is **multi-threaded (BlazeSeq) vs single-threaded (others)**. For a fair single-threaded comparison, use the single-threaded gzip benchmark.
 
@@ -153,7 +154,7 @@ pixi run -e benchmark benchmark-gzip 0   # all available threads
 pixi run -e benchmark benchmark-gzip-single
 ```
 
-Or: `GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh`
+Or: `python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads 1`
 
 ---
 
@@ -187,9 +188,10 @@ To reduce timing variation (frequency scaling and turbo can cause ~5–15% varia
 
 1. **Performance governor**: `cpupower frequency-set -g performance` (requires `cpupower`, e.g. `linux-tools-common`).
 2. **Disable turbo** (Intel): `echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo`. Not applied on AMD or if the path is missing.
-3. **Pin to cores**: Hyperfine runs under `taskset -c "$BENCH_CPUS"` (default core `0`). Override with `BENCH_CPUS=0-3` etc.
+3. **Disable hyperthreading / SMT** (optional): set `DISABLE_HYPERTHREADING=1` (or `true|yes|on`). Best-effort and only applies if `/sys/devices/system/cpu/smt/control` exists; requires `sudo` to write the setting.
+4. **Pin to cores**: Hyperfine runs under `taskset -c "$BENCH_CPUS"` (default core `0`). Override with `BENCH_CPUS=0-3` etc.
 
-Governor and turbo state are **restored on exit**. If `cpupower` or `taskset` is missing, the scripts still run but skip the corresponding step.
+Governor, turbo, and SMT state are **restored on exit**. If `cpupower`/`taskset` is missing, the scripts still run but skip the corresponding step.
 
 ---
 

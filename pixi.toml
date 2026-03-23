@@ -39,7 +39,7 @@ rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/dow
 rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
 
 [dependencies]
-mojo = ">=0.26.2.0.dev2026031005,<0.27"
+mojo = ">=0.26.2.0,<0.27"
 
 [target.linux-64.dependencies]
 rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
@@ -68,12 +68,18 @@ hyperfine = ">=1.20.0,<2"
 rust = ">=1.94.0,<1.95"
 python = ">=3.14.3,<3.15"
 matplotlib = ">=3.10.8,<4"
-numpy = ">=2.4.2,<3"
+numpy = ">=2.4.3,<3"
+ipykernel = ">=7.1.0,<8"
+pandas = ">=3.0.1,<4"
+seaborn = ">=0.13.2,<0.14"
+
+
 
 [feature.benchmark.tasks]
-benchmark-plain = "bash -c './benchmark/fastq-parser/run_benchmarks.sh'"
-benchmark-gzip = "bash -c './benchmark/fastq-parser/run_benchmarks_gzip.sh'"
-benchmark-gzip-single = "bash -c 'GZIP_BENCH_PARALLELISM=1 ./benchmark/fastq-parser/run_benchmarks_gzip.sh'"
+benchmark-plain = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs --plot'"
+benchmark-fastq-batch-vs-paraseq = "bash -c 'python benchmark/fastq-parser/bench.py run --workload batch_vs_paraseq --format plain --fs ramfs --plot'"
+benchmark-gzip = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads ${1:-4} --plot'"
+benchmark-gzip-single = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format gz --fs ramfs --gzip-threads 1 --plot'"
 benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmarks.sh'"
 benchmark-throughput-validation = "bash -c './benchmark/throughput/run_throughput_validation_benchmarks.sh'"
 benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_benchmarks.sh"

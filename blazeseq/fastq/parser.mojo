@@ -20,6 +20,7 @@ from blazeseq.utils import (
     ParseContext,
     _check_end_qual,
     _scan_record,
+    _scan_record_memchr_seq,
     _strip_spaces,
     _record_snippet,
     RecordOffsets,
@@ -169,10 +170,58 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return ref_rec
 
     @always_inline
+    fn next_view_memchr_seq(
+        mut self
+    ) raises -> FastqView[origin=MutExternalOrigin]:
+        """Benchmark-only variant that scans record boundaries via sequential memchr."""
+        var ref_rec = self._find_and_consume_ref_record_memchr_seq()
+        var code = self.validator._validate(ref_rec)
+        if code != FastxErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code,
+                    self._parse_context().record_number,
+                    "",
+                    self._get_record_snippet(ref_rec),
+                )
+            )
+        return ref_rec
+
+    @always_inline
     fn next_record(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
         var ref_rec = self._find_and_consume_ref_record()
+        var record: FastqRecord
+        try:
+            record = FastqRecord(
+                ref_rec._id,
+                ref_rec._sequence,
+                ref_rec._quality,
+                Int8(self.quality_schema.OFFSET),
+            )
+        except e:
+            raise Error(
+                format_parse_error(self._parse_context(), String(e))
+            )
+        var code = self.validator._validate(record)
+        if code != FastxErrorCode.OK:
+            raise Error(
+                format_validation_error_from_code(
+                    code,
+                    self._parse_context().record_number,
+                    "",
+                    self._get_record_snippet_from_fastq(record),
+                )
+            )
+        return record^
+
+    @always_inline
+    fn next_record_memchr_seq(mut self) raises -> FastqRecord:
+        """Benchmark-only variant that scans record boundaries via sequential memchr."""
+        if not self.has_more():
+            raise EOFError()
+        var ref_rec = self._find_and_consume_ref_record_memchr_seq()
         var record: FastqRecord
         try:
             record = FastqRecord(
@@ -343,6 +392,80 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         return ref_rec
 
+    fn _find_and_consume_ref_record_memchr_seq(
+        mut self,
+    ) raises -> FastqView[origin=MutExternalOrigin]:
+        if self.buffer.available() == 0:
+            _ = self.buffer.compact_and_fill()
+        if not self.has_more():
+            raise EOFError()
+
+        var base = self.buffer.buffer_position()
+        var offsets = RecordOffsets()
+        var phase = SearchPhase.HEADER
+
+        var scan_view = Span[Byte, MutExternalOrigin](
+            ptr=self.buffer._ptr + base,
+            length=self.buffer._end - base,
+        )
+        var complete: Bool
+        var parse_code: FastxErrorCode
+        complete, offsets, phase, parse_code = _scan_record_memchr_seq(
+            scan_view, offsets, phase
+        )
+        if parse_code != FastxErrorCode.OK:
+            var ctx = self._parse_context()
+            raise Error(
+                format_parse_error_from_code(
+                    parse_code,
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
+                    _record_snippet(scan_view, offsets),
+                )
+            )
+        if not complete:
+            complete, offsets, phase, refill_code = (
+                self._next_ref_complete_memchr_seq(base, offsets, phase)
+            )
+            base = 0
+            if refill_code == FastxErrorCode.EOF and not complete:
+                raise EOFError()
+            elif refill_code != FastxErrorCode.OK:
+                raise Error(
+                    self._refill_error_message(refill_code, phase, offsets)
+                )
+            if not complete:
+                raise Error()
+
+        var buffer_view = self.buffer.view().unsafe_ptr()
+
+        var id_span = Span[Byte, MutExternalOrigin](
+            ptr=buffer_view + offsets.header_start + 1,
+            length=(offsets.seq_start - offsets.header_start - 2),
+        )
+        var seq_span = Span[Byte, MutExternalOrigin](
+            ptr=buffer_view + offsets.seq_start,
+            length=(offsets.sep_start - offsets.seq_start - 1),
+        )
+        var qual_span = Span[Byte, MutExternalOrigin](
+            ptr=buffer_view + offsets.qual_start,
+            length=(offsets.record_end - offsets.qual_start),
+        )
+
+        var ref_rec = FastqView[origin=MutExternalOrigin](
+            _strip_spaces(id_span),
+            seq_span,
+            qual_span,
+            self.quality_schema.OFFSET,
+        )
+
+        var to_consume = offsets.record_end + 1
+        _ = self.buffer.consume(min(to_consume, self.buffer._end - base))
+        self._current_line_number += 4
+
+        return ref_rec
+
     @always_inline
     fn _next_ref_complete(
         mut self,
@@ -416,6 +539,79 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if complete:
                 return (True, offsets, current_phase, parse_code)
 
+    @always_inline
+    fn _next_ref_complete_memchr_seq(
+        mut self,
+        base: Int,
+        mut offsets: RecordOffsets,
+        phase: SearchPhase,
+    ) raises -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
+        var current_phase = phase
+        var new_base = base
+        while True:
+            var buf_available = self.buffer.available()
+            var buf_capacity = self.buffer.capacity()
+
+            if buf_available < buf_capacity and self.buffer.is_eof():
+                if current_phase == SearchPhase.QUAL:
+                    var got_record: Bool
+                    got_record, offsets = _check_end_qual(
+                        self.buffer, new_base, offsets
+                    )
+                    return (
+                        got_record,
+                        offsets,
+                        SearchPhase(Int8(new_base)),
+                        FastxErrorCode.OK,
+                    )
+                else:
+                    return (
+                        False,
+                        offsets,
+                        current_phase,
+                        FastxErrorCode.UNEXPECTED_EOF,
+                    )
+
+            if new_base == 0:
+
+                comptime if not self.config.buffer_growth_enabled:
+                    return (
+                        False,
+                        offsets,
+                        current_phase,
+                        FastxErrorCode.BUFFER_EXCEEDED,
+                    )
+                var current_cap = self.buffer.capacity()
+                var max_cap = self._max_capacity
+                if current_cap >= max_cap:
+                    return (
+                        False,
+                        offsets,
+                        current_phase,
+                        FastxErrorCode.BUFFER_AT_MAX,
+                    )
+                var growth = min(current_cap, max_cap - current_cap)
+                self.buffer.resize_buffer(growth, max_cap)
+            else:
+                self.buffer._compact_from(new_base)
+                new_base = 0
+
+            var filled = self.buffer._fill_buffer()
+            if filled == 0 and self.buffer.available() == 0:
+                return (False, offsets, current_phase, FastxErrorCode.EOF)
+
+            var scan_view = Span[Byte, MutExternalOrigin](
+                ptr=self.buffer._ptr + new_base,
+                length=self.buffer._end - new_base,
+            )
+            var complete: Bool
+            var parse_code: FastxErrorCode
+            complete, offsets, current_phase, parse_code = (
+                _scan_record_memchr_seq(scan_view, offsets, current_phase)
+            )
+            if complete:
+                return (True, offsets, current_phase, parse_code)
+
     fn _get_record_snippet(self, record: FastqView) -> String:
         var snippet = String(capacity=200)
         var id_str = StringSlice(unsafe_from_utf8=record._id)
@@ -426,9 +622,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if len(snippet) < 200 and len(record._sequence) > 0:
             var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
             var seq_len = min(len(seq_str), 200 - len(snippet))
-            snippet += String(seq_str[:seq_len])
+            snippet += String(seq_str[byte=0:seq_len])
         if len(snippet) > 200:
-            snippet = snippet[:197] + "..."
+            snippet = snippet[byte=0:197] + "..."
         return snippet
 
     fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
@@ -441,9 +637,9 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if len(snippet) < 200:
             var seq_str = record.sequence()
             var seq_len = min(len(seq_str), 200 - len(snippet))
-            snippet += String(seq_str[:seq_len])
+            snippet += String(seq_str[byte=0:seq_len])
         if len(snippet) > 200:
-            snippet = snippet[:197] + "..."
+            snippet = snippet[byte=0:197] + "..."
         return snippet
 
 

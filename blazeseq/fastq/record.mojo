@@ -60,7 +60,7 @@ struct Validator(Copyable):
         if len(id_str) > 0:
             snippet += String(id_str)
             if len(snippet) > 100:
-                snippet = snippet[:97] + "..."
+                snippet = snippet[byte=0:97] + "..."
         return snippet
 
     fn id_snippet(self, record: FastqView) -> String:
@@ -70,7 +70,7 @@ struct Validator(Copyable):
         if len(id_str) > 0:
             snippet += String(id_str)
             if len(snippet) > 100:
-                snippet = snippet[:97] + "..."
+                snippet = snippet[byte=0:97] + "..."
         return snippet
 
     @always_inline
