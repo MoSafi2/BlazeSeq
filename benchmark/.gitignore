@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 bench_results/*
 fastq-parser/kseq_runner/kseq_runner
 fastq-parser/kseq_runner/kseq_gzip_runner
@@ -16,7 +15,3 @@ throughput_memory_benchmark_results.json
 throughput_memory_benchmark_results.md
 throughput/run_throughput_blazeseq
 throughput/run_throughput_memory_blazeseq
-=======
-bench_results
-bench_runs.ipynb
->>>>>>> 79f2bfe1 (f)
