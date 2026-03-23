@@ -25,7 +25,7 @@ struct FaiView[O: Origin](Movable, Sized):
     var _line_width: Int64
     var _qual_offset: Optional[Int64]
 
-    fn __init__(
+    def __init__(
         out self,
         _name: Span[UInt8, Self.O],
         _length: Int64,
@@ -42,36 +42,36 @@ struct FaiView[O: Origin](Movable, Sized):
         self._qual_offset = _qual_offset
 
     @always_inline
-    fn name(self) -> StringSlice[origin=Self.O]:
+    def name(self) -> StringSlice[origin=Self.O]:
         """Return the sequence name (valid only while view is valid)."""
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._name)
 
     @always_inline
-    fn length(self) -> Int64:
+    def length(self) -> Int64:
         return self._length
 
     @always_inline
-    fn offset(self) -> Int64:
+    def offset(self) -> Int64:
         return self._offset
 
     @always_inline
-    fn line_bases(self) -> Int64:
+    def line_bases(self) -> Int64:
         return self._line_bases
 
     @always_inline
-    fn line_width(self) -> Int64:
+    def line_width(self) -> Int64:
         return self._line_width
 
     @always_inline
-    fn qual_offset(self) -> Optional[Int64]:
+    def qual_offset(self) -> Optional[Int64]:
         return self._qual_offset
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         """Return the reference length as an Int."""
         return Int(self._length)
 
-    fn to_record(self) -> FaiRecord:
+    def to_record(self) -> FaiRecord:
         """Materialize an owned `FaiRecord`. Call when the record must outlive the view.
         """
         return FaiRecord(
@@ -111,35 +111,35 @@ struct FaiRecord(Copyable, Movable, Sized, Writable):
     var QualOffset: Optional[Int64]
 
     @always_inline
-    fn name(ref[_] self) -> String:
+    def name(ref[_] self) -> String:
         return self.Name.to_string()
 
     @always_inline
-    fn length(self) -> Int64:
+    def length(self) -> Int64:
         return self.Length
 
     @always_inline
-    fn offset(self) -> Int64:
+    def offset(self) -> Int64:
         return self.Offset
 
     @always_inline
-    fn line_bases(self) -> Int64:
+    def line_bases(self) -> Int64:
         return self.LineBases
 
     @always_inline
-    fn line_width(self) -> Int64:
+    def line_width(self) -> Int64:
         return self.LineWidth
 
     @always_inline
-    fn qual_offset(self) -> Optional[Int64]:
+    def qual_offset(self) -> Optional[Int64]:
         return self.QualOffset
 
     @always_inline
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         """Return the reference length as an Int."""
         return Int(self.Length)
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         """Write this record as a single .fai line."""
         writer.write(self.Name.to_string())
         writer.write("\t")

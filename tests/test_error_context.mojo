@@ -7,7 +7,7 @@ from blazeseq.CONSTS import EOF
 from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 
 
-fn create_invalid_id_fastq() -> List[Byte]:
+def create_invalid_id_fastq() -> List[Byte]:
     """Create FASTQ data with invalid header (doesn't start with @)."""
     var data = List[Byte]()
     # Invalid header - doesn't start with @
@@ -29,7 +29,7 @@ fn create_invalid_id_fastq() -> List[Byte]:
     return data^
 
 
-fn create_mismatched_length_fastq() -> List[Byte]:
+def create_mismatched_length_fastq() -> List[Byte]:
     """Create FASTQ data with mismatched sequence/quality lengths."""
     var data = List[Byte]()
     # Valid header
@@ -54,7 +54,7 @@ fn create_mismatched_length_fastq() -> List[Byte]:
     return data^
 
 
-fn test_parse_error_with_context() raises:
+def test_parse_error_with_context() raises:
     """Test that ParseError includes contextual information."""
     var invalid_data = create_invalid_id_fastq()
     var reader = MemoryReader(invalid_data^)
@@ -66,7 +66,7 @@ fn test_parse_error_with_context() raises:
         _ = parser.next_record()
 
 
-fn test_validation_error_with_context() raises:
+def test_validation_error_with_context() raises:
     """Test that ValidationError includes contextual information."""
     var invalid_data = create_mismatched_length_fastq()
     var reader = MemoryReader(invalid_data^)
@@ -78,7 +78,7 @@ fn test_validation_error_with_context() raises:
         _ = parser.next_record()
 
 
-fn test_error_context_in_iterator() raises:
+def test_error_context_in_iterator() raises:
     """Test that errors in iterators are printed with context."""
     var invalid_data = create_invalid_id_fastq()
     var reader = MemoryReader(invalid_data^)
@@ -94,7 +94,7 @@ fn test_error_context_in_iterator() raises:
     assert_equal(count, 0)
 
 
-fn test_record_number_tracking() raises:
+def test_record_number_tracking() raises:
     """Test that record numbers are tracked correctly."""
     # Create data with multiple records, second one invalid
     var data = List[Byte]()
@@ -137,7 +137,7 @@ fn test_record_number_tracking() raises:
         _ = parser.next_record()
 
 
-fn test_line_number_tracking() raises:
+def test_line_number_tracking() raises:
     """Test that line numbers are tracked correctly."""
     var invalid_data = create_invalid_id_fastq()
     var reader = MemoryReader(invalid_data^)
@@ -149,5 +149,5 @@ fn test_line_number_tracking() raises:
         _ = parser.next_record()
 
 
-fn main() raises:
+def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

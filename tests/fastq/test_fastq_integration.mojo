@@ -42,7 +42,7 @@ comptime SYNTHETIC_GZ_PATH = "tests/test_data/fastq_integration_synthetic.fastq.
 # ---------------------------------------------------------------------------
 
 
-fn assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") raises:
+def assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") raises:
     """Assert two FastqRecords are equal on all fields (not just sequence)."""
     assert_equal(
         a._id.to_string(),
@@ -71,7 +71,7 @@ fn assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") 
 # ---------------------------------------------------------------------------
 
 
-fn write_fastq_records[W: WriterBackend](
+def write_fastq_records[W: WriterBackend](
     mut writer: BufferedWriter[W], records: List[FastqRecord]
 ) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""
@@ -87,7 +87,7 @@ fn write_fastq_records[W: WriterBackend](
 # ---------------------------------------------------------------------------
 
 
-fn parse_plain_fastq(path: String) raises -> List[FastqRecord]:
+def parse_plain_fastq(path: String) raises -> List[FastqRecord]:
     """Parse a plain FASTQ file into a list of FastqRecords."""
     var records = List[FastqRecord]()
     var parser = FastqParser[FileReader](FileReader(Path(path)), SCHEMA)
@@ -101,7 +101,7 @@ fn parse_plain_fastq(path: String) raises -> List[FastqRecord]:
 # ---------------------------------------------------------------------------
 
 
-fn generate_synthetic_fastq_fixtures() raises:
+def generate_synthetic_fastq_fixtures() raises:
     """Generate synthetic reads, write to plain and gzip files for large fixtures.
     Writes to SYNTHETIC_PLAIN_PATH and SYNTHETIC_GZ_PATH.
     """
@@ -126,7 +126,7 @@ fn generate_synthetic_fastq_fixtures() raises:
 # ---------------------------------------------------------------------------
 
 
-fn parse_gzip_fastq(path: String) raises -> List[FastqRecord]:
+def parse_gzip_fastq(path: String) raises -> List[FastqRecord]:
     """Parse a gzipped FASTQ file into a list of FastqRecords."""
     var records = List[FastqRecord]()
     var parser = FastqParser[GZFile](GZFile(path, "rb"), SCHEMA)
@@ -140,7 +140,7 @@ fn parse_gzip_fastq(path: String) raises -> List[FastqRecord]:
 # ---------------------------------------------------------------------------
 
 
-fn test_plain_roundtrip() raises:
+def test_plain_roundtrip() raises:
     var original = parse_plain_fastq(EXAMPLE_FASTQ)
     var out_path = Path("tests/test_data/fastq_integration_plain.fastq")
     var writer = buffered_writer_for_file(out_path)
@@ -158,7 +158,7 @@ fn test_plain_roundtrip() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_plain_to_gzip_roundtrip() raises:
+def test_plain_to_gzip_roundtrip() raises:
     var original = parse_plain_fastq(EXAMPLE_FASTQ)
     var gz_path = "tests/test_data/fastq_integration_plain2gz.fastq.gz"
     var writer = buffered_writer_for_gzip(gz_path)
@@ -176,7 +176,7 @@ fn test_plain_to_gzip_roundtrip() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_gzip_roundtrip() raises:
+def test_gzip_roundtrip() raises:
     var original = parse_plain_fastq(EXAMPLE_FASTQ)
     var gz_path = "tests/test_data/fastq_integration_roundtrip.fastq.gz"
     var gz_writer = buffered_writer_for_gzip(gz_path)
@@ -199,7 +199,7 @@ fn test_gzip_roundtrip() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_gzip_to_gzip_roundtrip() raises:
+def test_gzip_to_gzip_roundtrip() raises:
     var original = parse_plain_fastq(EXAMPLE_FASTQ)
     var gz_in_path = "tests/test_data/fastq_integration_input.fastq.gz"
     var gz_in_writer = buffered_writer_for_gzip(gz_in_path)
@@ -222,7 +222,7 @@ fn test_gzip_to_gzip_roundtrip() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_synthetic_plain_roundtrip() raises:
+def test_synthetic_plain_roundtrip() raises:
     """Round-trip on large synthetic plain fixture."""
     if not exists(Path(SYNTHETIC_PLAIN_PATH)):
         generate_synthetic_fastq_fixtures()
@@ -237,7 +237,7 @@ fn test_synthetic_plain_roundtrip() raises:
     print("✓ test_synthetic_plain_roundtrip passed (" + String(len(original)) + " records)")
 
 
-fn test_synthetic_plain_to_gzip_roundtrip() raises:
+def test_synthetic_plain_to_gzip_roundtrip() raises:
     """Round-trip: large synthetic plain → write gzip → read gzip → compare."""
     if not exists(Path(SYNTHETIC_PLAIN_PATH)):
         generate_synthetic_fastq_fixtures()
@@ -252,7 +252,7 @@ fn test_synthetic_plain_to_gzip_roundtrip() raises:
     print("✓ test_synthetic_plain_to_gzip_roundtrip passed (" + String(len(original)) + " records)")
 
 
-fn test_synthetic_gzip_roundtrip() raises:
+def test_synthetic_gzip_roundtrip() raises:
     """Round-trip: large synthetic gzip → write plain → read plain → compare."""
     var original = parse_gzip_fastq(SYNTHETIC_GZ_PATH)
     var plain_path = "tests/test_data/fastq_integration_synthetic_gz2plain_out.fastq"
@@ -265,7 +265,7 @@ fn test_synthetic_gzip_roundtrip() raises:
     print("✓ test_synthetic_gzip_roundtrip passed (" + String(len(original)) + " records)")
 
 
-fn test_synthetic_gzip_to_gzip_roundtrip() raises:
+def test_synthetic_gzip_to_gzip_roundtrip() raises:
     """Round-trip: large synthetic gzip → write gzip → read gzip → compare."""
     var original = parse_gzip_fastq(SYNTHETIC_GZ_PATH)
     var gz_out_path = "tests/test_data/fastq_integration_synthetic_gz2gz_out.fastq.gz"
@@ -283,7 +283,7 @@ fn test_synthetic_gzip_to_gzip_roundtrip() raises:
 # ---------------------------------------------------------------------------
 
 
-fn cleanup_fastq_integration_files() raises:
+def cleanup_fastq_integration_files() raises:
     """Remove all files written by integration tests (ignore missing files)."""
     var paths = List[String]()
     paths.append(SYNTHETIC_PLAIN_PATH)
@@ -310,7 +310,7 @@ fn cleanup_fastq_integration_files() raises:
 # ---------------------------------------------------------------------------
 
 
-fn main() raises:
+def main() raises:
     generate_synthetic_fastq_fixtures()  # create fixtures for synthetic round-trip tests
     TestSuite.discover_tests[__functions_in_module()]().run()
     cleanup_fastq_integration_files()

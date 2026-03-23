@@ -8,7 +8,7 @@ comptime QUAL_LOWER: Int64 = 33
 comptime QUAL_UPPER: Int64 = 126
 
 
-fn generate_fastq_record(
+def generate_fastq_record(
     length: Int, schema: QualitySchema = generic_schema
 ) raises -> FastqRecord:
     var DNA_BASES = ["A", "T", "G", "C", "N"]
@@ -28,5 +28,5 @@ fn generate_fastq_record(
     return FastqRecord(HEADER, seq, qual, schema)
 
 
-fn main() raises:
+def main() raises:
     print(generate_fastq_record(50))

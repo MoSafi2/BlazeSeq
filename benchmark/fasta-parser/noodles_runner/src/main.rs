@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::process;
 
-fn main() {
+def main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("Usage: noodles_fasta_runner <path.fasta>");

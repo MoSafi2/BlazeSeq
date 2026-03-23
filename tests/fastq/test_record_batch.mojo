@@ -23,7 +23,7 @@ from std.testing import (
 )
 
 
-fn test_device_fastq_batch_add_and_layout() raises:
+def test_device_fastq_batch_add_and_layout() raises:
     """FastqBatch stacks records and builds correct ends."""
     var batch = FastqBatch()
     var r1 = FastqRecord("@a", "AC", "!!")
@@ -38,7 +38,7 @@ fn test_device_fastq_batch_add_and_layout() raises:
     assert_equal(len(batch._sequence_bytes), 4)
 
 
-fn test_fastq_batch_write_to() raises:
+def test_fastq_batch_write_to() raises:
     """FastqBatch.write_to round-trip via to_records: structure is correct.
 
     Note: Direct write_to(Writer) has a Mojo 26.2 dispatch issue where the
@@ -58,7 +58,7 @@ fn test_fastq_batch_write_to() raises:
     assert_equal(back[1]._sequence.to_string(), "TGCA", "Second record seq")
 
 
-fn test_fastq_batch_from_records_and_to_records() raises:
+def test_fastq_batch_from_records_and_to_records() raises:
     """Round-trip: List[FastqRecord] -> FastqBatch -> to_records() equals original list.
     """
     var records = List[FastqRecord]()
@@ -84,7 +84,7 @@ fn test_fastq_batch_from_records_and_to_records() raises:
         assert_equal(back[i]._phred_offset, records[i]._phred_offset)
 
 
-fn test_fastq_batch_get_record_matches_to_records() raises:
+def test_fastq_batch_get_record_matches_to_records() raises:
     """Get_record(i) returns the same record as to_records()[i]; compare to original added records.
     """
     var records = List[FastqRecord]()
@@ -134,14 +134,14 @@ fn test_fastq_batch_get_record_matches_to_records() raises:
         _ = from_get
 
 
-fn test_fastq_batch_empty_from_records() raises:
+def test_fastq_batch_empty_from_records() raises:
     """FastqBatch from empty list has 0 records."""
     var records = List[FastqRecord]()
     with assert_raises(contains="FastqBatch cannot be empty"):
         var batch = FastqBatch(records)
 
 
-# fn test_stage_batch_to_host_always_full() raises:
+# def test_stage_batch_to_host_always_full() raises:
 #     """When GPU is available: stage_batch_to_host always has quality, sequence, and header host buffers.
 #     """
 
@@ -162,7 +162,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(staged.id_ends), 2)
 
 
-# fn test_stage_batch_to_host_full_content() raises:
+# def test_stage_batch_to_host_full_content() raises:
 #     """When GPU is available: stage_batch_to_host with multiple records has correct header/sequence lengths.
 #     """
 
@@ -182,7 +182,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(staged.id_ends), 2)
 
 
-# fn test_move_staged_to_device() raises:
+# def test_move_staged_to_device() raises:
 #     """When GPU is available: move_staged_to_device produces DeviceFastqBatch with all buffers set.
 #     """
 
@@ -206,7 +206,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(d.id_ends), d.num_records)
 
 
-# fn test_upload_batch_to_device_always_full() raises:
+# def test_upload_batch_to_device_always_full() raises:
 #     """When GPU is available: upload always has qual, sequence, and header buffers.
 #     """
 
@@ -229,7 +229,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(d.id_ends), 2)
 
 
-# fn test_upload_batch_to_device_single_record() raises:
+# def test_upload_batch_to_device_single_record() raises:
 #     """When GPU is available: upload single record has all buffers set."""
 
 #     @parameter
@@ -246,7 +246,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(len(d.sequence_buffer), 4)
 
 
-# fn test_device_fastq_batch_shape_after_upload() raises:
+# def test_device_fastq_batch_shape_after_upload() raises:
 #     """When GPU is available: DeviceFastqBatch after upload matches batch shape; copy-back sanity check.
 #     """
 
@@ -267,7 +267,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #         assert_equal(host_qual[i], batch._quality_bytes[i])
 
 
-# fn test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
+# def test_device_fastq_batch_copy_to_host_full_roundtrip() raises:
 #     """When GPU is available: FULL round-trip List[FastqRecord] -> FastqBatch -> upload -> copy_to_host -> to_records equals original.
 #     """
 
@@ -300,7 +300,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #         assert_equal(back_list[i]._phred_offset, records[i]._phred_offset)
 
 
-# fn test_device_fastq_batch_empty_roundtrip() raises:
+# def test_device_fastq_batch_empty_roundtrip() raises:
 #     """When GPU is available: empty FastqBatch upload (FULL) -> copy_to_host -> to_records yields empty list.
 #     """
 
@@ -312,7 +312,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #         var batch = FastqBatch(records)
 
 
-# fn test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
+# def test_device_fastq_batch_roundtrip_quality_offset_zero() raises:
 #     """When GPU is available: round-trip with quality_offset 0 is accepted (no false rejection).
 #     Uses a 2-byte sequence to avoid single-byte buffer edge cases in staging/copy.
 #     """
@@ -335,7 +335,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #     _ = back_list
 
 
-# fn test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() raises:
+# def test_device_fastq_batch_quality_and_sequence_roundtrip_matches_original() raises:
 #     """When GPU is available: QUALITY_AND_SEQUENCE round-trip preserves sequence and quality vs original records.
 #     """
 
@@ -362,7 +362,7 @@ fn test_fastq_batch_empty_from_records() raises:
 #         assert_equal(back_list[i]._phred_offset, records[i]._phred_offset)
 
 
-# fn test_device_fastq_batch_copy_to_host_succeeds() raises:
+# def test_device_fastq_batch_copy_to_host_succeeds() raises:
 #     """When GPU is available: copy_to_host after upload returns FastqBatch with same shape.
 #     """
 
@@ -378,5 +378,5 @@ fn test_fastq_batch_empty_from_records() raises:
 #     assert_equal(back.seq_len(), batch.seq_len())
 
 
-fn main() raises:
+def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -23,24 +23,24 @@ struct ParserConfig(Copyable):
 
     var check_ascii: Bool
 
-    fn __init__(out self, check_ascii: Bool = False):
+    def __init__(out self, check_ascii: Bool = False):
         self.check_ascii = check_ascii
 
 
 struct Validator(Copyable):
     """Validator for FASTA records; enforces 7-bit ASCII on id and sequence."""
 
-    fn __init__(out self):
+    def __init__(out self):
         pass
 
     @always_inline
-    fn _validate(self, id_bytes: BString, seq_bytes: BString) -> FastxErrorCode:
+    def _validate(self, id_bytes: BString, seq_bytes: BString) -> FastxErrorCode:
         var code = _check_ascii(id_bytes.as_span())
         if code != FastxErrorCode.OK:
             return code
         return _check_ascii(seq_bytes.as_span())
 
-    fn validate(
+    def validate(
         self,
         id_bytes: BString,
         seq_bytes: BString,
@@ -85,7 +85,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
     var _last_seq_size: UInt32  # tracks previous sequence size for optimistic pre-allocation
     var validator: Validator
 
-    fn __init__(out self, var reader: Self.R) raises:
+    def __init__(out self, var reader: Self.R) raises:
         self.lines = LineIterator(reader^)
         self._record_number = 0
         self._pending_ids = List[BString]()
@@ -97,12 +97,12 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
     # ------------------------------------------------------------------ #
 
     @always_inline
-    fn has_more(self) -> Bool:
+    def has_more(self) -> Bool:
         """Return True if there may be more records to read."""
         return len(self._pending_ids) > 0 or self.lines.has_more()
 
     @always_inline
-    fn _parse_context(ref self) -> ParseContext:
+    def _parse_context(ref self) -> ParseContext:
         return ParseContext(
             self._record_number,
             self.lines.get_line_number(),
@@ -110,7 +110,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
         )
 
     @always_inline
-    fn get_buffer_position(ref self) -> Int:
+    def get_buffer_position(ref self) -> Int:
         """Return the current buffer position."""
         return self.lines.buffer_position()
 
@@ -118,7 +118,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
     # Public record API                                                    #
     # ------------------------------------------------------------------ #
 
-    fn next_record(mut self) raises -> FastaRecord:
+    def next_record(mut self) raises -> FastaRecord:
         """Return the next FASTA record as an owned FastaRecord.
 
         Raises EOFError when no more records are available.
@@ -164,14 +164,14 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
         self._record_number += 1
         return FastaRecord(id_str^, seq_buf^)
 
-    fn records(ref self) -> Self.IteratorType[origin_of(self)]:
+    def records(ref self) -> Self.IteratorType[origin_of(self)]:
         return {Pointer(to=self)}
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #
 
-    fn _read_header_line(mut self) raises -> BString:
+    def _read_header_line(mut self) raises -> BString:
         """Return the next header id (after '>'), or raise EOFError/ParseError.
 
         Uses _pending_ids if non-empty; otherwise reads lines until a non-blank
@@ -197,7 +197,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
             var id_span = _strip_spaces(trimmed[1:])
             return BString(id_span)
 
-    fn __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
         return self.records()
 
 
@@ -217,22 +217,22 @@ struct _FastaParserRecordIter[R: Reader, cfg: ParserConfig, origin: Origin](
 
     var _src: Pointer[FastaParser[Self.R, Self.cfg], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[FastaParser[Self.R, Self.cfg], Self.origin],
     ):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     # Fix #11: Reflect actual parser state.
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[FastaParser[Self.R], MutExternalOrigin]](
             self._src
         )

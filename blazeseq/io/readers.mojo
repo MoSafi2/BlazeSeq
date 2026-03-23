@@ -60,22 +60,22 @@ trait Reader(ImplicitlyDestructible, Movable):
         ```mojo
         from blazeseq.io.readers import Reader
         struct MyReader(Reader):
-            fn read_to_buffer(mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int) raises -> UInt64:
+            def read_to_buffer(mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int) raises -> UInt64:
                 # ... copy up to amt bytes from your source into buf starting at pos
                 var bytes_read: Int = 0
                 return UInt64(bytes_read)
-            fn __init__(out self, *, deinit take: Self): ...
+            def __init__(out self, *, deinit take: Self): ...
         ```
     """
 
-    fn read_to_buffer(
+    def read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
         """Read up to amt bytes into buf at offset pos. Returns bytes read (0 at EOF).
         """
         ...
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         ...
 
 
@@ -99,7 +99,7 @@ struct FileReader(Movable, Reader):
 
     var handle: FileHandle
 
-    fn __init__(out self, path: Path) raises:
+    def __init__(out self, path: Path) raises:
         """Open a file for reading.
 
         Args:
@@ -111,12 +111,12 @@ struct FileReader(Movable, Reader):
         self.handle = open(path, "r")
 
     @always_inline
-    fn read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
+    def read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
         """Read up to amt bytes (or all if amt < 0) as a list of bytes."""
         return self.handle.read_bytes(amt)
 
     @always_inline
-    fn read_to_buffer(
+    def read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Read up to amt bytes from the file into buf at offset pos. Returns bytes read.
@@ -147,27 +147,27 @@ struct MemoryReader(Movable, Reader):
     var data: List[Byte]
     var position: Int
 
-    fn __init__(out self, var data: List[Byte]):
+    def __init__(out self, var data: List[Byte]):
         """Initialize with an owned List[Byte] buffer. Takes ownership of data.
         """
         self.data = data^
         self.position = 0
 
-    fn __init__(out self, data: Span[Byte, _]):
+    def __init__(out self, data: Span[Byte, _]):
         """Initialize with a Span[Byte]; bytes are copied into an internal list.
         """
         self.data = List[Byte](capacity=len(data))
         self.data.extend(data)
         self.position = 0
 
-    fn __init__(out self, var content: String) raises:
+    def __init__(out self, var content: String) raises:
         """Initialize from a string; copies its bytes into an internal buffer.
         """
         self.data = List(content.as_bytes())
         self.position = 0
 
     @always_inline
-    fn read_to_buffer(
+    def read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
     ) raises -> UInt64:
         """Read bytes from the memory buffer into the destination buffer.
@@ -212,12 +212,12 @@ struct MemoryReader(Movable, Reader):
 
         return UInt64(bytes_to_read)
 
-    fn reset(mut self):
+    def reset(mut self):
         """Reset the read position to the start. Use to re-read the same buffer (e.g. for benchmarking).
         """
         self.position = 0
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         """Move constructor for Movable trait compliance."""
         self.data = take.data^
         self.position = take.position
@@ -231,17 +231,17 @@ struct ZLib(Movable):
     var lib_handle: OwnedDLHandle
 
     @staticmethod
-    fn _get_libname() -> StaticString:
+    def _get_libname() -> StaticString:
         comptime if CompilationTarget.is_macos():
             return "libz.dylib"
         else:
             return "libz.so"
 
-    fn __init__(out self) raises:
+    def __init__(out self) raises:
         """Initialize zlib wrapper."""
         self.lib_handle = OwnedDLHandle(Self._get_libname())
 
-    fn gzopen(
+    def gzopen(
         self, mut filename: String, mut mode: String
     ) raises -> c_void_ptr:
         """Open a gzip file."""
@@ -260,19 +260,19 @@ struct ZLib(Movable):
 
         return result
 
-    fn gzclose(self, file: c_void_ptr) -> c_int:
+    def gzclose(self, file: c_void_ptr) -> c_int:
         """Close a gzip file."""
         var func = self.lib_handle.get_function[gzclose_fn_type]("gzclose")
         return func(file)
 
-    fn gzread(
+    def gzread(
         self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
     ) -> c_int:
         """Read from a gzip file."""
         var func = self.lib_handle.get_function[gzread_fn_type]("gzread")
         return func(file, buffer, length)
 
-    fn gzwrite(
+    def gzwrite(
         self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
     ) -> c_int:
         """Write to a gzip file."""
@@ -302,7 +302,7 @@ struct GZFile(Movable, Reader):
     var filename: String
     var mode: String
 
-    fn __init__(out self, filename: String, mode: String) raises:
+    def __init__(out self, filename: String, mode: String) raises:
         """Open a gzip file (e.g. mode "rb" for read binary).
 
         Args:
@@ -320,18 +320,18 @@ struct GZFile(Movable, Reader):
         if self.handle == c_void_ptr():
             raise Error("Failed to open gzip file: " + filename)
 
-    fn __del__(deinit self):
+    def __del__(deinit self):
         """Close the file when the object is destroyed."""
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
-    fn __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit take: Self):
         self.handle = take.handle
         self.lib = take.lib^
         self.filename = take.filename^
         self.mode = take.mode^
 
-    fn read_to_buffer(
+    def read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
         """Read decompressed bytes into buf at offset pos. Returns bytes read (0 at EOF).
@@ -356,7 +356,7 @@ struct GZFile(Movable, Reader):
         return UInt64(bytes_read)
 
     @doc_hidden
-    fn unbuffered_read[](
+    def unbuffered_read[](
         mut self, buffer: Span[UInt8, MutExternalOrigin]
     ) raises -> Int:
         """Read data from the gzip file.
@@ -396,7 +396,7 @@ struct RapidgzipReader(Movable, Reader):
 
     var _file: RapidgzipFile
 
-    fn __init__(out self, path: String, parallelism: UInt32 = 0) raises:
+    def __init__(out self, path: String, parallelism: UInt32 = 0) raises:
         """Open a gzip file for parallel decompression.
 
         Args:
@@ -408,7 +408,7 @@ struct RapidgzipReader(Movable, Reader):
         """
         self._file = RapidgzipFile.open(path, parallelism)
 
-    fn __init__(out self, path: Path, parallelism: UInt32 = 0) raises:
+    def __init__(out self, path: Path, parallelism: UInt32 = 0) raises:
         """Open a gzip file for parallel decompression.
 
         Args:
@@ -420,7 +420,7 @@ struct RapidgzipReader(Movable, Reader):
         """
         self._file = RapidgzipFile.open(path.path, parallelism)
 
-    fn read_to_buffer(
+    def read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
         """Read decompressed bytes into buf at offset pos. Returns bytes read (0 at EOF).

@@ -7,14 +7,14 @@ from std.collections.string import String
 from std.testing import assert_equal, assert_true, assert_raises, TestSuite
 
 
-fn _bytes(s: String) -> List[Byte]:
+def _bytes(s: String) -> List[Byte]:
     var out = List[Byte]()
     for b in s.as_bytes():
         out.append(b)
     return out^
 
 
-fn test_fasta_fai_unix() raises:
+def test_fasta_fai_unix() raises:
     """Parse the example FASTA .fai with Unix line endings."""
     var data = "one\t66\t5\t30\t31\ntwo\t28\t98\t14\t15\n"
     var reader = MemoryReader(_bytes(data))
@@ -37,7 +37,7 @@ fn test_fasta_fai_unix() raises:
     assert_true(not rec2.qual_offset(), "FASTA FAI should have no qual offset")
 
 
-fn test_fasta_fai_windows() raises:
+def test_fasta_fai_windows() raises:
     """Parse the example FASTA .fai with Windows CRLF semantics."""
     var data = "one\t66\t6\t30\t32\ntwo\t28\t103\t14\t16\n"
     var reader = MemoryReader(_bytes(data))
@@ -58,7 +58,7 @@ fn test_fasta_fai_windows() raises:
     assert_equal(rec2.line_width(), 16)
 
 
-fn test_fastq_fai_example() raises:
+def test_fastq_fai_example() raises:
     """Parse the example FASTQ .fai with QUALOFFSET column."""
     var data = "fastq1\t66\t8\t30\t31\t79\nfastq2\t28\t156\t14\t15\t188\n"
     var reader = MemoryReader(_bytes(data))
@@ -83,7 +83,7 @@ fn test_fastq_fai_example() raises:
     assert_equal(rec2.qual_offset().value(), 188)
 
 
-fn test_collect_helper() raises:
+def test_collect_helper() raises:
     """Collect() reads all rows into a list."""
     var data = "one\t10\t0\t10\t11\ntwo\t20\t100\t10\t11\n"
     var reader = MemoryReader(_bytes(data))
@@ -94,7 +94,7 @@ fn test_collect_helper() raises:
     assert_equal(items[1].name(), "two")
 
 
-fn test_invalid_column_count() raises:
+def test_invalid_column_count() raises:
     """Rows with wrong number of columns raise an Error."""
     var data = "one\t10\t0\t10\n"  # only 4 columns
     var reader = MemoryReader(_bytes(data))
@@ -103,7 +103,7 @@ fn test_invalid_column_count() raises:
         _ = parser.next_record()
 
 
-fn test_non_integer_field() raises:
+def test_non_integer_field() raises:
     """Non-numeric numeric columns raise an Error."""
     var data = "one\tNaN\t0\t10\t11\n"
     var reader = MemoryReader(_bytes(data))
@@ -112,7 +112,7 @@ fn test_non_integer_field() raises:
         _ = parser.next_record()
 
 
-fn test_iterator_over_records() raises:
+def test_iterator_over_records() raises:
     """For-in iteration over FaiParser yields all records."""
     var data = (
         "one\t10\t0\t10\t11\ntwo\t20\t100\t10\t11\nthree\t30\t200\t10\t11\n"
@@ -128,7 +128,7 @@ fn test_iterator_over_records() raises:
     assert_equal(names[2], "three")
 
 
-fn test_next_record_view_and_to_record() raises:
+def test_next_record_view_and_to_record() raises:
     """Next_view() returns a view; view.to_record() equals next_record()."""
     # Use consistent column count (6) so DelimitedReader accepts both rows.
     var data = "seq1\t100\t0\t80\t81\t90\nseq2\t200\t500\t80\t81\t600\n"
@@ -155,5 +155,5 @@ fn test_next_record_view_and_to_record() raises:
     assert_equal(rec2.qual_offset().value(), 600)
 
 
-fn main() raises:
+def main() raises:
     var suite = TestSuite.discover_tests[__functions_in_module()]().run()

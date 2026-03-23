@@ -7,12 +7,12 @@ from std.collections.string import String
 from blazeseq.io import DelimitedRecord, DelimitedReader, MemoryReader, EOFError
 
 
-fn _memory_reader_from_string(content: String) -> MemoryReader:
+def _memory_reader_from_string(content: String) -> MemoryReader:
     """Helper to build a MemoryReader from string content."""
     return MemoryReader(content.as_bytes())
 
 
-fn test_delimited_reader_basic_tsv_with_header() raises:
+def test_delimited_reader_basic_tsv_with_header() raises:
     """Basic TSV with header: header() and next_record() fields match input."""
     var content = "col1\tcol2\n1\t2\n3\t4\n"
     var reader = _memory_reader_from_string(content)
@@ -41,7 +41,7 @@ fn test_delimited_reader_basic_tsv_with_header() raises:
         _ = delimited.next_record()
 
 
-fn test_delimited_reader_skips_empty_lines() raises:
+def test_delimited_reader_skips_empty_lines() raises:
     """Empty lines are skipped; record_number and records iterator behave correctly.
     """
     var content = "a\tb\n\n1\t2\n\n3\t4\n"
@@ -58,7 +58,7 @@ fn test_delimited_reader_skips_empty_lines() raises:
     assert_equal(records[2][0].to_string(), "3", "Third record first field")
 
 
-fn test_delimited_reader_inconsistent_num_fields_raises() raises:
+def test_delimited_reader_inconsistent_num_fields_raises() raises:
     """Rows with inconsistent number of fields raise Error via next_record()."""
     var content = "c1\tc2\n1\t2\n3\t4\t5\n"
     var reader = _memory_reader_from_string(content)
@@ -73,7 +73,7 @@ fn test_delimited_reader_inconsistent_num_fields_raises() raises:
         _ = delimited.next_record()
 
 
-fn test_delimited_reader_records_for_loop() raises:
+def test_delimited_reader_records_for_loop() raises:
     """For record in reader.records() yields DelimitedRecord instances."""
     var content = "x\ty\n10\t20\n30\t40\n"
     var reader = _memory_reader_from_string(content)
@@ -88,7 +88,7 @@ fn test_delimited_reader_records_for_loop() raises:
     assert_equal(rows[1][1].to_string(), "40", "Second row content")
 
 
-fn test_delimited_record_get_and_len() raises:
+def test_delimited_record_get_and_len() raises:
     """DelimitedRecord.get() returns Optional[BString] and __len__ mirrors num_fields().
     """
     var content = "a\tb\tc\n"
@@ -109,7 +109,7 @@ fn test_delimited_record_get_and_len() raises:
     assert_equal(f2.value().to_string(), "c", "Last field value")
 
 
-fn main() raises:
+def main() raises:
     """Run all DelimitedRecord / DelimitedReader tests."""
     print("Running delimited IO tests...\n")
     TestSuite.discover_tests[__functions_in_module()]().run()

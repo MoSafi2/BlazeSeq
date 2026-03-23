@@ -25,7 +25,7 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     var value: Int8
 
     @always_inline
-    fn __init__(out self, value: Int8):
+    def __init__(out self, value: Int8):
         self.value = value
 
     comptime Plus = Self(0)
@@ -33,10 +33,10 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     comptime Unknown = Self(2)
 
     @always_inline
-    fn __eq__(self, other: Self) -> Bool:
+    def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         if self.value == 0:
             writer.write("+")
         elif self.value == 1:
@@ -58,17 +58,17 @@ struct ItemRgb(Copyable, Movable, TrivialRegisterPassable, Writable):
     var b: UInt8
 
     @always_inline
-    fn __init__(out self, r: UInt8, g: UInt8, b: UInt8):
+    def __init__(out self, r: UInt8, g: UInt8, b: UInt8):
         self.r = r
         self.g = g
         self.b = b
 
     @always_inline
-    fn is_black(self) -> Bool:
+    def is_black(self) -> Bool:
         """True if 0,0,0 (or the single 0 value)."""
         return self.r == 0 and self.g == 0 and self.b == 0
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         writer.write(String(self.r))
         writer.write(",")
         writer.write(String(self.g))
@@ -76,7 +76,7 @@ struct ItemRgb(Copyable, Movable, TrivialRegisterPassable, Writable):
         writer.write(String(self.b))
 
 
-fn position_try_from(value: UInt64) -> Optional[Position]:
+def position_try_from(value: UInt64) -> Optional[Position]:
     """Create a Position if value >= 1 (1-based), else None (aligned with noodles_core).
     """
     if value < 1:
@@ -84,7 +84,7 @@ fn position_try_from(value: UInt64) -> Optional[Position]:
     return Optional(Position(value, True))
 
 
-fn interval_try_from_start_end(
+def interval_try_from_start_end(
     start: UInt64, end: UInt64
 ) -> Optional[Interval]:
     """Build an Interval from 1-based start and end (closed [start, end]) if valid.
@@ -122,7 +122,7 @@ struct BedView[O: Origin](Movable):
     var _block_starts_span: Optional[Span[UInt8, Self.O]]
     var num_fields: Int
 
-    fn __init__(
+    def __init__(
         out self,
         _chrom: Span[UInt8, Self.O],
         chrom_start: UInt64,
@@ -153,15 +153,15 @@ struct BedView[O: Origin](Movable):
         self.num_fields = num_fields
 
     @always_inline
-    fn chrom(self) -> StringSlice[origin=Self.O]:
+    def chrom(self) -> StringSlice[origin=Self.O]:
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._chrom)
 
-    fn start_position(self) -> Position:
+    def start_position(self) -> Position:
         """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
         """
         return Position(self.chrom_start + 1, True)
 
-    fn end_position(self) raises -> Position:
+    def end_position(self) raises -> Position:
         """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
         """
         if self.chrom_end < 1:
@@ -171,7 +171,7 @@ struct BedView[O: Origin](Movable):
             )
         return Position(self.chrom_end, True)
 
-    fn interval(self) raises -> Interval:
+    def interval(self) raises -> Interval:
         """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
         """
         if self.chrom_end < 1:
@@ -185,7 +185,7 @@ struct BedView[O: Origin](Movable):
             True,
         )
 
-    fn thick_interval(self) -> Optional[Interval]:
+    def thick_interval(self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
         """
         if not self.thick_start or not self.thick_end:
@@ -198,17 +198,17 @@ struct BedView[O: Origin](Movable):
         return Optional(opt.value())
 
     @always_inline
-    fn name(self) -> Optional[StringSlice[origin=Self.O]]:
+    def name(self) -> Optional[StringSlice[origin=Self.O]]:
         if not self._name:
             return None
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._name.value())
 
-    fn item_rgb(self) -> Optional[ItemRgb]:
+    def item_rgb(self) -> Optional[ItemRgb]:
         if not self._item_rgb:
             return None
         return Optional(self._item_rgb.value().copy())
 
-    fn to_record(self) raises -> BedRecord:
+    def to_record(self) raises -> BedRecord:
         """Materialize an owned BedRecord. Call when the record must outlive the view.
         """
         var block_sizes: Optional[List[UInt64]] = None
@@ -239,7 +239,7 @@ struct BedView[O: Origin](Movable):
         )
 
 
-fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
+def _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
     """Parse comma-separated list of integers (e.g. blockSizes, blockStarts)."""
     var out = List[UInt64]()
     var start: Int = 0
@@ -256,7 +256,7 @@ fn _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
     return out^
 
 
-fn _strand_to_char(strand: Optional[Strand]) -> String:
+def _strand_to_char(strand: Optional[Strand]) -> String:
     """Format strand as BED character: +, -, or ."""
     if not strand:
         return "."
@@ -267,7 +267,7 @@ fn _strand_to_char(strand: Optional[Strand]) -> String:
     return "."
 
 
-fn _comma_sep_u64_list(values: List[UInt64]) -> String:
+def _comma_sep_u64_list(values: List[UInt64]) -> String:
     """Format list of UInt64 as comma-separated string."""
     var out = String()
     for i in range(len(values)):
@@ -302,15 +302,15 @@ struct BedRecord(Copyable, Movable, Writable):
     var NumFields: Int
 
     @always_inline
-    fn chrom(ref[_] self) -> String:
+    def chrom(ref[_] self) -> String:
         return self.Chrom.to_string()
 
-    fn start_position(self) -> Position:
+    def start_position(self) -> Position:
         """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
         """
         return Position(self.ChromStart + 1, True)
 
-    fn end_position(self) raises -> Position:
+    def end_position(self) raises -> Position:
         """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
         """
         if self.ChromEnd < 1:
@@ -320,7 +320,7 @@ struct BedRecord(Copyable, Movable, Writable):
             )
         return Position(self.ChromEnd, True)
 
-    fn interval(self) raises -> Interval:
+    def interval(self) raises -> Interval:
         """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
         """
         if self.ChromEnd < 1:
@@ -334,7 +334,7 @@ struct BedRecord(Copyable, Movable, Writable):
             True,
         )
 
-    fn thick_interval(ref self) -> Optional[Interval]:
+    def thick_interval(ref self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
         """
         if not self.ThickStart or not self.ThickEnd:
@@ -347,27 +347,27 @@ struct BedRecord(Copyable, Movable, Writable):
         return Optional(opt.value())
 
     @always_inline
-    fn name(ref[_] self) -> Optional[String]:
+    def name(ref[_] self) -> Optional[String]:
         if not self.Name:
             return None
         return self.Name.value().to_string()
 
-    fn item_rgb(ref self) -> Optional[ItemRgb]:
+    def item_rgb(ref self) -> Optional[ItemRgb]:
         if not self.ItemRgb:
             return None
         return Optional(self.ItemRgb.value().copy())
 
-    fn block_sizes(ref self) -> Optional[List[UInt64]]:
+    def block_sizes(ref self) -> Optional[List[UInt64]]:
         if self.BlockSizes:
             return Optional(self.BlockSizes.value().copy())
         return None
 
-    fn block_starts(ref self) -> Optional[List[UInt64]]:
+    def block_starts(ref self) -> Optional[List[UInt64]]:
         if self.BlockStarts:
             return Optional(self.BlockStarts.value().copy())
         return None
 
-    fn write_to[w: Writer](ref self, mut writer: w):
+    def write_to[w: Writer](ref self, mut writer: w):
         """Write this record as one TAB-delimited line (same column count as parsed).
         """
         self._write_core_fields(writer)
@@ -378,30 +378,30 @@ struct BedRecord(Copyable, Movable, Writable):
         self._write_item_rgb_field(writer)
         self._write_block_fields(writer)
 
-    fn _write_core_fields[w: Writer](ref self, mut writer: w):
+    def _write_core_fields[w: Writer](ref self, mut writer: w):
         writer.write(
             t"{self.Chrom.to_string()}\t{String(self.ChromStart)}\t{String(self.ChromEnd)}"
         )
 
-    fn _write_name_field[w: Writer](ref self, mut writer: w):
+    def _write_name_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 4:
             return
         var name_str = self.Name.value().to_string() if self.Name else "."
         writer.write(t"\t{name_str}")
 
-    fn _write_score_field[w: Writer](ref self, mut writer: w):
+    def _write_score_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 5:
             return
         var score_str = String(self.Score.value()) if self.Score else "0"
         writer.write(t"\t{score_str}")
 
-    fn _write_strand_field[w: Writer](ref self, mut writer: w):
+    def _write_strand_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 6:
             return
         var c = _strand_to_char(self.Strand)
         writer.write(t"\t{c}")
 
-    fn _write_thick_fields[w: Writer](ref self, mut writer: w):
+    def _write_thick_fields[w: Writer](ref self, mut writer: w):
         if self.NumFields >= 7:
             var thick_start_str = String(
                 self.ThickStart.value()
@@ -413,7 +413,7 @@ struct BedRecord(Copyable, Movable, Writable):
             ) if self.ThickEnd else String(self.ChromEnd)
             writer.write(t"\t{thick_end_str}")
 
-    fn _write_item_rgb_field[w: Writer](ref self, mut writer: w):
+    def _write_item_rgb_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 9:
             return
         if self.ItemRgb:
@@ -422,7 +422,7 @@ struct BedRecord(Copyable, Movable, Writable):
         else:
             writer.write("\t0")
 
-    fn _write_block_fields[w: Writer](ref self, mut writer: w):
+    def _write_block_fields[w: Writer](ref self, mut writer: w):
         if self.NumFields < 12 or not self.BlockSizes or not self.BlockStarts:
             return
         var sizes = self.BlockSizes.value().copy()

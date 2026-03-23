@@ -18,7 +18,7 @@ from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.CONSTS import KB
 
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("Usage: run_blazeseq_batch.mojo <path.fastq> [batch_size]")

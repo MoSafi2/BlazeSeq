@@ -37,18 +37,18 @@ comptime PyFastqGZParser = FastqParser[RapidgzipReader, ParserConfig()]
 struct BlazeSeqParserHolder(Movable, Writable):
     var _parser_ptr: UnsafePointer[PyFastqParser, MutAnyOrigin]
 
-    fn __init__(out self, var parser: PyFastqParser):
+    def __init__(out self, var parser: PyFastqParser):
         var storage = alloc[PyFastqParser](1)
         storage[0] = parser^
         self._parser_ptr = storage
 
-    fn __del__(deinit self):
+    def __del__(deinit self):
         self._parser_ptr.destroy_pointee()
 
-    fn __repr__(self) -> String:
+    def __repr__(self) -> String:
         return "BlazeSeqParser(...)"
 
-    fn write_to(self, mut writer: Some[Writer]):
+    def write_to(self, mut writer: Some[Writer]):
         writer.write("BlazeSeqParser(...)")
 
 
@@ -57,18 +57,18 @@ struct BlazeSeqParserHolder(Movable, Writable):
 struct BlazeSeqGZParserHolder(Movable, Writable):
     var _parser_ptr: UnsafePointer[PyFastqGZParser, MutAnyOrigin]
 
-    fn __init__(out self, var parser: PyFastqGZParser):
+    def __init__(out self, var parser: PyFastqGZParser):
         var storage = alloc[PyFastqGZParser](1)
         storage[0] = parser^
         self._parser_ptr = storage
 
-    fn __del__(deinit self):
+    def __del__(deinit self):
         self._parser_ptr.destroy_pointee()
 
-    fn __repr__(self) -> String:
+    def __repr__(self) -> String:
         return "BlazeSeqParser(...)"
 
-    fn write_to(self, mut writer: Some[Writer]):
+    def write_to(self, mut writer: Some[Writer]):
         writer.write("BlazeSeqParser(...)")
 
 
@@ -77,7 +77,7 @@ struct BlazeSeqGZParserHolder(Movable, Writable):
 # ---------------------------------------------------------------------------
 
 
-fn parser(
+def parser(
     path: PythonObject, quality_schema: PythonObject, parallelism: PythonObject
 ) raises -> PythonObject:
     """Create a FASTQ parser for the given file path and quality schema.
@@ -117,12 +117,12 @@ fn parser(
 # Method wrappers for plain-file parser (BlazeSeqParserHolder).
 struct ParserMethodsPlain:
     @staticmethod
-    fn has_more(py_self: PythonObject) raises -> PythonObject:
+    def has_more(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         return PythonObject(holder_ptr[]._parser_ptr[].has_more())
 
     @staticmethod
-    fn next_record(py_self: PythonObject) raises -> PythonObject:
+    def next_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         try:
             var record = holder_ptr[]._parser_ptr[].next_record()
@@ -133,7 +133,7 @@ struct ParserMethodsPlain:
             raise e^
 
     @staticmethod
-    fn next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
+    def next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         try:
             var view = holder_ptr[]._parser_ptr[].next_view()
@@ -150,7 +150,7 @@ struct ParserMethodsPlain:
             raise e^
 
     @staticmethod
-    fn next_batch(
+    def next_batch(
         py_self: PythonObject, max_records: PythonObject
     ) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
@@ -158,11 +158,11 @@ struct ParserMethodsPlain:
         return PythonObject(alloc=batch^)
 
     @staticmethod
-    fn parser_py_iter(py_self: PythonObject) raises -> PythonObject:
+    def parser_py_iter(py_self: PythonObject) raises -> PythonObject:
         return py_self
 
     @staticmethod
-    fn parser_py_next(py_self: PythonObject) raises -> PythonObject:
+    def parser_py_next(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[BlazeSeqParserHolder]()
         if not self_ptr[]._parser_ptr[].has_more():
             raise Error("StopIteration")
@@ -178,12 +178,12 @@ struct ParserMethodsPlain:
 # Method wrappers for gzip parser (BlazeSeqGZParserHolder).
 struct ParserMethodsGz:
     @staticmethod
-    fn has_more(py_self: PythonObject) raises -> PythonObject:
+    def has_more(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         return PythonObject(holder_ptr[]._parser_ptr[].has_more())
 
     @staticmethod
-    fn next_record(py_self: PythonObject) raises -> PythonObject:
+    def next_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         try:
             var record = holder_ptr[]._parser_ptr[].next_record()
@@ -194,7 +194,7 @@ struct ParserMethodsGz:
             raise e^
 
     @staticmethod
-    fn next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
+    def next_ref_as_record(py_self: PythonObject) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         try:
             var view = holder_ptr[]._parser_ptr[].next_view()
@@ -211,7 +211,7 @@ struct ParserMethodsGz:
             raise e^
 
     @staticmethod
-    fn next_batch(
+    def next_batch(
         py_self: PythonObject, max_records: PythonObject
     ) raises -> PythonObject:
         var holder_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
@@ -219,11 +219,11 @@ struct ParserMethodsGz:
         return PythonObject(alloc=batch^)
 
     @staticmethod
-    fn parser_py_iter(py_self: PythonObject) raises -> PythonObject:
+    def parser_py_iter(py_self: PythonObject) raises -> PythonObject:
         return py_self
 
     @staticmethod
-    fn parser_py_next(py_self: PythonObject) raises -> PythonObject:
+    def parser_py_next(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[BlazeSeqGZParserHolder]()
         if not self_ptr[]._parser_ptr[].has_more():
             raise Error("StopIteration")
@@ -243,32 +243,32 @@ struct ParserMethodsGz:
 
 struct FastqRecordMethods:
     @staticmethod
-    fn get_id(py_self: PythonObject) raises -> PythonObject:
+    def get_id(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
         return String(self_ptr[].id())
 
     @staticmethod
-    fn get_sequence(py_self: PythonObject) raises -> PythonObject:
+    def get_sequence(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
         return String(self_ptr[].sequence())
 
     @staticmethod
-    fn get_quality(py_self: PythonObject) raises -> PythonObject:
+    def get_quality(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
         return String(self_ptr[].quality())
 
     @staticmethod
-    fn get_len(py_self: PythonObject) raises -> PythonObject:
+    def get_len(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
         return PythonObject(self_ptr[].__len__())
 
     @staticmethod
-    fn get_phred_scores(py_self: PythonObject) raises -> PythonObject:
+    def get_phred_scores(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqRecord]()
         var scores = self_ptr[].phred_scores()
         var py_list = Python.evaluate("[]")
         for i in range(len(scores)):
-            var append_fn = py_list.__getattr__("append")
+            var append_def = py_list.__getattr__("append")
             append_fn(Int(scores[i]))
         return py_list
 
@@ -280,12 +280,12 @@ struct FastqRecordMethods:
 
 struct FastqBatchMethods:
     @staticmethod
-    fn get_num_records(py_self: PythonObject) raises -> PythonObject:
+    def get_num_records(py_self: PythonObject) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqBatch]()
         return PythonObject(self_ptr[].num_records())
 
     @staticmethod
-    fn get_record_at(
+    def get_record_at(
         py_self: PythonObject, index: PythonObject
     ) raises -> PythonObject:
         var self_ptr = py_self.downcast_value_ptr[FastqBatch]()
@@ -294,7 +294,7 @@ struct FastqBatchMethods:
         return PythonObject(alloc=record^)
 
     @staticmethod
-    fn batch_py_iter(py_self: PythonObject) raises -> PythonObject:
+    def batch_py_iter(py_self: PythonObject) raises -> PythonObject:
         """Return an iterator over records in the batch. Iterator is invalid after batch is discarded.
         """
         var batch_ptr = py_self.downcast_value_ptr[FastqBatch]()
@@ -309,7 +309,7 @@ struct FastqBatchIterator(Movable, Writable):
     var index: Int
     var count: Int
 
-    fn __init__(
+    def __init__(
         out self,
         batch_ptr: UnsafePointer[FastqBatch, MutAnyOrigin],
         index: Int,
@@ -319,18 +319,18 @@ struct FastqBatchIterator(Movable, Writable):
         self.index = index
         self.count = count
 
-    fn __repr__(self) -> String:
+    def __repr__(self) -> String:
         return String(
             "FastqBatchIterator(index=", self.index, ", count=", self.count, ")"
         )
 
     @staticmethod
-    fn py_iter(py_self: PythonObject) raises -> PythonObject:
+    def py_iter(py_self: PythonObject) raises -> PythonObject:
         """Return self as the iterator."""
         return py_self
 
     @staticmethod
-    fn py_next(py_self: PythonObject) raises -> PythonObject:
+    def py_next(py_self: PythonObject) raises -> PythonObject:
         """Return the next FastqRecord or raise StopIteration when exhausted."""
         var self_ptr = py_self.downcast_value_ptr[FastqBatchIterator]()
         if self_ptr[].index >= self_ptr[].count:
@@ -346,7 +346,7 @@ struct FastqBatchIterator(Movable, Writable):
 
 
 @export
-fn PyInit_blazeseq_parser() -> PythonObject:
+def PyInit_blazeseq_parser() -> PythonObject:
     try:
         var mb = PythonModuleBuilder("blazeseq_parser")
         # Module-level: parser only (parallelism passed at init, used for all reads)

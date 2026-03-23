@@ -6,7 +6,7 @@ from blazeseq.io.buffered import BufferedReader, BufferedWriter, LineIterator
 from blazeseq.io.readers import FileReader, MemoryReader
 from blazeseq.io.writers import FileWriter
 
-fn create_test_file(path: Path, content: String) raises -> Path:
+def create_test_file(path: Path, content: String) raises -> Path:
     """Helper function to create test files."""
     new_path = Path("tests/test_data") / path
     with open(new_path, "w") as f:
@@ -15,7 +15,7 @@ fn create_test_file(path: Path, content: String) raises -> Path:
     return new_path
 
 
-fn create_memory_reader(content: String) -> MemoryReader:
+def create_memory_reader(content: String) -> MemoryReader:
     """Helper function to create MemoryReader from string content."""
     var content_bytes = content.as_bytes()
     return MemoryReader(content_bytes)
@@ -27,7 +27,7 @@ fn create_memory_reader(content: String) -> MemoryReader:
 # Initialization
 
 
-fn test_buffered_reader_init() raises:
+def test_buffered_reader_init() raises:
     """Verify initialization with default capacity."""
     var content = "Hello World\n"
     var reader = create_memory_reader(content)
@@ -50,7 +50,7 @@ fn test_buffered_reader_init() raises:
     print("✓ test_buffered_reader_init passed")
 
 
-fn test_buffered_reader_init_custom_capacity() raises:
+def test_buffered_reader_init_custom_capacity() raises:
     """Verify initialization with custom capacity."""
     var test_content = "Test content\n"
     var reader = create_memory_reader(test_content)
@@ -62,7 +62,7 @@ fn test_buffered_reader_init_custom_capacity() raises:
     print("✓ test_buffered_reader_init_custom_capacity passed")
 
 
-fn test_buffered_reader_init_empty() raises:
+def test_buffered_reader_init_empty() raises:
     """Handle empty buffer initialization."""
     var reader = create_memory_reader("")
     var buf_reader = BufferedReader(reader^)
@@ -76,7 +76,7 @@ fn test_buffered_reader_init_empty() raises:
 # Basic Properties
 
 
-fn test_buffered_reader_available_and_len() raises:
+def test_buffered_reader_available_and_len() raises:
     """Test available() and __len__ methods (they should return the same value).
     """
     var test_content = "0123456789\n"
@@ -118,7 +118,7 @@ fn test_buffered_reader_available_and_len() raises:
     print("✓ test_buffered_reader_available_and_len passed")
 
 
-fn test_buffered_reader_buffer_position() raises:
+def test_buffered_reader_buffer_position() raises:
     """Test buffer_position() method."""
     var test_content = "Test content\n"
     var reader = create_memory_reader(test_content)
@@ -139,7 +139,7 @@ fn test_buffered_reader_buffer_position() raises:
     print("✓ test_buffered_reader_buffer_position passed")
 
 
-fn test_buffered_reader_stream_position() raises:
+def test_buffered_reader_stream_position() raises:
     """Test stream_position() method."""
     var test_content = "Test content\n"
     var reader = create_memory_reader(test_content)
@@ -159,7 +159,7 @@ fn test_buffered_reader_stream_position() raises:
     print("✓ test_buffered_reader_stream_position passed")
 
 
-fn test_buffered_reader_is_eof() raises:
+def test_buffered_reader_is_eof() raises:
     """Test is_eof() method."""
     var test_content = "Short\n"
     var reader = create_memory_reader(test_content)
@@ -190,7 +190,7 @@ fn test_buffered_reader_is_eof() raises:
 # Buffer Management
 
 
-fn test_buffered_reader_consume() raises:
+def test_buffered_reader_consume() raises:
     """Test consume() method."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -212,7 +212,7 @@ fn test_buffered_reader_consume() raises:
     print("✓ test_buffered_reader_consume passed")
 
 
-fn test_buffered_reader_consume_zero() raises:
+def test_buffered_reader_consume_zero() raises:
     """Test consume(0) is valid."""
     var test_content = "Test\n"
     var reader = create_memory_reader(test_content)
@@ -229,7 +229,7 @@ fn test_buffered_reader_consume_zero() raises:
     print("✓ test_buffered_reader_consume_zero passed")
 
 
-fn test_buffered_reader_consume_too_much() raises:
+def test_buffered_reader_consume_too_much() raises:
     """Test consume() exceeding available raises error."""
     var test_content = "Test\n"
     var reader = create_memory_reader(test_content)
@@ -243,7 +243,7 @@ fn test_buffered_reader_consume_too_much() raises:
     print("✓ test_buffered_reader_consume_too_much passed")
 
 
-fn test_buffered_reader_read_exact() raises:
+def test_buffered_reader_read_exact() raises:
     """Test read_exact() method (on LineIterator)."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -263,7 +263,7 @@ fn test_buffered_reader_read_exact() raises:
     print("✓ test_buffered_reader_read_exact passed")
 
 
-fn test_buffered_reader_read_exact_zero() raises:
+def test_buffered_reader_read_exact_zero() raises:
     """Test read_exact(0) returns empty span."""
     var test_content = "Test\n"
     var reader = create_memory_reader(test_content)
@@ -275,7 +275,7 @@ fn test_buffered_reader_read_exact_zero() raises:
     print("✓ test_buffered_reader_read_exact_zero passed")
 
 
-fn test_buffered_reader_read_exact_large() raises:
+def test_buffered_reader_read_exact_large() raises:
     """Test read_exact() with large content requiring refill."""
     var test_content = String("")
     for i in range(200):
@@ -302,7 +302,7 @@ fn test_buffered_reader_read_exact_large() raises:
     print("✓ test_buffered_reader_read_exact_large passed")
 
 
-fn test_buffered_reader_view() raises:
+def test_buffered_reader_view() raises:
     """Test view() returns span of unconsumed bytes."""
     var test_content = "Span test content\n"
     var reader = create_memory_reader(test_content)
@@ -335,7 +335,7 @@ fn test_buffered_reader_view() raises:
 # Indexing and Slicing
 
 
-fn test_buffered_reader_getitem() raises:
+def test_buffered_reader_getitem() raises:
     """Test single byte access via __getitem__."""
     var test_content = "ABC\n"
     var reader = create_memory_reader(test_content)
@@ -352,7 +352,7 @@ fn test_buffered_reader_getitem() raises:
     print("✓ test_buffered_reader_getitem passed")
 
 
-fn test_buffered_reader_getitem_after_consume() raises:
+def test_buffered_reader_getitem_after_consume() raises:
     """Test indexing after consuming bytes."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -371,7 +371,7 @@ fn test_buffered_reader_getitem_after_consume() raises:
     print("✓ test_buffered_reader_getitem_after_consume passed")
 
 
-fn test_buffered_reader_slice() raises:
+def test_buffered_reader_slice() raises:
     """Test slicing operations."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -399,7 +399,7 @@ fn test_buffered_reader_slice() raises:
     print("✓ test_buffered_reader_slice passed")
 
 
-fn test_buffered_reader_slice_edge_cases() raises:
+def test_buffered_reader_slice_edge_cases() raises:
     """Test slice operations with various edge cases."""
     var test_content = "0123456789ABCDEF\n"
     var reader = create_memory_reader(test_content)
@@ -426,7 +426,7 @@ fn test_buffered_reader_slice_edge_cases() raises:
     print("✓ test_buffered_reader_slice_edge_cases passed")
 
 
-fn test_buffered_reader_slice_after_consume() raises:
+def test_buffered_reader_slice_after_consume() raises:
     """Test slicing after consuming bytes."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -445,7 +445,7 @@ fn test_buffered_reader_slice_after_consume() raises:
     print("✓ test_buffered_reader_slice_after_consume passed")
 
 
-fn test_buffered_reader_grow_buffer() raises:
+def test_buffered_reader_grow_buffer() raises:
     """Test grow_buffer() method."""
     var test_content = "Test content for resize\n"
     var reader = create_memory_reader(test_content)
@@ -477,7 +477,7 @@ fn test_buffered_reader_grow_buffer() raises:
     print("✓ test_buffered_reader_grow_buffer passed")
 
 
-fn test_buffered_reader_grow_buffer_max_capacity() raises:
+def test_buffered_reader_grow_buffer_max_capacity() raises:
     """Test grow_buffer() at max capacity does not raise (no-op resize)."""
     var test_content = "Test content\n"
     var reader = create_memory_reader(test_content)
@@ -491,7 +491,7 @@ fn test_buffered_reader_grow_buffer_max_capacity() raises:
     print("✓ test_buffered_reader_grow_buffer_max_capacity passed")
 
 
-fn test_buffered_reader_grow_buffer_respects_max() raises:
+def test_buffered_reader_grow_buffer_respects_max() raises:
     """Test grow_buffer() respects max_capacity limit."""
     var test_content = "Test content\n"
     var reader = create_memory_reader(test_content)
@@ -509,7 +509,7 @@ fn test_buffered_reader_grow_buffer_respects_max() raises:
 # Writer Interface
 
 
-fn test_buffered_reader_write_to() raises:
+def test_buffered_reader_write_to() raises:
     """Test write_to() method."""
     var test_content = "Content to write\n"
     var reader = create_memory_reader(test_content)
@@ -528,7 +528,7 @@ fn test_buffered_reader_write_to() raises:
     print("✓ test_buffered_reader_write_to passed")
 
 
-fn test_buffered_reader_str() raises:
+def test_buffered_reader_str() raises:
     """Test String(buf_reader) representation."""
     var test_content = "String representation test\n"
     var reader = create_memory_reader(test_content)
@@ -547,7 +547,7 @@ fn test_buffered_reader_str() raises:
     print("✓ test_buffered_reader_str passed")
 
 
-fn test_buffered_reader_write_to_after_consume() raises:
+def test_buffered_reader_write_to_after_consume() raises:
     """Test write_to() after consuming bytes."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -572,7 +572,7 @@ fn test_buffered_reader_write_to_after_consume() raises:
 # ASCII Validation
 
 
-fn test_buffered_reader_ascii_validation() raises:
+def test_buffered_reader_ascii_validation() raises:
     """BufferedReader should accept regular ASCII content."""
     var test_content = "Valid ASCII content\nLine 2\nLine 3\n"
     var test_file = Path("test_ascii_valid.txt")
@@ -587,7 +587,7 @@ fn test_buffered_reader_ascii_validation() raises:
     print("✓ test_buffered_reader_ascii_validation passed")
 
 
-fn test_buffered_reader_ascii_validation_invalid() raises:
+def test_buffered_reader_ascii_validation_invalid() raises:
     """BufferedReader should not enforce ASCII on raw bytes."""
     var test_file = Path("test_ascii_invalid.txt")
     new_path = Path("tests/test_data") / test_file
@@ -614,7 +614,7 @@ fn test_buffered_reader_ascii_validation_invalid() raises:
 # Large Content (Multiple Refills)
 
 
-fn test_buffered_reader_large_multiple_refills() raises:
+def test_buffered_reader_large_multiple_refills() raises:
     """Test with large content requiring multiple buffer refills and verify position tracking.
     """
     var test_content = String("")
@@ -679,7 +679,7 @@ fn test_buffered_reader_large_multiple_refills() raises:
 # Boundary Conditions
 
 
-fn test_buffered_reader_init_zero_capacity() raises:
+def test_buffered_reader_init_zero_capacity() raises:
     """Test initialization with very small capacity (edge case)."""
     var test_content = "Test\n"
 
@@ -704,7 +704,7 @@ fn test_buffered_reader_init_zero_capacity() raises:
     print("✓ test_buffered_reader_init_zero_capacity passed")
 
 
-fn test_buffered_reader_consume_exact_available() raises:
+def test_buffered_reader_consume_exact_available() raises:
     """Test consuming exactly all available bytes."""
     var test_content = "0123456789\n"
     var reader = create_memory_reader(test_content)
@@ -734,7 +734,7 @@ fn test_buffered_reader_consume_exact_available() raises:
     print("✓ test_buffered_reader_consume_exact_available passed")
 
 
-fn test_buffered_reader_operations_after_eof() raises:
+def test_buffered_reader_operations_after_eof() raises:
     """Test multiple operations after EOF."""
     var test_content = "Short\n"
     var reader = create_memory_reader(test_content)
@@ -765,7 +765,7 @@ fn test_buffered_reader_operations_after_eof() raises:
     print("✓ test_buffered_reader_operations_after_eof passed")
 
 
-fn test_buffered_reader_stream_position_across_refills() raises:
+def test_buffered_reader_stream_position_across_refills() raises:
     """Verify stream_position is accurate after multiple buffer compactions."""
     var test_content = String("")
     for i in range(150):
@@ -816,7 +816,7 @@ fn test_buffered_reader_stream_position_across_refills() raises:
     print("✓ test_buffered_reader_stream_position_across_refills passed")
 
 
-fn test_buffered_reader_custom_capacity_edge_cases() raises:
+def test_buffered_reader_custom_capacity_edge_cases() raises:
     """Test various custom capacity scenarios."""
     var test_content = "Test content\n"
 
@@ -848,7 +848,7 @@ fn test_buffered_reader_custom_capacity_edge_cases() raises:
 # FileReader Alignment (verify FileReader works same as MemoryReader)
 
 
-fn test_file_reader_alignment_basic() raises:
+def test_file_reader_alignment_basic() raises:
     """Verify FileReader produces same results as MemoryReader for basic operations.
     """
     var content = "Test content for alignment\n"
@@ -879,7 +879,7 @@ fn test_file_reader_alignment_basic() raises:
     print("✓ test_file_reader_alignment_basic passed")
 
 
-fn test_file_reader_alignment_large() raises:
+def test_file_reader_alignment_large() raises:
     """Verify FileReader produces same results as MemoryReader for large content.
     """
     var content = String("")
@@ -944,7 +944,7 @@ fn test_file_reader_alignment_large() raises:
     print("✓ test_file_reader_alignment_large passed")
 
 
-fn test_file_reader_alignment_ascii() raises:
+def test_file_reader_alignment_ascii() raises:
     """Verify FileReader + BufferedReader handles plain text input."""
     var content = "Valid ASCII content\n"
     var test_file = Path("test_alignment_ascii.txt")
@@ -961,7 +961,7 @@ fn test_file_reader_alignment_ascii() raises:
 # MemoryReader Initialization Variants
 
 
-fn test_memory_reader_init_list() raises:
+def test_memory_reader_init_list() raises:
     """Test MemoryReader initialization with List[Byte]."""
     var data = List[Byte]()
     var content = "Hello World\n"
@@ -984,7 +984,7 @@ fn test_memory_reader_init_list() raises:
     print("✓ test_memory_reader_init_list passed")
 
 
-fn test_memory_reader_init_span() raises:
+def test_memory_reader_init_span() raises:
     """Test MemoryReader initialization with Span[Byte]."""
     var content = "Test content\n"
     # Create span from string bytes directly - as_bytes() returns a span we can use
@@ -1011,7 +1011,7 @@ fn test_memory_reader_init_span() raises:
 # ============================================================================
 
 
-fn test_buffered_writer_init() raises:
+def test_buffered_writer_init() raises:
     """Test BufferedWriter initialization with default capacity."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_init.txt"
@@ -1032,7 +1032,7 @@ fn test_buffered_writer_init() raises:
     print("✓ test_buffered_writer_init passed")
 
 
-fn test_buffered_writer_init_custom_capacity() raises:
+def test_buffered_writer_init_custom_capacity() raises:
     """Test BufferedWriter initialization with custom capacity."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_init_custom.txt"
@@ -1053,7 +1053,7 @@ fn test_buffered_writer_init_custom_capacity() raises:
     print("✓ test_buffered_writer_init_custom_capacity passed")
 
 
-fn test_buffered_writer_init_invalid_capacity() raises:
+def test_buffered_writer_init_invalid_capacity() raises:
     """Test BufferedWriter initialization with invalid capacity raises error."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_init_invalid.txt"
@@ -1068,7 +1068,7 @@ fn test_buffered_writer_init_invalid_capacity() raises:
     print("✓ test_buffered_writer_init_invalid_capacity passed")
 
 
-fn test_buffered_writer_write_small() raises:
+def test_buffered_writer_write_small() raises:
     """Test writing bytes that fit in buffer."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_write_small.txt"
@@ -1114,7 +1114,7 @@ fn test_buffered_writer_write_small() raises:
     print("✓ test_buffered_writer_write_small passed")
 
 
-fn test_buffered_writer_write_large() raises:
+def test_buffered_writer_write_large() raises:
     """Test writing bytes that exceed buffer capacity (triggers automatic flush).
     """
     var test_path = Path("tests/test_data") / Path(
@@ -1160,7 +1160,7 @@ fn test_buffered_writer_write_large() raises:
     print("✓ test_buffered_writer_write_large passed")
 
 
-fn test_buffered_writer_write_span() raises:
+def test_buffered_writer_write_span() raises:
     """Test writing bytes from a Span."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_write_span.txt"
@@ -1191,7 +1191,7 @@ fn test_buffered_writer_write_span() raises:
     print("✓ test_buffered_writer_write_span passed")
 
 
-fn test_buffered_writer_explicit_flush() raises:
+def test_buffered_writer_explicit_flush() raises:
     """Test explicit flush functionality."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_explicit_flush.txt"
@@ -1229,7 +1229,7 @@ fn test_buffered_writer_explicit_flush() raises:
     print("✓ test_buffered_writer_explicit_flush passed")
 
 
-fn test_buffered_writer_destructor_flush() raises:
+def test_buffered_writer_destructor_flush() raises:
     """Test that destructor flushes remaining data."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_destructor_flush.txt"
@@ -1266,7 +1266,7 @@ fn test_buffered_writer_destructor_flush() raises:
     print("✓ test_buffered_writer_destructor_flush passed")
 
 
-fn test_buffered_writer_bytes_written_counter() raises:
+def test_buffered_writer_bytes_written_counter() raises:
     """Test bytes_written counter accuracy."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_bytes_written.txt"
@@ -1307,7 +1307,7 @@ fn test_buffered_writer_bytes_written_counter() raises:
     print("✓ test_buffered_writer_bytes_written_counter passed")
 
 
-fn test_buffered_writer_empty_write() raises:
+def test_buffered_writer_empty_write() raises:
     """Test writing empty data."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_empty_write.txt"
@@ -1334,7 +1334,7 @@ fn test_buffered_writer_empty_write() raises:
     print("✓ test_buffered_writer_empty_write passed")
 
 
-fn test_buffered_writer_multiple_flushes() raises:
+def test_buffered_writer_multiple_flushes() raises:
     """Test multiple flush calls."""
     var test_path = Path("tests/test_data") / Path(
         "test_buffered_writer_multiple_flushes.txt"
@@ -1374,7 +1374,7 @@ fn test_buffered_writer_multiple_flushes() raises:
 # ============================================================================
 
 
-fn cleanup_iostream_test_files() raises:
+def cleanup_iostream_test_files() raises:
     """Remove all files created by tests (ignore missing files)."""
     var base = Path("tests/test_data")
     var names = List[String]()
@@ -1401,6 +1401,6 @@ fn cleanup_iostream_test_files() raises:
             pass
 
 
-fn main() raises:
+def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
     cleanup_iostream_test_files()

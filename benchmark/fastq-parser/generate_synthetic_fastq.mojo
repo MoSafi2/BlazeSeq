@@ -19,7 +19,7 @@ from blazeseq.utils import (
 from blazeseq.io.buffered import buffered_writer_for_file
 
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("Usage: generate_synthetic_fastq.mojo <output_path> [size_gb]")

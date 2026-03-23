@@ -19,7 +19,7 @@ struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     var value: Int8
 
     @always_inline
-    fn __init__(out self, value: Int8):
+    def __init__(out self, value: Int8):
         self.value = value
 
     comptime OK = Self(0)
@@ -38,15 +38,15 @@ struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime OTHER = Self(10)
 
     @always_inline
-    fn __eq__(self, other: Self) -> Bool:
+    def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
     @always_inline
-    fn __ne__(self, other: Self) -> Bool:
+    def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
 
-fn _message_for_code(code: FastxErrorCode) -> String:
+def _message_for_code(code: FastxErrorCode) -> String:
     """Internal: return default message for a FastxErrorCode. Used when building ParseError/ValidationError.
     """
     if code == FastxErrorCode.ID_NO_AT:
@@ -68,7 +68,7 @@ fn _message_for_code(code: FastxErrorCode) -> String:
     return "Parse or validation error"
 
 
-fn format_parse_error_from_code(
+def format_parse_error_from_code(
     code: FastxErrorCode,
     record_number: Int,
     line_number: Int,
@@ -94,7 +94,7 @@ fn format_parse_error_from_code(
     return String(parse_err)
 
 
-fn format_validation_error_from_code(
+def format_validation_error_from_code(
     code: FastxErrorCode,
     record_number: Int,
     field: String = "",
@@ -129,7 +129,7 @@ struct ParseError(Writable):
     var file_position: Int64  # Byte position in file
     var record_snippet: String  # First 100-200 chars of problematic record
 
-    fn __init__(
+    def __init__(
         out self,
         message: String,
         record_number: Int = 0,
@@ -153,7 +153,7 @@ struct ParseError(Writable):
         self.record_snippet = record_snippet
 
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         """Write error to writer without building an intermediate String."""
         writer.write(self.message)
         if self.record_number > 0:
@@ -178,7 +178,7 @@ struct ValidationError(Writable):
     var field: String  # "header", "sequence", "quality", etc.
     var record_snippet: String
 
-    fn __init__(
+    def __init__(
         out self,
         message: String,
         record_number: Int = 0,
@@ -198,7 +198,7 @@ struct ValidationError(Writable):
         self.field = field
         self.record_snippet = record_snippet
 
-    fn write_to[w: Writer](self, mut writer: w):
+    def write_to[w: Writer](self, mut writer: w):
         """Write error to writer without building an intermediate String."""
         writer.write(self.message)
         if self.record_number > 0:
@@ -217,7 +217,7 @@ struct ValidationError(Writable):
 # ---------------------------------------------------------------------------
 
 
-fn buffer_capacity_error(
+def buffer_capacity_error(
     capacity: Int,
     max_capacity: Int = 0,
     growth_hint: Bool = False,

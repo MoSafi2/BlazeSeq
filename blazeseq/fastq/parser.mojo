@@ -55,7 +55,7 @@ struct ParserConfig(Copyable):
     var check_quality: Bool
     var quality_schema: Optional[String]
 
-    fn __init__(
+    def __init__(
         out self,
         buffer_capacity: Int = DEFAULT_CAPACITY,
         buffer_max_capacity: Int = MAX_CAPACITY,
@@ -84,7 +84,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     var _max_capacity: Int
     var _current_line_number: Int
 
-    fn __init__(
+    def __init__(
         out self,
         var reader: Self.R,
     ) raises:
@@ -104,7 +104,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
         self._batch_size = DEFAULT_BATCH_SIZE
 
-    fn __init__(
+    def __init__(
         out self,
         var reader: Self.R,
         quality_schema: String,
@@ -120,7 +120,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
         self._batch_size = DEFAULT_BATCH_SIZE
 
-    fn __init__(
+    def __init__(
         out self,
         var reader: Self.R,
         batch_size: Int,
@@ -143,7 +143,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         self._batch_size = batch_size
 
     @always_inline
-    fn _parse_context(ref self) -> ParseContext:
+    def _parse_context(ref self) -> ParseContext:
         return ParseContext(
             self._current_line_number // 4,
             self._current_line_number,
@@ -151,11 +151,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
 
     @always_inline
-    fn has_more(self) -> Bool:
+    def has_more(self) -> Bool:
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
     @always_inline
-    fn next_view(mut self) raises -> FastqView[origin=MutExternalOrigin]:
+    def next_view(mut self) raises -> FastqView[origin=MutExternalOrigin]:
         var ref_rec = self._find_and_consume_ref_record()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
@@ -170,7 +170,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return ref_rec
 
     @always_inline
-    fn next_view_memchr_seq(
+    def next_view_memchr_seq(
         mut self
     ) raises -> FastqView[origin=MutExternalOrigin]:
         """Benchmark-only variant that scans record boundaries via sequential memchr."""
@@ -188,7 +188,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return ref_rec
 
     @always_inline
-    fn next_record(mut self) raises -> FastqRecord:
+    def next_record(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
         var ref_rec = self._find_and_consume_ref_record()
@@ -217,7 +217,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return record^
 
     @always_inline
-    fn next_record_memchr_seq(mut self) raises -> FastqRecord:
+    def next_record_memchr_seq(mut self) raises -> FastqRecord:
         """Benchmark-only variant that scans record boundaries via sequential memchr."""
         if not self.has_more():
             raise EOFError()
@@ -246,7 +246,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             )
         return record^
 
-    fn next_batch(
+    def next_batch(
         mut self, max_records: Int = DEFAULT_BATCH_SIZE
     ) raises -> FastqBatch:
         var limit = max_records if max_records else self._batch_size
@@ -260,21 +260,21 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 raise e^
         return batch^
 
-    fn views(
+    def views(
         ref self,
     ) -> _FastqParserViewIter[Self.R, Self.config, origin_of(self)]:
         return _FastqParserViewIter[Self.R, Self.config, origin_of(self)](
             Pointer(to=self)
         )
 
-    fn records(
+    def records(
         ref self,
     ) -> _FastqParserRecordIter[Self.R, Self.config, origin_of(self)]:
         return _FastqParserRecordIter[Self.R, Self.config, origin_of(self)](
             Pointer(to=self)
         )
 
-    fn batches(
+    def batches(
         ref self,
         max_records: Optional[Int] = None,
     ) -> _FastqParserBatchIter[Self.R, Self.config, origin_of(self)]:
@@ -283,7 +283,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             Pointer(to=self), limit
         )
 
-    fn _refill_error_message(
+    def _refill_error_message(
         self,
         refill_code: FastxErrorCode,
         phase: SearchPhase,
@@ -318,7 +318,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             + " bytes). Enable buffer growth or increase max_capacity."
         )
 
-    fn _find_and_consume_ref_record(
+    def _find_and_consume_ref_record(
         mut self,
     ) raises -> FastqView[origin=MutExternalOrigin]:
         if self.buffer.available() == 0:
@@ -392,7 +392,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         return ref_rec
 
-    fn _find_and_consume_ref_record_memchr_seq(
+    def _find_and_consume_ref_record_memchr_seq(
         mut self,
     ) raises -> FastqView[origin=MutExternalOrigin]:
         if self.buffer.available() == 0:
@@ -467,7 +467,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return ref_rec
 
     @always_inline
-    fn _next_ref_complete(
+    def _next_ref_complete(
         mut self,
         base: Int,
         mut offsets: RecordOffsets,
@@ -540,7 +540,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 return (True, offsets, current_phase, parse_code)
 
     @always_inline
-    fn _next_ref_complete_memchr_seq(
+    def _next_ref_complete_memchr_seq(
         mut self,
         base: Int,
         mut offsets: RecordOffsets,
@@ -612,7 +612,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if complete:
                 return (True, offsets, current_phase, parse_code)
 
-    fn _get_record_snippet(self, record: FastqView) -> String:
+    def _get_record_snippet(self, record: FastqView) -> String:
         var snippet = String(capacity=200)
         var id_str = StringSlice(unsafe_from_utf8=record._id)
         if len(id_str) > 0:
@@ -627,7 +627,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             snippet = snippet[byte=0:197] + "..."
         return snippet
 
-    fn _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
+    def _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
         var snippet = String(capacity=200)
         var id_str = record.id()
         if len(id_str) > 0:
@@ -650,21 +650,21 @@ struct _FastqParserViewIter[R: Reader, config: ParserConfig, origin: Origin](
 
     var _src: Pointer[FastqParser[Self.R, Self.config], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[FastqParser[Self.R, Self.config], Self.origin],
     ):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
     @always_inline
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return True
 
     @always_inline
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
@@ -686,19 +686,19 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
 
     var _src: Pointer[FastqParser[Self.R, Self.config], Self.origin]
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[FastqParser[Self.R, Self.config], Self.origin],
     ):
         self._src = src
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)
@@ -723,7 +723,7 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
     var _src: Pointer[FastqParser[Self.R, Self.config], Self.origin]
     var _max_records: Int
 
-    fn __init__(
+    def __init__(
         out self,
         src: Pointer[FastqParser[Self.R, Self.config], Self.origin],
         max_records: Int,
@@ -731,13 +731,13 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
         self._src = src
         self._max_records = max_records
 
-    fn __iter__(ref self) -> Self:
+    def __iter__(ref self) -> Self:
         return Self(self._src, self._max_records)
 
-    fn __has_next__(self) -> Bool:
+    def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    fn __next__(mut self) raises StopIteration -> Self.Element:
+    def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
         ](self._src)

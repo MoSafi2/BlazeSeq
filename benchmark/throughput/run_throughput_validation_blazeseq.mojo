@@ -17,7 +17,7 @@ from blazeseq.io.readers import FileReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 
 
-fn run_mode_none(path: String, mode: String) raises -> Tuple[Int, Int]:
+def run_mode_none(path: String, mode: String) raises -> Tuple[Int, Int]:
     comptime config = ParserConfig(
         check_ascii=False,
         check_quality=False,
@@ -45,7 +45,7 @@ fn run_mode_none(path: String, mode: String) raises -> Tuple[Int, Int]:
     return (total_reads, total_base_pairs)
 
 
-fn run_mode_ascii(path: String, mode: String) raises -> Tuple[Int, Int]:
+def run_mode_ascii(path: String, mode: String) raises -> Tuple[Int, Int]:
     comptime config = ParserConfig(
         check_ascii=True,
         check_quality=False,
@@ -73,7 +73,7 @@ fn run_mode_ascii(path: String, mode: String) raises -> Tuple[Int, Int]:
     return (total_reads, total_base_pairs)
 
 
-fn run_mode_ascii_quality(path: String, mode: String) raises -> Tuple[Int, Int]:
+def run_mode_ascii_quality(path: String, mode: String) raises -> Tuple[Int, Int]:
     comptime config = ParserConfig(
         check_ascii=True,
         check_quality=True,
@@ -102,7 +102,7 @@ fn run_mode_ascii_quality(path: String, mode: String) raises -> Tuple[Int, Int]:
     return (total_reads, total_base_pairs)
 
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 4:
         print(

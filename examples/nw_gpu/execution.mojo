@@ -35,7 +35,7 @@ comptime BATCH_SIZE: Int = 65536
 comptime REF_40BP: String = "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT"
 
 
-fn load_batches_synthetic(
+def load_batches_synthetic(
     num_reads: Int, read_len: Int
 ) raises -> List[FastqBatch]:
     """Generate synthetic FASTQ (num_reads × read_len bp) and return list of batches.
@@ -57,7 +57,7 @@ fn load_batches_synthetic(
     return batches^
 
 
-fn total_record_count(batches: List[FastqBatch]) -> Int:
+def total_record_count(batches: List[FastqBatch]) -> Int:
     """Total number of records across all batches."""
     var total: Int = 0
     for b in batches:
@@ -65,7 +65,7 @@ fn total_record_count(batches: List[FastqBatch]) -> Int:
     return total
 
 
-fn setup_reference(
+def setup_reference(
     ctx: DeviceContext, ref_str: String
 ) raises -> Tuple[DeviceBuffer[DType.uint8], Int]:
     """Upload reference to device; return (ref_buffer, ref_len) for kernel calls.
@@ -87,7 +87,7 @@ fn setup_reference(
     return (ref_buffer, ref_len)
 
 
-fn run_gpu_nw(
+def run_gpu_nw(
     batches: List[FastqBatch],
     ref_buffer: DeviceBuffer[DType.uint8],
     ref_len: Int,
@@ -134,7 +134,7 @@ fn run_gpu_nw(
     return (Float64(end_ns - start_ns) / 1e9, all_scores^)
 
 
-fn run_cpu_nw(
+def run_cpu_nw(
     batches: List[FastqBatch], ref_str: String
 ) raises -> Tuple[Float64, List[Int32]]:
     var start_ns = perf_counter_ns()
@@ -152,7 +152,7 @@ fn run_cpu_nw(
     return (Float64(end_ns - start_ns) / 1e9, all_scores^)
 
 
-fn scores_match(
+def scores_match(
     gpu_scores: List[Int32], cpu_scores: List[Int32]
 ) -> Tuple[Bool, Int]:
     """Return (True, -1) if lists are equal; (False, -1) if length mismatch; else (False, first mismatch index).
