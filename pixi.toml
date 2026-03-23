@@ -33,19 +33,19 @@ mojo-compiler = "=0.26.2.0"
 rattler-build = "*"
 
 [package.target.linux-64.build-dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
 [package.target.osx-arm64.build-dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
 [dependencies]
 mojo = ">=0.26.2.0,<0.27"
 
 [target.linux-64.dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
 [target.osx-arm64.dependencies]
-rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-h60d57d3_0.conda" }
+rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
 
 [tasks]
@@ -72,7 +72,6 @@ numpy = ">=2.4.3,<3"
 ipykernel = ">=7.1.0,<8"
 pandas = ">=3.0.1,<4"
 seaborn = ">=0.13.2,<0.14"
-
 
 
 [feature.benchmark.tasks]
