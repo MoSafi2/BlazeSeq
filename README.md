@@ -5,7 +5,7 @@
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://mosafi2.github.io/BlazeSeq/)
-[![Mojo](https://img.shields.io/badge/Mojo-0.26.1-fire)](https://docs.modular.com)
+[![Mojo](https://img.shields.io/badge/Mojo-0.26.2-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)).Configurable validation is available — all through a single unified API.
