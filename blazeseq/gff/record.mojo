@@ -67,7 +67,7 @@ struct SequenceRegion(Copyable, Movable):
     var seqid: BString
     var region: Interval  # 1-based closed [start, end]
 
-    fn __init__(out self, seqid: BString, region: Interval):
+    def __init__(out self, var seqid: BString, region: Interval):
         self.seqid = seqid^
         self.region = region
 
@@ -271,9 +271,9 @@ struct TargetAttribute(Copyable, Movable):
     var end: UInt64
     var strand: Optional[GffStrand]
 
-    fn __init__(
+    def __init__(
         out self,
-        target_id: BString,
+        var target_id: BString,
         start: UInt64,
         end: UInt64,
         strand: Optional[GffStrand],

@@ -8,7 +8,8 @@ from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
 from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
-from blazeseq.utils import memchr, format_parse_error, ParseContext
+from blazeseq.utils import memchr
+from blazeseq.errors import ParseContext, raise_parse_error
 
 
 # ---------------------------------------------------------------------------
@@ -473,13 +474,9 @@ struct DelimitedReader[
         if self._expected_num_fields == 0:
             self._expected_num_fields = n
         elif n != self._expected_num_fields:
-            raise Error(
-                format_parse_error(
-                    self._parse_context(),
-                    "Delimited row has inconsistent number of fields",
-                    "",
-                    1,
-                )
+            raise_parse_error(
+                self._parse_context(),
+                "Delimited row has inconsistent number of fields",
             )
 
 

@@ -31,7 +31,7 @@ from blazeseq.io.buffered import (
 )
 from blazeseq.io.readers import Reader
 from blazeseq.io.writers import WriterBackend
-from blazeseq.errors import ParseError, FastxErrorCode
+from blazeseq.errors import ParseError, FastxErrorCode, ParseContext, format_parse_error
 
 
 @doc_hidden
@@ -127,52 +127,6 @@ struct SearchPhase(
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.value)
 
-
-@doc_hidden
-@fieldwise_init
-struct ParseContext(Copyable, Movable, TrivialRegisterPassable):
-    """Parser position context: record number, line number, file position. Used for error reporting.
-    """
-
-    var record_number: Int
-    var line_number: Int
-    var file_position: Int64
-
-
-@doc_hidden
-def format_parse_error(
-    ctx: ParseContext,
-    message: String,
-    record_snippet: String = "",
-    record_offset: Int = 0,
-) -> String:
-    """Build ParseError from message and parser context; return formatted string for raising Error.
-    """
-    var parse_err = ParseError(
-        message,
-        record_number=ctx.record_number + record_offset,
-        line_number=ctx.line_number,
-        file_position=ctx.file_position,
-        record_snippet=record_snippet,
-    )
-    return String(parse_err)
-
-
-@doc_hidden
-def format_parse_error(
-    message: String,
-    record_number: Int,
-    line_number: Int,
-    file_position: Int64,
-    record_snippet: String,
-) -> String:
-    """Legacy 5-arg overload; delegates to ParseContext-based implementation."""
-    return format_parse_error(
-        ParseContext(record_number, line_number, file_position),
-        message,
-        record_snippet,
-        0,
-    )
 
 
 # # From extramojo pacakge, skipping version problems
