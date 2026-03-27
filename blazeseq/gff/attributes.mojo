@@ -71,7 +71,10 @@ struct GffAttributes(Copyable, Movable, Sized, Writable):
         """Emit attributes in GTF (tag \"value\") or GFF3 (key=value) format."""
         for i in range(len(self._pairs)):
             if i > 0:
-                writer.write("; ")
+                if format_gtf:
+                    writer.write("; ")
+                else:
+                    writer.write(";")
             var k = self._pairs[i][0].to_string()
             if format_gtf:
                 if len(self._pairs[i][1]) > 0:
