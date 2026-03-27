@@ -161,29 +161,24 @@ struct BedView[O: Origin](Movable):
         """
         return Position(self.chrom_start + 1, True)
 
-    def end_position(self) raises -> Position:
-        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
-        """
-        if self.chrom_end < 1:
-            raise Error(
-                "chrom_end must be >= 1 for 1-based end_position (BED"
-                " [start,end) has no bases when end is 0)"
-            )
-        return Position(self.chrom_end, True)
+    def end_position(self) -> Optional[Position]:
+        """1-based end position (chromEnd). None for zero-length BED records (chromEnd == 0)."""
+        if self.chrom_end == 0:
+            return None
+        return Optional(Position(self.chrom_end, True))
 
-    def interval(self) raises -> Interval:
-        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
+    def interval(self) -> Optional[Interval]:
+        """Feature extent as 1-based closed [chromStart+1, chromEnd].
+        Returns None for zero-length BED records (chromEnd == 0).
+        BED 0-based half-open [s, e) → 1-based closed [s+1, e].
         """
-        if self.chrom_end < 1:
-            raise Error(
-                "chrom_end must be >= 1 for 1-based interval (BED [start,end)"
-                " has no bases when end is 0)"
-            )
-        return Interval(
+        if self.chrom_end == 0:
+            return None
+        return Optional(Interval(
             Position(self.chrom_start + 1, True),
             Position(self.chrom_end, True),
             True,
-        )
+        ))
 
     def thick_interval(self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
@@ -213,13 +208,21 @@ struct BedView[O: Origin](Movable):
         """
         var block_sizes: Optional[List[UInt64]] = None
         var block_starts: Optional[List[UInt64]] = None
-        if self._block_sizes_span and self._block_starts_span:
-            block_sizes = _parse_comma_sep_int64_list(
-                self._block_sizes_span.value()
-            )
-            block_starts = _parse_comma_sep_int64_list(
-                self._block_starts_span.value()
-            )
+        if self._block_sizes_span and self._block_starts_span and self.block_count:
+            var bc = self.block_count.value()
+            var sizes = _parse_comma_sep_int64_list(self._block_sizes_span.value())
+            var starts = _parse_comma_sep_int64_list(self._block_starts_span.value())
+            if len(sizes) != bc or len(starts) != bc:
+                raise Error("BED: blockSizes/blockStarts length != blockCount")
+            if starts[0] != 0:
+                raise Error("BED: blockStarts[0] must be 0 (first block at chromStart)")
+            if self.chrom_start + starts[bc - 1] + sizes[bc - 1] != self.chrom_end:
+                raise Error("BED: last block must end at chromEnd")
+            block_sizes = sizes^
+            block_starts = starts^
+        elif self._block_sizes_span and self._block_starts_span:
+            block_sizes = _parse_comma_sep_int64_list(self._block_sizes_span.value())
+            block_starts = _parse_comma_sep_int64_list(self._block_starts_span.value())
         var name_opt: Optional[BString] = None
         if self._name:
             name_opt = BString(self._name.value())
@@ -282,8 +285,6 @@ def _comma_sep_u64_list(values: List[UInt64]) -> String:
 # ---------------------------------------------------------------------------
 
 
-# The convesion from Bed to Position and Interval is a mine-field with mismatches between 1-based closed and 0-based half-open coordinates.
-# Fix later, for now focus on Reading and writing BED files with InterOp coming later.
 @fieldwise_init
 struct BedRecord(Copyable, Movable, Writable):
     """Single BED feature (owned). Coordinates are 0-based, half-open."""
@@ -310,29 +311,24 @@ struct BedRecord(Copyable, Movable, Writable):
         """
         return Position(self.ChromStart + 1, True)
 
-    def end_position(self) raises -> Position:
-        """1-based end of the feature (aligned with noodles_core; BED chromEnd is exclusive → end).
-        """
-        if self.ChromEnd < 1:
-            raise Error(
-                "ChromEnd must be >= 1 for 1-based end_position (BED"
-                " [start,end) has no bases when end is 0)"
-            )
-        return Position(self.ChromEnd, True)
+    def end_position(self) -> Optional[Position]:
+        """1-based end position (ChromEnd). None for zero-length BED records (ChromEnd == 0)."""
+        if self.ChromEnd == 0:
+            return None
+        return Optional(Position(self.ChromEnd, True))
 
-    def interval(self) raises -> Interval:
-        """Feature extent as 1-based closed [start, end] (aligned with noodles_core::Interval).
+    def interval(self) -> Optional[Interval]:
+        """Feature extent as 1-based closed [ChromStart+1, ChromEnd].
+        Returns None for zero-length BED records (ChromEnd == 0).
+        BED 0-based half-open [s, e) → 1-based closed [s+1, e].
         """
-        if self.ChromEnd < 1:
-            raise Error(
-                "ChromEnd must be >= 1 for 1-based interval (BED [start,end)"
-                " has no bases when end is 0)"
-            )
-        return Interval(
+        if self.ChromEnd == 0:
+            return None
+        return Optional(Interval(
             Position(self.ChromStart + 1, True),
             Position(self.ChromEnd, True),
             True,
-        )
+        ))
 
     def thick_interval(ref self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
@@ -377,6 +373,7 @@ struct BedRecord(Copyable, Movable, Writable):
         self._write_thick_fields(writer)
         self._write_item_rgb_field(writer)
         self._write_block_fields(writer)
+        writer.write("\n")
 
     def _write_core_fields[w: Writer](ref self, mut writer: w):
         writer.write(

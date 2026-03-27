@@ -8,16 +8,18 @@ from blazeseq.errors import (
     ParseError,
     ValidationError,
     FastxErrorCode,
+    ParseContext,
+    format_parse_error,
     format_parse_error_from_code,
     format_validation_error_from_code,
     buffer_capacity_error,
+    raise_parse_error,
+    raise_validation_error,
 )
 from std.iter import Iterator
 from blazeseq.byte_string import BString
 from blazeseq.utils import (
     _parse_schema,
-    format_parse_error,
-    ParseContext,
     _check_end_qual,
     _scan_record,
     _scan_record_memchr_seq,
@@ -159,13 +161,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var ref_rec = self._find_and_consume_ref_record()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code,
-                    self._parse_context().record_number,
-                    "",
-                    self._get_record_snippet(ref_rec),
-                )
+            raise_validation_error(
+                self._parse_context(),
+                code.message(),
+                "",
+                self._get_record_snippet(ref_rec),
             )
         return ref_rec
 
@@ -177,13 +177,11 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var ref_rec = self._find_and_consume_ref_record_memchr_seq()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code,
-                    self._parse_context().record_number,
-                    "",
-                    self._get_record_snippet(ref_rec),
-                )
+            raise_validation_error(
+                self._parse_context(),
+                code.message(),
+                "",
+                self._get_record_snippet(ref_rec),
             )
         return ref_rec
 
@@ -201,18 +199,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 Int8(self.quality_schema.OFFSET),
             )
         except e:
-            raise Error(
-                format_parse_error(self._parse_context(), String(e))
-            )
+            raise Error(format_parse_error(self._parse_context(), String(e)))
         var code = self.validator._validate(record)
         if code != FastxErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code,
-                    self._parse_context().record_number,
-                    "",
-                    self._get_record_snippet_from_fastq(record),
-                )
+            raise_validation_error(
+                self._parse_context(),
+                code.message(),
+                "",
+                self._get_record_snippet_from_fastq(record),
             )
         return record^
 
@@ -231,18 +225,14 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 Int8(self.quality_schema.OFFSET),
             )
         except e:
-            raise Error(
-                format_parse_error(self._parse_context(), String(e))
-            )
+            raise Error(format_parse_error(self._parse_context(), String(e)))
         var code = self.validator._validate(record)
         if code != FastxErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code,
-                    self._parse_context().record_number,
-                    "",
-                    self._get_record_snippet_from_fastq(record),
-                )
+            raise_validation_error(
+                self._parse_context(),
+                code.message(),
+                "",
+                self._get_record_snippet_from_fastq(record),
             )
         return record^
 
@@ -341,14 +331,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
         if parse_code != FastxErrorCode.OK:
             var ctx = self._parse_context()
-            raise Error(
-                format_parse_error_from_code(
-                    parse_code,
-                    ctx.record_number + 1,
-                    ctx.line_number + 1,
-                    ctx.file_position,
-                    _record_snippet(scan_view, offsets),
-                )
+            raise_parse_error(
+                ParseContext(ctx.record_number + 1, ctx.line_number + 1, ctx.file_position),
+                parse_code.message(),
+                _record_snippet(scan_view, offsets),
             )
         if not complete:
             complete, offsets, phase, refill_code = self._next_ref_complete(
@@ -415,14 +401,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         )
         if parse_code != FastxErrorCode.OK:
             var ctx = self._parse_context()
-            raise Error(
-                format_parse_error_from_code(
-                    parse_code,
-                    ctx.record_number + 1,
-                    ctx.line_number + 1,
-                    ctx.file_position,
-                    _record_snippet(scan_view, offsets),
-                )
+            raise_parse_error(
+                ParseContext(ctx.record_number + 1, ctx.line_number + 1, ctx.file_position),
+                parse_code.message(),
+                _record_snippet(scan_view, offsets),
             )
         if not complete:
             complete, offsets, phase, refill_code = (

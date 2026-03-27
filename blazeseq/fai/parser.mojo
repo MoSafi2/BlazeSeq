@@ -28,7 +28,55 @@ from blazeseq.fai.record import FaiRecord, FaiView
 from blazeseq.io.buffered import EOFError
 from blazeseq.io.delimited import DelimitedReader, DelimitedView
 from blazeseq.io.readers import Reader
-from blazeseq.utils import format_parse_error, ParseContext
+from blazeseq.errors import ParseContext, raise_parse_error
+
+
+# ---------------------------------------------------------------------------
+# FaiErrorCode: format-local trivial enum for hot-path field parsing
+# ---------------------------------------------------------------------------
+
+
+struct FaiErrorCode(Copyable, Equatable, TrivialRegisterPassable):
+    """Trivial error code returned by low-level FAI field parsers; caller raises."""
+
+    var value: Int8
+
+    @always_inline
+    def __init__(out self, value: Int8):
+        self.value = value
+
+    @always_inline
+    def __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    @always_inline
+    def __ne__(self, other: Self) -> Bool:
+        return self.value != other.value
+
+    comptime OK          = Self(0)
+    comptime INT_EMPTY   = Self(1)
+    comptime INT_INVALID = Self(2)
+    comptime FIELD_COUNT = Self(3)
+
+    def message(self) -> String:
+        if self == Self.INT_EMPTY:   return "FAI: integer field is empty"
+        if self == Self.INT_INVALID: return "FAI: invalid byte in integer field"
+        if self == Self.FIELD_COUNT: return "FAI: row must have 5 or 6 TAB-delimited columns"
+        return "FAI: parse error"
+
+
+@always_inline
+def _parse_int64_from_span(span: Span[UInt8, _], mut result: Int64) -> FaiErrorCode:
+    """Parse a decimal Int64 from a byte span. Returns OK or an error code."""
+    result = 0
+    if len(span) == 0:
+        return FaiErrorCode.INT_EMPTY
+    for i in range(len(span)):
+        var digit = span[i] - 48
+        if digit > 9:
+            return FaiErrorCode.INT_INVALID
+        result = result * 10 + digit.cast[DType.int64]()
+    return FaiErrorCode.OK
 
 
 struct FaiParser[R: Reader](Iterable, Movable):
@@ -82,43 +130,36 @@ struct FaiParser[R: Reader](Iterable, Movable):
         if not self.has_more():
             raise EOFError()
 
+        var ctx = self._parse_context()
         var view = self._rows.next_view()
         var n_fields = view.num_fields()
         if n_fields != 5 and n_fields != 6:
-            var msg = format_parse_error(
-                self._parse_context(),
-                "FAI row must have 5 or 6 TAB-delimited columns",
-                "",
-                1,
-            )
-            raise Error(msg)
+            raise_parse_error(ctx, FaiErrorCode.FIELD_COUNT.message())
 
-        def _parse_int64_from_span(span: Span[UInt8, _]) raises -> Int64:
-            var result: Int64 = 0
-            var n = len(span)
-
-            if n == 0:
-                raise Error("Invalid FAI integer: empty span")
-
-            for i in range(n):
-                var digit = span[i] - 48  # stays UInt8, wraps on underflow
-                if digit > 9:  # single unsigned check catches < '0' and > '9'
-                    raise Error(
-                        "Invalid FAI integer: unexpected byte "
-                        + chr(Int(span[i]))
-                    )
-                result = result * 10 + digit.cast[DType.int64]()
-
-            return result
-
-        var length = _parse_int64_from_span(view.get_span(1))
-        var offset = _parse_int64_from_span(view.get_span(2))
-        var line_bases = _parse_int64_from_span(view.get_span(3))
-        var line_width = _parse_int64_from_span(view.get_span(4))
+        var length: Int64 = 0
+        var lc = _parse_int64_from_span(view.get_span(1), length)
+        if lc != FaiErrorCode.OK:
+            raise_parse_error(ctx, lc.message())
+        var offset: Int64 = 0
+        var oc = _parse_int64_from_span(view.get_span(2), offset)
+        if oc != FaiErrorCode.OK:
+            raise_parse_error(ctx, oc.message())
+        var line_bases: Int64 = 0
+        var lbc = _parse_int64_from_span(view.get_span(3), line_bases)
+        if lbc != FaiErrorCode.OK:
+            raise_parse_error(ctx, lbc.message())
+        var line_width: Int64 = 0
+        var lwc = _parse_int64_from_span(view.get_span(4), line_width)
+        if lwc != FaiErrorCode.OK:
+            raise_parse_error(ctx, lwc.message())
 
         var qual_offset: Optional[Int64] = None
         if n_fields == 6:
-            qual_offset = _parse_int64_from_span(view.get_span(5))
+            var qo: Int64 = 0
+            var qc = _parse_int64_from_span(view.get_span(5), qo)
+            if qc != FaiErrorCode.OK:
+                raise_parse_error(ctx, qc.message())
+            qual_offset = qo
 
         return FaiView[MutExternalOrigin](
             _name=view.get_span(0),

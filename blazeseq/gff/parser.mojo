@@ -22,10 +22,52 @@ from blazeseq.io.delimited import (
     LinePolicy,
 )
 from blazeseq.io.readers import Reader
-from blazeseq.utils import format_parse_error, ParseContext
+from blazeseq.errors import ParseContext, raise_parse_error
 
 comptime GFF_TAB: Byte = 9  # ord('\t')
 comptime GFF_NUM_FIELDS: Int = 9
+
+
+# ---------------------------------------------------------------------------
+# GffErrorCode: format-local trivial enum for hot-path field parsing
+# ---------------------------------------------------------------------------
+
+
+struct GffErrorCode(Copyable, Equatable, TrivialRegisterPassable):
+    """Trivial error code returned by low-level GFF/GTF field parsers; caller raises."""
+
+    var value: Int8
+
+    @always_inline
+    def __init__(out self, value: Int8):
+        self.value = value
+
+    @always_inline
+    def __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    @always_inline
+    def __ne__(self, other: Self) -> Bool:
+        return self.value != other.value
+
+    comptime OK              = Self(0)
+    comptime VERSION         = Self(1)
+    comptime SEQ_REGION      = Self(2)
+    comptime INT_EMPTY       = Self(3)
+    comptime INT_INVALID     = Self(4)
+    comptime STRAND_INVALID  = Self(5)
+    comptime PHASE_INVALID   = Self(6)
+    comptime FIELD_COUNT     = Self(7)
+
+    def message(self) -> String:
+        if self == Self.VERSION:        return "GFF3: ##gff-version must be 3.x"
+        if self == Self.SEQ_REGION:     return "GFF3: malformed ##sequence-region directive"
+        if self == Self.INT_EMPTY:      return "GFF: integer field is empty"
+        if self == Self.INT_INVALID:    return "GFF: invalid byte in integer field"
+        if self == Self.STRAND_INVALID: return "GFF: strand must be +, -, ., or ?"
+        if self == Self.PHASE_INVALID:  return "GFF: phase must be 0, 1, or 2"
+        if self == Self.FIELD_COUNT:    return "GFF: row must have exactly 9 fields"
+        return "GFF: parse error"
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +75,7 @@ comptime GFF_NUM_FIELDS: Int = 9
 # ---------------------------------------------------------------------------
 
 
-fn _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
+def _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
     """True if span begins with the bytes of lit."""
     var s = StringSlice(lit)
     var n = len(s)
@@ -46,14 +88,14 @@ fn _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
     return True
 
 
-fn _check_gff_version(line: Span[UInt8, _]) raises:
+def _check_gff_version(line: Span[UInt8, _], ctx: ParseContext) raises:
     """Raise if ##gff-version declares a version other than 3.x."""
     # "##gff-version 3" minimum: 15 bytes; version digit is at index 14
     if len(line) < 15 or line[14] != UInt8(ord("3")):
-        raise Error("GFF3: ##gff-version must be 3.x")
+        raise_parse_error(ctx, GffErrorCode.VERSION.message())
 
 
-fn _parse_sequence_region(
+def _parse_sequence_region(
     line: Span[UInt8, _],
     ctx: ParseContext,
 ) raises -> SequenceRegion:
@@ -61,23 +103,24 @@ fn _parse_sequence_region(
     # prefix "##sequence-region " is 18 bytes
     var prefix_len = 18
     if len(line) <= prefix_len:
-        var msg = format_parse_error(ctx, "GFF3: malformed ##sequence-region directive")
-        raise Error(msg)
+        raise_parse_error(ctx, GffErrorCode.SEQ_REGION.message())
     var rest = line[prefix_len:]
     # seqid
     var i: Int = 0
     while i < len(rest) and rest[i] != UInt8(ord(" ")):
         i += 1
     if i == 0:
-        var msg = format_parse_error(ctx, "GFF3: ##sequence-region missing seqid")
-        raise Error(msg)
+        raise_parse_error(ctx, "GFF3: ##sequence-region missing seqid")
     var seqid = BString(rest[0:i])
     i += 1  # skip space
     # start
     var j = i
     while j < len(rest) and rest[j] != UInt8(ord(" ")):
         j += 1
-    var start = _parse_uint64_from_span(rest[i:j])
+    var start: UInt64 = 0
+    var sc = _parse_uint64_from_span(rest[i:j], start)
+    if sc != GffErrorCode.OK:
+        raise_parse_error(ctx, sc.message())
     j += 1  # skip space
     # end — trim trailing whitespace/newline
     var end_span = rest[j:]
@@ -88,7 +131,10 @@ fn _parse_sequence_region(
         or end_span[end_len - 1] == UInt8(ord(" "))
     ):
         end_len -= 1
-    var end = _parse_uint64_from_span(end_span[0:end_len])
+    var end: UInt64 = 0
+    var ec = _parse_uint64_from_span(end_span[0:end_len], end)
+    if ec != GffErrorCode.OK:
+        raise_parse_error(ctx, ec.message())
     var region = Interval(Position(start), Position(end))
     return SequenceRegion(seqid=seqid^, region=region)
 
@@ -157,7 +203,8 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     @always_inline
     fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
         if _starts_with(line, "##gff-version"):
-            _check_gff_version(line)
+            var ctx = ParseContext(0, 0, 0)
+            _check_gff_version(line, ctx)
             self._seen_version = True
         elif _starts_with(line, "##sequence-region"):
             if self._regions_ptr:
@@ -171,20 +218,21 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 # ---------------------------------------------------------------------------
 
 
-fn _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
-    var result: UInt64 = 0
-    var n = len(span)
-    if n == 0:
-        raise Error("GFF: empty integer field")
-    for i in range(n):
+@always_inline
+def _parse_uint64_from_span(span: Span[UInt8, _], mut result: UInt64) -> GffErrorCode:
+    """Parse a decimal UInt64. Returns OK or an error code; never raises."""
+    result = 0
+    if len(span) == 0:
+        return GffErrorCode.INT_EMPTY
+    for i in range(len(span)):
         var digit = span[i] - 48
         if digit > 9:
-            raise Error("GFF: invalid integer " + chr(Int(span[i])))
+            return GffErrorCode.INT_INVALID
         result = result * 10 + digit.cast[DType.uint64]()
-    return result
+    return GffErrorCode.OK
 
 
-fn _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
+def _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
     if len(span) == 0:
         return None
     if len(span) == 1 and span[0] == UInt8(ord(".")):
@@ -193,64 +241,80 @@ fn _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
     return Optional(atof(s))
 
 
-fn _parse_gff_strand(span: Span[UInt8, _]) raises -> Optional[GffStrand]:
+def _parse_gff_strand(span: Span[UInt8, _], mut result: Optional[GffStrand]) -> GffErrorCode:
+    """Parse GFF strand field. Returns OK or STRAND_INVALID; never raises."""
+    result = None
     if len(span) == 0:
-        return None
+        return GffErrorCode.OK
     if len(span) == 1:
         var c = span[0]
         if c == UInt8(ord("+")):
-            return Optional(GffStrand.Plus)
+            result = Optional(GffStrand.Plus)
+            return GffErrorCode.OK
         if c == UInt8(ord("-")):
-            return Optional(GffStrand.Minus)
+            result = Optional(GffStrand.Minus)
+            return GffErrorCode.OK
         if c == UInt8(ord(".")):
-            return Optional(GffStrand.Unstranded)
+            result = Optional(GffStrand.Unstranded)
+            return GffErrorCode.OK
         if c == UInt8(ord("?")):
-            return Optional(GffStrand.Unknown)
-    raise Error("GFF: strand must be +, -, ., or ?")
+            result = Optional(GffStrand.Unknown)
+            return GffErrorCode.OK
+    return GffErrorCode.STRAND_INVALID
 
 
-fn _parse_phase_span(span: Span[UInt8, _]) raises -> Optional[UInt8]:
+def _parse_phase_span(span: Span[UInt8, _], mut result: Optional[UInt8]) -> GffErrorCode:
+    """Parse GFF phase field. Returns OK or an error code; never raises."""
+    result = None
     if len(span) == 0:
-        return None
+        return GffErrorCode.OK
     if len(span) == 1 and span[0] == UInt8(ord(".")):
-        return None
-    var v = _parse_uint64_from_span(span)
+        return GffErrorCode.OK
+    var v: UInt64 = 0
+    var ic = _parse_uint64_from_span(span, v)
+    if ic != GffErrorCode.OK:
+        return ic
     if v > 2:
-        raise Error("GFF: phase must be 0, 1, or 2")
-    return Optional(UInt8(v))
+        return GffErrorCode.PHASE_INVALID
+    result = Optional(UInt8(v))
+    return GffErrorCode.OK
 
 
-fn _parse_gff_row(
+def _parse_gff_row(
     view: DelimitedView[MutExternalOrigin, 16],
     ctx: ParseContext,
     format_gtf: Bool,
 ) raises -> GffView[MutExternalOrigin]:
     """Parse one 9-field row into GffView."""
     if view.num_fields() != GFF_NUM_FIELDS:
-        var msg = format_parse_error(
-            ctx,
-            "GFF row must have exactly 9 fields",
-            "",
-            1,
-        )
-        raise Error(msg)
+        raise_parse_error(ctx, GffErrorCode.FIELD_COUNT.message())
     var seqid = view.get_span(0)
     var source = view.get_span(1)
     var ftype = view.get_span(2)
-    var start = _parse_uint64_from_span(view.get_span(3))
-    var end = _parse_uint64_from_span(view.get_span(4))
+    var start: UInt64 = 0
+    var sc = _parse_uint64_from_span(view.get_span(3), start)
+    if sc != GffErrorCode.OK:
+        raise_parse_error(ctx, sc.message())
+    var end: UInt64 = 0
+    var ec = _parse_uint64_from_span(view.get_span(4), end)
+    if ec != GffErrorCode.OK:
+        raise_parse_error(ctx, ec.message())
     if start > end:
-        var msg = format_parse_error(ctx, "GFF start must be <= end")
-        raise Error(msg)
+        raise_parse_error(ctx, "GFF: start must be <= end")
     var score = _parse_score_span(view.get_span(5))
-    var strand = _parse_gff_strand(view.get_span(6))
-    var phase = _parse_phase_span(view.get_span(7))
+    var strand: Optional[GffStrand] = None
+    var stc = _parse_gff_strand(view.get_span(6), strand)
+    if stc != GffErrorCode.OK:
+        raise_parse_error(ctx, stc.message())
+    var phase: Optional[UInt8] = None
+    var pc = _parse_phase_span(view.get_span(7), phase)
+    if pc != GffErrorCode.OK:
+        raise_parse_error(ctx, pc.message())
     # Per GFF3 spec: phase is required for CDS features
     if not format_gtf:
         var ftype_str = StringSlice(unsafe_from_utf8=ftype)
         if String(ftype_str) == "CDS" and not phase:
-            var msg = format_parse_error(ctx, "GFF3: CDS feature requires phase (0, 1, or 2)")
-            raise Error(msg)
+            raise_parse_error(ctx, "GFF3: CDS feature requires phase (0, 1, or 2)")
     var attrs_span = view.get_span(8)
     return GffView[MutExternalOrigin](
         _seqid=seqid,
@@ -347,7 +411,7 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
         var result = List[SequenceRegion]()
         var src = self._seq_regions
         for i in range(len(src[])):
-            result.append(SequenceRegion(src[i].copy()))
+            result.append(SequenceRegion(copy=src[][i]))
         return result^
 
     @always_inline

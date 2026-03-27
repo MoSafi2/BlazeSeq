@@ -2,8 +2,14 @@ from blazeseq.fasta.record import FastaRecord
 from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
 from blazeseq.CONSTS import EOF
-from blazeseq.utils import format_parse_error, ParseContext, _strip_spaces, _check_ascii
-from blazeseq.errors import FastxErrorCode, format_validation_error_from_code
+from blazeseq.utils import _strip_spaces, _check_ascii
+from blazeseq.errors import (
+    FastxErrorCode,
+    ParseContext,
+    format_validation_error_from_code,
+    raise_parse_error,
+    raise_validation_error,
+)
 from blazeseq.byte_string import BString
 from std.memory import Span
 from std.collections import List
@@ -44,18 +50,11 @@ struct Validator(Copyable):
         self,
         id_bytes: BString,
         seq_bytes: BString,
-        record_number: Int = 0,
+        ctx: ParseContext,
     ) raises:
         var code = self._validate(id_bytes, seq_bytes)
         if code != FastxErrorCode.OK:
-            raise Error(
-                format_validation_error_from_code(
-                    code,
-                    record_number,
-                    "",
-                    "",
-                )
-            )
+            raise_validation_error(ctx, code.message(), "", "")
 
 
 struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, Movable):
@@ -150,16 +149,17 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
 
         self._last_seq_size = seq_buf.size
         if len(seq_buf) == 0:
-            var ctx = ParseContext(
-                self._record_number,
-                seq_start_line,
-                self.lines.get_file_position(),
+            raise_parse_error(
+                ParseContext(
+                    self._record_number + 1,
+                    seq_start_line,
+                    self.lines.get_file_position(),
+                ),
+                "FASTA record has empty sequence",
             )
-            var msg = format_parse_error(ctx, "FASTA record has empty sequence", "", 1)
-            raise Error(msg)
 
         comptime if Self.config.check_ascii:
-            self.validator.validate(id_str, seq_buf, self._record_number + 1)
+            self.validator.validate(id_str, seq_buf, self._parse_context())
 
         self._record_number += 1
         return FastaRecord(id_str^, seq_buf^)
@@ -186,13 +186,10 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, M
             if len(trimmed) == 0:
                 continue
             if trimmed[0] != FASTA_HEADER_BYTE:
-                var msg = format_parse_error(
+                raise_parse_error(
                     self._parse_context(),
-                    "Sequence id line does not start with '>'",
-                    "",
-                    1,
+                    "FASTA: sequence id line does not start with '>'",
                 )
-                raise Error(msg)
             # Id is text after '>', trimmed of leading/trailing whitespace.
             var id_span = _strip_spaces(trimmed[1:])
             return BString(id_span)
