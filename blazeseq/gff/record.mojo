@@ -24,7 +24,7 @@ from blazeseq.gff.attributes import (
 
 
 struct GffStrand(Copyable, Equatable, TrivialRegisterPassable, Writable):
-    """Strand of a GFF feature: Plus (+), Minus (-), Unknown (.), or Unstranded (?)."""
+    """Strand of a GFF feature: Plus (+), Minus (-), Unstranded (.), or Unknown (?)."""
 
     var value: Int8
 
@@ -34,8 +34,8 @@ struct GffStrand(Copyable, Equatable, TrivialRegisterPassable, Writable):
 
     comptime Plus = Self(0)
     comptime Minus = Self(1)
-    comptime Unknown = Self(2)
-    comptime Unstranded = Self(3)  # GFF3 "?"
+    comptime Unstranded = Self(2)  # "." — no strand concept
+    comptime Unknown = Self(3)     # "?" — strand unknown (GFF3)
 
     @always_inline
     fn __eq__(self, other: Self) -> Bool:
@@ -50,6 +50,30 @@ struct GffStrand(Copyable, Equatable, TrivialRegisterPassable, Writable):
             writer.write(".")
         else:
             writer.write("?")
+
+
+# ---------------------------------------------------------------------------
+# SequenceRegion — from ##sequence-region directive
+# ---------------------------------------------------------------------------
+
+
+struct SequenceRegion(Copyable, Movable):
+    """Sequence boundary declared by a ##sequence-region directive.
+
+    ##sequence-region seqid start end
+    Coordinates are 1-based inclusive, same as GFF feature coordinates.
+    """
+
+    var seqid: BString
+    var region: Interval  # 1-based closed [start, end]
+
+    fn __init__(out self, seqid: BString, region: Interval):
+        self.seqid = seqid^
+        self.region = region
+
+    fn __init__(out self, *, copy: Self):
+        self.seqid = copy.seqid.copy()
+        self.region = copy.region
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +219,10 @@ struct GffRecord(Copyable, Movable, Writable):
     fn get_attribute(ref self, key: String) -> Optional[BString]:
         return self.Attributes.get(key)
 
+    fn get_all_attributes(ref self, key: String) -> List[BString]:
+        """Return all values for key (for multi-value GFF3 attributes like Parent)."""
+        return self.Attributes.get_all(key)
+
     fn write_to[w: Writer](ref self, mut writer: w, format_gtf: Bool = False):
         """Write one tab-delimited line. format_gtf: True = GTF attribute style."""
         writer.write(self.Seqid.to_string())
@@ -223,3 +251,96 @@ struct GffRecord(Copyable, Movable, Writable):
             writer.write(".")
         writer.write("\t")
         self.Attributes.write_to(writer, format_gtf=format_gtf)
+        writer.write("\n")
+
+
+# ---------------------------------------------------------------------------
+# TargetAttribute — structured form of the GFF3 Target attribute value
+# ---------------------------------------------------------------------------
+
+
+struct TargetAttribute(Copyable, Movable):
+    """Structured form of a GFF3 Target attribute value.
+
+    Format: target_id start end [strand]
+    Coordinates are 1-based. strand is optional (+/-).
+    """
+
+    var target_id: BString
+    var start: UInt64
+    var end: UInt64
+    var strand: Optional[GffStrand]
+
+    fn __init__(
+        out self,
+        target_id: BString,
+        start: UInt64,
+        end: UInt64,
+        strand: Optional[GffStrand],
+    ):
+        self.target_id = target_id^
+        self.start = start
+        self.end = end
+        self.strand = strand
+
+    fn __init__(out self, *, copy: Self):
+        self.target_id = copy.target_id.copy()
+        self.start = copy.start
+        self.end = copy.end
+        self.strand = copy.strand
+
+
+fn _parse_uint64_from_bstring(s: BString) raises -> UInt64:
+    """Parse a BString as a decimal UInt64."""
+    var result: UInt64 = 0
+    var n = len(s)
+    if n == 0:
+        raise Error("Target: empty integer field")
+    for i in range(n):
+        var digit = s[i] - 48
+        if digit > 9:
+            raise Error("Target: invalid integer digit")
+        result = result * 10 + digit.cast[DType.uint64]()
+    return result
+
+
+fn parse_target_attribute(value: BString) raises -> TargetAttribute:
+    """Parse a GFF3 Target attribute value: 'target_id start end [strand]'.
+
+    Coordinates are 1-based. Strand (+ or -) is optional.
+    """
+    # Collect space-delimited tokens
+    var tokens = List[BString]()
+    var span = value.as_span()
+    var n = len(span)
+    var i: Int = 0
+    while i < n:
+        while i < n and span[i] == UInt8(ord(" ")):
+            i += 1
+        if i >= n:
+            break
+        var j = i
+        while j < n and span[j] != UInt8(ord(" ")):
+            j += 1
+        tokens.append(BString(span[i:j]))
+        i = j + 1
+    if len(tokens) < 3:
+        raise Error("GFF3 Target: expected 'target_id start end [strand]', got fewer fields")
+    var target_id = tokens[0].copy()
+    var start = _parse_uint64_from_bstring(tokens[1])
+    var end = _parse_uint64_from_bstring(tokens[2])
+    var strand: Optional[GffStrand] = None
+    if len(tokens) >= 4:
+        var s_span = tokens[3].as_span()
+        if len(s_span) == 1:
+            if s_span[0] == UInt8(ord("+")):
+                strand = Optional(GffStrand.Plus)
+            elif s_span[0] == UInt8(ord("-")):
+                strand = Optional(GffStrand.Minus)
+            else:
+                raise Error("GFF3 Target: strand must be + or -")
+        else:
+            raise Error("GFF3 Target: strand must be a single character + or -")
+    if start > end:
+        raise Error("GFF3 Target: start must be <= end")
+    return TargetAttribute(target_id=target_id^, start=start, end=end, strand=strand)

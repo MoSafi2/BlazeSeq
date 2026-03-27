@@ -8,10 +8,12 @@ Use next_view() / next_record() and views() / records() as with BED/FAI.
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.iter import Iterator
-from std.memory import Span
+from std.memory import Span, UnsafePointer, alloc
 
+from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
-from blazeseq.gff.record import GffRecord, GffView, GffStrand
+from blazeseq.features import Position, Interval
+from blazeseq.gff.record import GffRecord, GffView, GffStrand, SequenceRegion
 from blazeseq.io.buffered import EOFError
 from blazeseq.io.delimited import (
     DelimitedReader,
@@ -24,6 +26,71 @@ from blazeseq.utils import format_parse_error, ParseContext
 
 comptime GFF_TAB: Byte = 9  # ord('\t')
 comptime GFF_NUM_FIELDS: Int = 9
+
+
+# ---------------------------------------------------------------------------
+# Directive helper functions
+# ---------------------------------------------------------------------------
+
+
+fn _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
+    """True if span begins with the bytes of lit."""
+    var s = StringSlice(lit)
+    var n = len(s)
+    if len(span) < n:
+        return False
+    var b = s.as_bytes()
+    for i in range(n):
+        if span[i] != b[i]:
+            return False
+    return True
+
+
+fn _check_gff_version(line: Span[UInt8, _]) raises:
+    """Raise if ##gff-version declares a version other than 3.x."""
+    # "##gff-version 3" minimum: 15 bytes; version digit is at index 14
+    if len(line) < 15 or line[14] != UInt8(ord("3")):
+        raise Error("GFF3: ##gff-version must be 3.x")
+
+
+fn _parse_sequence_region(
+    line: Span[UInt8, _],
+    ctx: ParseContext,
+) raises -> SequenceRegion:
+    """Parse '##sequence-region seqid start end' into SequenceRegion."""
+    # prefix "##sequence-region " is 18 bytes
+    var prefix_len = 18
+    if len(line) <= prefix_len:
+        var msg = format_parse_error(ctx, "GFF3: malformed ##sequence-region directive")
+        raise Error(msg)
+    var rest = line[prefix_len:]
+    # seqid
+    var i: Int = 0
+    while i < len(rest) and rest[i] != UInt8(ord(" ")):
+        i += 1
+    if i == 0:
+        var msg = format_parse_error(ctx, "GFF3: ##sequence-region missing seqid")
+        raise Error(msg)
+    var seqid = BString(rest[0:i])
+    i += 1  # skip space
+    # start
+    var j = i
+    while j < len(rest) and rest[j] != UInt8(ord(" ")):
+        j += 1
+    var start = _parse_uint64_from_span(rest[i:j])
+    j += 1  # skip space
+    # end — trim trailing whitespace/newline
+    var end_span = rest[j:]
+    var end_len = len(end_span)
+    while end_len > 0 and (
+        end_span[end_len - 1] == UInt8(ord("\n"))
+        or end_span[end_len - 1] == UInt8(ord("\r"))
+        or end_span[end_len - 1] == UInt8(ord(" "))
+    ):
+        end_len -= 1
+    var end = _parse_uint64_from_span(end_span[0:end_len])
+    var region = Interval(Position(start), Position(end))
+    return SequenceRegion(seqid=seqid^, region=region)
 
 
 # ---------------------------------------------------------------------------
@@ -51,16 +118,28 @@ struct GffGtfLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 
 
 struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
-    """GFF3: skip blank; ## lines -> METADATA; ##FASTA -> STOP."""
+    """GFF3: skip blank; ## lines -> METADATA; ##FASTA -> STOP.
+
+    Stateful: collects ##sequence-region directives via a pointer to a
+    List[SequenceRegion] owned by Gff3Parser. Validates ##gff-version is 3.x.
+    Both fields are trivially passable (Bool + UnsafePointer).
+    """
+
+    var _seen_version: Bool
+    var _regions_ptr: UnsafePointer[List[SequenceRegion], MutAnyOrigin]
 
     fn __init__(out self):
-        pass
+        self._seen_version = False
+        self._regions_ptr = UnsafePointer[List[SequenceRegion], MutAnyOrigin]()
 
     @always_inline
     fn classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
         if len(line) >= 2 and line[0] == UInt8(ord("#")) and line[1] == UInt8(ord("#")):
+            # ### forward-reference boundary — no payload, skip cleanly
+            if len(line) == 3 and line[2] == UInt8(ord("#")):
+                return LineAction.SKIP
             if len(line) >= 7:
                 if (
                     line[2] == UInt8(ord("F"))
@@ -77,7 +156,14 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 
     @always_inline
     fn handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        ...
+        if _starts_with(line, "##gff-version"):
+            _check_gff_version(line)
+            self._seen_version = True
+        elif _starts_with(line, "##sequence-region"):
+            if self._regions_ptr:
+                var ctx = ParseContext(0, 0, 0)
+                var region = _parse_sequence_region(line, ctx)
+                self._regions_ptr[].append(region^)
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +203,9 @@ fn _parse_gff_strand(span: Span[UInt8, _]) raises -> Optional[GffStrand]:
         if c == UInt8(ord("-")):
             return Optional(GffStrand.Minus)
         if c == UInt8(ord(".")):
-            return Optional(GffStrand.Unknown)
-        if c == UInt8(ord("?")):
             return Optional(GffStrand.Unstranded)
+        if c == UInt8(ord("?")):
+            return Optional(GffStrand.Unknown)
     raise Error("GFF: strand must be +, -, ., or ?")
 
 
@@ -159,6 +245,12 @@ fn _parse_gff_row(
     var score = _parse_score_span(view.get_span(5))
     var strand = _parse_gff_strand(view.get_span(6))
     var phase = _parse_phase_span(view.get_span(7))
+    # Per GFF3 spec: phase is required for CDS features
+    if not format_gtf:
+        var ftype_str = StringSlice(unsafe_from_utf8=ftype)
+        if String(ftype_str) == "CDS" and not phase:
+            var msg = format_parse_error(ctx, "GFF3: CDS feature requires phase (0, 1, or 2)")
+            raise Error(msg)
     var attrs_span = view.get_span(8)
     return GffView[MutExternalOrigin](
         _seqid=seqid,
@@ -224,16 +316,39 @@ struct GtfParser[R: Reader](Iterable, Movable):
 
 
 struct Gff3Parser[R: Reader](Iterable, Movable):
-    """Streaming GFF3 parser. Yields GffView / GffRecord. Stops at ##FASTA."""
+    """Streaming GFF3 parser. Yields GffView / GffRecord. Stops at ##FASTA.
+
+    Collects ##sequence-region directives into an owned heap list accessible
+    via sequence_regions(). Validates ##gff-version is 3.x when present.
+    """
 
     comptime IteratorType[origin: Origin] = _Gff3ParserRecordIter[Self.R, origin]
 
     var _rows: DelimitedReader[Self.R, Gff3LinePolicy, 16]
+    var _seq_regions: UnsafePointer[List[SequenceRegion], MutAnyOrigin]
 
     fn __init__(out self, var reader: Self.R) raises:
+        # Allocate the sequence-region list on the heap so the pointer inside
+        # the policy remains stable even if Gff3Parser is moved.
+        self._seq_regions = alloc[List[SequenceRegion]](1)
+        self._seq_regions[0] = List[SequenceRegion]()
         self._rows = DelimitedReader[Self.R, Gff3LinePolicy, 16](
             reader^, delimiter=GFF_TAB, has_header=False
         )
+        # Link the policy to our owned list after construction.
+        self._rows.policy._regions_ptr = self._seq_regions
+
+    fn __del__(deinit self):
+        self._seq_regions.destroy_pointee()
+        self._seq_regions.free()
+
+    fn sequence_regions(ref self) -> List[SequenceRegion]:
+        """Return a copy of all ##sequence-region directives encountered so far."""
+        var result = List[SequenceRegion]()
+        var src = self._seq_regions
+        for i in range(len(src[])):
+            result.append(SequenceRegion(src[i].copy()))
+        return result^
 
     @always_inline
     fn has_more(self) -> Bool:
