@@ -1,6 +1,9 @@
 """Correctness tests for GtfParser and Gff3Parser."""
 
-from blazeseq import GtfParser, Gff3Parser, GffRecord, GffView, GffStrand
+from blazeseq import (
+    GtfParser, GtfRecord, GtfView, GtfStrand, GtfAttributes,
+    Gff3Parser, Gff3Record, Gff3View, Gff3Strand, Gff3Attributes,
+)
 from blazeseq.io import MemoryReader
 from std.collections.string import String
 from std.testing import assert_equal, assert_true, TestSuite
@@ -11,7 +14,7 @@ from std.testing import assert_equal, assert_true, TestSuite
 # ---------------------------------------------------------------------------
 
 
-fn test_gtf_parse_one_record() raises:
+def test_gtf_parse_one_record() raises:
     """Parse one GTF line and check core fields and attributes."""
     var data = "1\tEnsembl\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972\"; gene_name \"DDX11L1\";\n"
     var reader = MemoryReader(data)
@@ -25,7 +28,7 @@ fn test_gtf_parse_one_record() raises:
     assert_equal(rec.End, 14409)
     assert_true(not rec.Score)
     assert_true(rec.Strand)
-    assert_equal(rec.Strand.value(), GffStrand.Plus)
+    assert_equal(rec.Strand.value(), GtfStrand.Plus)
     assert_true(not rec.Phase)
     var gene_id = rec.get_attribute("gene_id")
     assert_true(gene_id)
@@ -36,7 +39,7 @@ fn test_gtf_parse_one_record() raises:
     assert_true(not parser.has_more())
 
 
-fn test_gtf_skip_comment_lines() raises:
+def test_gtf_skip_comment_lines() raises:
     """GTF parser skips lines starting with #."""
     var data = "# comment\n1\tx\tgene\t1\t100\t.\t-\t.\tgene_id \"g1\";\n"
     var reader = MemoryReader(data)
@@ -45,11 +48,11 @@ fn test_gtf_skip_comment_lines() raises:
     assert_equal(rec.seqid(), "1")
     assert_equal(rec.Start, 1)
     assert_equal(rec.End, 100)
-    assert_true(rec.Strand.value() == GffStrand.Minus)
+    assert_true(rec.Strand.value() == GtfStrand.Minus)
     assert_true(not parser.has_more())
 
 
-fn test_gtf_view_to_record() raises:
+def test_gtf_view_to_record() raises:
     """Zero-copy view can be converted to owned record."""
     var data = "chr1\tsrc\t exon\t100\t200\t0.95\t+\t0\tgene_id \"g1\"; transcript_id \"t1\";\n"
     var reader = MemoryReader(data)
@@ -68,12 +71,22 @@ fn test_gtf_view_to_record() raises:
     assert_equal(rec.get_attribute("transcript_id").value().to_string(), "t1")
 
 
+def test_gtf_mandatory_gene_transcript_id() raises:
+    """GtfRecord exposes gene_id and transcript_id as direct fields."""
+    var data = "chr1\t.\tCDS\t1\t2\t.\t.\t0\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
+    var reader = MemoryReader(data)
+    var parser = GtfParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_equal(rec.Attributes.gene_id.to_string(), "ENSG001")
+    assert_equal(rec.Attributes.transcript_id.to_string(), "ENST001")
+
+
 # ---------------------------------------------------------------------------
 # GFF3 parsing
 # ---------------------------------------------------------------------------
 
 
-fn test_gff3_parse_one_record() raises:
+def test_gff3_parse_one_record() raises:
     """Parse one GFF3 line with key=value attributes."""
     var data = "##gff-version 3\nchr1\tsource\tgene\t1000\t2000\t.\t+\t.\tID=gene1;Name=MyGene;\n"
     var reader = MemoryReader(data)
@@ -94,7 +107,7 @@ fn test_gff3_parse_one_record() raises:
     assert_true(not parser.has_more())
 
 
-fn test_gff3_multi_value_attribute() raises:
+def test_gff3_multi_value_attribute() raises:
     """GFF3 Parent=id1,id2 parses as multiple values."""
     var data = "##gff-version 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Parent=tr1,tr2;\n"
     var reader = MemoryReader(data)
@@ -106,7 +119,7 @@ fn test_gff3_multi_value_attribute() raises:
     assert_equal(parents[1].to_string(), "tr2")
 
 
-fn test_gff3_stops_at_fasta() raises:
+def test_gff3_stops_at_fasta() raises:
     """GFF3 parser stops at ##FASTA; only one feature is returned, next read raises."""
     var data = "##gff-version 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n##FASTA\n>seq1\nACGT\n"
     var reader = MemoryReader(data)
@@ -122,12 +135,28 @@ fn test_gff3_stops_at_fasta() raises:
     assert_equal(count, 1, "exactly one record before ##FASTA")
 
 
+def test_gff3_typed_attribute_accessors() raises:
+    """Gff3Attributes typed accessors for GFF3 reserved attributes."""
+    var data = "##gff-version 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Name=MyExon;Parent=tr1,tr2;Note=test\n"
+    var reader = MemoryReader(data)
+    var parser = Gff3Parser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_equal(rec.Attributes.id().value().to_string(), "ex1")
+    assert_equal(rec.Attributes.name().value().to_string(), "MyExon")
+    var parents = rec.Attributes.parent()
+    assert_equal(len(parents), 2)
+    assert_equal(parents[0].to_string(), "tr1")
+    assert_equal(parents[1].to_string(), "tr2")
+    assert_equal(rec.Attributes.note().value().to_string(), "test")
+    assert_true(not rec.Attributes.is_circular())
+
+
 # ---------------------------------------------------------------------------
 # Attribute parsing (via full record)
 # ---------------------------------------------------------------------------
 
 
-fn test_parse_gtf_attributes() raises:
+def test_parse_gtf_attributes() raises:
     """GTF attribute string parses to key-value pairs via full line."""
     var data = "chr1\t.\tgene\t1\t2\t.\t.\t.\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
     var reader = MemoryReader(data)
@@ -142,7 +171,7 @@ fn test_parse_gtf_attributes() raises:
     assert_equal(tid.value().to_string(), "ENST001")
 
 
-fn test_parse_gff3_attributes() raises:
+def test_parse_gff3_attributes() raises:
     """GFF3 key=value and multi-value parse via full line."""
     var data = "##gff-version 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Name=Exon1;Parent=tr1,tr2\n"
     var reader = MemoryReader(data)
@@ -157,7 +186,7 @@ fn test_parse_gff3_attributes() raises:
     assert_equal(parents[1].to_string(), "tr2")
 
 
-fn test_percent_decode() raises:
+def test_percent_decode() raises:
     """RFC 3986 percent-encoding in GFF3 attributes decodes correctly."""
     var data = "##gff-version 3\nchr1\t.\tgene\t1\t10\t.\t.\t.\tName=foo%20bar%3B\n"
     var reader = MemoryReader(data)
@@ -173,8 +202,8 @@ fn test_percent_decode() raises:
 # ---------------------------------------------------------------------------
 
 
-fn test_gff_interval() raises:
-    """GffRecord interval() returns 1-based closed [start, end]."""
+def test_gff_interval() raises:
+    """Gff3Record interval() returns 1-based closed [start, end]."""
     var data = "chr1\t.\tgene\t10\t20\t.\t+\t.\tID=g1;\n"
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
@@ -185,5 +214,5 @@ fn test_gff_interval() raises:
     assert_equal(iv.length(), 11)
 
 
-fn main() raises:
+def main() raises:
     var suite = TestSuite.discover_tests[__functions_in_module()]().run()
