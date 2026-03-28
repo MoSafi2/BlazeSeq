@@ -6,40 +6,24 @@ Addresses deviations found by comparing BlazeSeq against [noodles](https://githu
 
 ## Summary Table
 
-| # | Issue | Severity | Primary Files | API Break? |
-|---|-------|----------|--------------|:-----------:|
-| 1 | Iterator swallows parse errors, prints to stdout, silently stops | **High** | `gff/parser.mojo:406-413`, `gtf/parser.mojo:261-269` | No |
-| 2 | `start=0` / `end=0` accepted; spec requires ≥ 1 | Medium | `gff/parser.mojo:272-278`, `gtf/parser.mojo:162-168` | No |
-| 3 | GTF unquoted attribute values silently dropped | Medium | `gtf/attributes.mojo:116-128` | No |
-| 4 | GTF duplicate-key attributes partially lost | Medium | `gtf/attributes.mojo:30,45-54`, `gtf/record.mojo:186` | Additive |
-| 5 | GTF backslash escapes in values not decoded | Low–Med | `gtf/attributes.mojo:119-128` | No |
-| 6 | `##gff-version` checked by raw byte offset, not parsed | Low | `gff/parser.mojo:100-104` | No |
-| 7 | `.` in GFF3 attribute column not positively recognized | Low | `gff/attributes.mojo:176-180` | No |
-| 8 | seqid percent-decoding not applied | Low | `gff/record.mojo:156`, `gff/parser.mojo:123` | Behavioural |
-| 9 | `gene_id`/`transcript_id` absence defaults to empty string, no warning | Low | `gtf/attributes.mojo:85-87`, `gtf/parser.mojo:199-226` | Additive |
-| 10 | `###` directive silently discarded | Info | `gff/parser.mojo:170-172` | No |
 
-**Scope:** Issues 1, 2 affect both GFF3 and GTF. Issues 3–5, 9 affect GTF only. Issues 6–8, 10 affect GFF3 only.
+| #   | Issue                                                                  | Severity | Primary Files                                          | API Break?  |
+| --- | ---------------------------------------------------------------------- | -------- | ------------------------------------------------------ | ----------- |
+|     |                                                                        |          |                                                        |             |
+| 2   | `start=0` / `end=0` accepted; spec requires ≥ 1                        | Medium   | `gff/parser.mojo:272-278`, `gtf/parser.mojo:162-168`   | No          |
+| 3   | GTF unquoted attribute values silently dropped                         | Medium   | `gtf/attributes.mojo:116-128`                          | No          |
+| 4   | GTF duplicate-key attributes partially lost                            | Medium   | `gtf/attributes.mojo:30,45-54`, `gtf/record.mojo:186`  | Additive    |
+| 5   | GTF backslash escapes in values not decoded                            | Low–Med  | `gtf/attributes.mojo:119-128`                          | No          |
+| 6   | `##gff-version` checked by raw byte offset, not parsed                 | Low      | `gff/parser.mojo:100-104`                              | No          |
+| 7   | `.` in GFF3 attribute column not positively recognized                 | Low      | `gff/attributes.mojo:176-180`                          | No          |
+| 8   | seqid percent-decoding not applied                                     | Low      | `gff/record.mojo:156`, `gff/parser.mojo:123`           | Behavioural |
+| 9   | `gene_id`/`transcript_id` absence defaults to empty string, no warning | Low      | `gtf/attributes.mojo:85-87`, `gtf/parser.mojo:199-226` | Additive    |
+| 10  | `###` directive silently discarded                                     | Info     | `gff/parser.mojo:170-172`                              | No          |
+
+
+**Scope:** Issues  2 affect both GFF3 and GTF. Issues 3–5, 9 affect GTF only. Issues 6–8, 10 affect GFF3 only.
 
 ---
-
-## Issue 1 — Iterator Swallows Parse Errors
-
-### Problem
-
-All four iterator `__next__` methods catch every exception, print it to stdout, and convert it to `StopIteration`. A corrupted record silently terminates the for-loop with no error visible to the caller.
-
-**BlazeSeq locations:**
-- `blazeseq/gff/parser.mojo:401-413` — `_Gff3ParserViewIter.__next__`
-- `blazeseq/gff/parser.mojo:432-444` — `_Gff3ParserRecordIter.__next__`
-- `blazeseq/gtf/parser.mojo:259-269` — `_GtfParserViewIter.__next__`
-- `blazeseq/gtf/parser.mojo:288-298` — `_GtfParserRecordIter.__next__`
-
-**noodles equivalent:** `noodles-gff/src/reader.rs` — `Records::next()` returns `Some(Err(e))` on parse failure; errors propagate to the caller as `io::Result`. No swallowing occurs.
-
-### Fix
-
-In each `__next__` body, the `except e` branch checks whether the error message equals the `EOF` constant (from `blazeseq.CONSTS`). Keep the `raise StopIteration()` path for EOF. For any other error — re-raise `e` directly without printing. Remove all `print(msg)` calls in these paths.
 
 ### New error codes
 
@@ -60,6 +44,7 @@ None. Existing `raise_parse_error` infrastructure in `blazeseq/errors.mojo` is s
 `_parse_uint64_from_span` has no lower-bound check. GFF3 and GTF both require coordinates ≥ 1 (1-based spec). A record with `start=0` passes integer parsing and may trigger a confusing `start > end` error downstream rather than a clear coordinate error.
 
 **BlazeSeq locations:**
+
 - `blazeseq/gff/parser.mojo:272-279` — `_parse_gff3_row`, start/end parsing + existing `start > end` guard
 - `blazeseq/gtf/parser.mojo:162-170` — `_parse_gtf_row`, same
 
@@ -70,6 +55,7 @@ None. Existing `raise_parse_error` infrastructure in `blazeseq/errors.mojo` is s
 After parsing `start` and again after parsing `end` in both `_parse_gff3_row` and `_parse_gtf_row`, add a guard: if the value is 0, call `raise_parse_error(ctx, <COORD_ZERO message>)`. Place both zero checks before the existing `start > end` check so the zero-specific message fires first.
 
 Add new error code constants:
+
 - `Gff3ErrorCode.COORD_ZERO = Self(8)` — message `"GFF3: start/end coordinate must be >= 1 (1-based)"` — in `blazeseq/gff/parser.mojo`
 - `GtfErrorCode.COORD_ZERO = Self(6)` — message `"GTF: start/end coordinate must be >= 1 (1-based)"` — in `blazeseq/gtf/parser.mojo`
 
@@ -113,6 +99,7 @@ No new error codes — unquoted values are accepted, not rejected.
 `GtfAttributes._extras` (`blazeseq/gtf/attributes.mojo:30`) is `List[Tuple[BString, BString]]`. When the same key appears twice, two entries are appended — but `get()` (`gtf/attributes.mojo:45-54`) returns only the first match. The second value is unreachable.
 
 **BlazeSeq locations:**
+
 - `blazeseq/gtf/attributes.mojo:30` — `_extras` field
 - `blazeseq/gtf/attributes.mojo:45-54` — `get()` method
 - `blazeseq/gtf/record.mojo:186` — `get_attribute()` delegation
@@ -124,6 +111,7 @@ No new error codes — unquoted values are accepted, not rejected.
 **Part A — `get_all()` on `GtfAttributes`** (`gtf/attributes.mojo`):
 
 Add a `get_all(key: String) -> List[BString]` method modelled on the existing `Gff3Attributes.get_all()` (`gff/attributes.mojo:63`):
+
 - If `key == "gene_id"` return a single-element list of `self.gene_id`.
 - If `key == "transcript_id"` return a single-element list of `self.transcript_id`.
 - Otherwise, iterate `_extras` and collect all values whose key matches; return in encounter order.
@@ -159,6 +147,7 @@ Value bytes extracted from between quotes are stored verbatim (`blazeseq/gtf/att
 ### Fix
 
 Add a private helper function `_gtf_unescape_value(span: Span[UInt8, _]) -> BString` to `gtf/attributes.mojo`. It processes bytes sequentially:
+
 - On `\` (ASCII 92), peek at the next byte:
   - `"` (34) → emit `"` (34)
   - `\` (92) → emit `\` (92)
@@ -246,6 +235,7 @@ Verify that `DelimitedView.get_span(8)` for column 9 already has trailing newlin
 `Gff3View.to_record()` (`blazeseq/gff/record.mojo:156`) stores seqid as `BString(self._seqid)` — raw bytes. The GFF3 spec requires seqid to be URL-encoded when it contains reserved characters. `percent_decode_to_bstring` already exists in `gff/attributes.mojo:165` but is not applied to seqid.
 
 **BlazeSeq locations:**
+
 - `blazeseq/gff/record.mojo:156` — `Seqid=BString(self._seqid)` in `to_record()`
 - `blazeseq/gff/parser.mojo:123` — `BString(rest[0:i])` in `_parse_sequence_region`
 
@@ -261,7 +251,7 @@ Verify that `DelimitedView.get_span(8)` for column 9 already has trailing newlin
 
 **Scope note:** Do NOT apply to GTF — the GTF2.2 spec does not define percent-encoding for any field.
 
-**`Gff3View` note:** The raw `_seqid` span on `Gff3View` is intentionally left as-is (zero-copy). If callers need the decoded seqid from a view, consider adding a `decoded_seqid() -> String` method to `Gff3View` that calls `percent_decode` directly. This is optional.
+`**Gff3View` note:** The raw `_seqid` span on `Gff3View` is intentionally left as-is (zero-copy). If callers need the decoded seqid from a view, consider adding a `decoded_seqid() -> String` method to `Gff3View` that calls `percent_decode` directly. This is optional.
 
 ### Changelog note
 
@@ -293,6 +283,7 @@ Implement optional strict-mode validation. Default behaviour (lenient) is unchan
 **Part A — New error codes** (`gtf/parser.mojo`):
 
 Add to `GtfErrorCode`:
+
 - `MISSING_GENE_ID = Self(7)` — `"GTF: gene_id attribute is missing (required by GTF2.2)"`
 - `MISSING_TRANSCRIPT_ID = Self(8)` — `"GTF: transcript_id attribute is missing (required by GTF2.2)"`
 
@@ -383,3 +374,4 @@ Issues 9 and 4 need to test `BString` emptiness. Check `blazeseq/byte_string.moj
 
 - **Issue 8** — seqid percent-decode. Import `percent_decode_to_bstring` into `gff/record.mojo` and `gff/parser.mojo`.
 - **Issue 9** — Missing mandatory attrs. Extends `GtfParser` struct (layout change); must come after Issues 3, 5, and 4 are stable.
+

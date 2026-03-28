@@ -15,6 +15,7 @@ from blazeseq.features import Position, Interval
 from blazeseq.gff.attributes import (
     Gff3Attributes,
     parse_gff3_attributes,
+    percent_decode_to_bstring,
 )
 
 
@@ -153,7 +154,7 @@ struct Gff3View[O: Origin](Movable):
         """Materialize an owned Gff3Record by parsing attributes from column 9."""
         var attrs = parse_gff3_attributes(self._attributes)
         return Gff3Record(
-            Seqid=BString(self._seqid),
+            Seqid=percent_decode_to_bstring(self._seqid),
             Source=BString(self._source),
             Type=BString(self._type),
             Start=self.start,

@@ -186,6 +186,10 @@ struct GtfRecord(Copyable, Movable, Writable):
     def get_attribute(ref self, key: String) -> Optional[BString]:
         return self.Attributes.get(key)
 
+    def get_all_attributes(ref self, key: String) -> List[BString]:
+        """Return all values for key in encounter order (supports duplicate keys)."""
+        return self.Attributes.get_all(key)
+
     def write_to[w: Writer](ref self, mut writer: w):
         """Write one tab-delimited GTF line."""
         writer.write(self.Seqid.to_string())

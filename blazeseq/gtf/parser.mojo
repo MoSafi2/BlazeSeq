@@ -34,7 +34,8 @@ comptime GTF_NUM_FIELDS: Int = 9
 
 
 struct GtfErrorCode(Copyable, Equatable, TrivialRegisterPassable):
-    """Trivial error code returned by low-level GTF field parsers; caller raises."""
+    """Trivial error code returned by low-level GTF field parsers; caller raises.
+    """
 
     var value: Int8
 
@@ -50,19 +51,35 @@ struct GtfErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
-    comptime OK              = Self(0)
-    comptime INT_EMPTY       = Self(1)
-    comptime INT_INVALID     = Self(2)
-    comptime STRAND_INVALID  = Self(3)
-    comptime PHASE_INVALID   = Self(4)
-    comptime FIELD_COUNT     = Self(5)
+    comptime OK = Self(0)
+    comptime INT_EMPTY = Self(1)
+    comptime INT_INVALID = Self(2)
+    comptime STRAND_INVALID = Self(3)
+    comptime PHASE_INVALID = Self(4)
+    comptime FIELD_COUNT = Self(5)
+    comptime COORD_ZERO = Self(6)
+    comptime MISSING_GENE_ID = Self(7)
+    comptime MISSING_TRANSCRIPT_ID = Self(8)
 
     def message(self) -> String:
-        if self == Self.INT_EMPTY:      return "GTF: integer field is empty"
-        if self == Self.INT_INVALID:    return "GTF: invalid byte in integer field"
-        if self == Self.STRAND_INVALID: return "GTF: strand must be +, -, or ."
-        if self == Self.PHASE_INVALID:  return "GTF: phase must be 0, 1, or 2"
-        if self == Self.FIELD_COUNT:    return "GTF: row must have exactly 9 fields"
+        if self == Self.INT_EMPTY:
+            return "GTF: integer field is empty"
+        if self == Self.INT_INVALID:
+            return "GTF: invalid byte in integer field"
+        if self == Self.STRAND_INVALID:
+            return "GTF: strand must be +, -, or ."
+        if self == Self.PHASE_INVALID:
+            return "GTF: phase must be 0, 1, or 2"
+        if self == Self.FIELD_COUNT:
+            return "GTF: row must have exactly 9 fields"
+        if self == Self.COORD_ZERO:
+            return "GTF: start/end coordinate must be >= 1 (1-based)"
+        if self == Self.MISSING_GENE_ID:
+            return "GTF: gene_id attribute is missing (required by GTF2.2)"
+        if self == Self.MISSING_TRANSCRIPT_ID:
+            return (
+                "GTF: transcript_id attribute is missing (required by GTF2.2)"
+            )
         return "GTF: parse error"
 
 
@@ -90,7 +107,9 @@ struct GtfLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 
 
 @always_inline
-def _parse_uint64_from_span(span: Span[UInt8, _], mut result: UInt64) -> GtfErrorCode:
+def _parse_uint64_from_span(
+    span: Span[UInt8, _], mut result: UInt64
+) -> GtfErrorCode:
     """Parse a decimal UInt64. Returns OK or an error code; never raises."""
     result = 0
     if len(span) == 0:
@@ -112,7 +131,9 @@ def _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
     return Optional(atof(s))
 
 
-def _parse_gtf_strand(span: Span[UInt8, _], mut result: Optional[GtfStrand]) -> GtfErrorCode:
+def _parse_gtf_strand(
+    span: Span[UInt8, _], mut result: Optional[GtfStrand]
+) -> GtfErrorCode:
     """Parse GTF strand field. Returns OK or STRAND_INVALID; never raises."""
     result = None
     if len(span) == 0:
@@ -131,7 +152,9 @@ def _parse_gtf_strand(span: Span[UInt8, _], mut result: Optional[GtfStrand]) -> 
     return GtfErrorCode.STRAND_INVALID
 
 
-def _parse_phase_span(span: Span[UInt8, _], mut result: Optional[UInt8]) -> GtfErrorCode:
+def _parse_phase_span(
+    span: Span[UInt8, _], mut result: Optional[UInt8]
+) -> GtfErrorCode:
     """Parse GTF phase field. Returns OK or an error code; never raises."""
     result = None
     if len(span) == 0:
@@ -162,10 +185,14 @@ def _parse_gtf_row(
     var sc = _parse_uint64_from_span(view.get_span(3), start)
     if sc != GtfErrorCode.OK:
         raise_parse_error(ctx, sc.message())
+    if start == 0:
+        raise_parse_error(ctx, GtfErrorCode.COORD_ZERO.message())
     var end: UInt64 = 0
     var ec = _parse_uint64_from_span(view.get_span(4), end)
     if ec != GtfErrorCode.OK:
         raise_parse_error(ctx, ec.message())
+    if end == 0:
+        raise_parse_error(ctx, GtfErrorCode.COORD_ZERO.message())
     if start > end:
         raise_parse_error(ctx, "GTF: start must be <= end")
     var score = _parse_score_span(view.get_span(5))
@@ -197,16 +224,27 @@ def _parse_gtf_row(
 
 
 struct GtfParser[R: Reader](Iterable, Movable):
-    """Streaming GTF2.2 parser. Yields GtfView / GtfRecord."""
+    """Streaming GTF2.2 parser. Yields GtfView / GtfRecord.
+
+    Pass `strict_mandatory_attrs=True` to raise an error when gene_id or
+    transcript_id is absent from a feature line, as required by GTF2.2.
+    """
 
     comptime IteratorType[origin: Origin] = _GtfParserRecordIter[Self.R, origin]
 
     var _rows: DelimitedReader[Self.R, GtfLinePolicy, 16]
+    var _strict_mandatory_attrs: Bool
 
-    def __init__(out self, var reader: Self.R) raises:
+    def __init__(
+        out self,
+        var reader: Self.R,
+        *,
+        strict_mandatory_attrs: Bool = False,
+    ) raises:
         self._rows = DelimitedReader[Self.R, GtfLinePolicy, 16](
             reader^, delimiter=GTF_TAB, has_header=False
         )
+        self._strict_mandatory_attrs = strict_mandatory_attrs
 
     @always_inline
     def has_more(self) -> Bool:
@@ -223,7 +261,13 @@ struct GtfParser[R: Reader](Iterable, Movable):
         return _parse_gtf_row(view, self._parse_context())
 
     def next_record(mut self) raises -> GtfRecord:
-        return self.next_view().to_record()
+        var rec = self.next_view().to_record()
+        if self._strict_mandatory_attrs:
+            if rec.Attributes.gene_id.to_string() == "":
+                raise Error(GtfErrorCode.MISSING_GENE_ID.message())
+            if rec.Attributes.transcript_id.to_string() == "":
+                raise Error(GtfErrorCode.MISSING_TRANSCRIPT_ID.message())
+        return rec^
 
     def views(ref self) -> _GtfParserViewIter[Self.R, origin_of(self)]:
         return _GtfParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
@@ -257,7 +301,9 @@ struct _GtfParserViewIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutExternalOrigin]](self._src)
+        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutExternalOrigin]](
+            self._src
+        )
         try:
             return mut_ptr[].next_view()
         except e:
@@ -266,7 +312,7 @@ struct _GtfParserViewIter[R: Reader, origin: Origin](Iterator):
                 raise StopIteration()
             else:
                 print(msg)
-                raise StopIteration()
+                raise StopIteration()  # propagate parse errors to the caller
 
 
 struct _GtfParserRecordIter[R: Reader, origin: Origin](Iterator):
@@ -286,7 +332,9 @@ struct _GtfParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutExternalOrigin]](self._src)
+        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutExternalOrigin]](
+            self._src
+        )
         try:
             return mut_ptr[].next_record()
         except e:
@@ -295,4 +343,4 @@ struct _GtfParserRecordIter[R: Reader, origin: Origin](Iterator):
                 raise StopIteration()
             else:
                 print(msg)
-                raise StopIteration()
+                raise StopIteration()  # propagate parse errors to the caller

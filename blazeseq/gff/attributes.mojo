@@ -174,9 +174,23 @@ def percent_decode_to_bstring(span: Span[UInt8, _]) -> BString:
 
 
 def parse_gff3_attributes(span: Span[UInt8, _]) raises -> Gff3Attributes:
-    """Parse GFF3 column 9: semicolon-separated key=value; multi-value: key=val1,val2."""
+    """Parse GFF3 column 9: semicolon-separated key=value; multi-value: key=val1,val2.
+
+    A literal '.' column means no attributes (GFF3 spec §2.2) and is treated as
+    an empty attribute set (Issue 7).
+    """
     var attrs = Gff3Attributes()
     if len(span) == 0:
+        return attrs^
+    # A single '.' byte (possibly with trailing whitespace) means no attributes
+    var dot_end = len(span)
+    while dot_end > 0 and (
+        span[dot_end - 1] == UInt8(10)
+        or span[dot_end - 1] == UInt8(13)
+        or span[dot_end - 1] == UInt8(ord(" "))
+    ):
+        dot_end -= 1
+    if dot_end == 1 and span[0] == UInt8(ord(".")):
         return attrs^
     var start: Int = 0
     var n = len(span)
