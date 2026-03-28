@@ -1,11 +1,29 @@
 """Custom error types for BlazeSeq with contextual information.
 
 Public API:
-- FastxErrorCode: trivial enum for hot-path returns (no raise)
+- FastxErrorCode: trivial enum for hot-path returns (no raise) — FASTQ/FASTA codes
+- ParseContext: parser position context (record number, line number, file position)
 - ParseError, ValidationError: structs with message and context
-- format_parse_error_from_code, format_validation_error_from_code: build error strings from codes
+- raise_parse_error, raise_validation_error: format + raise helpers (cold path)
+- format_parse_error, format_parse_error_from_code, format_validation_error_from_code: build error strings from codes
 - buffer_capacity_error: build buffer-capacity message for callers that raise Error(...)
 """
+
+# ---------------------------------------------------------------------------
+# ParseContext: parser position passed to error helpers
+# ---------------------------------------------------------------------------
+
+
+@doc_hidden
+@fieldwise_init
+struct ParseContext(Copyable, Movable, TrivialRegisterPassable):
+    """Parser position context: record number, line number, file position. Used for error reporting.
+    """
+
+    var record_number: Int
+    var line_number: Int
+    var file_position: Int64
+
 
 # ---------------------------------------------------------------------------
 # FastxErrorCode: trivial enum for hot-path error returns (no raise)
@@ -44,6 +62,10 @@ struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     @always_inline
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
+
+    def message(self) -> String:
+        """Return a human-readable message for this error code."""
+        return _message_for_code(self)
 
 
 def _message_for_code(code: FastxErrorCode) -> String:
@@ -246,3 +268,84 @@ def buffer_capacity_error(
     if growth_hint:
         msg += ". Enable buffer_growth or use a larger buffer_capacity."
     return msg
+
+
+# ---------------------------------------------------------------------------
+# format_parse_error: build a formatted string from context + message
+# ---------------------------------------------------------------------------
+
+
+@doc_hidden
+def format_parse_error(
+    ctx: ParseContext,
+    message: String,
+    record_snippet: String = "",
+    record_offset: Int = 0,
+) -> String:
+    """Build ParseError from message and parser context; return formatted string for raising Error."""
+    var parse_err = ParseError(
+        message,
+        record_number=ctx.record_number + record_offset,
+        line_number=ctx.line_number,
+        file_position=ctx.file_position,
+        record_snippet=record_snippet,
+    )
+    return String(parse_err)
+
+
+@doc_hidden
+def format_parse_error(
+    message: String,
+    record_number: Int,
+    line_number: Int,
+    file_position: Int64,
+    record_snippet: String,
+) -> String:
+    """Legacy 5-arg overload; delegates to ParseContext-based implementation."""
+    return format_parse_error(
+        ParseContext(record_number, line_number, file_position),
+        message,
+        record_snippet,
+        0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# raise_parse_error / raise_validation_error: format + raise (cold path)
+# ---------------------------------------------------------------------------
+
+
+def raise_parse_error(
+    ctx: ParseContext,
+    message: String,
+    snippet: String = "",
+) raises:
+    """Format a ParseError with context and raise it. Never returns.
+
+    All parsers should call this instead of constructing error strings inline.
+    """
+    raise Error(String(ParseError(
+        message,
+        record_number=ctx.record_number,
+        line_number=ctx.line_number,
+        file_position=ctx.file_position,
+        record_snippet=snippet,
+    )))
+
+
+def raise_validation_error(
+    ctx: ParseContext,
+    message: String,
+    field: String = "",
+    snippet: String = "",
+) raises:
+    """Format a ValidationError with context and raise it. Never returns.
+
+    All parsers should call this instead of constructing error strings inline.
+    """
+    raise Error(String(ValidationError(
+        message,
+        record_number=ctx.record_number,
+        field=field,
+        record_snippet=snippet,
+    )))

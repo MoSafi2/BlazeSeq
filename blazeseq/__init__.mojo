@@ -36,6 +36,17 @@ from blazeseq.bed import (
     BedView,
     BedParser,
 )
+from blazeseq.gff import (
+    Gff3Record,
+    Gff3View,
+    Gff3Strand,
+    Gff3Attributes,
+    Gff3Parser,
+    SequenceRegion,
+    TargetAttribute,
+    parse_target_attribute,
+)
+from blazeseq.gtf import (GtfRecord, GtfView, GtfStrand, GtfAttributes, GtfParser)
 from blazeseq.fastq.record_batch import FastqBatch, upload_batch_to_device
 
 from blazeseq.io import (

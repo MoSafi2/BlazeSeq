@@ -8,7 +8,8 @@ from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
 from blazeseq.io.buffered import EOFError, LineIterator
 from blazeseq.io.readers import Reader
-from blazeseq.utils import memchr, format_parse_error, ParseContext
+from blazeseq.utils import memchr
+from blazeseq.errors import ParseContext, raise_parse_error
 
 
 # ---------------------------------------------------------------------------
@@ -41,11 +42,6 @@ trait LinePolicy(
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         ...
 
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        """Called when classify() returns METADATA. Default: no-op."""
-        ...
-
 
 @fieldwise_init
 struct LineAction(
@@ -65,6 +61,7 @@ struct LineAction(
         return self._tag == other._tag
 
 
+@fieldwise_init
 struct DefaultLinePolicy(
     Copyable, LinePolicy, Movable, TrivialRegisterPassable
 ):
@@ -73,18 +70,11 @@ struct DefaultLinePolicy(
     Skips blank lines (SKIP) and yields all non-empty lines (YIELD).
     """
 
-    def __init__(out self):
-        pass
-
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
         return LineAction.YIELD
-
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        ...
 
 
 struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
@@ -449,7 +439,6 @@ struct DelimitedReader[
             elif action == LineAction.SKIP:
                 continue
             elif action == LineAction.METADATA:
-                self.policy.handle_metadata(line)
                 continue
             elif action == LineAction.HEADER:
                 self._parse_header_from(line)
@@ -473,13 +462,9 @@ struct DelimitedReader[
         if self._expected_num_fields == 0:
             self._expected_num_fields = n
         elif n != self._expected_num_fields:
-            raise Error(
-                format_parse_error(
-                    self._parse_context(),
-                    "Delimited row has inconsistent number of fields",
-                    "",
-                    1,
-                )
+            raise_parse_error(
+                self._parse_context(),
+                "Delimited row has inconsistent number of fields",
             )
 
 
@@ -577,5 +562,3 @@ struct _DelimitedRecordIter[
             else:
                 print(msg)
                 raise StopIteration()
-
-

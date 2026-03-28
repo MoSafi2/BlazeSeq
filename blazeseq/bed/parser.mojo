@@ -29,7 +29,7 @@ from blazeseq.io.delimited import (
     LinePolicy,
 )
 from blazeseq.io.readers import Reader
-from blazeseq.utils import format_parse_error, ParseContext
+from blazeseq.errors import ParseContext, raise_parse_error
 
 comptime BED_TAB: Byte = 9  # ord('\t')
 
@@ -47,45 +47,106 @@ def _is_valid_bed_field_count(n: Int) -> Bool:
     )
 
 
-def _parse_uint64_from_span(span: Span[UInt8, _]) raises -> UInt64:
-    var result: UInt64 = 0
-    var n = len(span)
+# ---------------------------------------------------------------------------
+# BedErrorCode: format-local trivial enum for hot-path field parsing
+# ---------------------------------------------------------------------------
 
-    if n == 0:
-        raise Error("Invalid FAI integer: empty span")
 
-    for i in range(n):
-        var digit = span[i] - 48  # stays UInt8, wraps on underflow
-        if digit > 9:  # single unsigned check catches < '0' and > '9'
-            raise Error(
-                "Invalid FAI integer: unexpected byte " + chr(Int(span[i]))
-            )
+struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
+    """Trivial error code returned by low-level BED field parsers; caller raises."""
+
+    var value: Int8
+
+    @always_inline
+    def __init__(out self, value: Int8):
+        self.value = value
+
+    @always_inline
+    def __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    @always_inline
+    def __ne__(self, other: Self) -> Bool:
+        return self.value != other.value
+
+    comptime OK              = Self(0)
+    comptime INT_EMPTY       = Self(1)
+    comptime INT_INVALID     = Self(2)
+    comptime STRAND_INVALID  = Self(3)
+    comptime SCORE_RANGE     = Self(4)
+    comptime RGB_FORMAT      = Self(5)
+    comptime RGB_RANGE       = Self(6)
+    comptime FIELD_COUNT     = Self(7)
+    comptime BLOCK_INVALID   = Self(8)
+
+    def message(self) -> String:
+        if self == Self.INT_EMPTY:      return "BED: integer field is empty"
+        if self == Self.INT_INVALID:    return "BED: invalid byte in integer field"
+        if self == Self.STRAND_INVALID: return "BED: strand must be +, -, or ."
+        if self == Self.SCORE_RANGE:    return "BED: score must be in [0, 1000]"
+        if self == Self.RGB_FORMAT:     return "BED: itemRgb must be 0 or r,g,b"
+        if self == Self.RGB_RANGE:      return "BED: itemRgb components must be 0-255"
+        if self == Self.FIELD_COUNT:    return "BED: invalid number of fields"
+        if self == Self.BLOCK_INVALID:  return "BED: blockCount must be > 0"
+        return "BED: parse error"
+
+
+# ---------------------------------------------------------------------------
+# Low-level field parsers — return BedErrorCode, never raise
+# ---------------------------------------------------------------------------
+
+
+@always_inline
+def _parse_uint64_from_span(span: Span[UInt8, _], mut result: UInt64) -> BedErrorCode:
+    """Parse a decimal UInt64 from a byte span. Returns OK or an error code."""
+    result = 0
+    if len(span) == 0:
+        return BedErrorCode.INT_EMPTY
+    for i in range(len(span)):
+        var digit = span[i] - 48  # wraps on underflow for non-digit bytes
+        if digit > 9:
+            return BedErrorCode.INT_INVALID
         result = result * 10 + digit.cast[DType.uint64]()
+    return BedErrorCode.OK
 
-    return result
 
-
-def _parse_strand(span: Span[UInt8, _]) raises -> Strand:
+@always_inline
+def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
+    """Parse a single-byte strand field. Returns OK or STRAND_INVALID."""
+    result = Strand.Unknown
     if len(span) != 1:
-        raise Error("strand must be one character: +, -, or .")
+        return BedErrorCode.STRAND_INVALID
     var c = span[0]
     if c == UInt8(ord("+")):
-        return Strand.Plus
+        result = Strand.Plus
+        return BedErrorCode.OK
     if c == UInt8(ord("-")):
-        return Strand.Minus
+        result = Strand.Minus
+        return BedErrorCode.OK
     if c == UInt8(ord(".")):
-        return Strand.Unknown
-    raise Error("strand must be +, -, or .")
+        return BedErrorCode.OK
+    return BedErrorCode.STRAND_INVALID
 
 
-def _parse_score(span: Span[UInt8, _]) raises -> Int:
-    var v = _parse_uint64_from_span(span)
-    if v < 0 or v > 1000:
-        raise Error("score must be in [0, 1000]")
-    return Int(v)
+@always_inline
+def _parse_score(span: Span[UInt8, _], mut result: Int) -> BedErrorCode:
+    """Parse a BED score [0, 1000]. Returns OK, INT_EMPTY, INT_INVALID, or SCORE_RANGE."""
+    result = 0
+    var v: UInt64 = 0
+    var code = _parse_uint64_from_span(span, v)
+    if code != BedErrorCode.OK:
+        return code
+    if v > 1000:
+        return BedErrorCode.SCORE_RANGE
+    result = Int(v)
+    return BedErrorCode.OK
 
 
-def _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
+def _parse_item_rgb(
+    span: Span[UInt8, _],
+    ctx: ParseContext,
+) raises -> ItemRgb:
+    """Parse an itemRgb field. Uses raise_parse_error for rich context on failure."""
     var s = StringSlice(unsafe_from_utf8=span)
     var trimmed = s.strip()
     if trimmed == "0":
@@ -109,12 +170,12 @@ def _parse_item_rgb(span: Span[UInt8, _]) raises -> ItemRgb:
         )
         start = end + 1
     if len(parts) != 3:
-        raise Error("itemRgb must be 0 or r,g,b")
+        raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
     var r = atol(parts[0])
     var g = atol(parts[1])
     var b = atol(parts[2])
     if r < 0 or r > 255 or g < 0 or g > 255 or b < 0 or b > 255:
-        raise Error("itemRgb components must be 0-255")
+        raise_parse_error(ctx, BedErrorCode.RGB_RANGE.message())
     return ItemRgb(UInt8(r), UInt8(g), UInt8(b))
 
 
@@ -187,11 +248,9 @@ struct _BedOptionalFields[O: Origin](Movable):
 # ---------------------------------------------------------------------------
 
 
+@fieldwise_init
 struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """Line policy for BED: skip blank lines and lines starting with #."""
-
-    def __init__(out self):
-        pass
 
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
@@ -200,10 +259,6 @@ struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
         if line[0] == UInt8(ord("#")):
             return LineAction.SKIP
         return LineAction.YIELD
-
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        ...
 
 
 struct BedParser[R: Reader](Iterable, Movable):
@@ -240,25 +295,25 @@ struct BedParser[R: Reader](Iterable, Movable):
     ) raises -> _BedRequiredParsed:
         """Validate field count and parse required BED fields (chrom, chromStart, chromEnd).
         """
+        var ctx = self._parse_context()
         var n = view.num_fields()
         if not _is_valid_bed_field_count(n):
-            var msg = format_parse_error(
-                self._parse_context(),
-                (
-                    "BED row must have 3, 4, 5, 6, 7, 8, 9, or 12 fields"
-                    " (BED10/BED11 prohibited)"
-                ),
+            raise_parse_error(
+                ctx,
+                "BED row must have 3, 4, 5, 6, 7, 8, 9, or 12 fields"
+                " (BED10/BED11 prohibited)",
             )
-            raise Error(msg)
         var chrom_span = view.get_span(0)
-        var chrom_start = _parse_uint64_from_span(view.get_span(1))
-        var chrom_end = _parse_uint64_from_span(view.get_span(2))
+        var chrom_start: UInt64 = 0
+        var cs_code = _parse_uint64_from_span(view.get_span(1), chrom_start)
+        if cs_code != BedErrorCode.OK:
+            raise_parse_error(ctx, cs_code.message())
+        var chrom_end: UInt64 = 0
+        var ce_code = _parse_uint64_from_span(view.get_span(2), chrom_end)
+        if ce_code != BedErrorCode.OK:
+            raise_parse_error(ctx, ce_code.message())
         if chrom_start > chrom_end:
-            var msg = format_parse_error(
-                self._parse_context(),
-                "chromStart must be <= chromEnd",
-            )
-            raise Error(msg)
+            raise_parse_error(ctx, "BED: chromStart must be <= chromEnd")
         return _BedRequiredParsed(
             chrom_span=chrom_span,
             chrom_start=chrom_start,
@@ -273,6 +328,7 @@ struct BedParser[R: Reader](Iterable, Movable):
     ) raises -> _BedOptionalFields[MutExternalOrigin]:
         """Parse optional BED fields (name, score, strand, thick, itemRgb, blocks) based on n.
         """
+        var ctx = self._parse_context()
         var name_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
         var score_opt: Optional[Int] = None
         var strand_opt: Optional[Strand] = None
@@ -289,31 +345,40 @@ struct BedParser[R: Reader](Iterable, Movable):
         if n >= 4:
             name_opt = view.get_span(3)
         if n >= 5:
-            try:
-                score_opt = _parse_score(view.get_span(4))
-            except e:
-                var msg = format_parse_error(self._parse_context(), String(e))
-                raise Error(msg)
+            var score: Int = 0
+            var sc_code = _parse_score(view.get_span(4), score)
+            if sc_code != BedErrorCode.OK:
+                raise_parse_error(ctx, sc_code.message())
+            score_opt = score
         if n >= 6:
-            try:
-                strand_opt = _parse_strand(view.get_span(5))
-            except e:
-                var msg = format_parse_error(self._parse_context(), String(e))
-                raise Error(msg)
+            var strand: Strand = Strand.Unknown
+            var st_code = _parse_strand(view.get_span(5), strand)
+            if st_code != BedErrorCode.OK:
+                raise_parse_error(ctx, st_code.message())
+            strand_opt = strand
         if n >= 7:
-            thick_start_opt = _parse_uint64_from_span(view.get_span(6))
+            var thick_start: UInt64 = 0
+            var ts_code = _parse_uint64_from_span(view.get_span(6), thick_start)
+            if ts_code != BedErrorCode.OK:
+                raise_parse_error(ctx, ts_code.message())
+            thick_start_opt = thick_start
         if n >= 8:
-            thick_end_opt = _parse_uint64_from_span(view.get_span(7))
+            var thick_end: UInt64 = 0
+            var te_code = _parse_uint64_from_span(view.get_span(7), thick_end)
+            if te_code != BedErrorCode.OK:
+                raise_parse_error(ctx, te_code.message())
+            thick_end_opt = thick_end
         if n >= 9:
-            try:
-                item_rgb_opt = _parse_item_rgb(view.get_span(8))
-            except e:
-                var msg = format_parse_error(self._parse_context(), String(e))
-                raise Error(msg)
+            item_rgb_opt = _parse_item_rgb(view.get_span(8), ctx)
         if n == 12:
-            block_count_opt = Int(
-                UInt64(_parse_uint64_from_span(view.get_span(9)))
-            )
+            var bc_raw: UInt64 = 0
+            var bc_code = _parse_uint64_from_span(view.get_span(9), bc_raw)
+            if bc_code != BedErrorCode.OK:
+                raise_parse_error(ctx, bc_code.message())
+            var bc = Int(bc_raw)
+            if bc < 1:
+                raise_parse_error(ctx, BedErrorCode.BLOCK_INVALID.message())
+            block_count_opt = bc
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
         return _BedOptionalFields[MutExternalOrigin](
