@@ -20,7 +20,7 @@ count mismatch vs. that scan):
 | gff_syntax/in/9_test.gff | GFF3 | success |
 | gff_syntax/in/10_test.gff | GFF3 | success |
 | gff_syntax/in/11_test.gff | GFF3 | success |
-| gff_syntax/in/12_test.gff | GFF3 | success |
+| gff_syntax/in/12_test.gff | GFF3 | fail |
 | gff_syntax/in/13_test.gff | GFF3 | success |
 | gff_syntax/in/14_test.gff | GFF3 | success |
 | gff_syntax/in/15_test.gff | GFF3 | success |
@@ -82,7 +82,8 @@ def _read_text(path: String) raises -> String:
 
 
 def _expected_feature_line_count_gff3(content: String) -> Int:
-    """Count data lines: non-empty, not #/## comment or directive, before ##FASTA."""
+    """Count data lines: non-empty, not #/## comment or directive, before ##FASTA.
+    """
     var lines = content.split("\n")
     var n: Int = 0
     for line in lines:
@@ -134,7 +135,8 @@ def _gtf_records_from_file(path: String) raises -> Int:
 
 
 def _agat_gff3_fixture(rel: String, expect_success: Bool) raises:
-    """Assert full parse and line-count match (success) or non-matching outcome (fail)."""
+    """Assert full parse and line-count match (success) or non-matching outcome (fail).
+    """
     var full = agat_dir + rel
     var content = _read_text(full)
     var expected = _expected_feature_line_count_gff3(content)
@@ -158,175 +160,230 @@ def _agat_gtf_fixture(rel: String) raises:
     assert_equal(_gtf_records_from_file(full), expected, rel)
 
 
-
 def test_agat_fixture_gff_syntax_in_0_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/0_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_1_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/1_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_2_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/2_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_3_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/3_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_4_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/4_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_5_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/5_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_6_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/6_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_7_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/7_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_8_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/8_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_9_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/9_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_10_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/10_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_11_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/11_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_12_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/12_test.gff", expect_success=False)
+
 
 def test_agat_fixture_gff_syntax_in_13_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/13_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_14_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/14_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_15_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/15_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_16_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/16_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_17_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/17_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_18_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/18_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_19_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/19_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_20_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/20_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_21_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/21_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_22_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/22_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_23_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/23_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_24_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/24_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_25_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/25_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_26_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/26_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_27_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/27_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_28_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/28_test.gff", expect_success=False)
+
 
 def test_agat_fixture_gff_syntax_in_29_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/29_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_30_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/30_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_31_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/31_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_32_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/32_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_33_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/33_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_34_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/34_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_35_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/35_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_36_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/36_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_37_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/37_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_38_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/38_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_39_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/39_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_40_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/40_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_41_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/41_test.gff", expect_success=False)
 
+
 def test_agat_fixture_gff_syntax_in_42_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/42_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_43_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/43_test.gff", expect_success=False)
 
+
 def test_agat_fixture_gff_syntax_in_44_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/44_test.gff", expect_success=False)
+
 
 def test_agat_fixture_gff_syntax_in_45_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/45_test.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_syntax_in_46_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/46_test.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_syntax_in_47_test_gff() raises:
     _agat_gff3_fixture("gff_syntax/in/47_test.gff", expect_success=False)
 
+
 def test_agat_fixture_gff_other_in_decode_gff3urlescape_gff() raises:
-    _agat_gff3_fixture("gff_other/in/decode_gff3urlescape.gff", expect_success=True)
+    _agat_gff3_fixture(
+        "gff_other/in/decode_gff3urlescape.gff", expect_success=True
+    )
+
 
 def test_agat_fixture_gff_other_in_issue329_gff() raises:
     _agat_gff3_fixture("gff_other/in/issue329.gff", expect_success=True)
 
+
 def test_agat_fixture_gff_other_in_issue368_gff() raises:
     _agat_gff3_fixture("gff_other/in/issue368.gff", expect_success=True)
+
 
 def test_agat_fixture_gff_other_in_issue389_gff() raises:
     _agat_gff3_fixture("gff_other/in/issue389.gff", expect_success=False)
 
+
 def test_agat_fixture_gff_other_in_issue441_gtf() raises:
     _agat_gtf_fixture("gff_other/in/issue441.gtf")
+
 
 def test_agat_fixture_gff_other_in_issue448_gtf() raises:
     _agat_gtf_fixture("gff_other/in/issue448.gtf")
 
+
 def test_agat_fixture_gff_other_in_issue457_gff() raises:
     _agat_gff3_fixture("gff_other/in/issue457.gff", expect_success=True)
 
+
 def test_agat_fixture_script_sp_in_test_kraken_gtf() raises:
     _agat_gtf_fixture("script_sp/in/test_kraken.gtf")
-
 
 
 def test_agat_gtf_issue441_first_record() raises:
@@ -353,7 +410,8 @@ def test_agat_gff_syntax_0_first_record_fields() raises:
 
 
 def test_agat_gtf_issue448_first_record_fields() raises:
-    """Issue448.gtf: first line gene coordinates and ids (pipes in attribute values)."""
+    """Issue448.gtf: first line gene coordinates and ids (pipes in attribute values).
+    """
     var path = agat_dir + "gff_other/in/issue448.gtf"
     var reader = FileReader(Path(path))
     var parser = GtfParser[FileReader](reader^)
@@ -381,7 +439,8 @@ def test_agat_gtf_kraken_first_record_fields() raises:
 
 
 def test_agat_issue368_gff_empty_seqid_first_gene() raises:
-    """Issue368.gff: AGAT issue with leading tab — empty seqid on first features."""
+    """Issue368.gff: AGAT issue with leading tab — empty seqid on first features.
+    """
     var path = agat_dir + "gff_other/in/issue368.gff"
     var reader = FileReader(Path(path))
     var parser = Gff3Parser[FileReader](reader^)
@@ -395,7 +454,8 @@ def test_agat_issue368_gff_empty_seqid_first_gene() raises:
 
 
 def test_agat_decode_gff3urlescape_gene_synonym_percent_decoded() raises:
-    """Decode_gff3urlescape.gff: %3B in gene_synonym becomes ';' after percent-decode."""
+    """Decode_gff3urlescape.gff: %3B in gene_synonym becomes ';' after percent-decode.
+    """
     var path = agat_dir + "gff_other/in/decode_gff3urlescape.gff"
     var reader = FileReader(Path(path))
     var parser = Gff3Parser[FileReader](reader^)
@@ -410,4 +470,3 @@ def test_agat_decode_gff3urlescape_gene_synonym_percent_decoded() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
-
