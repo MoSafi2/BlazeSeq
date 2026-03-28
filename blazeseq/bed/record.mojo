@@ -76,11 +76,7 @@ struct ItemRgb(Copyable, Movable, TrivialRegisterPassable, Writable):
         return self.r == 0 and self.g == 0 and self.b == 0
 
     def write_to[w: Writer](self, mut writer: w):
-        writer.write(String(self.r))
-        writer.write(",")
-        writer.write(String(self.g))
-        writer.write(",")
-        writer.write(String(self.b))
+        writer.write(t"{self.r},{self.g},{self.b}")
 
 
 def position_try_from(value: UInt64) -> Optional[Position]:
@@ -214,6 +210,7 @@ struct BedView[O: Origin](Movable):
             return None
         return StringSlice[origin=Self.O](unsafe_from_utf8=self._name.value())
 
+    @always_inline
     def item_rgb(self) -> Optional[ItemRgb]:
         if not self._item_rgb:
             return None
@@ -250,9 +247,6 @@ struct BedView[O: Origin](Movable):
                     raise Error("BED: blocks must be non-overlapping and sorted")
             block_sizes = sizes^
             block_starts = starts^
-        elif self._block_sizes_span and self._block_starts_span:
-            block_sizes = _parse_comma_sep_int64_list(self._block_sizes_span.value())
-            block_starts = _parse_comma_sep_int64_list(self._block_starts_span.value())
         var name_opt: Optional[BString] = None
         if self._name:
             name_opt = BString(self._name.value())
@@ -296,17 +290,6 @@ def _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
             out.append(UInt64(atol(s)))
         start = end + 1
     return out^
-
-
-def _strand_to_char(strand: Optional[Strand]) -> String:
-    """Format strand as BED character: +, -, or ."""
-    if not strand:
-        return "."
-    if strand.value() == Strand.Plus:
-        return "+"
-    if strand.value() == Strand.Minus:
-        return "-"
-    return "."
 
 
 def _comma_sep_u64_list(values: List[UInt64]) -> String:
@@ -393,6 +376,7 @@ struct BedRecord(Copyable, Movable, Writable):
             return None
         return self.Name.value().to_string()
 
+    @always_inline
     def item_rgb(ref self) -> Optional[ItemRgb]:
         if not self.ItemRgb:
             return None
@@ -429,65 +413,72 @@ struct BedRecord(Copyable, Movable, Writable):
         self._write_item_rgb_field(writer)
         self._write_block_fields(writer)
         self._write_other_fields(writer)
-        writer.write("\n")
+        writer.write_string("\n")
 
     def _write_core_fields[w: Writer](ref self, mut writer: w):
-        writer.write(
-            t"{self.Chrom.to_string()}\t{String(self.ChromStart)}\t{String(self.ChromEnd)}"
-        )
+        var s = self.Chrom.to_string() + "\t" + String(self.ChromStart) + "\t" + String(self.ChromEnd)
+        writer.write_string(StringSlice(s))
 
     def _write_name_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 4:
             return
         var name_str = self.Name.value().to_string() if self.Name else "."
-        writer.write(t"\t{name_str}")
+        var s = "\t" + name_str
+        writer.write_string(StringSlice(s))
 
     def _write_score_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 5:
             return
         var score_str = String(self.Score.value()) if self.Score else "0"
-        writer.write(t"\t{score_str}")
+        var s = "\t" + score_str
+        writer.write_string(StringSlice(s))
 
     def _write_strand_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 6:
             return
-        var c = _strand_to_char(self.Strand)
-        writer.write(t"\t{c}")
+        if self.Strand and self.Strand.value() == Strand.Plus:
+            writer.write_string("\t+")
+        elif self.Strand and self.Strand.value() == Strand.Minus:
+            writer.write_string("\t-")
+        else:
+            writer.write_string("\t.")
 
     def _write_thick_fields[w: Writer](ref self, mut writer: w):
         if self.NumFields >= 7:
             var thick_start_str = String(
                 self.ThickStart.value()
             ) if self.ThickStart else String(self.ChromStart)
-            writer.write(t"\t{thick_start_str}")
+            var s = "\t" + thick_start_str
+            writer.write_string(StringSlice(s))
         if self.NumFields >= 8:
             var thick_end_str = String(
                 self.ThickEnd.value()
             ) if self.ThickEnd else String(self.ChromEnd)
-            writer.write(t"\t{thick_end_str}")
+            var s = "\t" + thick_end_str
+            writer.write_string(StringSlice(s))
 
     def _write_item_rgb_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 9:
             return
         if self.ItemRgb:
             var rgb = self.ItemRgb.value().copy()
-            writer.write(t"\t{String(rgb.r)},{String(rgb.g)},{String(rgb.b)}")
+            var s = "\t" + String(rgb.r) + "," + String(rgb.g) + "," + String(rgb.b)
+            writer.write_string(StringSlice(s))
         else:
-            writer.write("\t0")
+            writer.write_string("\t0")
 
     def _write_block_fields[w: Writer](ref self, mut writer: w):
         if self.NumFields < 12 or not self.BlockSizes or not self.BlockStarts:
             return
         var sizes = self.BlockSizes.value().copy()
         var starts = self.BlockStarts.value().copy()
-        writer.write(t"\t{String(len(sizes))}")
-        writer.write(t"\t{_comma_sep_u64_list(sizes)}")
-        writer.write(t"\t{_comma_sep_u64_list(starts)}")
+        var s = "\t" + String(len(sizes)) + "\t" + _comma_sep_u64_list(sizes) + "\t" + _comma_sep_u64_list(starts)
+        writer.write_string(StringSlice(s))
 
     def _write_other_fields[w: Writer](ref self, mut writer: w):
         if not self.OtherFields:
             return
         var fields = self.OtherFields.value().copy()
         for i in range(len(fields)):
-            writer.write("\t")
-            writer.write(fields[i].to_string())
+            var s = "\t" + fields[i].to_string()
+            writer.write_string(StringSlice(s))

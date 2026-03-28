@@ -225,9 +225,9 @@ struct Gff3Record(Copyable, Movable, Writable):
         writer.write("\t")
         writer.write(self.Type.to_string())
         writer.write("\t")
-        writer.write(String(self.Start))
+        writer.write(self.Start)
         writer.write("\t")
-        writer.write(String(self.End))
+        writer.write(self.End)
         writer.write("\t")
         if self.Score:
             writer.write(String(self.Score.value()))
@@ -240,7 +240,7 @@ struct Gff3Record(Copyable, Movable, Writable):
             writer.write(".")
         writer.write("\t")
         if self.Phase:
-            writer.write(String(self.Phase.value()))
+            writer.write(self.Phase.value())
         else:
             writer.write(".")
         writer.write("\t")
@@ -284,14 +284,14 @@ struct TargetAttribute(Copyable, Movable):
         self.strand = copy.strand
 
 
-def _parse_uint64_from_bstring(s: BString) raises -> UInt64:
-    """Parse a BString as a decimal UInt64."""
-    var result: UInt64 = 0
-    var n = len(s)
-    if n == 0:
+@always_inline
+def _parse_uint64_span(span: Span[UInt8, _]) raises -> UInt64:
+    """Parse a span of ASCII decimal digits as UInt64. Raises on empty or invalid."""
+    if len(span) == 0:
         raise Error("Target: empty integer field")
-    for i in range(n):
-        var digit = s[i] - 48
+    var result: UInt64 = 0
+    for i in range(len(span)):
+        var digit = span[i] - 48
         if digit > 9:
             raise Error("Target: invalid integer digit")
         result = result * 10 + digit.cast[DType.uint64]()
@@ -302,39 +302,67 @@ def parse_target_attribute(value: BString) raises -> TargetAttribute:
     """Parse a GFF3 Target attribute value: 'target_id start end [strand]'.
 
     Coordinates are 1-based. Strand (+ or -) is optional.
+    Single-pass over the span; never builds an intermediate token list.
     """
-    # Collect space-delimited tokens
-    var tokens = List[BString]()
     var span = value.as_span()
     var n = len(span)
     var i: Int = 0
-    while i < n:
-        while i < n and span[i] == UInt8(ord(" ")):
-            i += 1
-        if i >= n:
-            break
-        var j = i
-        while j < n and span[j] != UInt8(ord(" ")):
-            j += 1
-        tokens.append(BString(span[i:j]))
-        i = j + 1
-    if len(tokens) < 3:
-        raise Error("GFF3 Target: expected 'target_id start end [strand]', got fewer fields")
-    var target_id = tokens[0].copy()
-    var start = _parse_uint64_from_bstring(tokens[1])
-    var end = _parse_uint64_from_bstring(tokens[2])
+
+    # Skip leading spaces
+    while i < n and span[i] == UInt8(ord(" ")):
+        i += 1
+
+    # Token 1: target_id
+    var id_start = i
+    while i < n and span[i] != UInt8(ord(" ")):
+        i += 1
+    if i == id_start:
+        raise Error(
+            "GFF3 Target: expected 'target_id start end [strand]', got fewer fields"
+        )
+    var target_id = BString(span[id_start:i])
+
+    # Skip space(s)
+    while i < n and span[i] == UInt8(ord(" ")):
+        i += 1
+
+    # Token 2: start
+    var start_begin = i
+    while i < n and span[i] != UInt8(ord(" ")):
+        i += 1
+    if i == start_begin:
+        raise Error(
+            "GFF3 Target: expected 'target_id start end [strand]', got fewer fields"
+        )
+    var start = _parse_uint64_span(span[start_begin:i])
+
+    # Skip space(s)
+    while i < n and span[i] == UInt8(ord(" ")):
+        i += 1
+
+    # Token 3: end
+    var end_begin = i
+    while i < n and span[i] != UInt8(ord(" ")):
+        i += 1
+    if i == end_begin:
+        raise Error(
+            "GFF3 Target: expected 'target_id start end [strand]', got fewer fields"
+        )
+    var end = _parse_uint64_span(span[end_begin:i])
+
+    # Token 4 (optional): strand
     var strand: Optional[Gff3Strand] = None
-    if len(tokens) >= 4:
-        var s_span = tokens[3].as_span()
-        if len(s_span) == 1:
-            if s_span[0] == UInt8(ord("+")):
-                strand = Optional(Gff3Strand.Plus)
-            elif s_span[0] == UInt8(ord("-")):
-                strand = Optional(Gff3Strand.Minus)
-            else:
-                raise Error("GFF3 Target: strand must be + or -")
+    while i < n and span[i] == UInt8(ord(" ")):
+        i += 1
+    if i < n:
+        var s = span[i]
+        if s == UInt8(ord("+")):
+            strand = Optional(Gff3Strand.Plus)
+        elif s == UInt8(ord("-")):
+            strand = Optional(Gff3Strand.Minus)
         else:
-            raise Error("GFF3 Target: strand must be a single character + or -")
+            raise Error("GFF3 Target: strand must be + or -")
+
     if start > end:
         raise Error("GFF3 Target: start must be <= end")
     return TargetAttribute(target_id=target_id^, start=start, end=end, strand=strand)

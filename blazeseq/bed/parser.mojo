@@ -140,104 +140,59 @@ def _parse_item_rgb(
     span: Span[UInt8, _],
     ctx: ParseContext,
 ) raises -> ItemRgb:
-    """Parse an itemRgb field. Uses raise_parse_error for rich context on failure."""
-    var s = StringSlice(unsafe_from_utf8=span)
-    var trimmed = s.strip()
-    if trimmed == "0":
-        return ItemRgb(0, 0, 0)
-    # Parse r,g,b
-    var parts = List[String]()
-    var start: Int = 0
+    """Parse an itemRgb field: '0' or 'r,g,b' (each 0-255).
+
+    Single-pass byte parser — avoids building an intermediate List[String].
+    """
     var n = len(span)
-    while start < n:
-        while start < n and (
-            span[start] == UInt8(ord(" ")) or span[start] == UInt8(ord(","))
-        ):
-            start += 1
-        if start >= n:
-            break
-        var end = start
-        while end < n and span[end] != UInt8(ord(",")):
-            end += 1
-        parts.append(
-            String(StringSlice(unsafe_from_utf8=span[start:end]).strip())
-        )
-        start = end + 1
-    if len(parts) != 3:
+    # Trim trailing whitespace
+    var end = n
+    while end > 0 and (
+        span[end - 1] == UInt8(ord(" "))
+        or span[end - 1] == UInt8(9)
+        or span[end - 1] == UInt8(10)
+        or span[end - 1] == UInt8(13)
+    ):
+        end -= 1
+    # Skip leading whitespace
+    var start = 0
+    while start < end and span[start] == UInt8(ord(" ")):
+        start += 1
+
+    # Fast path: single '0'
+    if end - start == 1 and span[start] == UInt8(ord("0")):
+        return ItemRgb(0, 0, 0)
+
+    # Parse three comma-separated decimal components
+    var components: Int = 0
+    var values = InlineArray[Int, 3](fill=0)
+    var cur: Int = 0
+    var has_digit = False
+    var i = start
+    while i <= end:
+        var is_sep = (i == end or span[i] == UInt8(ord(",")))
+        if is_sep:
+            if not has_digit:
+                raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+            if components >= 3:
+                raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+            if cur < 0 or cur > 255:
+                raise_parse_error(ctx, BedErrorCode.RGB_RANGE.message())
+            values[components] = cur
+            components += 1
+            cur = 0
+            has_digit = False
+        else:
+            var digit = Int(span[i]) - 48
+            if digit < 0 or digit > 9:
+                raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+            cur = cur * 10 + digit
+            has_digit = True
+        i += 1
+
+    if components != 3:
         raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
-    var r = atol(parts[0])
-    var g = atol(parts[1])
-    var b = atol(parts[2])
-    if r < 0 or r > 255 or g < 0 or g > 255 or b < 0 or b > 255:
-        raise_parse_error(ctx, BedErrorCode.RGB_RANGE.message())
-    return ItemRgb(UInt8(r), UInt8(g), UInt8(b))
-
-
-# ---------------------------------------------------------------------------
-# Parsed-field structs for next_view helpers
-# ---------------------------------------------------------------------------
-
-
-struct _BedRequiredParsed(Movable):
-    """Result of parsing required BED fields (chrom, chromStart, chromEnd)."""
-
-    var chrom_span: Span[UInt8, MutExternalOrigin]
-    var chrom_start: UInt64
-    var chrom_end: UInt64
-    var num_fields: Int
-
-    def __init__(
-        out self,
-        *,
-        chrom_span: Span[UInt8, MutExternalOrigin],
-        chrom_start: UInt64,
-        chrom_end: UInt64,
-        num_fields: Int,
-    ):
-        self.chrom_span = chrom_span
-        self.chrom_start = chrom_start
-        self.chrom_end = chrom_end
-        self.num_fields = num_fields
-
-
-struct _BedOptionalFields[O: Origin](Movable):
-    """Parsed optional BED fields (name through blockStarts) plus any extra columns."""
-
-    var name: Optional[Span[UInt8, Self.O]]
-    var score: Optional[UInt16]
-    var strand: Optional[Strand]
-    var thick_start: Optional[UInt64]
-    var thick_end: Optional[UInt64]
-    var item_rgb: Optional[ItemRgb]
-    var block_count: Optional[Int]
-    var block_sizes_span: Optional[Span[UInt8, Self.O]]
-    var block_starts_span: Optional[Span[UInt8, Self.O]]
-    var other_fields: Optional[List[Span[UInt8, Self.O]]]
-
-    def __init__(
-        out self,
-        *,
-        name: Optional[Span[UInt8, Self.O]],
-        score: Optional[UInt16],
-        strand: Optional[Strand],
-        thick_start: Optional[UInt64],
-        thick_end: Optional[UInt64],
-        item_rgb: Optional[ItemRgb],
-        block_count: Optional[Int],
-        block_sizes_span: Optional[Span[UInt8, Self.O]],
-        block_starts_span: Optional[Span[UInt8, Self.O]],
-        var other_fields: Optional[List[Span[UInt8, Self.O]]],
-    ):
-        self.name = name
-        self.score = score
-        self.strand = strand
-        self.thick_start = thick_start
-        self.thick_end = thick_end
-        self.item_rgb = item_rgb
-        self.block_count = block_count
-        self.block_sizes_span = block_sizes_span
-        self.block_starts_span = block_starts_span
-        self.other_fields = other_fields^
+    return ItemRgb(UInt8(values[0]), UInt8(values[1]), UInt8(values[2]))
 
 
 # ---------------------------------------------------------------------------
@@ -324,19 +279,22 @@ struct BedParser[R: Reader](Iterable, Movable):
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
-    def _parse_bed_required(
+    def _parse_bed_row(
         ref self,
         view: DelimitedView[MutExternalOrigin, 32],
-    ) raises -> _BedRequiredParsed:
-        """Validate field count and parse required BED fields (chrom, chromStart, chromEnd).
+    ) raises -> BedView[MutExternalOrigin]:
+        """Parse all BED fields from a DelimitedView and return a BedView directly.
 
-        Accepts any column count >= 3. BED10 and BED11 are treated as BED9 with
-        extra columns stored in other_fields.
+        Validates field count (>= 3) and parses required and optional fields in
+        one pass. Columns 10-11 when n < 12, and columns beyond 12, go to
+        other_fields as raw byte spans.
         """
         var ctx = self._parse_context()
         var n = view.num_fields()
         if n < 3:
             raise_parse_error(ctx, BedErrorCode.FIELD_COUNT.message())
+
+        # Required fields
         var chrom_span = view.get_span(0)
         var chrom_start: UInt64 = 0
         var cs_code = _parse_uint64_from_span(view.get_span(1), chrom_start)
@@ -348,26 +306,8 @@ struct BedParser[R: Reader](Iterable, Movable):
             raise_parse_error(ctx, ce_code.message())
         if chrom_start > chrom_end:
             raise_parse_error(ctx, "BED: chromStart must be <= chromEnd")
-        return _BedRequiredParsed(
-            chrom_span=chrom_span,
-            chrom_start=chrom_start,
-            chrom_end=chrom_end,
-            num_fields=n,
-        )
 
-    def _parse_bed_optional_fields(
-        ref self,
-        view: DelimitedView[MutExternalOrigin, 32],
-        n: Int,
-    ) raises -> _BedOptionalFields[MutExternalOrigin]:
-        """Parse optional BED fields based on column count n.
-
-        Standard fields are parsed for columns 4-9 (name, score, strand,
-        thickStart, thickEnd, itemRgb) and 10-12 if n >= 12 (block fields).
-        Any columns beyond 12, or columns 10-11 when n < 12, are collected
-        into other_fields as raw byte spans.
-        """
-        var ctx = self._parse_context()
+        # Optional fields
         var name_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
         var score_opt: Optional[UInt16] = None
         var strand_opt: Optional[Strand] = None
@@ -421,7 +361,6 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_count_opt = bc
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
-            # Columns beyond 12 are extra fields
             if n > 12:
                 var extras = List[Span[UInt8, MutExternalOrigin]]()
                 for i in range(12, n):
@@ -434,17 +373,21 @@ struct BedParser[R: Reader](Iterable, Movable):
                 extras.append(view.get_span(i))
             other_fields_opt = extras^
 
-        return _BedOptionalFields[MutExternalOrigin](
-            name=name_opt,
+        return BedView[MutExternalOrigin](
+            _chrom=chrom_span,
+            chrom_start=chrom_start,
+            chrom_end=chrom_end,
+            _name=name_opt,
             score=score_opt,
             strand=strand_opt,
             thick_start=thick_start_opt,
             thick_end=thick_end_opt,
-            item_rgb=item_rgb_opt,
+            _item_rgb=item_rgb_opt,
             block_count=block_count_opt,
-            block_sizes_span=block_sizes_span_opt,
-            block_starts_span=block_starts_span_opt,
-            other_fields=other_fields_opt^,
+            _block_sizes_span=block_sizes_span_opt,
+            _block_starts_span=block_starts_span_opt,
+            _other_fields_spans=other_fields_opt^,
+            num_fields=n,
         )
 
     def next_view(mut self) raises -> BedView[MutExternalOrigin]:
@@ -458,33 +401,7 @@ struct BedParser[R: Reader](Iterable, Movable):
         if not self.has_more():
             raise EOFError()
         var view = self._rows.next_view()
-        var required = self._parse_bed_required(view)
-        var optional = self._parse_bed_optional_fields(
-            view, required.num_fields
-        )
-        # Extract the non-trivially-copyable other_fields before the constructor
-        # call to avoid a partial move from optional while it's still in use.
-        var other_fields_spans: Optional[
-            List[Span[UInt8, MutExternalOrigin]]
-        ] = None
-        if optional.other_fields:
-            other_fields_spans = optional.other_fields.value().copy()
-        return BedView[MutExternalOrigin](
-            _chrom=required.chrom_span,
-            chrom_start=required.chrom_start,
-            chrom_end=required.chrom_end,
-            _name=optional.name,
-            score=optional.score,
-            strand=optional.strand,
-            thick_start=optional.thick_start,
-            thick_end=optional.thick_end,
-            _item_rgb=optional.item_rgb,
-            block_count=optional.block_count,
-            _block_sizes_span=optional.block_sizes_span,
-            _block_starts_span=optional.block_starts_span,
-            _other_fields_spans=other_fields_spans^,
-            num_fields=required.num_fields,
-        )
+        return self._parse_bed_row(view)
 
     def next_record(mut self) raises -> BedRecord:
         """Return the next BED record as an owned BedRecord."""

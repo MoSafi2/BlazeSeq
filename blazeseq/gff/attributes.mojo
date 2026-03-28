@@ -9,6 +9,24 @@ from blazeseq.io.writers import Writer
 
 
 # ---------------------------------------------------------------------------
+# Key comparison helper — avoids BString.to_string() allocation
+# ---------------------------------------------------------------------------
+
+
+@always_inline
+def _bstring_eq(b: BString, key: String) -> Bool:
+    """Compare BString bytes to String without allocating."""
+    var bspan = b.as_span()
+    if len(bspan) != len(key):
+        return False
+    var kptr = key.unsafe_ptr()
+    for i in range(len(bspan)):
+        if bspan[i] != kptr[i]:
+            return False
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Gff3Attributes — key -> list of values (supports GFF3 multi-value)
 # ---------------------------------------------------------------------------
 
@@ -54,7 +72,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
     def get(ref self, key: String) -> Optional[BString]:
         """Return first value for key, if any."""
         for i in range(len(self._pairs)):
-            if self._pairs[i][0].to_string() == key:
+            if _bstring_eq(self._pairs[i][0], key):
                 if len(self._pairs[i][1]) > 0:
                     return Optional(self._pairs[i][1][0].copy())
                 return None
@@ -64,7 +82,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
         """Return all values for key (GFF3 multi-value attributes)."""
         var out = List[BString]()
         for i in range(len(self._pairs)):
-            if self._pairs[i][0].to_string() == key:
+            if _bstring_eq(self._pairs[i][0], key):
                 for j in range(len(self._pairs[i][1])):
                     out.append(self._pairs[i][1][j].copy())
         return out^
@@ -145,7 +163,7 @@ def _hex_digit(b: UInt8) -> Int:
 
 def percent_decode(span: Span[UInt8, _]) -> String:
     """Decode RFC 3986 percent-encoding. Used for GFF3 attributes and seqid."""
-    var out = String()
+    var bytes = List[UInt8]()
     var i: Int = 0
     var n = len(span)
     while i < n:
@@ -153,19 +171,30 @@ def percent_decode(span: Span[UInt8, _]) -> String:
             var hi = _hex_digit(span[i + 1])
             var lo = _hex_digit(span[i + 2])
             if hi >= 0 and lo >= 0:
-                var byte = UInt8(hi * 16 + lo)
-                out += chr(Int(byte))
+                bytes.append(UInt8(hi * 16 + lo))
                 i += 3
                 continue
-        out += chr(Int(span[i]))
+        bytes.append(span[i])
         i += 1
-    return out^
+    return String(StringSlice(unsafe_from_utf8=Span(bytes)))
 
 
 def percent_decode_to_bstring(span: Span[UInt8, _]) -> BString:
     """Decode RFC 3986 percent-encoding into BString."""
-    var s = percent_decode(span)
-    return BString(s)
+    var bytes = List[UInt8]()
+    var i: Int = 0
+    var n = len(span)
+    while i < n:
+        if span[i] == UInt8(ord("%")) and i + 2 < n:
+            var hi = _hex_digit(span[i + 1])
+            var lo = _hex_digit(span[i + 2])
+            if hi >= 0 and lo >= 0:
+                bytes.append(UInt8(hi * 16 + lo))
+                i += 3
+                continue
+        bytes.append(span[i])
+        i += 1
+    return BString(Span(bytes))
 
 
 # ---------------------------------------------------------------------------

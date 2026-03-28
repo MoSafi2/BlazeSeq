@@ -51,7 +51,7 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
         if key == "transcript_id":
             return Optional(self.transcript_id.copy())
         for i in range(len(self._extras)):
-            if self._extras[i][0].to_string() == key:
+            if _bstring_eq(self._extras[i][0], key):
                 return Optional(self._extras[i][1].copy())
         return None
 
@@ -65,26 +65,50 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
             out.append(self.transcript_id.copy())
             return out^
         for i in range(len(self._extras)):
-            if self._extras[i][0].to_string() == key:
+            if _bstring_eq(self._extras[i][0], key):
                 out.append(self._extras[i][1].copy())
         return out^
 
     def __len__(self) -> Int:
-        return 2 + len(self._extras)
+        """Return count of non-empty attributes (gene_id, transcript_id, and extras)."""
+        var count = len(self._extras)
+        if len(self.gene_id) > 0:
+            count += 1
+        if len(self.transcript_id) > 0:
+            count += 1
+        return count
 
     def write_to[w: Writer](ref self, mut writer: w):
         """Emit attributes in GTF format: gene_id "..."; transcript_id "..."; ..."""
         writer.write("gene_id \"")
-        writer.write(self.gene_id.to_string())
+        _write_gtf_escaped(self.gene_id, writer)
         writer.write("\"; transcript_id \"")
-        writer.write(self.transcript_id.to_string())
+        _write_gtf_escaped(self.transcript_id, writer)
         writer.write("\"")
         for i in range(len(self._extras)):
             writer.write("; ")
             writer.write(self._extras[i][0].to_string())
             writer.write(" \"")
-            writer.write(self._extras[i][1].to_string())
+            _write_gtf_escaped(self._extras[i][1], writer)
             writer.write("\"")
+
+
+# ---------------------------------------------------------------------------
+# Key comparison helper — avoids BString.to_string() allocation
+# ---------------------------------------------------------------------------
+
+
+@always_inline
+def _bstring_eq(b: BString, key: String) -> Bool:
+    """Compare BString bytes to String without allocating."""
+    var bspan = b.as_span()
+    if len(bspan) != len(key):
+        return False
+    var kptr = key.unsafe_ptr()
+    for i in range(len(bspan)):
+        if bspan[i] != kptr[i]:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +122,7 @@ def _gtf_unescape_value(span: Span[UInt8, _]) -> BString:
     Recognised sequences: \\" → ", \\\\ → \\, \\n → newline, \\t → tab, \\r → CR.
     Unknown sequences emit both the backslash and the following byte literally.
     """
-    var out = String()
+    var bytes = List[UInt8]()
     var i: Int = 0
     var n = len(span)
     while i < n:
@@ -107,27 +131,68 @@ def _gtf_unescape_value(span: Span[UInt8, _]) -> BString:
             if i + 1 < n:
                 var next = span[i + 1]
                 if next == UInt8(34):    # \"  → "
-                    out += chr(34)
+                    bytes.append(UInt8(34))
                 elif next == UInt8(92):  # \\ → backslash
-                    out += chr(92)
+                    bytes.append(UInt8(92))
                 elif next == UInt8(110): # \n → newline
-                    out += chr(10)
+                    bytes.append(UInt8(10))
                 elif next == UInt8(116): # \t → tab
-                    out += chr(9)
+                    bytes.append(UInt8(9))
                 elif next == UInt8(114): # \r → carriage return
-                    out += chr(13)
+                    bytes.append(UInt8(13))
                 else:                    # unknown — emit both bytes literally
-                    out += chr(92)
-                    out += chr(Int(next))
+                    bytes.append(UInt8(92))
+                    bytes.append(next)
                 i += 2
             else:
                 # Trailing backslash — emit literally
-                out += chr(92)
+                bytes.append(UInt8(92))
                 i += 1
         else:
-            out += chr(Int(b))
+            bytes.append(b)
             i += 1
-    return BString(out)
+    return BString(Span(bytes))
+
+
+# ---------------------------------------------------------------------------
+# GTF value escaping (inverse of _gtf_unescape_value) — for write_to
+# ---------------------------------------------------------------------------
+
+
+def _write_gtf_escaped[w: Writer](value: BString, mut writer: w):
+    """Write a GTF attribute value with backslash escaping applied.
+
+    Buffers unescaped runs and emits them as single StringSlice writes,
+    so the only per-character overhead is for bytes that need escaping.
+    """
+    var span = value.as_span()
+    var n = len(span)
+    var run_start = 0
+    for i in range(n):
+        var b = span[i]
+        var needs_escape = (
+            b == UInt8(34)   # "
+            or b == UInt8(92)   # \
+            or b == UInt8(10)   # newline
+            or b == UInt8(9)    # tab
+            or b == UInt8(13)   # CR
+        )
+        if needs_escape:
+            if i > run_start:
+                writer.write(StringSlice(unsafe_from_utf8=span[run_start:i]))
+            if b == UInt8(34):
+                writer.write("\\\"")
+            elif b == UInt8(92):
+                writer.write("\\\\")
+            elif b == UInt8(10):
+                writer.write("\\n")
+            elif b == UInt8(9):
+                writer.write("\\t")
+            else:
+                writer.write("\\r")
+            run_start = i + 1
+    if run_start < n:
+        writer.write(StringSlice(unsafe_from_utf8=span[run_start:n]))
 
 
 # ---------------------------------------------------------------------------
@@ -211,11 +276,22 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
             if v_end <= i:
                 continue  # empty value — skip
             value = _gtf_unescape_value(part[i:v_end])
-        var key_str = StringSlice(unsafe_from_utf8=key_span)
-        if String(key_str) == "gene_id":
+        # A7: Compare key bytes directly to avoid String allocation
+        if len(key_span) == 7 and _span_eq_literal(key_span, "gene_id"):
             attrs.gene_id = value^
-        elif String(key_str) == "transcript_id":
+        elif len(key_span) == 13 and _span_eq_literal(key_span, "transcript_id"):
             attrs.transcript_id = value^
         else:
             attrs._extras.append((BString(key_span), value^))
     return attrs^
+
+
+@always_inline
+def _span_eq_literal(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
+    """True if span bytes equal the literal (caller must pre-check length)."""
+    var s = StringSlice(lit)
+    var b = s.as_bytes()
+    for i in range(len(b)):
+        if span[i] != b[i]:
+            return False
+    return True

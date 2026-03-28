@@ -117,7 +117,13 @@ def _check_gff_version(line: Span[UInt8, _], ctx: ParseContext) raises:
         raise_parse_error(ctx, Gff3ErrorCode.VERSION.message())
     # Collect the version token (up to whitespace or end)
     var tok_start = i
-    while i < n and line[i] != UInt8(ord(" ")) and line[i] != UInt8(9) and line[i] != UInt8(10) and line[i] != UInt8(13):
+    while (
+        i < n
+        and line[i] != UInt8(ord(" "))
+        and line[i] != UInt8(9)
+        and line[i] != UInt8(10)
+        and line[i] != UInt8(13)
+    ):
         i += 1
     var tok_len = i - tok_start
     if tok_len == 0:
@@ -318,8 +324,13 @@ def _parse_gff3_row(
     if pc != Gff3ErrorCode.OK:
         raise_parse_error(ctx, pc.message())
     # Per GFF3 spec: phase is required for CDS features
-    var ftype_str = StringSlice(unsafe_from_utf8=ftype)
-    if String(ftype_str) == "CDS" and not phase:
+    if (
+        len(ftype) == 3
+        and ftype[0] == UInt8(ord("C"))
+        and ftype[1] == UInt8(ord("D"))
+        and ftype[2] == UInt8(ord("S"))
+        and not phase
+    ):
         raise_parse_error(ctx, "GFF3: CDS feature requires phase (0, 1, or 2)")
     var attrs_span = view.get_span(8)
     return Gff3View[MutExternalOrigin](
@@ -365,6 +376,12 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
         """
         return self._seq_regions.copy()
 
+    def sequence_regions_ref(
+        ref self,
+    ) -> ref[self._seq_regions] List[SequenceRegion]:
+        """Return a reference to the ##sequence-region directives (no copy)."""
+        return self._seq_regions
+
     @always_inline
     def has_more(self) -> Bool:
         return self._rows.has_more()
@@ -385,7 +402,7 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
             elif action == LineAction.SKIP:
                 continue
             elif action == LineAction.METADATA:
-                var ctx = ParseContext(0, 0, 0)
+                var ctx = self._parse_context()
                 if _starts_with(line, "###"):
                     pass  # forward-reference flush — no-op for streaming parser
                 elif _starts_with(line, "##gff-version"):

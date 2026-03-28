@@ -198,9 +198,9 @@ struct GtfRecord(Copyable, Movable, Writable):
         writer.write("\t")
         writer.write(self.Type.to_string())
         writer.write("\t")
-        writer.write(String(self.Start))
+        writer.write(self.Start)
         writer.write("\t")
-        writer.write(String(self.End))
+        writer.write(self.End)
         writer.write("\t")
         if self.Score:
             writer.write(String(self.Score.value()))
@@ -213,7 +213,7 @@ struct GtfRecord(Copyable, Movable, Writable):
             writer.write(".")
         writer.write("\t")
         if self.Phase:
-            writer.write(String(self.Phase.value()))
+            writer.write(self.Phase.value())
         else:
             writer.write(".")
         writer.write("\t")
