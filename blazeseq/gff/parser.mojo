@@ -9,7 +9,7 @@ views() / records() iterators as with BED/FAI.
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.iter import Iterator
-from std.memory import Span, UnsafePointer, alloc
+from std.memory import Span
 
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
@@ -145,20 +145,9 @@ def _parse_sequence_region(
 # ---------------------------------------------------------------------------
 
 
+@fieldwise_init
 struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
-    """GFF3: skip blank; ## lines -> METADATA; ##FASTA -> STOP.
-
-    Stateful: collects ##sequence-region directives via a pointer to a
-    List[SequenceRegion] owned by Gff3Parser. Validates ##gff-version is 3.x.
-    Both fields are trivially passable (Bool + UnsafePointer).
-    """
-
-    var _seen_version: Bool
-    var _regions_ptr: UnsafePointer[List[SequenceRegion], MutAnyOrigin]
-
-    def __init__(out self):
-        self._seen_version = False
-        self._regions_ptr = UnsafePointer[List[SequenceRegion], MutAnyOrigin]()
+    """GFF3: skip blank and single-# lines; ## lines -> METADATA; ##FASTA -> STOP."""
 
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
@@ -181,18 +170,6 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
         if line[0] == UInt8(ord("#")):
             return LineAction.SKIP
         return LineAction.YIELD
-
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        if _starts_with(line, "##gff-version"):
-            var ctx = ParseContext(0, 0, 0)
-            _check_gff_version(line, ctx)
-            self._seen_version = True
-        elif _starts_with(line, "##sequence-region"):
-            if self._regions_ptr:
-                var ctx = ParseContext(0, 0, 0)
-                var region = _parse_sequence_region(line, ctx)
-                self._regions_ptr[].append(region^)
 
 
 # ---------------------------------------------------------------------------
@@ -324,29 +301,19 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
     comptime IteratorType[origin: Origin] = _Gff3ParserRecordIter[Self.R, origin]
 
     var _rows: DelimitedReader[Self.R, Gff3LinePolicy, 16]
-    var _seq_regions: UnsafePointer[List[SequenceRegion], MutAnyOrigin]
+    var _seq_regions: List[SequenceRegion]
 
     def __init__(out self, var reader: Self.R) raises:
-        # Allocate the sequence-region list on the heap so the pointer inside
-        # the policy remains stable even if Gff3Parser is moved.
-        self._seq_regions = alloc[List[SequenceRegion]](1)
-        self._seq_regions[0] = List[SequenceRegion]()
+        self._seq_regions = List[SequenceRegion]()
         self._rows = DelimitedReader[Self.R, Gff3LinePolicy, 16](
             reader^, delimiter=GFF_TAB, has_header=False
         )
-        # Link the policy to our owned list after construction.
-        self._rows.policy._regions_ptr = self._seq_regions
-
-    def __del__(deinit self):
-        self._seq_regions.destroy_pointee()
-        self._seq_regions.free()
 
     def sequence_regions(ref self) -> List[SequenceRegion]:
         """Return a copy of all ##sequence-region directives encountered so far."""
         var result = List[SequenceRegion]()
-        var src = self._seq_regions
-        for i in range(len(src[])):
-            result.append(SequenceRegion(copy=src[][i]))
+        for i in range(len(self._seq_regions)):
+            result.append(SequenceRegion(copy=self._seq_regions[i]))
         return result^
 
     @always_inline
@@ -358,10 +325,25 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
         return self._rows._parse_context()
 
     def next_view(mut self) raises -> Gff3View[MutExternalOrigin]:
-        if not self.has_more():
-            raise EOFError()
-        var view = self._rows.next_view()
-        return _parse_gff3_row(view, self._parse_context())
+        while True:
+            var line = self._rows.lines.next_line()  # raises EOFError at EOF
+            var action = self._rows.policy.classify(line)
+            if action == LineAction.YIELD:
+                var view = DelimitedView[MutExternalOrigin, 16](line, GFF_TAB)
+                var ctx = self._parse_context()
+                self._rows._record_number += 1
+                return _parse_gff3_row(view, ctx)
+            elif action == LineAction.SKIP:
+                continue
+            elif action == LineAction.METADATA:
+                var ctx = ParseContext(0, 0, 0)
+                if _starts_with(line, "##gff-version"):
+                    _check_gff_version(line, ctx)
+                elif _starts_with(line, "##sequence-region"):
+                    var region = _parse_sequence_region(line, ctx)
+                    self._seq_regions.append(region^)
+            else:  # STOP
+                raise EOFError()
 
     def next_record(mut self) raises -> Gff3Record:
         return self.next_view().to_record()
