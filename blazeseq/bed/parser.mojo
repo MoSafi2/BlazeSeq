@@ -1,8 +1,9 @@
 """Parser for BED (Browser Extensible Data) files.
 
 BED is TAB-delimited with 3 required fields (chrom, chromStart, chromEnd)
-and 9 optional fields. Comment lines (start with #) and blank lines are skipped.
-Valid column counts: 3, 4, 5, 6, 7, 8, 9, 12 (BED10 and BED11 are prohibited).
+and 9 optional fields. Comment lines (start with #), blank lines, UCSC
+`track ...` lines, and `browser ...` lines are all skipped automatically.
+Valid column counts: 3 or more (BED10/BED11 are treated as BED9 + extra fields).
 
 Use `next_view()` / `views()` for zero-allocation parsing; the view is
 invalidated on the next advance. Call `.to_record()` on a view or use
@@ -32,19 +33,6 @@ from blazeseq.io.readers import Reader
 from blazeseq.errors import ParseContext, raise_parse_error
 
 comptime BED_TAB: Byte = 9  # ord('\t')
-
-
-def _is_valid_bed_field_count(n: Int) -> Bool:
-    return (
-        n == 3
-        or n == 4
-        or n == 5
-        or n == 6
-        or n == 7
-        or n == 8
-        or n == 9
-        or n == 12
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +74,7 @@ struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
         if self == Self.SCORE_RANGE:    return "BED: score must be in [0, 1000]"
         if self == Self.RGB_FORMAT:     return "BED: itemRgb must be 0 or r,g,b"
         if self == Self.RGB_RANGE:      return "BED: itemRgb components must be 0-255"
-        if self == Self.FIELD_COUNT:    return "BED: invalid number of fields"
+        if self == Self.FIELD_COUNT:    return "BED: row must have at least 3 fields"
         if self == Self.BLOCK_INVALID:  return "BED: blockCount must be > 0"
         return "BED: parse error"
 
@@ -112,7 +100,13 @@ def _parse_uint64_from_span(span: Span[UInt8, _], mut result: UInt64) -> BedErro
 
 @always_inline
 def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
-    """Parse a single-byte strand field. Returns OK or STRAND_INVALID."""
+    """Parse a single-byte strand field. Returns OK or STRAND_INVALID.
+
+    '+' → Strand.Plus, '-' → Strand.Minus, '.' → Strand.Unknown.
+    When the field is absent (BED5 or fewer), the caller stores None rather
+    than calling this function, keeping None (absent) distinct from
+    Optional(Strand.Unknown) ('.').
+    """
     result = Strand.Unknown
     if len(span) != 1:
         return BedErrorCode.STRAND_INVALID
@@ -124,12 +118,12 @@ def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
         result = Strand.Minus
         return BedErrorCode.OK
     if c == UInt8(ord(".")):
-        return BedErrorCode.OK
+        return BedErrorCode.OK  # Strand.Unknown already set
     return BedErrorCode.STRAND_INVALID
 
 
 @always_inline
-def _parse_score(span: Span[UInt8, _], mut result: Int) -> BedErrorCode:
+def _parse_score(span: Span[UInt8, _], mut result: UInt16) -> BedErrorCode:
     """Parse a BED score [0, 1000]. Returns OK, INT_EMPTY, INT_INVALID, or SCORE_RANGE."""
     result = 0
     var v: UInt64 = 0
@@ -138,7 +132,7 @@ def _parse_score(span: Span[UInt8, _], mut result: Int) -> BedErrorCode:
         return code
     if v > 1000:
         return BedErrorCode.SCORE_RANGE
-    result = Int(v)
+    result = UInt16(v)
     return BedErrorCode.OK
 
 
@@ -207,10 +201,10 @@ struct _BedRequiredParsed(Movable):
 
 
 struct _BedOptionalFields[O: Origin](Movable):
-    """Parsed optional BED fields (name through blockStarts)."""
+    """Parsed optional BED fields (name through blockStarts) plus any extra columns."""
 
     var name: Optional[Span[UInt8, Self.O]]
-    var score: Optional[Int]
+    var score: Optional[UInt16]
     var strand: Optional[Strand]
     var thick_start: Optional[UInt64]
     var thick_end: Optional[UInt64]
@@ -218,12 +212,13 @@ struct _BedOptionalFields[O: Origin](Movable):
     var block_count: Optional[Int]
     var block_sizes_span: Optional[Span[UInt8, Self.O]]
     var block_starts_span: Optional[Span[UInt8, Self.O]]
+    var other_fields: Optional[List[Span[UInt8, Self.O]]]
 
     def __init__(
         out self,
         *,
         name: Optional[Span[UInt8, Self.O]],
-        score: Optional[Int],
+        score: Optional[UInt16],
         strand: Optional[Strand],
         thick_start: Optional[UInt64],
         thick_end: Optional[UInt64],
@@ -231,6 +226,7 @@ struct _BedOptionalFields[O: Origin](Movable):
         block_count: Optional[Int],
         block_sizes_span: Optional[Span[UInt8, Self.O]],
         block_starts_span: Optional[Span[UInt8, Self.O]],
+        var other_fields: Optional[List[Span[UInt8, Self.O]]],
     ):
         self.name = name
         self.score = score
@@ -241,30 +237,69 @@ struct _BedOptionalFields[O: Origin](Movable):
         self.block_count = block_count
         self.block_sizes_span = block_sizes_span
         self.block_starts_span = block_starts_span
+        self.other_fields = other_fields^
 
 
 # ---------------------------------------------------------------------------
-# BedLinePolicy — skip blank and comment lines, yield data rows
+# BedLinePolicy — skip blank lines, comments, track/browser headers
 # ---------------------------------------------------------------------------
 
 
 @fieldwise_init
 struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
-    """Line policy for BED: skip blank lines and lines starting with #."""
+    """Line policy for BED files.
+
+    Skips:
+    - Blank lines
+    - Lines starting with '#'
+    - UCSC 'track ...' header lines
+    - UCSC 'browser ...' directive lines
+
+    All other lines are yielded to the parser.
+    """
 
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
-        if len(line) == 0:
+        var n = len(line)
+        if n == 0:
             return LineAction.SKIP
-        if line[0] == UInt8(ord("#")):
+        var first = line[0]
+        if first == UInt8(ord("#")):
             return LineAction.SKIP
+        # UCSC track / browser lines: first token must be exactly "track" or "browser"
+        # followed by whitespace, end-of-line, or end-of-span.
+        if first == UInt8(ord("t")) and n >= 5:
+            # "track"
+            if (
+                line[1] == UInt8(ord("r"))
+                and line[2] == UInt8(ord("a"))
+                and line[3] == UInt8(ord("c"))
+                and line[4] == UInt8(ord("k"))
+            ):
+                if n == 5 or line[5] == UInt8(32) or line[5] == UInt8(9) or line[5] == UInt8(10) or line[5] == UInt8(13):
+                    return LineAction.SKIP
+        if first == UInt8(ord("b")) and n >= 7:
+            # "browser"
+            if (
+                line[1] == UInt8(ord("r"))
+                and line[2] == UInt8(ord("o"))
+                and line[3] == UInt8(ord("w"))
+                and line[4] == UInt8(ord("s"))
+                and line[5] == UInt8(ord("e"))
+                and line[6] == UInt8(ord("r"))
+            ):
+                if n == 7 or line[7] == UInt8(32) or line[7] == UInt8(9) or line[7] == UInt8(10) or line[7] == UInt8(13):
+                    return LineAction.SKIP
         return LineAction.YIELD
 
 
 struct BedParser[R: Reader](Iterable, Movable):
     """Streaming BED parser over a Reader.
 
-    Skips comment lines (starting with #) and blank lines.
+    Skips comment lines (#), blank lines, and UCSC track/browser header lines.
+    Accepts any column count >= 3. Columns 10+ (or 10-11 for BED10/11) are
+    collected into other_fields as raw byte spans.
+
     API:
         - next_view() -> BedView (zero-alloc; invalidated on next advance)
         - next_record() -> BedRecord (materialized; raises EOFError when exhausted)
@@ -294,15 +329,14 @@ struct BedParser[R: Reader](Iterable, Movable):
         view: DelimitedView[MutExternalOrigin, 32],
     ) raises -> _BedRequiredParsed:
         """Validate field count and parse required BED fields (chrom, chromStart, chromEnd).
+
+        Accepts any column count >= 3. BED10 and BED11 are treated as BED9 with
+        extra columns stored in other_fields.
         """
         var ctx = self._parse_context()
         var n = view.num_fields()
-        if not _is_valid_bed_field_count(n):
-            raise_parse_error(
-                ctx,
-                "BED row must have 3, 4, 5, 6, 7, 8, 9, or 12 fields"
-                " (BED10/BED11 prohibited)",
-            )
+        if n < 3:
+            raise_parse_error(ctx, BedErrorCode.FIELD_COUNT.message())
         var chrom_span = view.get_span(0)
         var chrom_start: UInt64 = 0
         var cs_code = _parse_uint64_from_span(view.get_span(1), chrom_start)
@@ -326,26 +360,29 @@ struct BedParser[R: Reader](Iterable, Movable):
         view: DelimitedView[MutExternalOrigin, 32],
         n: Int,
     ) raises -> _BedOptionalFields[MutExternalOrigin]:
-        """Parse optional BED fields (name, score, strand, thick, itemRgb, blocks) based on n.
+        """Parse optional BED fields based on column count n.
+
+        Standard fields are parsed for columns 4-9 (name, score, strand,
+        thickStart, thickEnd, itemRgb) and 10-12 if n >= 12 (block fields).
+        Any columns beyond 12, or columns 10-11 when n < 12, are collected
+        into other_fields as raw byte spans.
         """
         var ctx = self._parse_context()
         var name_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
-        var score_opt: Optional[Int] = None
+        var score_opt: Optional[UInt16] = None
         var strand_opt: Optional[Strand] = None
         var thick_start_opt: Optional[UInt64] = None
         var thick_end_opt: Optional[UInt64] = None
         var item_rgb_opt: Optional[ItemRgb] = None
         var block_count_opt: Optional[Int] = None
-        var block_sizes_span_opt: Optional[
-            Span[UInt8, MutExternalOrigin]
-        ] = None
-        var block_starts_span_opt: Optional[
-            Span[UInt8, MutExternalOrigin]
-        ] = None
+        var block_sizes_span_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
+        var block_starts_span_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
+        var other_fields_opt: Optional[List[Span[UInt8, MutExternalOrigin]]] = None
+
         if n >= 4:
             name_opt = view.get_span(3)
         if n >= 5:
-            var score: Int = 0
+            var score: UInt16 = 0
             var sc_code = _parse_score(view.get_span(4), score)
             if sc_code != BedErrorCode.OK:
                 raise_parse_error(ctx, sc_code.message())
@@ -370,7 +407,10 @@ struct BedParser[R: Reader](Iterable, Movable):
             thick_end_opt = thick_end
         if n >= 9:
             item_rgb_opt = _parse_item_rgb(view.get_span(8), ctx)
-        if n == 12:
+
+        # Block fields: only present when n >= 12.
+        # For n == 10 or n == 11, columns 9+(0-indexed) go to other_fields.
+        if n >= 12:
             var bc_raw: UInt64 = 0
             var bc_code = _parse_uint64_from_span(view.get_span(9), bc_raw)
             if bc_code != BedErrorCode.OK:
@@ -381,6 +421,19 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_count_opt = bc
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
+            # Columns beyond 12 are extra fields
+            if n > 12:
+                var extras = List[Span[UInt8, MutExternalOrigin]]()
+                for i in range(12, n):
+                    extras.append(view.get_span(i))
+                other_fields_opt = extras^
+        elif n > 9:
+            # BED10 or BED11: columns 10..n go to other_fields
+            var extras = List[Span[UInt8, MutExternalOrigin]]()
+            for i in range(9, n):
+                extras.append(view.get_span(i))
+            other_fields_opt = extras^
+
         return _BedOptionalFields[MutExternalOrigin](
             name=name_opt,
             score=score_opt,
@@ -391,6 +444,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_count=block_count_opt,
             block_sizes_span=block_sizes_span_opt,
             block_starts_span=block_starts_span_opt,
+            other_fields=other_fields_opt^,
         )
 
     def next_view(mut self) raises -> BedView[MutExternalOrigin]:
@@ -398,8 +452,8 @@ struct BedParser[R: Reader](Iterable, Movable):
 
         Raises:
             EOFError: When no more records.
-            Error: On invalid field count, non-integer coordinates, chromStart > chromEnd,
-                   invalid score/strand/itemRgb/block lists.
+            Error: On fewer than 3 fields, non-integer coordinates,
+                   chromStart > chromEnd, or invalid score/strand/itemRgb/blocks.
         """
         if not self.has_more():
             raise EOFError()
@@ -408,6 +462,13 @@ struct BedParser[R: Reader](Iterable, Movable):
         var optional = self._parse_bed_optional_fields(
             view, required.num_fields
         )
+        # Extract the non-trivially-copyable other_fields before the constructor
+        # call to avoid a partial move from optional while it's still in use.
+        var other_fields_spans: Optional[
+            List[Span[UInt8, MutExternalOrigin]]
+        ] = None
+        if optional.other_fields:
+            other_fields_spans = optional.other_fields.value().copy()
         return BedView[MutExternalOrigin](
             _chrom=required.chrom_span,
             chrom_start=required.chrom_start,
@@ -421,6 +482,7 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_count=optional.block_count,
             _block_sizes_span=optional.block_sizes_span,
             _block_starts_span=optional.block_starts_span,
+            _other_fields_spans=other_fields_spans^,
             num_fields=required.num_fields,
         )
 

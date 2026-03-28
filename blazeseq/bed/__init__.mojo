@@ -9,3 +9,4 @@ from blazeseq.bed.record import (
     position_try_from,
 )
 from blazeseq.bed.parser import BedParser
+from blazeseq.bed.writer import BedWriter

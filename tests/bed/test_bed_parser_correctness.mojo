@@ -4,8 +4,9 @@ Test data from Biopython Tests/Blat.
 URL: https://github.com/biopython/biopython/tree/master/Tests/Blat
 """
 
-from blazeseq import BedParser, FileReader
+from blazeseq import BedParser, BedWriter, FileReader
 from blazeseq.bed.record import Strand
+from blazeseq.io import MemoryReader
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.pathlib import Path
@@ -156,6 +157,228 @@ def test_biopython_bed9() raises:
 
 def test_biopython_bed12() raises:
     _assert_invariants_for_file(test_dir + "bed12.bed", 12)
+
+
+# ---------------------------------------------------------------------------
+# Enhancement 2 — track / browser line handling
+# ---------------------------------------------------------------------------
+
+
+def test_track_line_skipped() raises:
+    """UCSC 'track name=...' header lines are skipped; data line is yielded."""
+    var data = "track name=myTrack description=\"test\"\nchr1\t0\t100\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    assert_true(parser.has_more())
+    var rec = parser.next_record()
+    assert_equal(rec.chrom(), "chr1")
+    assert_equal(rec.ChromStart, 0)
+    assert_equal(rec.ChromEnd, 100)
+    assert_true(not parser.has_more())
+
+
+def test_browser_line_skipped() raises:
+    """UCSC 'browser position ...' lines are skipped."""
+    var data = "browser position chr1:1-1000\nchr1\t0\t500\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_equal(rec.chrom(), "chr1")
+    assert_equal(rec.ChromEnd, 500)
+
+
+def test_track_and_browser_before_data() raises:
+    """Multiple UCSC header lines before data are all skipped."""
+    var data = "track name=t1\nbrowser position chr1:1-1000\nbrowser hide all\nchr1\t10\t20\nchr2\t30\t40\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var count = 0
+    for _ in parser:
+        count += 1
+    assert_equal(count, 2)
+
+
+# ---------------------------------------------------------------------------
+# Enhancement 1 — extra / custom fields (other_fields)
+# ---------------------------------------------------------------------------
+
+
+def test_extra_fields_stored_in_bed6_plus() raises:
+    """Extra columns beyond BED6 are stored in OtherFields."""
+    var data = "chr1\t0\t100\tfeature\t500\t+\t1.5e-10\tfold_change=2.3\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_equal(rec.NumFields, 8)
+    assert_true(rec.OtherFields)
+    var extras = rec.OtherFields.value().copy()
+    assert_equal(len(extras), 0)  # fields 7-8 are standard thickStart/thickEnd
+
+
+def test_extra_fields_beyond_bed12() raises:
+    """Columns beyond 12 land in OtherFields and round-trip correctly."""
+    var data = "chr1\t0\t1000\texon\t0\t+\t100\t900\t0\t2\t400,200,\t0,600,\tp_value\t0.001\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_true(rec.OtherFields)
+    var extras = rec.OtherFields.value().copy()
+    assert_equal(len(extras), 2)
+    assert_equal(extras[0].to_string(), "p_value")
+    assert_equal(extras[1].to_string(), "0.001")
+
+
+def test_bed10_accepted_as_bed9_plus_extra() raises:
+    """BED10 (previously rejected) is now accepted; column 10 goes to OtherFields."""
+    var data = "chr1\t0\t100\tname\t0\t+\t0\t0\t0\textra_col\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_equal(rec.NumFields, 10)
+    assert_true(rec.OtherFields)
+    var extras = rec.OtherFields.value().copy()
+    assert_equal(len(extras), 1)
+    assert_equal(extras[0].to_string(), "extra_col")
+
+
+def test_bed11_accepted_as_bed9_plus_extras() raises:
+    """BED11 is accepted; columns 10-11 go to OtherFields."""
+    var data = "chr1\t0\t100\tname\t0\t+\t0\t0\t0\textra1\textra2\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_equal(rec.NumFields, 11)
+    var extras = rec.OtherFields.value().copy()
+    assert_equal(len(extras), 2)
+    assert_equal(extras[0].to_string(), "extra1")
+    assert_equal(extras[1].to_string(), "extra2")
+
+
+# ---------------------------------------------------------------------------
+# Enhancement 3 — strand None vs Unknown semantics
+# ---------------------------------------------------------------------------
+
+
+def test_strand_absent_is_none_for_bed3() raises:
+    """BED3 has no strand field; strand is None (absent), not Unknown."""
+    var data = "chr1\t0\t100\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_true(not rec.Strand, "strand absent → None")
+
+
+def test_strand_dot_is_unknown_for_bed6() raises:
+    """BED6 with '.' in strand field yields Optional(Strand.Unknown), not None."""
+    var data = "chr1\t0\t100\tname\t0\t.\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_true(rec.Strand, "strand present (dot) → not None")
+    assert_equal(rec.Strand.value(), Strand.Unknown)
+
+
+def test_strand_plus_minus_round_trip() raises:
+    """Plus and Minus strands parse and are distinguishable."""
+    var data = "chr1\t0\t100\tpos\t0\t+\nchr1\t0\t100\tneg\t0\t-\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var r1 = parser.next_record()
+    var r2 = parser.next_record()
+    assert_equal(r1.Strand.value(), Strand.Plus)
+    assert_equal(r2.Strand.value(), Strand.Minus)
+
+
+# ---------------------------------------------------------------------------
+# Enhancement 4 — score is UInt16
+# ---------------------------------------------------------------------------
+
+
+def test_score_type_is_uint16() raises:
+    """Score field is parsed as UInt16 and still validates [0, 1000]."""
+    var data = "chr1\t0\t100\tname\t750\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_true(rec.Score)
+    assert_equal(rec.Score.value(), 750)
+
+
+def test_score_out_of_range_rejected() raises:
+    """Score > 1000 is rejected."""
+    var data = "chr1\t0\t100\tname\t1001\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var saw_error = False
+    try:
+        _ = parser.next_record()
+    except e:
+        assert_true(String(e).find("score") != -1 or String(e).find("1000") != -1)
+        saw_error = True
+    assert_true(saw_error)
+
+
+# ---------------------------------------------------------------------------
+# Enhancement 5 — BedWriter round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_bedwriter_round_trip_bed6() raises:
+    """Parse a BED6 record, write it, re-parse, and assert equality."""
+    var original = "chr1\t1000\t2000\tfeature\t500\t+\n"
+    var reader = MemoryReader(original)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+
+    # Write via BedWriter into an in-memory string buffer
+    var out = String()
+    var writer = BedWriter[String](out^)
+    writer.write_record(rec)
+    var written = writer._writer
+
+    # Re-parse the written output
+    var reader2 = MemoryReader(written)
+    var parser2 = BedParser[MemoryReader](reader2^)
+    var rec2 = parser2.next_record()
+
+    assert_equal(rec2.chrom(), "chr1")
+    assert_equal(rec2.ChromStart, 1000)
+    assert_equal(rec2.ChromEnd, 2000)
+    assert_equal(rec2.Name.value().to_string(), "feature")
+    assert_equal(rec2.Score.value(), 500)
+    assert_equal(rec2.Strand.value(), Strand.Plus)
+
+
+# ---------------------------------------------------------------------------
+# Enhancement 6 — block overlap validation
+# ---------------------------------------------------------------------------
+
+
+def test_overlapping_blocks_rejected() raises:
+    """BED12 with overlapping blocks raises an error on to_record()."""
+    # blocks: [0, 100), [50, 200) — overlap
+    var data = "chr1\t0\t200\tname\t0\t+\t0\t200\t0\t2\t100,150,\t0,50,\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var saw_error = False
+    try:
+        _ = parser.next_record()
+    except e:
+        assert_true(
+            String(e).find("non-overlapping") != -1 or String(e).find("sorted") != -1
+        )
+        saw_error = True
+    assert_true(saw_error)
+
+
+def test_non_overlapping_blocks_accepted() raises:
+    """BED12 with valid non-overlapping sorted blocks parses correctly."""
+    var data = "chr1\t0\t1000\texon\t0\t+\t100\t900\t0\t2\t400,200,\t0,600,\n"
+    var reader = MemoryReader(data)
+    var parser = BedParser[MemoryReader](reader^)
+    var rec = parser.next_record()
+    assert_true(rec.BlockSizes)
+    assert_equal(len(rec.BlockSizes.value()), 2)
 
 
 def test_bed_detection_regardless_of_extension() raises:

@@ -35,6 +35,7 @@ from blazeseq.bed import (
     BedRecord,
     BedView,
     BedParser,
+    BedWriter,
 )
 from blazeseq.gff import (
     Gff3Record,

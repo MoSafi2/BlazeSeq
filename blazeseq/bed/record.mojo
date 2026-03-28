@@ -3,6 +3,8 @@
 BED uses 0-based, half-open coordinates [chromStart, chromEnd).
 Standard BED fields: chrom, chromStart, chromEnd (required), then optional
 name, score, strand, thickStart, thickEnd, itemRgb, blockCount, blockSizes, blockStarts.
+Extra columns beyond field 12 (or beyond field 9 for BED10/11) are stored in
+OtherFields / _other_fields_spans as opaque byte sequences.
 """
 
 from std.collections import List
@@ -20,7 +22,12 @@ from blazeseq.features import Position, Interval
 
 
 struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
-    """Strand of a BED feature: Plus (+), Minus (-), or Unknown (.)."""
+    """Strand of a BED feature: Plus (+), Minus (-), or Unknown (.).
+
+    When the strand field is absent (BED5 or fewer columns), the enclosing
+    Optional[Strand] is None — distinguishable from an explicit '.' which
+    yields Optional(Strand.Unknown).
+    """
 
     var value: Int8
 
@@ -28,9 +35,9 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     def __init__(out self, value: Int8):
         self.value = value
 
-    comptime Plus = Self(0)
-    comptime Minus = Self(1)
-    comptime Unknown = Self(2)
+    comptime Plus    = Self(0)
+    comptime Minus   = Self(1)
+    comptime Unknown = Self(2)  # explicit '.' — strand not applicable
 
     @always_inline
     def __eq__(self, other: Self) -> Bool:
@@ -106,13 +113,19 @@ struct BedView[O: Origin](Movable):
     call `.to_record()` when the record must outlive the current iteration.
 
     Coordinates are 0-based, half-open [chrom_start, chrom_end).
+
+    strand: None means the field is absent (BED5 or fewer).
+            Optional(Strand.Unknown) means the field was '.'.
+    score:  UInt16 in [0, 1000] per BED spec.
+    _other_fields_spans: Extra columns beyond the standard 12 (or beyond 9
+                         for BED10/11), stored as raw byte spans.
     """
 
     var _chrom: Span[UInt8, Self.O]
     var chrom_start: UInt64
     var chrom_end: UInt64
     var _name: Optional[Span[UInt8, Self.O]]
-    var score: Optional[Int]
+    var score: Optional[UInt16]
     var strand: Optional[Strand]
     var thick_start: Optional[UInt64]
     var thick_end: Optional[UInt64]
@@ -120,6 +133,7 @@ struct BedView[O: Origin](Movable):
     var block_count: Optional[Int]
     var _block_sizes_span: Optional[Span[UInt8, Self.O]]
     var _block_starts_span: Optional[Span[UInt8, Self.O]]
+    var _other_fields_spans: Optional[List[Span[UInt8, Self.O]]]
     var num_fields: Int
 
     def __init__(
@@ -128,7 +142,7 @@ struct BedView[O: Origin](Movable):
         chrom_start: UInt64,
         chrom_end: UInt64,
         _name: Optional[Span[UInt8, Self.O]],
-        score: Optional[Int],
+        score: Optional[UInt16],
         strand: Optional[Strand],
         thick_start: Optional[UInt64],
         thick_end: Optional[UInt64],
@@ -136,6 +150,7 @@ struct BedView[O: Origin](Movable):
         block_count: Optional[Int],
         _block_sizes_span: Optional[Span[UInt8, Self.O]],
         _block_starts_span: Optional[Span[UInt8, Self.O]],
+        var _other_fields_spans: Optional[List[Span[UInt8, Self.O]]],
         num_fields: Int,
     ):
         self._chrom = _chrom
@@ -150,6 +165,7 @@ struct BedView[O: Origin](Movable):
         self.block_count = block_count
         self._block_sizes_span = _block_sizes_span
         self._block_starts_span = _block_starts_span
+        self._other_fields_spans = _other_fields_spans^
         self.num_fields = num_fields
 
     @always_inline
@@ -203,6 +219,16 @@ struct BedView[O: Origin](Movable):
             return None
         return Optional(self._item_rgb.value().copy())
 
+    def other_fields(ref self) -> Optional[List[StringSlice[origin=Self.O]]]:
+        """Return extra columns beyond the standard BED fields, if any."""
+        if not self._other_fields_spans:
+            return None
+        var out = List[StringSlice[origin=Self.O]]()
+        var spans = self._other_fields_spans.value().copy()
+        for i in range(len(spans)):
+            out.append(StringSlice[origin=Self.O](unsafe_from_utf8=spans[i]))
+        return Optional(out^)
+
     def to_record(self) raises -> BedRecord:
         """Materialize an owned BedRecord. Call when the record must outlive the view.
         """
@@ -218,6 +244,10 @@ struct BedView[O: Origin](Movable):
                 raise Error("BED: blockStarts[0] must be 0 (first block at chromStart)")
             if self.chrom_start + starts[bc - 1] + sizes[bc - 1] != self.chrom_end:
                 raise Error("BED: last block must end at chromEnd")
+            # Validate blocks are sorted and non-overlapping
+            for i in range(bc - 1):
+                if starts[i] + sizes[i] > starts[i + 1]:
+                    raise Error("BED: blocks must be non-overlapping and sorted")
             block_sizes = sizes^
             block_starts = starts^
         elif self._block_sizes_span and self._block_starts_span:
@@ -226,6 +256,14 @@ struct BedView[O: Origin](Movable):
         var name_opt: Optional[BString] = None
         if self._name:
             name_opt = BString(self._name.value())
+        # Copy extra fields from spans to owned BStrings
+        var other_fields_opt: Optional[List[BString]] = None
+        if self._other_fields_spans:
+            var spans = self._other_fields_spans.value().copy()
+            var fields = List[BString]()
+            for i in range(len(spans)):
+                fields.append(BString(spans[i]))
+            other_fields_opt = fields^
         return BedRecord(
             Chrom=BString(self._chrom),
             ChromStart=self.chrom_start,
@@ -238,6 +276,7 @@ struct BedView[O: Origin](Movable):
             ItemRgb=self._item_rgb,
             BlockSizes=block_sizes^ if block_sizes else None,
             BlockStarts=block_starts^ if block_starts else None,
+            OtherFields=other_fields_opt^ if other_fields_opt else None,
             NumFields=self.num_fields,
         )
 
@@ -287,19 +326,25 @@ def _comma_sep_u64_list(values: List[UInt64]) -> String:
 
 @fieldwise_init
 struct BedRecord(Copyable, Movable, Writable):
-    """Single BED feature (owned). Coordinates are 0-based, half-open."""
+    """Single BED feature (owned). Coordinates are 0-based, half-open.
+
+    score: UInt16 in [0, 1000] per BED spec.
+    OtherFields: extra columns beyond the standard BED12 fields (or beyond
+                 field 9 for BED10/11), stored as owned strings.
+    """
 
     var Chrom: BString
     var ChromStart: UInt64
     var ChromEnd: UInt64
     var Name: Optional[BString]
-    var Score: Optional[Int]
+    var Score: Optional[UInt16]
     var Strand: Optional[Strand]
     var ThickStart: Optional[UInt64]
     var ThickEnd: Optional[UInt64]
     var ItemRgb: Optional[ItemRgb]
     var BlockSizes: Optional[List[UInt64]]
     var BlockStarts: Optional[List[UInt64]]
+    var OtherFields: Optional[List[BString]]
     var NumFields: Int
 
     @always_inline
@@ -363,6 +408,16 @@ struct BedRecord(Copyable, Movable, Writable):
             return Optional(self.BlockStarts.value().copy())
         return None
 
+    def other_fields(ref self) -> Optional[List[String]]:
+        """Return extra columns beyond the standard BED fields, if any."""
+        if not self.OtherFields:
+            return None
+        var out = List[String]()
+        var fields = self.OtherFields.value().copy()
+        for i in range(len(fields)):
+            out.append(fields[i].to_string())
+        return Optional(out^)
+
     def write_to[w: Writer](ref self, mut writer: w):
         """Write this record as one TAB-delimited line (same column count as parsed).
         """
@@ -373,6 +428,7 @@ struct BedRecord(Copyable, Movable, Writable):
         self._write_thick_fields(writer)
         self._write_item_rgb_field(writer)
         self._write_block_fields(writer)
+        self._write_other_fields(writer)
         writer.write("\n")
 
     def _write_core_fields[w: Writer](ref self, mut writer: w):
@@ -427,3 +483,11 @@ struct BedRecord(Copyable, Movable, Writable):
         writer.write(t"\t{String(len(sizes))}")
         writer.write(t"\t{_comma_sep_u64_list(sizes)}")
         writer.write(t"\t{_comma_sep_u64_list(starts)}")
+
+    def _write_other_fields[w: Writer](ref self, mut writer: w):
+        if not self.OtherFields:
+            return
+        var fields = self.OtherFields.value().copy()
+        for i in range(len(fields)):
+            writer.write("\t")
+            writer.write(fields[i].to_string())
