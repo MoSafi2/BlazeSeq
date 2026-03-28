@@ -71,11 +71,9 @@ struct GtfErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 # ---------------------------------------------------------------------------
 
 
+@fieldwise_init
 struct GtfLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """GTF: skip blank lines and lines starting with #."""
-
-    def __init__(out self):
-        pass
 
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
@@ -84,10 +82,6 @@ struct GtfLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
         if line[0] == UInt8(ord("#")):
             return LineAction.SKIP
         return LineAction.YIELD
-
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        pass
 
 
 # ---------------------------------------------------------------------------

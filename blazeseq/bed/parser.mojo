@@ -248,11 +248,9 @@ struct _BedOptionalFields[O: Origin](Movable):
 # ---------------------------------------------------------------------------
 
 
+@fieldwise_init
 struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """Line policy for BED: skip blank lines and lines starting with #."""
-
-    def __init__(out self):
-        pass
 
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
@@ -261,10 +259,6 @@ struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
         if line[0] == UInt8(ord("#")):
             return LineAction.SKIP
         return LineAction.YIELD
-
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        ...
 
 
 struct BedParser[R: Reader](Iterable, Movable):

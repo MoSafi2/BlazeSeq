@@ -42,11 +42,6 @@ trait LinePolicy(
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         ...
 
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        """Called when classify() returns METADATA. Default: no-op."""
-        ...
-
 
 @fieldwise_init
 struct LineAction(
@@ -66,6 +61,7 @@ struct LineAction(
         return self._tag == other._tag
 
 
+@fieldwise_init
 struct DefaultLinePolicy(
     Copyable, LinePolicy, Movable, TrivialRegisterPassable
 ):
@@ -74,18 +70,11 @@ struct DefaultLinePolicy(
     Skips blank lines (SKIP) and yields all non-empty lines (YIELD).
     """
 
-    def __init__(out self):
-        pass
-
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
         return LineAction.YIELD
-
-    @always_inline
-    def handle_metadata(mut self, line: Span[UInt8, _]) raises:
-        ...
 
 
 struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
@@ -450,7 +439,6 @@ struct DelimitedReader[
             elif action == LineAction.SKIP:
                 continue
             elif action == LineAction.METADATA:
-                self.policy.handle_metadata(line)
                 continue
             elif action == LineAction.HEADER:
                 self._parse_header_from(line)
@@ -574,5 +562,3 @@ struct _DelimitedRecordIter[
             else:
                 print(msg)
                 raise StopIteration()
-
-
