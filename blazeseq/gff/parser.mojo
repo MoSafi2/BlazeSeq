@@ -35,7 +35,8 @@ comptime GFF_NUM_FIELDS: Int = 9
 
 
 struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
-    """Trivial error code returned by low-level GFF3 field parsers; caller raises."""
+    """Trivial error code returned by low-level GFF3 field parsers; caller raises.
+    """
 
     var value: Int8
 
@@ -51,23 +52,30 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
-    comptime OK              = Self(0)
-    comptime VERSION         = Self(1)
-    comptime SEQ_REGION      = Self(2)
-    comptime INT_EMPTY       = Self(3)
-    comptime INT_INVALID     = Self(4)
-    comptime STRAND_INVALID  = Self(5)
-    comptime PHASE_INVALID   = Self(6)
-    comptime FIELD_COUNT     = Self(7)
+    comptime OK = Self(0)
+    comptime VERSION = Self(1)
+    comptime SEQ_REGION = Self(2)
+    comptime INT_EMPTY = Self(3)
+    comptime INT_INVALID = Self(4)
+    comptime STRAND_INVALID = Self(5)
+    comptime PHASE_INVALID = Self(6)
+    comptime FIELD_COUNT = Self(7)
 
     def message(self) -> String:
-        if self == Self.VERSION:        return "GFF3: ##gff-version must be 3.x"
-        if self == Self.SEQ_REGION:     return "GFF3: malformed ##sequence-region directive"
-        if self == Self.INT_EMPTY:      return "GFF3: integer field is empty"
-        if self == Self.INT_INVALID:    return "GFF3: invalid byte in integer field"
-        if self == Self.STRAND_INVALID: return "GFF3: strand must be +, -, ., or ?"
-        if self == Self.PHASE_INVALID:  return "GFF3: phase must be 0, 1, or 2"
-        if self == Self.FIELD_COUNT:    return "GFF3: row must have exactly 9 fields"
+        if self == Self.VERSION:
+            return "GFF3: ##gff-version must be 3.x"
+        if self == Self.SEQ_REGION:
+            return "GFF3: malformed ##sequence-region directive"
+        if self == Self.INT_EMPTY:
+            return "GFF3: integer field is empty"
+        if self == Self.INT_INVALID:
+            return "GFF3: invalid byte in integer field"
+        if self == Self.STRAND_INVALID:
+            return "GFF3: strand must be +, -, ., or ?"
+        if self == Self.PHASE_INVALID:
+            return "GFF3: phase must be 0, 1, or 2"
+        if self == Self.FIELD_COUNT:
+            return "GFF3: row must have exactly 9 fields"
         return "GFF3: parse error"
 
 
@@ -147,13 +155,18 @@ def _parse_sequence_region(
 
 @fieldwise_init
 struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
-    """GFF3: skip blank and single-# lines; ## lines -> METADATA; ##FASTA -> STOP."""
+    """GFF3: skip blank and single-# lines; ## lines -> METADATA; ##FASTA -> STOP.
+    """
 
     @always_inline
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
-        if len(line) >= 2 and line[0] == UInt8(ord("#")) and line[1] == UInt8(ord("#")):
+        if (
+            len(line) >= 2
+            and line[0] == UInt8(ord("#"))
+            and line[1] == UInt8(ord("#"))
+        ):
             # ### forward-reference boundary — no payload, skip cleanly
             if len(line) == 3 and line[2] == UInt8(ord("#")):
                 return LineAction.SKIP
@@ -178,7 +191,9 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 
 
 @always_inline
-def _parse_uint64_from_span(span: Span[UInt8, _], mut result: UInt64) -> Gff3ErrorCode:
+def _parse_uint64_from_span(
+    span: Span[UInt8, _], mut result: UInt64
+) -> Gff3ErrorCode:
     """Parse a decimal UInt64. Returns OK or an error code; never raises."""
     result = 0
     if len(span) == 0:
@@ -200,7 +215,9 @@ def _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
     return Optional(atof(s))
 
 
-def _parse_gff3_strand(span: Span[UInt8, _], mut result: Optional[Gff3Strand]) -> Gff3ErrorCode:
+def _parse_gff3_strand(
+    span: Span[UInt8, _], mut result: Optional[Gff3Strand]
+) -> Gff3ErrorCode:
     """Parse GFF3 strand field. Returns OK or STRAND_INVALID; never raises."""
     result = None
     if len(span) == 0:
@@ -222,7 +239,9 @@ def _parse_gff3_strand(span: Span[UInt8, _], mut result: Optional[Gff3Strand]) -
     return Gff3ErrorCode.STRAND_INVALID
 
 
-def _parse_phase_span(span: Span[UInt8, _], mut result: Optional[UInt8]) -> Gff3ErrorCode:
+def _parse_phase_span(
+    span: Span[UInt8, _], mut result: Optional[UInt8]
+) -> Gff3ErrorCode:
     """Parse GFF3 phase field. Returns OK or an error code; never raises."""
     result = None
     if len(span) == 0:
@@ -298,7 +317,9 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
     via sequence_regions(). Validates ##gff-version is 3.x when present.
     """
 
-    comptime IteratorType[origin: Origin] = _Gff3ParserRecordIter[Self.R, origin]
+    comptime IteratorType[origin: Origin] = _Gff3ParserRecordIter[
+        Self.R, origin
+    ]
 
     var _rows: DelimitedReader[Self.R, Gff3LinePolicy, 16]
     var _seq_regions: List[SequenceRegion]
@@ -310,11 +331,9 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
         )
 
     def sequence_regions(ref self) -> List[SequenceRegion]:
-        """Return a copy of all ##sequence-region directives encountered so far."""
-        var result = List[SequenceRegion]()
-        for i in range(len(self._seq_regions)):
-            result.append(SequenceRegion(copy=self._seq_regions[i]))
-        return result^
+        """Return a copy of all ##sequence-region directives encountered so far.
+        """
+        return self._seq_regions.copy()
 
     @always_inline
     def has_more(self) -> Bool:
@@ -380,7 +399,9 @@ struct _Gff3ParserViewIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutExternalOrigin]](self._src)
+        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutExternalOrigin]](
+            self._src
+        )
         try:
             return mut_ptr[].next_view()
         except e:
@@ -409,7 +430,9 @@ struct _Gff3ParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutExternalOrigin]](self._src)
+        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutExternalOrigin]](
+            self._src
+        )
         try:
             return mut_ptr[].next_record()
         except e:
