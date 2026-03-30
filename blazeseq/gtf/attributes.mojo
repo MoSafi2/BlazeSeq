@@ -41,7 +41,9 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
         self.transcript_id = copy.transcript_id.copy()
         var extras = List[Tuple[BString, BString]]()
         for i in range(len(copy._extras)):
-            extras.append((copy._extras[i][0].copy(), copy._extras[i][1].copy()))
+            extras.append(
+                (copy._extras[i][0].copy(), copy._extras[i][1].copy())
+            )
         self._extras = extras^
 
     def get(ref self, key: String) -> Optional[BString]:
@@ -51,12 +53,13 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
         if key == "transcript_id":
             return Optional(self.transcript_id.copy())
         for i in range(len(self._extras)):
-            if _bstring_eq(self._extras[i][0], key):
+            if self._extras[i][0].as_string_slice() == key:
                 return Optional(self._extras[i][1].copy())
         return None
 
     def get_all(ref self, key: String) -> List[BString]:
-        """Return all values for key in encounter order (supports duplicate keys)."""
+        """Return all values for key in encounter order (supports duplicate keys).
+        """
         var out = List[BString]()
         if key == "gene_id":
             out.append(self.gene_id.copy())
@@ -65,12 +68,13 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
             out.append(self.transcript_id.copy())
             return out^
         for i in range(len(self._extras)):
-            if _bstring_eq(self._extras[i][0], key):
+            if self._extras[i][0].as_string_slice() == key:
                 out.append(self._extras[i][1].copy())
         return out^
 
     def __len__(self) -> Int:
-        """Return count of non-empty attributes (gene_id, transcript_id, and extras)."""
+        """Return count of non-empty attributes (gene_id, transcript_id, and extras).
+        """
         var count = len(self._extras)
         if len(self.gene_id) > 0:
             count += 1
@@ -79,18 +83,19 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
         return count
 
     def write_to[w: Writer](ref self, mut writer: w):
-        """Emit attributes in GTF format: gene_id "..."; transcript_id "..."; ..."""
-        writer.write("gene_id \"")
+        """Emit attributes in GTF format: gene_id "..."; transcript_id "..."; ...
+        """
+        writer.write('gene_id "')
         _write_gtf_escaped(self.gene_id, writer)
-        writer.write("\"; transcript_id \"")
+        writer.write('"; transcript_id "')
         _write_gtf_escaped(self.transcript_id, writer)
-        writer.write("\"")
+        writer.write('"')
         for i in range(len(self._extras)):
             writer.write("; ")
             writer.write(self._extras[i][0].to_string())
-            writer.write(" \"")
+            writer.write(' "')
             _write_gtf_escaped(self._extras[i][1], writer)
-            writer.write("\"")
+            writer.write('"')
 
 
 # ---------------------------------------------------------------------------
@@ -99,16 +104,6 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
 
 
 @always_inline
-def _bstring_eq(b: BString, key: String) -> Bool:
-    """Compare BString bytes to String without allocating."""
-    var bspan = b.as_span()
-    if len(bspan) != len(key):
-        return False
-    var kptr = key.unsafe_ptr()
-    for i in range(len(bspan)):
-        if bspan[i] != kptr[i]:
-            return False
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -130,17 +125,17 @@ def _gtf_unescape_value(span: Span[UInt8, _]) -> BString:
         if b == UInt8(92):  # backslash
             if i + 1 < n:
                 var next = span[i + 1]
-                if next == UInt8(34):    # \"  → "
+                if next == UInt8(34):  # \"  → "
                     bytes.append(UInt8(34))
                 elif next == UInt8(92):  # \\ → backslash
                     bytes.append(UInt8(92))
-                elif next == UInt8(110): # \n → newline
+                elif next == UInt8(110):  # \n → newline
                     bytes.append(UInt8(10))
-                elif next == UInt8(116): # \t → tab
+                elif next == UInt8(116):  # \t → tab
                     bytes.append(UInt8(9))
-                elif next == UInt8(114): # \r → carriage return
+                elif next == UInt8(114):  # \r → carriage return
                     bytes.append(UInt8(13))
-                else:                    # unknown — emit both bytes literally
+                else:  # unknown — emit both bytes literally
                     bytes.append(UInt8(92))
                     bytes.append(next)
                 i += 2
@@ -171,17 +166,17 @@ def _write_gtf_escaped[w: Writer](value: BString, mut writer: w):
     for i in range(n):
         var b = span[i]
         var needs_escape = (
-            b == UInt8(34)   # "
-            or b == UInt8(92)   # \
-            or b == UInt8(10)   # newline
-            or b == UInt8(9)    # tab
-            or b == UInt8(13)   # CR
+            b == UInt8(34)  # "
+            or b == UInt8(92)  # \
+            or b == UInt8(10)  # newline
+            or b == UInt8(9)  # tab
+            or b == UInt8(13)  # CR
         )
         if needs_escape:
             if i > run_start:
                 writer.write(StringSlice(unsafe_from_utf8=span[run_start:i]))
             if b == UInt8(34):
-                writer.write("\\\"")
+                writer.write('\\"')
             elif b == UInt8(92):
                 writer.write("\\\\")
             elif b == UInt8(10):
@@ -232,7 +227,7 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
             if b == UInt8(92) and in_quote and end + 1 < n:  # backslash escape
                 end += 2
                 continue
-            if b == UInt8(ord("\"")):
+            if b == UInt8(ord('"')):
                 in_quote = not in_quote
             if b == UInt8(ord(";")) and not in_quote:
                 break
@@ -250,7 +245,7 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
         # Skip space
         i += 1
         var value: BString
-        if i < part_len and part[i] == UInt8(ord("\"")):
+        if i < part_len and part[i] == UInt8(ord('"')):
             # Quoted value — scan to closing quote, honouring backslash escapes
             i += 1
             var value_start = i
@@ -259,7 +254,7 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
                 if b == UInt8(92) and i + 1 < part_len:  # backslash — skip pair
                     i += 2
                     continue
-                if b == UInt8(ord("\"")):
+                if b == UInt8(ord('"')):
                     break
                 i += 1
             value = _gtf_unescape_value(part[value_start:i])
@@ -268,9 +263,9 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
             var v_end = part_len
             while v_end > i and (
                 part[v_end - 1] == UInt8(ord(" "))
-                or part[v_end - 1] == UInt8(13)   # \r
-                or part[v_end - 1] == UInt8(10)   # \n
-                or part[v_end - 1] == UInt8(9)    # \t
+                or part[v_end - 1] == UInt8(13)  # \r
+                or part[v_end - 1] == UInt8(10)  # \n
+                or part[v_end - 1] == UInt8(9)  # \t
             ):
                 v_end -= 1
             if v_end <= i:
@@ -279,7 +274,9 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
         # A7: Compare key bytes directly to avoid String allocation
         if len(key_span) == 7 and _span_eq_literal(key_span, "gene_id"):
             attrs.gene_id = value^
-        elif len(key_span) == 13 and _span_eq_literal(key_span, "transcript_id"):
+        elif len(key_span) == 13 and _span_eq_literal(
+            key_span, "transcript_id"
+        ):
             attrs.transcript_id = value^
         else:
             attrs._extras.append((BString(key_span), value^))

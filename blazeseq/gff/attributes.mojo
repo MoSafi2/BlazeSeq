@@ -9,24 +9,6 @@ from blazeseq.io.writers import Writer
 
 
 # ---------------------------------------------------------------------------
-# Key comparison helper — avoids BString.to_string() allocation
-# ---------------------------------------------------------------------------
-
-
-@always_inline
-def _bstring_eq(b: BString, key: String) -> Bool:
-    """Compare BString bytes to String without allocating."""
-    var bspan = b.as_span()
-    if len(bspan) != len(key):
-        return False
-    var kptr = key.unsafe_ptr()
-    for i in range(len(bspan)):
-        if bspan[i] != kptr[i]:
-            return False
-    return True
-
-
-# ---------------------------------------------------------------------------
 # Gff3Attributes — key -> list of values (supports GFF3 multi-value)
 # ---------------------------------------------------------------------------
 
@@ -44,24 +26,14 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
     def __init__(out self):
         self._pairs = List[Tuple[BString, List[BString]]]()
 
-    def __init__(out self, *, copy: Self):
-        var new_pairs = List[Tuple[BString, List[BString]]]()
-        for i in range(len(copy._pairs)):
-            var kv = copy._pairs[i].copy()
-            var vals = List[BString]()
-            for j in range(len(kv[1])):
-                vals.append(kv[1][j].copy())
-            new_pairs.append((kv[0].copy(), vals^))
-        self._pairs = new_pairs^
-
-    def add(mut self, key: BString, value: BString):
+    @always_inline
+    def add(mut self, var key: BString, var value: BString):
         """Append a key-value pair."""
-        var vals = List[BString]()
-        vals.append(value.copy())
-        var t = (key.copy(), vals^)
+        var t: Tuple[BString, List[BString]] = (key^, [value^])
         self._pairs.append(t^)
 
-    def add_multi(mut self, key: BString, values: List[BString]):
+    @always_inline
+    def add_multi(mut self, var key: BString, var values: List[BString]):
         """Append a key with multiple values (GFF3 comma-separated)."""
         var vals = List[BString]()
         for i in range(len(values)):
@@ -72,7 +44,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
     def get(ref self, key: String) -> Optional[BString]:
         """Return first value for key, if any."""
         for i in range(len(self._pairs)):
-            if _bstring_eq(self._pairs[i][0], key):
+            if self._pairs[i][0].as_string_slice() == key:
                 if len(self._pairs[i][1]) > 0:
                     return Optional(self._pairs[i][1][0].copy())
                 return None
@@ -82,7 +54,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
         """Return all values for key (GFF3 multi-value attributes)."""
         var out = List[BString]()
         for i in range(len(self._pairs)):
-            if _bstring_eq(self._pairs[i][0], key):
+            if self._pairs[i][0].as_string_slice() == key:
                 for j in range(len(self._pairs[i][1])):
                     out.append(self._pairs[i][1][j].copy())
         return out^
@@ -121,7 +93,8 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
         return self.get_all("Dbxref")
 
     def ontology_term(ref self) -> List[BString]:
-        """Ontology_term attribute — controlled vocabulary terms (multi-value)."""
+        """Ontology_term attribute — controlled vocabulary terms (multi-value).
+        """
         return self.get_all("Ontology_term")
 
     def is_circular(ref self) -> Bool:
@@ -257,5 +230,5 @@ def parse_gff3_attributes(span: Span[UInt8, _]) raises -> Gff3Attributes:
                 values.append(percent_decode_to_bstring(one))
             v_start = v_end + 1
         if len(values) > 0:
-            attrs.add_multi(key, values)
+            attrs.add_multi(key^, values^)
     return attrs^
