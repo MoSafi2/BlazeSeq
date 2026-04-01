@@ -10,7 +10,6 @@ All notable changes to BlazeSeq are documented here.
 
 - **FASTA support**: `FastaRecord` and `FastaParser` in `blazeseq.fasta` with definition-line parsing, optional description, and `definition()` method. Strip leading/trailing spaces from definition lines.
 - **FAI index parser**: `FaiRecord` and `FaiParser` in `blazeseq.fai` for streaming parsing of FASTA/FASTQ `.fai` index files (5-column FASTA and 6-column FASTQ formats), plus a `collect()` helper to load whole indexes into memory and tests based on the samtools `faidx` examples. Zero-copy access via `FaiView` and `views()` / `next_view()`.
-- **BED parsing**: BED record types and streaming parser in `blazeseq.bed` for BED3–BED12 and custom fields; zero-copy access via `BedView` and `views()` / `next_view()`; owned access via `BedRecord` and `records()`/`next_record()` tests for correctness and invalid input.
 
 - **Definition struct**: `Definition` in `blazeseq.fasta.definition` with `Id` and optional `Description`; `definition()` on `FastaRecord` and `FastqRef` for structured definition-line parsing.
 - **FASTA validation**: Optional ASCII validation for id and sequence via `ParserConfig.check_ascii`.
@@ -20,6 +19,7 @@ All notable changes to BlazeSeq are documented here.
 - **Throughput validation benchmark**: `run_throughput_validation_blazeseq.mojo` and scripts to measure effect of ASCII/quality validation on throughput.
 - **FASTA benchmarks**: Benchmark harness for FASTA parser with Noodles and needletail runners; plotting script for benchmark results.
 - **Delimited parser**: Streaming delimited-line parser in `blazeseq.io.delimited` with minimal allocation; stack-allocated `FieldOffsets`, zero-copy field access, and policy based parsing.
+- **BED & GTF & GFF parsing**: Initial record types and streaming parser in `blazeseq._*`
 
 ### Changed
 
