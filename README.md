@@ -1,6 +1,6 @@
 # 🔥 BlazeSeq
 
-**High-Performance FASTQ Parsing for Mojo — Zero-Copy to GPU**
+**High-Performance FASTX Parsing for Mojo — Zero-Copy to GPU**
 
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
@@ -8,7 +8,7 @@
 [![Mojo](https://img.shields.io/badge/Mojo-0.26.2-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with additional support for owned records and GPU-friendly batching. It supports **multithreaded** gzip decompression via **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)).Configurable validation is available — all through a single unified API.
+A high-throughput **FASTQ** parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with owned records and GPU-friendly batching for read pipelines. It also supports streaming **FASTA** and samtools-style **`.fai`** index files (five- or six-column rows from `faidx`, index metadata only). **Multithreaded** gzip decompression uses **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)). Configurable validation is available — all through a single unified API.
 
 ## ✨ Key Features
 
@@ -19,6 +19,7 @@ A high-throughput FASTQ parser written in [Mojo](https://docs.modular.com/mojo/)
   - `batches()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
 - **Rapidgzip with parallel decoding** — Gzipped FASTQ (`.fastq.gz`) is decompressed in parallel across multiple threads for high throughput; tune with the `parallelism`.
+- **FASTA and FAI** — Streaming FASTA parsing and `.fai` index files; see the API reference for `FastaParser` and `FaiParser`.
 
 ![Throughput](assets/throughput_gbps.png)
 
@@ -33,7 +34,7 @@ Use BlazeSeq as a Mojo dependency in your project. Install [pixi](https://prefix
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
-Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `views()`, `batches()`, GPU batching).
+Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `FastaParser`, `FaiParser`, `views()`, `batches()`, GPU batching).
 
 ## Python bindings (experimental)
 
@@ -129,7 +130,7 @@ Throughput (file-based and in-memory) and comparison with needletail, seq_io, an
 
 - No multi-line FASTQ support — Records must fit four lines (standard Illumina/ONT format)
 - No current support for Paired-end reads (in progress)
-- No index/seek — Streaming parser only; use MemoryReader for repeated scans
+- No random seek within FASTQ/FASTA streams — sequence parsers are sequential; use `MemoryReader` for repeated scans. `.fai` index metadata is parsed separately with `FaiParser`.
 - Python package is wheel-only (no source build of the extension on install)
 
 ## Testing
