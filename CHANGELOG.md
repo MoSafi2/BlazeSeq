@@ -4,7 +4,7 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
-## [0.3] - 2026-03-17
+## [0.3] - 2026-03-30
 
 ### Added
 
