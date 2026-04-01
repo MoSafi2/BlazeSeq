@@ -26,24 +26,14 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
     def __init__(out self):
         self._pairs = List[Tuple[BString, List[BString]]]()
 
-    def __init__(out self, *, copy: Self):
-        var new_pairs = List[Tuple[BString, List[BString]]]()
-        for i in range(len(copy._pairs)):
-            var kv = copy._pairs[i].copy()
-            var vals = List[BString]()
-            for j in range(len(kv[1])):
-                vals.append(kv[1][j].copy())
-            new_pairs.append((kv[0].copy(), vals^))
-        self._pairs = new_pairs^
-
-    def add(mut self, key: BString, value: BString):
+    @always_inline
+    def add(mut self, var key: BString, var value: BString):
         """Append a key-value pair."""
-        var vals = List[BString]()
-        vals.append(value.copy())
-        var t = (key.copy(), vals^)
+        var t: Tuple[BString, List[BString]] = (key^, [value^])
         self._pairs.append(t^)
 
-    def add_multi(mut self, key: BString, values: List[BString]):
+    @always_inline
+    def add_multi(mut self, var key: BString, var values: List[BString]):
         """Append a key with multiple values (GFF3 comma-separated)."""
         var vals = List[BString]()
         for i in range(len(values)):
@@ -54,7 +44,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
     def get(ref self, key: String) -> Optional[BString]:
         """Return first value for key, if any."""
         for i in range(len(self._pairs)):
-            if self._pairs[i][0].to_string() == key:
+            if self._pairs[i][0].as_string_slice() == key:
                 if len(self._pairs[i][1]) > 0:
                     return Optional(self._pairs[i][1][0].copy())
                 return None
@@ -64,7 +54,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
         """Return all values for key (GFF3 multi-value attributes)."""
         var out = List[BString]()
         for i in range(len(self._pairs)):
-            if self._pairs[i][0].to_string() == key:
+            if self._pairs[i][0].as_string_slice() == key:
                 for j in range(len(self._pairs[i][1])):
                     out.append(self._pairs[i][1][j].copy())
         return out^
@@ -103,7 +93,8 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
         return self.get_all("Dbxref")
 
     def ontology_term(ref self) -> List[BString]:
-        """Ontology_term attribute — controlled vocabulary terms (multi-value)."""
+        """Ontology_term attribute — controlled vocabulary terms (multi-value).
+        """
         return self.get_all("Ontology_term")
 
     def is_circular(ref self) -> Bool:
@@ -145,7 +136,7 @@ def _hex_digit(b: UInt8) -> Int:
 
 def percent_decode(span: Span[UInt8, _]) -> String:
     """Decode RFC 3986 percent-encoding. Used for GFF3 attributes and seqid."""
-    var out = String()
+    var bytes = List[UInt8]()
     var i: Int = 0
     var n = len(span)
     while i < n:
@@ -153,19 +144,30 @@ def percent_decode(span: Span[UInt8, _]) -> String:
             var hi = _hex_digit(span[i + 1])
             var lo = _hex_digit(span[i + 2])
             if hi >= 0 and lo >= 0:
-                var byte = UInt8(hi * 16 + lo)
-                out += chr(Int(byte))
+                bytes.append(UInt8(hi * 16 + lo))
                 i += 3
                 continue
-        out += chr(Int(span[i]))
+        bytes.append(span[i])
         i += 1
-    return out^
+    return String(StringSlice(unsafe_from_utf8=Span(bytes)))
 
 
 def percent_decode_to_bstring(span: Span[UInt8, _]) -> BString:
     """Decode RFC 3986 percent-encoding into BString."""
-    var s = percent_decode(span)
-    return BString(s)
+    var bytes = List[UInt8]()
+    var i: Int = 0
+    var n = len(span)
+    while i < n:
+        if span[i] == UInt8(ord("%")) and i + 2 < n:
+            var hi = _hex_digit(span[i + 1])
+            var lo = _hex_digit(span[i + 2])
+            if hi >= 0 and lo >= 0:
+                bytes.append(UInt8(hi * 16 + lo))
+                i += 3
+                continue
+        bytes.append(span[i])
+        i += 1
+    return BString(Span(bytes))
 
 
 # ---------------------------------------------------------------------------
@@ -174,9 +176,23 @@ def percent_decode_to_bstring(span: Span[UInt8, _]) -> BString:
 
 
 def parse_gff3_attributes(span: Span[UInt8, _]) raises -> Gff3Attributes:
-    """Parse GFF3 column 9: semicolon-separated key=value; multi-value: key=val1,val2."""
+    """Parse GFF3 column 9: semicolon-separated key=value; multi-value: key=val1,val2.
+
+    A literal '.' column means no attributes (GFF3 spec §2.2) and is treated as
+    an empty attribute set (Issue 7).
+    """
     var attrs = Gff3Attributes()
     if len(span) == 0:
+        return attrs^
+    # A single '.' byte (possibly with trailing whitespace) means no attributes
+    var dot_end = len(span)
+    while dot_end > 0 and (
+        span[dot_end - 1] == UInt8(10)
+        or span[dot_end - 1] == UInt8(13)
+        or span[dot_end - 1] == UInt8(ord(" "))
+    ):
+        dot_end -= 1
+    if dot_end == 1 and span[0] == UInt8(ord(".")):
         return attrs^
     var start: Int = 0
     var n = len(span)
@@ -214,5 +230,5 @@ def parse_gff3_attributes(span: Span[UInt8, _]) raises -> Gff3Attributes:
                 values.append(percent_decode_to_bstring(one))
             v_start = v_end + 1
         if len(values) > 0:
-            attrs.add_multi(key, values)
+            attrs.add_multi(key^, values^)
     return attrs^

@@ -15,6 +15,7 @@ from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
 from blazeseq.features import Position, Interval
 from blazeseq.gff.record import Gff3Record, Gff3View, Gff3Strand, SequenceRegion
+from blazeseq.gff.attributes import percent_decode_to_bstring
 from blazeseq.io.buffered import EOFError
 from blazeseq.io.delimited import (
     DelimitedReader,
@@ -60,6 +61,7 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime STRAND_INVALID = Self(5)
     comptime PHASE_INVALID = Self(6)
     comptime FIELD_COUNT = Self(7)
+    comptime COORD_ZERO = Self(8)
 
     def message(self) -> String:
         if self == Self.VERSION:
@@ -76,6 +78,8 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
             return "GFF3: phase must be 0, 1, or 2"
         if self == Self.FIELD_COUNT:
             return "GFF3: row must have exactly 9 fields"
+        if self == Self.COORD_ZERO:
+            return "GFF3: start/end coordinate must be >= 1 (1-based)"
         return "GFF3: parse error"
 
 
@@ -98,9 +102,37 @@ def _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
 
 
 def _check_gff_version(line: Span[UInt8, _], ctx: ParseContext) raises:
-    """Raise if ##gff-version declares a version other than 3.x."""
-    # "##gff-version 3" minimum: 15 bytes; version digit is at index 14
-    if len(line) < 15 or line[14] != UInt8(ord("3")):
+    """Raise if ##gff-version declares a version other than 3.x.
+
+    Handles '##gff-version 3', '##gff-version 3.1', '##gff-version 3.1.26', etc.
+    Rejects empty version tokens, version 2, and malformed values like '31'.
+    """
+    # Skip the "##gff-version" prefix (13 bytes)
+    var i: Int = 13
+    var n = len(line)
+    # Skip whitespace
+    while i < n and (line[i] == UInt8(ord(" ")) or line[i] == UInt8(9)):
+        i += 1
+    if i >= n:
+        raise_parse_error(ctx, Gff3ErrorCode.VERSION.message())
+    # Collect the version token (up to whitespace or end)
+    var tok_start = i
+    while (
+        i < n
+        and line[i] != UInt8(ord(" "))
+        and line[i] != UInt8(9)
+        and line[i] != UInt8(10)
+        and line[i] != UInt8(13)
+    ):
+        i += 1
+    var tok_len = i - tok_start
+    if tok_len == 0:
+        raise_parse_error(ctx, Gff3ErrorCode.VERSION.message())
+    # First character must be '3'
+    if line[tok_start] != UInt8(ord("3")):
+        raise_parse_error(ctx, Gff3ErrorCode.VERSION.message())
+    # If there is a second character it must be '.' (e.g. "3.1"), reject "31"
+    if tok_len >= 2 and line[tok_start + 1] != UInt8(ord(".")):
         raise_parse_error(ctx, Gff3ErrorCode.VERSION.message())
 
 
@@ -120,7 +152,7 @@ def _parse_sequence_region(
         i += 1
     if i == 0:
         raise_parse_error(ctx, "GFF3: ##sequence-region missing seqid")
-    var seqid = BString(rest[0:i])
+    var seqid = percent_decode_to_bstring(rest[0:i])
     i += 1  # skip space
     # start
     var j = i
@@ -167,9 +199,9 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
             and line[0] == UInt8(ord("#"))
             and line[1] == UInt8(ord("#"))
         ):
-            # ### forward-reference boundary — no payload, skip cleanly
-            if len(line) == 3 and line[2] == UInt8(ord("#")):
-                return LineAction.SKIP
+            # ### forward-reference boundary — recognised as metadata, no-op
+            if len(line) >= 3 and line[2] == UInt8(ord("#")):
+                return LineAction.METADATA
             if len(line) >= 7:
                 if (
                     line[2] == UInt8(ord("F"))
@@ -272,10 +304,14 @@ def _parse_gff3_row(
     var sc = _parse_uint64_from_span(view.get_span(3), start)
     if sc != Gff3ErrorCode.OK:
         raise_parse_error(ctx, sc.message())
+    if start == 0:
+        raise_parse_error(ctx, Gff3ErrorCode.COORD_ZERO.message())
     var end: UInt64 = 0
     var ec = _parse_uint64_from_span(view.get_span(4), end)
     if ec != Gff3ErrorCode.OK:
         raise_parse_error(ctx, ec.message())
+    if end == 0:
+        raise_parse_error(ctx, Gff3ErrorCode.COORD_ZERO.message())
     if start > end:
         raise_parse_error(ctx, "GFF3: start must be <= end")
     var score = _parse_score_span(view.get_span(5))
@@ -288,8 +324,13 @@ def _parse_gff3_row(
     if pc != Gff3ErrorCode.OK:
         raise_parse_error(ctx, pc.message())
     # Per GFF3 spec: phase is required for CDS features
-    var ftype_str = StringSlice(unsafe_from_utf8=ftype)
-    if String(ftype_str) == "CDS" and not phase:
+    if (
+        len(ftype) == 3
+        and ftype[0] == UInt8(ord("C"))
+        and ftype[1] == UInt8(ord("D"))
+        and ftype[2] == UInt8(ord("S"))
+        and not phase
+    ):
         raise_parse_error(ctx, "GFF3: CDS feature requires phase (0, 1, or 2)")
     var attrs_span = view.get_span(8)
     return Gff3View[MutExternalOrigin](
@@ -335,6 +376,12 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
         """
         return self._seq_regions.copy()
 
+    def sequence_regions_ref(
+        ref self,
+    ) -> ref[self._seq_regions] List[SequenceRegion]:
+        """Return a reference to the ##sequence-region directives (no copy)."""
+        return self._seq_regions
+
     @always_inline
     def has_more(self) -> Bool:
         return self._rows.has_more()
@@ -355,8 +402,10 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
             elif action == LineAction.SKIP:
                 continue
             elif action == LineAction.METADATA:
-                var ctx = ParseContext(0, 0, 0)
-                if _starts_with(line, "##gff-version"):
+                var ctx = self._parse_context()
+                if _starts_with(line, "###"):
+                    pass  # forward-reference flush — no-op for streaming parser
+                elif _starts_with(line, "##gff-version"):
                     _check_gff_version(line, ctx)
                 elif _starts_with(line, "##sequence-region"):
                     var region = _parse_sequence_region(line, ctx)
@@ -410,7 +459,7 @@ struct _Gff3ParserViewIter[R: Reader, origin: Origin](Iterator):
                 raise StopIteration()
             else:
                 print(msg)
-                raise StopIteration()
+                raise StopIteration()  # propagate parse errors to the caller
 
 
 struct _Gff3ParserRecordIter[R: Reader, origin: Origin](Iterator):
@@ -441,4 +490,4 @@ struct _Gff3ParserRecordIter[R: Reader, origin: Origin](Iterator):
                 raise StopIteration()
             else:
                 print(msg)
-                raise StopIteration()
+                raise StopIteration()  # propagate parse errors to the caller
