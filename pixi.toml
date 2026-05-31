@@ -32,20 +32,20 @@ mojo-compiler = "=0.26.2.0"
 mojo-compiler = "=0.26.2.0"
 rattler-build = "*"
 
-[package.target.linux-64.build-dependencies]
-rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
+# [package.target.linux-64.build-dependencies]
+# rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
-[package.target.osx-arm64.build-dependencies]
-rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
+# [package.target.osx-arm64.build-dependencies]
+# rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
 [dependencies]
 mojo = ">=0.26.2.0,<0.27"
 
-[target.linux-64.dependencies]
-rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
+# [target.linux-64.dependencies]
+# rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
-[target.osx-arm64.dependencies]
-rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
+# [target.osx-arm64.dependencies]
+# rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
 
 [tasks]
