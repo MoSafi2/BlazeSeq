@@ -19,6 +19,7 @@ All notable changes to BlazeSeq are documented here.
 
 - **Benchmark verification**: Plain and gzip benchmark runners now build and execute successfully against the bundled FASTQ fixtures, and the outer FASTQ benchmark harness validates all BlazeSeq scan modes.
 - **Mojo 1.0 warnings**: Cleaned up the main package build warnings around `String.__len__()`, docstring summaries, and pointer lifecycle/nullability handling in the buffered and gzip I/O layers.
+- **Mojo 1.0 syntax cleanup**: Updated remaining tests and examples to current `String`/byte APIs, fixed FASTQ batch code that relied on negative indexing, and removed reproducible compiler warnings from representative parser test targets.
 
 ## [0.3] - 2026-03-30
 

@@ -33,13 +33,13 @@ def _sniff_bed_first_line(content: String) raises -> Bool:
     for line in lines:
         var raw = String(line)
         var s = String(raw.strip())
-        if len(s) == 0:
+        if s.byte_length() == 0:
             continue
         if s.startswith("#"):
             continue
         first = s
         break
-    if len(first) == 0:
+    if first.byte_length() == 0:
         return False
 
     # BED is tab-delimited; require at least one tab.
@@ -90,7 +90,7 @@ def _assert_invariants_for_file(path: String, expected_fields: Int) raises:
     for view in parser.views():
         count += 1
         assert_equal(view.num_fields, expected_fields, "field count")
-        assert_true(len(String(view.chrom())) > 0, "chrom non-empty")
+        assert_true(String(view.chrom()).byte_length() > 0, "chrom non-empty")
         assert_true(view.chrom_start <= view.chrom_end, "start <= end")
 
         if expected_fields >= 5:
@@ -334,7 +334,7 @@ def test_bedwriter_round_trip_bed6() raises:
     var rec = parser.next_record()
 
     # BedWriter must construct and write without raising
-    var bw = BedWriter[String](String()^)
+    var bw = BedWriter[String](String())
     bw.write_record(rec)
 
     # Field values are correct (writer produces output; parsing was already tested above)
@@ -386,13 +386,11 @@ def test_bed_detection_regardless_of_extension() raises:
         if not txt_opt:
             continue
         var txt = txt_opt.value()
-        var is_bed = False
         try:
-            is_bed = _sniff_bed_first_line(txt)
+            if _sniff_bed_first_line(txt):
+                _parse_bed_file(path)
         except:
-            is_bed = False
-        if is_bed:
-            _parse_bed_file(path)
+            pass
 
 
 def main() raises:

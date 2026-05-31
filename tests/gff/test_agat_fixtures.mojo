@@ -88,7 +88,7 @@ def _expected_feature_line_count_gff3(content: String) -> Int:
     var n: Int = 0
     for line in lines:
         var s = String(line.strip())
-        if len(s) == 0:
+        if s.byte_length() == 0:
             continue
         if s.startswith("##FASTA"):
             break
@@ -104,7 +104,7 @@ def _expected_feature_line_count_gtf(content: String) -> Int:
     var n: Int = 0
     for line in lines:
         var s = String(line.strip())
-        if len(s) == 0:
+        if s.byte_length() == 0:
             continue
         if s.startswith("##FASTA"):
             break

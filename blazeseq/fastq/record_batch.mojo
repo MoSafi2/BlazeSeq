@@ -71,8 +71,13 @@ struct FastqBatch(
             self._id_ends.append(Int64(len(record._id)))
             self._ends.append(Int64(len(record._quality)))
         else:
-            self._id_ends.append(Int64(len(record._id)) + self._id_ends[-1])
-            self._ends.append(Int64(len(record._quality)) + self._ends[-1])
+            var last_idx = len(self._id_ends) - 1
+            self._id_ends.append(
+                Int64(len(record._id)) + self._id_ends[last_idx]
+            )
+            self._ends.append(
+                Int64(len(record._quality)) + self._ends[len(self._ends) - 1]
+            )
 
     def add[origin: Origin[mut=True]](mut self, record: FastqView[origin]):
         self._quality_bytes.extend(record._quality)
@@ -83,8 +88,13 @@ struct FastqBatch(
             self._id_ends.append(Int64(len(record._id)))
             self._ends.append(Int64(len(record._quality)))
         else:
-            self._id_ends.append(Int64(len(record._id)) + self._id_ends[-1])
-            self._ends.append(Int64(len(record._quality)) + self._ends[-1])
+            var last_idx = len(self._id_ends) - 1
+            self._id_ends.append(
+                Int64(len(record._id)) + self._id_ends[last_idx]
+            )
+            self._ends.append(
+                Int64(len(record._quality)) + self._ends[len(self._ends) - 1]
+            )
 
     def to_device(self, ctx: DeviceContext) raises -> DeviceFastqBatch:
         return upload_batch_to_device(self, ctx)
@@ -96,7 +106,7 @@ struct FastqBatch(
         return len(self._ends)
 
     def seq_len(self) -> Int:
-        return Int(self._ends[-1])
+        return Int(self._ends[len(self._ends) - 1])
 
     def quality_offset(self) -> UInt8:
         return self._quality_offset

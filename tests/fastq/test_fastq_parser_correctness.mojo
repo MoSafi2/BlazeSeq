@@ -1,5 +1,8 @@
-"""Correctness tests for FastqParser: each valid/invalid file in test_data/fastq_parser exercised individually.
-Test data from BioJava/BioPerl/Biopython FASTQ test suites.
+"""Correctness tests for FastqParser.
+
+Each valid or invalid file in `test_data/fastq_parser` is exercised
+individually. Test data comes from the BioJava, BioPerl, and Biopython FASTQ
+test suites.
 URL: https://github.com/biopython/biopython/tree/master/Tests/Quality
 """
 

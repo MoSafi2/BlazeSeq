@@ -54,7 +54,7 @@ def test_biopython_f002() raises:
         seq0.find("CGGACCAGACGGACACAGGGAGAAGCTAGTTTCTTTCATGTGATTGA") >= 0,
         "first sequence start",
     )
-    assert_true(len(seq0) > 100, "first sequence concatenated")
+    assert_true(seq0.byte_length() > 100, "first sequence concatenated")
 
 
 def test_biopython_f003_fa() raises:
@@ -102,9 +102,12 @@ def test_biopython_pro_aster() raises:
     """Biopython aster.pro: single protein record."""
     var records = _parse_fasta_file(test_dir + "aster.pro")
     assert_true(len(records) >= 1, "aster.pro should have at least 1 record")
-    assert_true(len(String(records[0].id())) > 0, "first id non-empty")
     assert_true(
-        len(String(records[0].sequence())) > 0, "first sequence non-empty"
+        String(records[0].id()).byte_length() > 0, "first id non-empty"
+    )
+    assert_true(
+        String(records[0].sequence()).byte_length() > 0,
+        "first sequence non-empty",
     )
     assert_true(
         String(records[0].id()).find("gi|3298468|dbj|BAA31520.1|") >= 0,
@@ -118,7 +121,9 @@ def test_biopython_pro_aster_no_wrap() raises:
     assert_true(
         len(records) >= 1, "aster_no_wrap.pro should have at least 1 record"
     )
-    assert_true(len(String(records[0].sequence())) > 0, "sequence non-empty")
+    assert_true(
+        String(records[0].sequence()).byte_length() > 0, "sequence non-empty"
+    )
 
 
 def test_biopython_pro_loveliesbleeding() raises:
@@ -170,8 +175,10 @@ def test_biopython_nu_centaurea() raises:
     """Biopython centaurea.nu: single nucleotide record."""
     var records = _parse_fasta_file(test_dir + "centaurea.nu")
     assert_true(len(records) >= 1, "centaurea.nu should have at least 1 record")
-    assert_true(len(String(records[0].id())) > 0, "id non-empty")
-    assert_true(len(String(records[0].sequence())) > 0, "sequence non-empty")
+    assert_true(String(records[0].id()).byte_length() > 0, "id non-empty")
+    assert_true(
+        String(records[0].sequence()).byte_length() > 0, "sequence non-empty"
+    )
 
 
 def test_biopython_nu_elderberry() raises:
@@ -193,7 +200,9 @@ def test_biopython_nu_lavender() raises:
     """Biopython lavender.nu: single nucleotide record."""
     var records = _parse_fasta_file(test_dir + "lavender.nu")
     assert_true(len(records) >= 1, "lavender.nu should have at least 1 record")
-    assert_true(len(String(records[0].sequence())) > 0, "sequence non-empty")
+    assert_true(
+        String(records[0].sequence()).byte_length() > 0, "sequence non-empty"
+    )
 
 
 def test_biopython_nu_lupine() raises:
@@ -224,7 +233,9 @@ def test_biopython_nu_sweetpea() raises:
     """Biopython sweetpea.nu: single nucleotide record."""
     var records = _parse_fasta_file(test_dir + "sweetpea.nu")
     assert_true(len(records) >= 1, "sweetpea.nu should have at least 1 record")
-    assert_true(len(String(records[0].sequence())) > 0, "sequence non-empty")
+    assert_true(
+        String(records[0].sequence()).byte_length() > 0, "sequence non-empty"
+    )
 
 
 def test_biopython_nu_wisteria() raises:

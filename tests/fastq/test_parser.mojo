@@ -533,8 +533,8 @@ def test_ref_parser_long_line_with_growth() raises:
 
     var r = parser.next_view()
     assert_equal(String(r.id()), "id", "Id should match")
-    assert_equal(len(r.sequence()), 20, "Sequence length 20")
-    assert_equal(len(r.quality()), 20, "Quality length 20")
+    assert_equal(r.sequence().byte_length(), 20, "Sequence length 20")
+    assert_equal(r.quality().byte_length(), 20, "Quality length 20")
     assert_equal(
         String(r.sequence()), "AAAAAAAAAAAAAAAAAAAA", "Sequence content"
     )
@@ -603,7 +603,7 @@ def test_ref_parser_valid_file_parity() raises:
         FileReader(test_dir + "example.fastq")
     )
     var first = parser.next_view()
-    assert_true(len(String(first.id())) > 0, "First record has id")
+    assert_true(String(first.id()).byte_length() > 0, "First record has id")
     assert_true(len(first) > 0, "First record has sequence")
     var count = 1
     while True:

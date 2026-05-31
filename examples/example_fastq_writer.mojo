@@ -16,6 +16,7 @@ Usage:
 from std.pathlib import Path
 from std.sys import argv
 from std.os import remove
+from std.collections.string import StringSlice
 
 from blazeseq import FastqRecord, FastqParser, FileReader, GZFile
 from blazeseq.io.writers import WriterBackend
@@ -131,9 +132,17 @@ def example_read_then_write_plain_and_gzip(input_path: String) raises:
     # Output paths (strip .gz from base name for plain, add .gz for gzip)
     var base = path_str
     if is_gz:
-        base = String(path_str[: len(path_str) - 3])  # remove ".gz"
+        var path_bytes = path_str.as_bytes()
+        base = String(
+            StringSlice(
+                unsafe_from_utf8=path_bytes[: path_str.byte_length() - 3]
+            )
+        )  # remove ".gz"
     if base.endswith(".fastq"):
-        base = String(base[: len(base) - 6])  # remove ".fastq"
+        var base_bytes = base.as_bytes()
+        base = String(
+            StringSlice(unsafe_from_utf8=base_bytes[: base.byte_length() - 6])
+        )  # remove ".fastq"
     var plain_out = base + "_out.fastq"
     var gz_out = base + "_out.fastq.gz"
 

@@ -334,7 +334,7 @@ struct GZFile(Movable, Reader):
             raise Error("The amount to be read should be positive")
 
         var bytes_read = self.lib.gzread(
-            self.handle.value(), s.unsafe_ptr(), c_uint(len(s))
+            self.handle.value(), s.unsafe_ptr(), c_uint(amt)
         )
 
         return UInt64(bytes_read)

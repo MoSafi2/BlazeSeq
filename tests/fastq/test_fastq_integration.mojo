@@ -47,22 +47,22 @@ def assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "")
     assert_equal(
         a._id.to_string(),
         b._id.to_string(),
-        "id mismatch" + (" " + msg) if len(msg) else "",
+        "id mismatch" + (" " + msg) if msg.byte_length() else "",
     )
     assert_equal(
         a._sequence.to_string(),
         b._sequence.to_string(),
-        "sequence mismatch" + (" " + msg) if len(msg) else "",
+        "sequence mismatch" + (" " + msg) if msg.byte_length() else "",
     )
     assert_equal(
         a._quality.to_string(),
         b._quality.to_string(),
-        "quality mismatch" + (" " + msg) if len(msg) else "",
+        "quality mismatch" + (" " + msg) if msg.byte_length() else "",
     )
     assert_equal(
         a._phred_offset,
         b._phred_offset,
-        "phred_offset mismatch" + (" " + msg) if len(msg) else "",
+        "phred_offset mismatch" + (" " + msg) if msg.byte_length() else "",
     )
 
 

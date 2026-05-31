@@ -1015,7 +1015,7 @@ def test_roundtrip_long_sequence_wrapping() raises:
     var result = _roundtrip_records(">long\n" + seq + "\n")
     assert_equal(len(result.original), 1)
     assert_equal(len(result.roundtrip), 1)
-    assert_equal(len(result.original[0].sequence()), 400)
+    assert_equal(result.original[0].sequence().byte_length(), 400)
     assert_equal(
         String(result.original[0].sequence()),
         String(result.roundtrip[0].sequence()),

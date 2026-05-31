@@ -6,7 +6,7 @@ from blazeseq import (
 )
 from blazeseq.io import MemoryReader
 from std.collections.string import String
-from std.testing import assert_equal, assert_true, TestSuite
+from std.testing import assert_equal, assert_true, assert_raises, TestSuite
 
 
 # ---------------------------------------------------------------------------
@@ -224,15 +224,9 @@ def test_gff3_iter_propagates_parse_error() raises:
     var data = "##gff-version 3\nchr1\tsource\tgene\t1\t100\t.\t+\t.\n"  # 8 fields, not 9
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
-    var saw_error = False
-    try:
+    with assert_raises(contains="field"):
         for _ in parser:
             pass
-    except e:
-        var msg = String(e)
-        assert_true(msg.find("9 fields") != -1 or msg.find("field") != -1)
-        saw_error = True
-    assert_true(saw_error, "expected a parse error from the for-loop iterator")
 
 
 def test_gtf_iter_propagates_parse_error() raises:
@@ -240,15 +234,9 @@ def test_gtf_iter_propagates_parse_error() raises:
     var data = "chr1\tsource\tgene\t1\t100\t.\t+\n"  # 7 fields, not 9
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
-    var saw_error = False
-    try:
+    with assert_raises(contains="field"):
         for _ in parser:
             pass
-    except e:
-        var msg = String(e)
-        assert_true(msg.find("9 fields") != -1 or msg.find("field") != -1)
-        saw_error = True
-    assert_true(saw_error, "expected a parse error from the for-loop iterator")
 
 
 def test_gff3_iter_stops_cleanly_at_eof() raises:
@@ -296,7 +284,7 @@ def test_gff3_rejects_end_zero() raises:
 
 
 def test_gff3_accepts_start_one() raises:
-    """start=1 parses cleanly."""
+    """Start=1 parses cleanly."""
     var data = "##gff-version 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n"
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
@@ -374,7 +362,7 @@ def test_gtf_mixed_quoted_and_unquoted() raises:
 
 
 def test_gtf_duplicate_key_get_all() raises:
-    """get_all_attributes returns all values for a duplicate key."""
+    """Get_all_attributes returns all values for a duplicate key."""
     var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"g1\"; tag \"v1\"; tag \"v2\";\n"
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
@@ -386,7 +374,7 @@ def test_gtf_duplicate_key_get_all() raises:
 
 
 def test_gtf_get_returns_first_value() raises:
-    """get_attribute still returns the first value for a duplicate key."""
+    """Get_attribute still returns the first value for a duplicate key."""
     var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"g1\"; tag \"v1\"; tag \"v2\";\n"
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
@@ -395,7 +383,7 @@ def test_gtf_get_returns_first_value() raises:
 
 
 def test_gtf_get_all_mandatory_ids() raises:
-    """get_all_attributes for gene_id returns a single-element list."""
+    """Get_all_attributes for gene_id returns a single-element list."""
     var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
