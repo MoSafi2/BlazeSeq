@@ -129,9 +129,9 @@ def format_validation_error_from_code(
     available.
     """
     var field_name = field
-    if len(field_name) == 0 and code == FastxErrorCode.ASCII_INVALID:
+    if field_name.byte_length() == 0 and code == FastxErrorCode.ASCII_INVALID:
         field_name = "ascii"
-    elif len(field_name) == 0 and code == FastxErrorCode.QUALITY_OUT_OF_RANGE:
+    elif field_name.byte_length() == 0 and code == FastxErrorCode.QUALITY_OUT_OF_RANGE:
         field_name = "quality"
     var val_err = ValidationError(
         _message_for_code(code),
@@ -187,7 +187,7 @@ struct ParseError(Writable):
         if self.file_position > 0:
             writer.write("\n  File position: ")
             writer.write(self.file_position)
-        if len(self.record_snippet) > 0:
+        if self.record_snippet.byte_length() > 0:
             writer.write("\n  Record snippet: ")
             writer.write(self.record_snippet)
 
@@ -226,10 +226,10 @@ struct ValidationError(Writable):
         if self.record_number > 0:
             writer.write("\n  Record number: ")
             writer.write(self.record_number)
-        if len(self.field) > 0:
+        if self.field.byte_length() > 0:
             writer.write("\n  Field: ")
             writer.write(self.field)
-        if len(self.record_snippet) > 0:
+        if self.record_snippet.byte_length() > 0:
             writer.write("\n  Record snippet: ")
             writer.write(self.record_snippet)
 

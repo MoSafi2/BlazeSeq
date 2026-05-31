@@ -91,7 +91,7 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 def _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
     """True if span begins with the bytes of lit."""
     var s = StringSlice(lit)
-    var n = len(s)
+    var n = s.byte_length()
     if len(span) < n:
         return False
     var b = s.as_bytes()

@@ -32,9 +32,39 @@ from blazeseq.fastq.parser import FastqParser
 from blazeseq.fasta import FastaRecord, FastaParser
 from blazeseq.fai import FaiRecord, FaiView, FaiParser
 from blazeseq.fastq.record_batch import FastqBatch, upload_batch_to_device
+from blazeseq.bed import BedParser, BedRecord, BedView, BedWriter, Strand, ItemRgb
+from blazeseq.gtf import (
+    GtfParser,
+    GtfRecord,
+    GtfView,
+    GtfStrand,
+    GtfAttributes,
+)
+from blazeseq.gff import (
+    Gff3Parser,
+    Gff3Record,
+    Gff3View,
+    Gff3Strand,
+    Gff3Attributes,
+    SequenceRegion,
+)
 
 from blazeseq.io import (
     FileReader,
+    MemoryReader,
     GZFile,
     RapidgzipReader,
+    Reader,
+    EOFError,
+    LineIteratorError,
+    BufferedReader,
+    BufferedWriter,
+    LineIterator,
+    Writer,
+    WriterBackend,
+    FileWriter,
+    MemoryWriter,
+    GZWriter,
+    DelimitedRecord,
+    DelimitedReader,
 )

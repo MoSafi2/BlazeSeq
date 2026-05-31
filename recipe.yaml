@@ -19,10 +19,8 @@ build:
 requirements:
   build:
     - ${{ compiler('cxx') }} # Needed if any shim logic is triggered
-    - mojo ==0.26.2.0
+    - mojo ==1.0.0b1
   host:
-    - mojo ==0.26.2.0
-    - rapidgzip-mojo >=0.1.1 # This MUST be a package, not a git link
+    - mojo ==1.0.0b1
   run:
-    - mojo ==0.26.2.0
-    - rapidgzip-mojo >=0.1.1
+    - mojo ==1.0.0b1

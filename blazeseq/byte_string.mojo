@@ -23,10 +23,11 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
             self.resize(UInt32(capacity))
 
     def __init__(out self, s: String):
-        self.ptr = alloc[UInt8](len(s))
-        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
-        self.size = UInt32(len(s))
-        self.cap = UInt32(len(s))
+        var n = s.byte_length()
+        self.ptr = alloc[UInt8](n)
+        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=n)
+        self.size = UInt32(n)
+        self.cap = UInt32(n)
 
     def __init__(out self, s: Span[UInt8, _]):
         self.ptr = alloc[UInt8](len(s))
@@ -35,10 +36,11 @@ struct BString(Copyable, Equatable, Movable, Sized, Writable):
         self.cap = UInt32(len(s))
 
     def __init__(out self, s: StringSlice[_]):
-        self.ptr = alloc[UInt8](len(s))
-        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=len(s))
-        self.size = UInt32(len(s))
-        self.cap = UInt32(len(s))
+        var n = s.byte_length()
+        self.ptr = alloc[UInt8](n)
+        memcpy(dest=self.ptr, src=s.unsafe_ptr(), count=n)
+        self.size = UInt32(n)
+        self.cap = UInt32(n)
 
     @doc_hidden
     @always_inline

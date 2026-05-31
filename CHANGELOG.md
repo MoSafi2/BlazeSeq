@@ -4,6 +4,22 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Public BED/GTF/GFF exports**: Added stable `blazeseq.bed`, `blazeseq.gff`, and `blazeseq.gtf` package shims plus top-level re-exports so examples, docs, and tests can import the published parser and record types consistently.
+- **Scanner benchmark modes**: Added explicit FASTQ scanner benchmark variants for the optimized grouped SIMD loop, the original fused SIMD loop, and sequential `memchr` scanning.
+
+### Changed
+
+- **Mojo 1.0 beta upgrade**: Moved the project to `Mojo 1.0.0b1`, updated Pixi/recipe version pins, and switched package resolution from the `max-nightly` channel to `max`.
+- **Rapidgzip compatibility fallback**: Temporarily disabled the external `rapidgzip` dependency while preserving the `RapidgzipReader` API by delegating gzip reads through `GZFile`.
+- **Docs and packaging**: Updated README, docs, and Python package notes to reflect the Mojo 1.0 beta target and the current gzip-reader behavior.
+
+### Fixed
+
+- **Benchmark verification**: Plain and gzip benchmark runners now build and execute successfully against the bundled FASTQ fixtures, and the outer FASTQ benchmark harness validates all BlazeSeq scan modes.
+- **Mojo 1.0 warnings**: Cleaned up the main package build warnings around `String.__len__()`, docstring summaries, and pointer lifecycle/nullability handling in the buffered and gzip I/O layers.
+
 ## [0.3] - 2026-03-30
 
 ### Added

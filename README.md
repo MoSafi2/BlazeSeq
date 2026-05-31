@@ -5,10 +5,10 @@
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://mosafi2.github.io/BlazeSeq/)
-[![Mojo](https://img.shields.io/badge/Mojo-0.26.2-fire)](https://docs.modular.com)
+[![Mojo](https://img.shields.io/badge/Mojo-1.0.0b1-fire)](https://docs.modular.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A high-throughput **FASTQ** parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with owned records and GPU-friendly batching for read pipelines. It also supports streaming **FASTA** and samtools-style **`.fai`** index files (five- or six-column rows from `faidx`, index metadata only). **Multithreaded** gzip decompression uses **rapidgzip** ([rapidgzip](https://github.com/mxmlnkn/rapidgzip)). Configurable validation is available — all through a single unified API.
+A high-throughput **FASTQ** parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with owned records and GPU-friendly batching for read pipelines. It also supports streaming **FASTA** and samtools-style **`.fai`** index files (five- or six-column rows from `faidx`, index metadata only). Gzip parsing remains available through `GZFile` and a temporary `RapidgzipReader` compatibility wrapper while the external `rapidgzip` dependency is disabled. Configurable validation is available — all through a single unified API.
 
 ## ✨ Key Features
 
@@ -18,7 +18,7 @@ A high-throughput **FASTQ** parser written in [Mojo](https://docs.modular.com/mo
   - `records()` — Owned records (thread-safe)
   - `batches()` — Structure-of-Arrays for GPU upload
 - **Compile-time validation toggles** — Enable/Disable ASCII/quality-range checks at compile time for maximum throughput
-- **Rapidgzip with parallel decoding** — Gzipped FASTQ (`.fastq.gz`) is decompressed in parallel across multiple threads for high throughput; tune with the `parallelism`.
+- **Gzip reader compatibility** — Gzipped FASTQ (`.fastq.gz`) works through `GZFile`, and `RapidgzipReader` is currently a compatibility wrapper with the same constructor signature while the external dependency is disabled.
 - **FASTA and FAI** — Streaming FASTA parsing and `.fai` index files; see the API reference for `FastaParser` and `FaiParser`.
 
 ![Throughput](assets/throughput_gbps.png)
@@ -54,7 +54,7 @@ pixi run mojo run examples/nw_gpu/main.mojo
 
 ```mojo
 from blazeseq import FastqParser, FileReader
-from pathlib import Path
+from std.pathlib import Path
 
 def main() raises:
     var parser = FastqParser(FileReader(Path("data.fastq")), "sanger")
@@ -70,7 +70,7 @@ def main() raises:
 
 ```mojo
 from blazeseq import FastqParser, ParserConfig, FileReader
-from pathlib import Path
+from std.pathlib import Path
 
 def main() raises:
     comptime config = ParserConfig(check_ascii=False, check_quality=False)
@@ -93,14 +93,14 @@ for batch in parser.batches():
     # Your GPU kernel, check examples
 ```
 
-### Reading gzip (rapidgzip, parallel decoding)
+### Reading gzip
 
-BlazeSeq uses **RapidgzipReader** for gzipped FASTQ. It performs **parallel decompression**: the compressed stream is split into chunks and multiple threads decode them concurrently resulting in much higher throughput than single-threaded readers through `zlib` or `libdeflate` .
+BlazeSeq currently ships with a compatibility `RapidgzipReader` that preserves the public API but delegates to `GZFile` while the external `rapidgzip` package is disabled.
 
 ```mojo
 from blazeseq import RapidgzipReader, FastqParser
 
-var reader = RapidgzipReader("data.fastq.gz", parallelism=4)  # 0 = use all available cores.
+var reader = RapidgzipReader("data.fastq.gz", parallelism=4)  # parallelism is currently ignored.
 var parser = FastqParser(reader^, "illumina_1.8")
 for record in parser.records():
     _ = record.id()

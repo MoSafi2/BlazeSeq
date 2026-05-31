@@ -87,6 +87,9 @@ def main() raises:
 
 ## GPU Pipeline Example
 
+`RapidgzipReader` currently preserves the older API but falls back to `GZFile`
+internally while the external `rapidgzip` dependency is disabled.
+
 ```mojo
 from blazeseq import FastqParser, RapidgzipReader
 from std.pathlib import Path

@@ -783,30 +783,30 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     def _get_record_snippet(self, record: FastqView) -> String:
         var snippet = String(capacity=200)
         var id_str = StringSlice(unsafe_from_utf8=record._id)
-        if len(id_str) > 0:
+        if id_str.byte_length() > 0:
             snippet += String(id_str)
-            if len(snippet) < 200:
+            if snippet.byte_length() < 200:
                 snippet += "\n"
-        if len(snippet) < 200 and len(record._sequence) > 0:
+        if snippet.byte_length() < 200 and len(record._sequence) > 0:
             var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
-            var seq_len = min(len(seq_str), 200 - len(snippet))
+            var seq_len = min(seq_str.byte_length(), 200 - snippet.byte_length())
             snippet += String(seq_str[byte=0:seq_len])
-        if len(snippet) > 200:
+        if snippet.byte_length() > 200:
             snippet = snippet[byte=0:197] + "..."
         return snippet
 
     def _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
         var snippet = String(capacity=200)
         var id_str = record.id()
-        if len(id_str) > 0:
+        if id_str.byte_length() > 0:
             snippet += String(id_str)
-            if len(snippet) < 200:
+            if snippet.byte_length() < 200:
                 snippet += "\n"
-        if len(snippet) < 200:
+        if snippet.byte_length() < 200:
             var seq_str = record.sequence()
-            var seq_len = min(len(seq_str), 200 - len(snippet))
+            var seq_len = min(seq_str.byte_length(), 200 - snippet.byte_length())
             snippet += String(seq_str[byte=0:seq_len])
-        if len(snippet) > 200:
+        if snippet.byte_length() > 200:
             snippet = snippet[byte=0:197] + "..."
         return snippet
 

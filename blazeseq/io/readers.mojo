@@ -13,7 +13,6 @@ from std.ffi import OwnedDLHandle
 from std.sys.info import CompilationTarget
 from std.pathlib import Path
 from std.collections.string import String, chr
-from rapidgzip import RapidgzipFile
 
 
 # Constants for zlib return codes
@@ -34,19 +33,6 @@ comptime c_void_ptr = UnsafePointer[mut=False, UInt8, MutExternalOrigin]
 comptime c_char_ptr = UnsafePointer[mut=False, Int8, MutExternalOrigin]
 comptime c_uint = UInt32
 comptime c_int = Int32
-
-# Define function signatures for zlib functions
-comptime gzopen_fn_type = fn(
-    filename: c_char_ptr, mode: c_char_ptr
-) -> c_void_ptr
-comptime gzclose_fn_type = fn(file: c_void_ptr) -> c_int
-comptime gzread_fn_type = fn(
-    file: c_void_ptr, buf: c_void_ptr, len: c_uint
-) -> c_int
-comptime gzwrite_fn_type = fn(
-    file: c_void_ptr, buf: c_void_ptr, len: c_uint
-) -> c_int
-
 
 trait Reader(ImplicitlyDestructible, Movable):
     """Trait for reading bytes from a source (file, memory, gzip, etc.).
@@ -243,13 +229,11 @@ struct ZLib(Movable):
 
     def gzopen(
         self, mut filename: String, mut mode: String
-    ) raises -> c_void_ptr:
+    ) raises -> Optional[c_void_ptr]:
         """Open a gzip file."""
-        # Get function pointer
-        var func = self.lib_handle.get_function[gzopen_fn_type]("gzopen")
-
-        # Call the function (cast to MutExternalOrigin for FFI - Mojo 26.2 requires explicit origin for indirect calls)
-        var result = func(
+        return self.lib_handle.call[
+            "gzopen", Optional[c_void_ptr], c_char_ptr, c_char_ptr
+        ](
             filename.as_c_string_slice()
             .unsafe_ptr()
             .unsafe_origin_cast[MutExternalOrigin](),
@@ -258,26 +242,25 @@ struct ZLib(Movable):
             .unsafe_origin_cast[MutExternalOrigin](),
         )
 
-        return result
-
     def gzclose(self, file: c_void_ptr) -> c_int:
         """Close a gzip file."""
-        var func = self.lib_handle.get_function[gzclose_fn_type]("gzclose")
-        return func(file)
+        return self.lib_handle.call["gzclose", c_int, c_void_ptr](file)
 
     def gzread(
         self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
     ) -> c_int:
         """Read from a gzip file."""
-        var func = self.lib_handle.get_function[gzread_fn_type]("gzread")
-        return func(file, buffer, length)
+        return self.lib_handle.call["gzread", c_int, c_void_ptr, c_void_ptr, c_uint](
+            file, buffer, length
+        )
 
     def gzwrite(
         self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
     ) -> c_int:
         """Write to a gzip file."""
-        var func = self.lib_handle.get_function[gzwrite_fn_type]("gzwrite")
-        return func(file, buffer, length)
+        return self.lib_handle.call[
+            "gzwrite", c_int, c_void_ptr, c_void_ptr, c_uint
+        ](file, buffer, length)
 
 
 struct GZFile(Movable, Reader):
@@ -297,7 +280,7 @@ struct GZFile(Movable, Reader):
         ```
     """
 
-    var handle: c_void_ptr
+    var handle: Optional[c_void_ptr]
     var lib: ZLib
     var filename: String
     var mode: String
@@ -316,14 +299,15 @@ struct GZFile(Movable, Reader):
         # Note: must keep filename and mode because gzopen takes a ref to them and they need to live as long as the file is open.
         self.filename = filename
         self.mode = mode
-        self.handle = self.lib.gzopen(self.filename, self.mode)
-        if self.handle == c_void_ptr():
+        var handle = self.lib.gzopen(self.filename, self.mode)
+        if not handle:
             raise Error("Failed to open gzip file: " + filename)
+        self.handle = handle
 
     def __del__(deinit self):
         """Close the file when the object is destroyed."""
-        if self.handle != c_void_ptr():
-            _ = self.lib.gzclose(self.handle)
+        if self.handle:
+            _ = self.lib.gzclose(self.handle.value())
 
     def __init__(out self, *, deinit take: Self):
         self.handle = take.handle
@@ -350,7 +334,7 @@ struct GZFile(Movable, Reader):
             raise Error("The amount to be read should be positive")
 
         var bytes_read = self.lib.gzread(
-            self.handle, s.unsafe_ptr(), c_uint(len(s))
+            self.handle.value(), s.unsafe_ptr(), c_uint(len(s))
         )
 
         return UInt64(bytes_read)
@@ -369,7 +353,7 @@ struct GZFile(Movable, Reader):
         """
 
         var bytes_read = self.lib.gzread(
-            self.handle, buffer.unsafe_ptr(), c_uint(len(buffer))
+            self.handle.value(), buffer.unsafe_ptr(), c_uint(len(buffer))
         )
 
         if bytes_read < 0:
@@ -378,66 +362,29 @@ struct GZFile(Movable, Reader):
 
 
 struct RapidgzipReader(Movable, Reader):
-    """Reader for gzip-compressed files (.gz) using parallel rapidgzip decompression.
+    """Compatibility gzip reader while the rapidgzip dependency is disabled.
 
-    Implements the `Reader` trait like `FileReader` and `GZFile`. Use for .fastq.gz
-    files with `FastqParser` when higher throughput from parallel decompression
-    is desired.
-
-    Example:
-        ```mojo
-        from blazeseq import RapidgzipReader, FastqParser
-        var r = RapidgzipReader("data.fastq.gz", parallelism=0)
-        var parser = FastqParser[RapidgzipReader](r^, "illumina_1.8")
-        for record in parser.records():
-            _ = record.id()
-        ```
+    The public `RapidgzipReader` API is preserved for callers and tests, but it
+    currently delegates to `GZFile` instead of the external `rapidgzip`
+    package. `parallelism` is accepted for API compatibility and ignored.
     """
 
-    var _file: RapidgzipFile
+    var _fallback: GZFile
+    var parallelism: UInt32
 
     def __init__(out self, path: String, parallelism: UInt32 = 0) raises:
-        """Open a gzip file for parallel decompression.
-
-        Args:
-            path: Path to the .gz file.
-            parallelism: Number of worker threads; 0 = auto-detect.
-
-        Raises:
-            Error: If the file cannot be opened.
-        """
-        self._file = RapidgzipFile.open(path, parallelism)
+        self._fallback = GZFile(path, "rb")
+        self.parallelism = parallelism
 
     def __init__(out self, path: Path, parallelism: UInt32 = 0) raises:
-        """Open a gzip file for parallel decompression.
+        self._fallback = GZFile(path.path, "rb")
+        self.parallelism = parallelism
 
-        Args:
-            path: Path to the .gz file.
-            parallelism: Number of worker threads; 0 = auto-detect.
-
-        Raises:
-            Error: If the file cannot be opened.
-        """
-        self._file = RapidgzipFile.open(path.path, parallelism)
+    def __init__(out self, *, deinit take: Self):
+        self._fallback = take._fallback^
+        self.parallelism = take.parallelism
 
     def read_to_buffer(
         mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
-        """Read decompressed bytes into buf at offset pos. Returns bytes read (0 at EOF).
-        """
-        if pos > len(buf):
-            raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
-        )
-        if amt > len(s):
-            raise Error(
-                "Number of elements to read is bigger than the available space"
-                " in the buffer"
-            )
-        if amt < 0:
-            raise Error("The amount to be read should be positive")
-
-        var count = min(amt, len(s))
-        var n = self._file.read(s.unsafe_ptr(), count)
-        return UInt64(n)
+        return self._fallback.read_to_buffer(buf, amt, pos)

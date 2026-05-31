@@ -159,7 +159,7 @@ struct MemoryWriter(Movable, WriterBackend):
 struct GZWriter(Movable, WriterBackend):
     """Writer for gzip-compressed files."""
 
-    var handle: c_void_ptr
+    var handle: Optional[c_void_ptr]
     var lib: ZLib
     var filename: String
     var mode: String
@@ -177,9 +177,10 @@ struct GZWriter(Movable, WriterBackend):
         self.lib = ZLib()
         self.filename = filename
         self.mode = mode
-        self.handle = self.lib.gzopen(self.filename, self.mode)
-        if self.handle == c_void_ptr():
+        var handle = self.lib.gzopen(self.filename, self.mode)
+        if not handle:
             raise Error("Failed to open gzip file for writing: " + filename)
+        self.handle = handle
 
     @always_inline
     def write_from_buffer(
@@ -203,7 +204,7 @@ struct GZWriter(Movable, WriterBackend):
             ptr=s.unsafe_ptr(), length=amt
         )
         var bytes_written = self.lib.gzwrite(
-            self.handle, write_span.unsafe_ptr(), c_uint(amt)
+            self.handle.value(), write_span.unsafe_ptr(), c_uint(amt)
         )
 
         if bytes_written < 0:
@@ -213,8 +214,8 @@ struct GZWriter(Movable, WriterBackend):
 
     def __del__(deinit self):
         """Close the file when the object is destroyed."""
-        if self.handle != c_void_ptr():
-            _ = self.lib.gzclose(self.handle)
+        if self.handle:
+            _ = self.lib.gzclose(self.handle.value())
 
     # Move constructor using unified init naming in Mojo 26.2.
     def __init__(out self, *, deinit take: Self):

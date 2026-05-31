@@ -792,7 +792,7 @@ def compute_num_reads_for_size(
     # Refine header size from estimated num_reads (zero-padded width)
     var num_digits: Int = 1
     if num_reads_est > 1:
-        num_digits = len(String(num_reads_est - 1))
+        num_digits = String(num_reads_est - 1).byte_length()
     var header_size = 6 + num_digits + 1
     var bytes_per_record = header_size + 2 * avg_read_length + 4
     return target_size_bytes // bytes_per_record
@@ -882,7 +882,7 @@ def _build_synthetic_fastq_record(
 
     # --- Header ---
     var index_str = String(i)
-    while len(index_str) < num_digits:
+    while index_str.byte_length() < num_digits:
         index_str = "0" + index_str
     var header_str = "@read_" + index_str + "\n"
     record.extend(header_str.as_bytes())
@@ -999,7 +999,7 @@ def generate_synthetic_fastq_buffer(
     # Header zero-padding width
     var num_digits: Int = 1
     if num_reads > 1:
-        num_digits = len(String(num_reads - 1))
+        num_digits = String(num_reads - 1).byte_length()
 
     # Quality model parameters.
     # We model mean Phred as a linear decay from q_start (5' end) to q_end (3' end),
@@ -1070,7 +1070,7 @@ def generate_synthetic_fastq_to_writer[
     # Header zero-padding width
     var num_digits: Int = 1
     if num_reads > 1:
-        num_digits = len(String(num_reads - 1))
+        num_digits = String(num_reads - 1).byte_length()
 
     # Quality model parameters.
     # We model mean Phred as a linear decay from q_start (5' end) to q_end (3' end),
@@ -1139,7 +1139,7 @@ def compute_num_fasta_reads_for_size(
     # Refine header size from estimated num_reads
     var num_digits: Int = 1
     if num_reads_est > 1:
-        num_digits = len(String(num_reads_est - 1))
+        num_digits = String(num_reads_est - 1).byte_length()
     var header_size = 6 + num_digits + 1
     var bytes_per_record = header_size + avg_length + seq_newlines
     return target_size_bytes // bytes_per_record
@@ -1217,7 +1217,7 @@ def generate_synthetic_fasta_buffer(
     # Header zero-padding width
     var num_digits: Int = 1
     if num_reads > 1:
-        num_digits = len(String(num_reads - 1))
+        num_digits = String(num_reads - 1).byte_length()
 
     for i in range(num_reads):
         # --- Record length (same deterministic scheme as FASTQ generator) ---
@@ -1231,7 +1231,7 @@ def generate_synthetic_fasta_buffer(
 
         # --- Header: >read_XXXXXXX\n ---
         var index_str = String(i)
-        while len(index_str) < num_digits:
+        while index_str.byte_length() < num_digits:
             index_str = "0" + index_str
         out.append(gt)
         var header_body = "read_" + index_str + "\n"

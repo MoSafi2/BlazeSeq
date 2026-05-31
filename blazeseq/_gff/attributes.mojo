@@ -105,7 +105,7 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
         return False
 
     def write_to[w: Writer](ref self, mut writer: w):
-        """Emit attributes in GFF3 format: key=value;key=val1,val2"""
+        """Emit attributes in GFF3 format: key=value;key=val1,val2."""
         for i in range(len(self._pairs)):
             if i > 0:
                 writer.write(";")

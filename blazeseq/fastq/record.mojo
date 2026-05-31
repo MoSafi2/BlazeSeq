@@ -57,9 +57,9 @@ struct Validator(Copyable):
         """Extract id snippet from record for error messages."""
         var snippet = String(capacity=100)
         var id_str = record.id()
-        if len(id_str) > 0:
+        if id_str.byte_length() > 0:
             snippet += String(id_str)
-            if len(snippet) > 100:
+            if snippet.byte_length() > 100:
                 snippet = snippet[byte=0:97] + "..."
         return snippet
 
@@ -67,9 +67,9 @@ struct Validator(Copyable):
         """Extract id snippet from FastqView for error messages."""
         var snippet = String(capacity=100)
         var id_str = StringSlice(unsafe_from_utf8=record._id)
-        if len(id_str) > 0:
+        if id_str.byte_length() > 0:
             snippet += String(id_str)
-            if len(snippet) > 100:
+            if snippet.byte_length() > 100:
                 snippet = snippet[byte=0:97] + "..."
         return snippet
 
@@ -383,8 +383,7 @@ struct FastqRecord(
 
     @always_inline
     def byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + "+\n").
-        """
+        """Return total byte length when written in four-line FASTQ form."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     def write[w: Writer](self, mut writer: w):
@@ -511,8 +510,7 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
 
     @always_inline
     def byte_len(self) -> Int:
-        """Return total byte length when written ("@" + id + sequence + quality + newlines and "+\n"). Used for calculating buffer capacity.
-        """
+        """Return total byte length when written in four-line FASTQ form."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
     @always_inline

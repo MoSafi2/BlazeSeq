@@ -478,8 +478,7 @@ struct BufferedWriter[W: WriterBackend](
             self._flush_buffer()
         except:
             pass
-        if self._ptr:
-            self._ptr.free()
+        self._ptr.free()
 
 
 @doc_hidden

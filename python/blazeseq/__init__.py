@@ -295,8 +295,9 @@ def mojopkg_path() -> str:
     Use this from Mojo projects to import the package installed via pip:
     mojo build -I $(python -c 'import blazeseq; print(blazeseq.mojopkg_path())') your_app.mojo
 
-    The Mojo package depends on rapidgzip; ensure your Mojo environment has
-    rapidgzip available (e.g. via pixi with rapidgzip-mojo, or -I path to rapidgzip).
+    The bundled Mojo package no longer requires the external rapidgzip package.
+    `RapidgzipReader` remains available as a compatibility wrapper and
+    currently falls back to the built-in gzip reader.
     """
     return str(Path(__file__).resolve().parent / "mojopkg")
 
