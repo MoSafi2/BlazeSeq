@@ -218,7 +218,6 @@ def memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     return -1
 
 
-@doc_hidden
 @always_inline
 def _strip_spaces[
     mut: Bool, //, o: Origin[mut=mut]
@@ -242,7 +241,6 @@ def _strip_spaces[
     return in_slice[start:end]
 
 
-@doc_hidden
 @always_inline
 def _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
@@ -290,7 +288,6 @@ def is_posix_space(c: UInt8) -> Bool:
 
 
 @always_inline
-@doc_hidden
 def _check_end_qual(
     buf: BufferedReader,
     base: Int,
@@ -330,7 +327,6 @@ def _check_end_qual(
 
 
 @always_inline
-@doc_hidden
 def _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
     """Return the relative-to-base offset at which to resume scanning.
 
@@ -359,7 +355,6 @@ def _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
 
 
 @always_inline
-@doc_hidden
 def _phase_to_count(phase: SearchPhase) -> Int:
     """Return how many newlines have already been found given the current phase.
 
@@ -378,7 +373,6 @@ def _phase_to_count(phase: SearchPhase) -> Int:
 
 
 @always_inline
-@doc_hidden
 def _count_to_phase(found: Int) -> SearchPhase:
     """Convert a found-newlines count back to the SearchPhase we are now in.
 
@@ -406,7 +400,6 @@ def _count_to_phase(found: Int) -> SearchPhase:
 
 
 @always_inline
-@doc_hidden
 def _store_newline_offset(
     mut offsets: RecordOffsets,
     found: Int,  # 1-indexed: which newline this is (1..4)
@@ -432,7 +425,6 @@ def _store_newline_offset(
         )  # record_end is inclusive last qual byte
 
 
-@doc_hidden
 def _record_snippet[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets) -> String:
@@ -445,7 +437,6 @@ def _record_snippet[
     return String(StringSlice(unsafe_from_utf8=sp))
 
 
-@doc_hidden
 def _validate_fastq_structure[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
@@ -468,7 +459,6 @@ def _validate_fastq_structure[
 
 
 @always_inline
-@doc_hidden
 def _drain_newline_cmp[
     W: Int,
 ](
@@ -492,7 +482,6 @@ def _drain_newline_cmp[
 
 
 @always_inline
-@doc_hidden
 def _scan_record_optimized[
     o: Origin,
 ](
@@ -602,7 +591,6 @@ def _scan_record_optimized[
 
 
 @always_inline
-@doc_hidden
 def _scan_record_fused_old[
     o: Origin,
 ](
@@ -660,7 +648,6 @@ def _scan_record_fused_old[
 
 
 @always_inline
-@doc_hidden
 def _scan_record[
     o: Origin,
 ](
@@ -672,7 +659,6 @@ def _scan_record[
 
 
 @always_inline
-@doc_hidden
 def _scan_record_memchr_seq[
     o: Origin
 ](
@@ -729,7 +715,6 @@ def _find_newline_from(
     return _from + pos + 1  # relative to base; +1 skips past the '\n'
 
 
-@doc_hidden
 @always_inline
 def _parse_schema(quality_format: String) -> QualitySchema:
     """Parse quality schema string into QualitySchema."""
@@ -798,7 +783,6 @@ def compute_num_reads_for_size(
     return target_size_bytes // bytes_per_record
 
 
-@doc_hidden
 def _validate_synthetic_fastq_args(
     num_reads: Int,
     min_length: Int,
@@ -824,7 +808,6 @@ def _validate_synthetic_fastq_args(
         )
 
 
-@doc_hidden
 def _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
     # Base LUT: 8 entries so index selects bases with configurable GC probability.
     # With gc_bias = 0.5: 2 G, 2 C, 2 A, 2 T (equal). Bias shifts the G/C vs A/T split.
@@ -853,7 +836,6 @@ def _build_gc_biased_base_lut(gc_bias: Float32) -> List[Byte]:
     return base_lut^
 
 
-@doc_hidden
 def _build_synthetic_fastq_record(
     i: Int,
     min_length: Int,

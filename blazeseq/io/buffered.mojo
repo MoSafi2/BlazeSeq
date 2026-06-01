@@ -505,7 +505,6 @@ def buffered_writer_for_gzip(
     return BufferedWriter[GZWriter](GZWriter(filename), capacity)
 
 
-@doc_hidden
 @always_inline
 def _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
     """
