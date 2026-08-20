@@ -5,7 +5,6 @@ performed externally via Validator (e.g. from ParserConfig). Tests are split
 into: (1) FastqRecord behaviour as a container, (2) Validator structure/ASCII/quality
 validation with explicit assert_raises where errors are expected.
 """
-from std.memory import alloc
 from blazeseq import FastqRecord
 from blazeseq.fastq import Validator
 from blazeseq.fastq.quality_schema import generic_schema
@@ -134,13 +133,13 @@ def test_validator_ascii_invalid_raises() raises:
     """With check_ascii=True, validate() raises when a field contains non-ASCII.
     """
     var v = Validator(True, False, materialize[generic_schema]())
-    # Build record with non-ASCII byte in id (String is UTF-8, so use alloc + BString).
-    var ptr = alloc[UInt8](2)
-    ptr[0] = 64  # '@'
-    ptr[1] = 128  # non-ASCII
-    var span = Span[UInt8, MutExternalOrigin](ptr=ptr, length=2)
+    # Build record with non-ASCII byte in id (String is UTF-8, so use unsafe_alloc + BString).
+    var ptr = unsafe_alloc[UInt8](2)
+    ptr[unsafe_offset=0] = 64  # '@'
+    ptr[unsafe_offset=1] = 128  # non-ASCII
+    var span = Span[UInt8, MutUntrackedOrigin](unsafe_ptr=ptr, length=2)
     var bad_id = BString(span)
-    ptr.free()
+    ptr.unsafe_free()
     var record = FastqRecord(
         bad_id^,
         BString("ACGT"),
@@ -191,3 +190,4 @@ def test_validator_full_valid_passes() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+from std.memory.alloc import unsafe_alloc

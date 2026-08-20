@@ -13,8 +13,6 @@ invalidated on the next advance. Call `.to_record()` on a view or use
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.iter import Iterator
-from std.memory import Span
-
 from blazeseq.CONSTS import EOF
 from blazeseq.bed.record import (
     BedRecord,
@@ -41,7 +39,8 @@ comptime BED_TAB: Byte = 9  # ord('\t')
 
 
 struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
-    """Trivial error code returned by low-level BED field parsers; caller raises."""
+    """Trivial error code returned by low-level BED field parsers; caller raises.
+    """
 
     var value: Int8
 
@@ -57,25 +56,33 @@ struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
-    comptime OK              = Self(0)
-    comptime INT_EMPTY       = Self(1)
-    comptime INT_INVALID     = Self(2)
-    comptime STRAND_INVALID  = Self(3)
-    comptime SCORE_RANGE     = Self(4)
-    comptime RGB_FORMAT      = Self(5)
-    comptime RGB_RANGE       = Self(6)
-    comptime FIELD_COUNT     = Self(7)
-    comptime BLOCK_INVALID   = Self(8)
+    comptime OK = Self(0)
+    comptime INT_EMPTY = Self(1)
+    comptime INT_INVALID = Self(2)
+    comptime STRAND_INVALID = Self(3)
+    comptime SCORE_RANGE = Self(4)
+    comptime RGB_FORMAT = Self(5)
+    comptime RGB_RANGE = Self(6)
+    comptime FIELD_COUNT = Self(7)
+    comptime BLOCK_INVALID = Self(8)
 
     def message(self) -> String:
-        if self == Self.INT_EMPTY:      return "BED: integer field is empty"
-        if self == Self.INT_INVALID:    return "BED: invalid byte in integer field"
-        if self == Self.STRAND_INVALID: return "BED: strand must be +, -, or ."
-        if self == Self.SCORE_RANGE:    return "BED: score must be in [0, 1000]"
-        if self == Self.RGB_FORMAT:     return "BED: itemRgb must be 0 or r,g,b"
-        if self == Self.RGB_RANGE:      return "BED: itemRgb components must be 0-255"
-        if self == Self.FIELD_COUNT:    return "BED: row must have at least 3 fields"
-        if self == Self.BLOCK_INVALID:  return "BED: blockCount must be > 0"
+        if self == Self.INT_EMPTY:
+            return "BED: integer field is empty"
+        if self == Self.INT_INVALID:
+            return "BED: invalid byte in integer field"
+        if self == Self.STRAND_INVALID:
+            return "BED: strand must be +, -, or ."
+        if self == Self.SCORE_RANGE:
+            return "BED: score must be in [0, 1000]"
+        if self == Self.RGB_FORMAT:
+            return "BED: itemRgb must be 0 or r,g,b"
+        if self == Self.RGB_RANGE:
+            return "BED: itemRgb components must be 0-255"
+        if self == Self.FIELD_COUNT:
+            return "BED: row must have at least 3 fields"
+        if self == Self.BLOCK_INVALID:
+            return "BED: blockCount must be > 0"
         return "BED: parse error"
 
 
@@ -85,7 +92,9 @@ struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
 
 @always_inline
-def _parse_uint64_from_span(span: Span[UInt8, _], mut result: UInt64) -> BedErrorCode:
+def _parse_uint64_from_span(
+    span: Span[UInt8, _], mut result: UInt64
+) -> BedErrorCode:
     """Parse a decimal UInt64 from a byte span. Returns OK or an error code."""
     result = 0
     if len(span) == 0:
@@ -124,7 +133,8 @@ def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
 
 @always_inline
 def _parse_score(span: Span[UInt8, _], mut result: UInt16) -> BedErrorCode:
-    """Parse a BED score [0, 1000]. Returns OK, INT_EMPTY, INT_INVALID, or SCORE_RANGE."""
+    """Parse a BED score [0, 1000]. Returns OK, INT_EMPTY, INT_INVALID, or SCORE_RANGE.
+    """
     result = 0
     var v: UInt64 = 0
     var code = _parse_uint64_from_span(span, v)
@@ -170,7 +180,7 @@ def _parse_item_rgb(
     var has_digit = False
     var i = start
     while i <= end:
-        var is_sep = (i == end or span[i] == UInt8(ord(",")))
+        var is_sep = i == end or span[i] == UInt8(ord(","))
         if is_sep:
             if not has_digit:
                 raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
@@ -231,7 +241,13 @@ struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
                 and line[3] == UInt8(ord("c"))
                 and line[4] == UInt8(ord("k"))
             ):
-                if n == 5 or line[5] == UInt8(32) or line[5] == UInt8(9) or line[5] == UInt8(10) or line[5] == UInt8(13):
+                if (
+                    n == 5
+                    or line[5] == UInt8(32)
+                    or line[5] == UInt8(9)
+                    or line[5] == UInt8(10)
+                    or line[5] == UInt8(13)
+                ):
                     return LineAction.SKIP
         if first == UInt8(ord("b")) and n >= 7:
             # "browser"
@@ -243,7 +259,13 @@ struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
                 and line[5] == UInt8(ord("e"))
                 and line[6] == UInt8(ord("r"))
             ):
-                if n == 7 or line[7] == UInt8(32) or line[7] == UInt8(9) or line[7] == UInt8(10) or line[7] == UInt8(13):
+                if (
+                    n == 7
+                    or line[7] == UInt8(32)
+                    or line[7] == UInt8(9)
+                    or line[7] == UInt8(10)
+                    or line[7] == UInt8(13)
+                ):
                     return LineAction.SKIP
         return LineAction.YIELD
 
@@ -256,7 +278,7 @@ struct BedParser[R: Reader](Iterable, Movable):
     collected into other_fields as raw byte spans.
 
     API:
-        - next_view() -> BedView (zero-alloc; invalidated on next advance)
+        - next_view() -> BedView (zero-unsafe_alloc; invalidated on next advance)
         - next_record() -> BedRecord (materialized; raises EOFError when exhausted)
         - for rec in parser / records() -> BedRecord
         - for view in parser.views() -> BedView
@@ -281,8 +303,8 @@ struct BedParser[R: Reader](Iterable, Movable):
 
     def _parse_bed_row(
         ref self,
-        view: DelimitedView[MutExternalOrigin, 32],
-    ) raises -> BedView[MutExternalOrigin]:
+        view: DelimitedView[MutUntrackedOrigin, 32],
+    ) raises -> BedView[MutUntrackedOrigin]:
         """Parse all BED fields from a DelimitedView and return a BedView directly.
 
         Validates field count (>= 3) and parses required and optional fields in
@@ -308,16 +330,22 @@ struct BedParser[R: Reader](Iterable, Movable):
             raise_parse_error(ctx, "BED: chromStart must be <= chromEnd")
 
         # Optional fields
-        var name_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
+        var name_opt: Optional[Span[UInt8, MutUntrackedOrigin]] = None
         var score_opt: Optional[UInt16] = None
         var strand_opt: Optional[Strand] = None
         var thick_start_opt: Optional[UInt64] = None
         var thick_end_opt: Optional[UInt64] = None
         var item_rgb_opt: Optional[ItemRgb] = None
         var block_count_opt: Optional[Int] = None
-        var block_sizes_span_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
-        var block_starts_span_opt: Optional[Span[UInt8, MutExternalOrigin]] = None
-        var other_fields_opt: Optional[List[Span[UInt8, MutExternalOrigin]]] = None
+        var block_sizes_span_opt: Optional[
+            Span[UInt8, MutUntrackedOrigin]
+        ] = None
+        var block_starts_span_opt: Optional[
+            Span[UInt8, MutUntrackedOrigin]
+        ] = None
+        var other_fields_opt: Optional[
+            List[Span[UInt8, MutUntrackedOrigin]]
+        ] = None
 
         if n >= 4:
             name_opt = view.get_span(3)
@@ -362,18 +390,18 @@ struct BedParser[R: Reader](Iterable, Movable):
             block_sizes_span_opt = view.get_span(10)
             block_starts_span_opt = view.get_span(11)
             if n > 12:
-                var extras = List[Span[UInt8, MutExternalOrigin]]()
+                var extras = List[Span[UInt8, MutUntrackedOrigin]]()
                 for i in range(12, n):
                     extras.append(view.get_span(i))
                 other_fields_opt = extras^
         elif n > 9:
             # BED10 or BED11: columns 10..n go to other_fields
-            var extras = List[Span[UInt8, MutExternalOrigin]]()
+            var extras = List[Span[UInt8, MutUntrackedOrigin]]()
             for i in range(9, n):
                 extras.append(view.get_span(i))
             other_fields_opt = extras^
 
-        return BedView[MutExternalOrigin](
+        return BedView[MutUntrackedOrigin](
             _chrom=chrom_span,
             chrom_start=chrom_start,
             chrom_end=chrom_end,
@@ -390,8 +418,8 @@ struct BedParser[R: Reader](Iterable, Movable):
             num_fields=n,
         )
 
-    def next_view(mut self) raises -> BedView[MutExternalOrigin]:
-        """Return the next BED record as a zero-alloc view.
+    def next_view(mut self) raises -> BedView[MutUntrackedOrigin]:
+        """Return the next BED record as a zero-unsafe_alloc view.
 
         Raises:
             EOFError: When no more records.
@@ -408,7 +436,7 @@ struct BedParser[R: Reader](Iterable, Movable):
         return self.next_view().to_record()
 
     def views(ref self) -> _BedParserViewIter[Self.R, origin_of(self)]:
-        """Iterator yielding zero-alloc BedViews."""
+        """Iterator yielding zero-unsafe_alloc BedViews."""
         return _BedParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
 
     def records(ref self) -> _BedParserRecordIter[Self.R, origin_of(self)]:
@@ -420,7 +448,7 @@ struct BedParser[R: Reader](Iterable, Movable):
 
 
 struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
-    comptime Element = BedView[MutExternalOrigin]
+    comptime Element = BedView[MutUntrackedOrigin]
 
     var _src: Pointer[BedParser[Self.R], Self.origin]
 
@@ -436,7 +464,7 @@ struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[BedParser[Self.R], MutExternalOrigin]](
+        var mut_ptr = rebind[Pointer[BedParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:
@@ -467,7 +495,7 @@ struct _BedParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[BedParser[Self.R], MutExternalOrigin]](
+        var mut_ptr = rebind[Pointer[BedParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:

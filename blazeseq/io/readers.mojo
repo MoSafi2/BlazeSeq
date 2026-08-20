@@ -8,7 +8,7 @@ it pass through to a normal reader that is quite fast when paired with a
 
 """
 
-from std.memory import memset_zero, UnsafePointer, Span, memcpy
+from std.memory import unsafe_memset_zero, Pointer, unsafe_memcpy
 from std.ffi import OwnedDLHandle
 from std.sys.info import CompilationTarget
 from std.pathlib import Path
@@ -26,15 +26,16 @@ comptime Z_MEM_ERROR = -4
 comptime Z_BUF_ERROR = -5
 comptime Z_VERSION_ERROR = -6
 
-# Type aliases for C types using modern UnsafePointer API.
+# Type aliases for C types using modern Pointer API.
 # These pointers refer to externally managed C memory; we model that
-# explicitly with MutExternalOrigin so the types are concrete.
-comptime c_void_ptr = UnsafePointer[mut=False, UInt8, MutExternalOrigin]
-comptime c_char_ptr = UnsafePointer[mut=False, Int8, MutExternalOrigin]
+# explicitly with MutUntrackedOrigin so the types are concrete.
+comptime c_void_ptr = Pointer[mut=False, UInt8, MutUntrackedOrigin]
+comptime c_char_ptr = Pointer[mut=False, Int8, MutUntrackedOrigin]
 comptime c_uint = UInt32
 comptime c_int = Int32
 
-trait Reader(ImplicitlyDestructible, Movable):
+
+trait Reader(Deinitable, Movable):
     """Trait for reading bytes from a source (file, memory, gzip, etc.).
 
     Implement this trait to provide a custom data source to `FastqParser` via
@@ -46,22 +47,22 @@ trait Reader(ImplicitlyDestructible, Movable):
         ```mojo
         from blazeseq.io.readers import Reader
         struct MyReader(Reader):
-            def read_to_buffer(mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int) raises -> UInt64:
+            def read_to_buffer(mut self, mut buf: Span[Byte, MutUntrackedOrigin], amt: Int, pos: Int) raises -> UInt64:
                 # ... copy up to amt bytes from your source into buf starting at pos
                 var bytes_read: Int = 0
                 return UInt64(bytes_read)
-            def __init__(out self, *, deinit take: Self): ...
+            def __init__(out self, *, deinit move: Self): ...
         ```
     """
 
     def read_to_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
+        mut self, mut buf: Span[Byte, MutUntrackedOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
         """Read up to amt bytes into buf at offset pos. Returns bytes read (0 at EOF).
         """
         ...
 
-    def __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit move: Self):
         ...
 
 
@@ -103,14 +104,18 @@ struct FileReader(Movable, Reader):
 
     @always_inline
     def read_to_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+        mut self,
+        mut buf: Span[Byte, MutUntrackedOrigin],
+        amt: Int,
+        pos: Int = 0,
     ) raises -> UInt64:
         """Read up to amt bytes from the file into buf at offset pos. Returns bytes read.
         """
         if pos > len(buf):
             raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        var s = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos),
+            length=len(buf) - pos,
         )
         if amt > len(s):
             raise Error(
@@ -119,7 +124,7 @@ struct FileReader(Movable, Reader):
             )
         if amt < 0:
             raise Error("The amount to be read should be positive")
-        read = self.handle.read(buffer=s)
+        var read = self.handle.read(buffer=s)
         return UInt64(read)
 
 
@@ -154,7 +159,10 @@ struct MemoryReader(Movable, Reader):
 
     @always_inline
     def read_to_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+        mut self,
+        mut buf: Span[Byte, MutUntrackedOrigin],
+        amt: Int,
+        pos: Int = 0,
     ) raises -> UInt64:
         """Read bytes from the memory buffer into the destination buffer.
 
@@ -168,8 +176,9 @@ struct MemoryReader(Movable, Reader):
         """
         if pos > len(buf):
             raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        var s = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos),
+            length=len(buf) - pos,
         )
         if amt > len(s):
             raise Error(
@@ -187,11 +196,11 @@ struct MemoryReader(Movable, Reader):
         var available = len(self.data) - self.position
         var bytes_to_read = min(amt, available)
 
-        # Copy bytes from data to destination buffer using memcpy
+        # Copy bytes from data to destination buffer using unsafe_memcpy
         if bytes_to_read > 0:
-            memcpy(
+            unsafe_memcpy(
                 dest=s.unsafe_ptr(),
-                src=self.data.unsafe_ptr() + self.position,
+                src=self.data.unsafe_ptr().unsafe_offset(self.position),
                 count=bytes_to_read,
             )
             self.position += bytes_to_read
@@ -203,10 +212,10 @@ struct MemoryReader(Movable, Reader):
         """
         self.position = 0
 
-    def __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit move: Self):
         """Move constructor for Movable trait compliance."""
-        self.data = take.data^
-        self.position = take.position
+        self.data = move.data^
+        self.position = move.position
 
 
 @doc_hidden
@@ -236,10 +245,10 @@ struct ZLib(Movable):
         ](
             filename.as_c_string_slice()
             .unsafe_ptr()
-            .unsafe_origin_cast[MutExternalOrigin](),
+            .unsafe_origin_cast[MutUntrackedOrigin](),
             mode.as_c_string_slice()
             .unsafe_ptr()
-            .unsafe_origin_cast[MutExternalOrigin](),
+            .unsafe_origin_cast[MutUntrackedOrigin](),
         )
 
     def gzclose(self, file: c_void_ptr) -> c_int:
@@ -250,9 +259,9 @@ struct ZLib(Movable):
         self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
     ) -> c_int:
         """Read from a gzip file."""
-        return self.lib_handle.call["gzread", c_int, c_void_ptr, c_void_ptr, c_uint](
-            file, buffer, length
-        )
+        return self.lib_handle.call[
+            "gzread", c_int, c_void_ptr, c_void_ptr, c_uint
+        ](file, buffer, length)
 
     def gzwrite(
         self, file: c_void_ptr, buffer: c_void_ptr, length: c_uint
@@ -304,26 +313,27 @@ struct GZFile(Movable, Reader):
             raise Error("Failed to open gzip file: " + filename)
         self.handle = handle
 
-    def __del__(deinit self):
+    def __deinit__(deinit self):
         """Close the file when the object is destroyed."""
         if self.handle:
             _ = self.lib.gzclose(self.handle.value())
 
-    def __init__(out self, *, deinit take: Self):
-        self.handle = take.handle
-        self.lib = take.lib^
-        self.filename = take.filename^
-        self.mode = take.mode^
+    def __init__(out self, *, deinit move: Self):
+        self.handle = move.handle
+        self.lib = move.lib^
+        self.filename = move.filename^
+        self.mode = move.mode^
 
     def read_to_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
+        mut self, mut buf: Span[Byte, MutUntrackedOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
         """Read decompressed bytes into buf at offset pos. Returns bytes read (0 at EOF).
         """
         if pos > len(buf):
             raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        var s = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos),
+            length=len(buf) - pos,
         )
         if amt > len(s):
             raise Error(
@@ -341,7 +351,7 @@ struct GZFile(Movable, Reader):
 
     @doc_hidden
     def unbuffered_read[](
-        mut self, buffer: Span[UInt8, MutExternalOrigin]
+        mut self, buffer: Span[UInt8, MutUntrackedOrigin]
     ) raises -> Int:
         """Read data from the gzip file.
 
@@ -380,11 +390,11 @@ struct RapidgzipReader(Movable, Reader):
         self._fallback = GZFile(path.path, "rb")
         self.parallelism = parallelism
 
-    def __init__(out self, *, deinit take: Self):
-        self._fallback = take._fallback^
-        self.parallelism = take.parallelism
+    def __init__(out self, *, deinit move: Self):
+        self._fallback = move._fallback^
+        self.parallelism = move.parallelism
 
     def read_to_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int
+        mut self, mut buf: Span[Byte, MutUntrackedOrigin], amt: Int, pos: Int
     ) raises -> UInt64:
         return self._fallback.read_to_buffer(buf, amt, pos)

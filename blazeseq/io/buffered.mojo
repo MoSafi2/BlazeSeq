@@ -1,4 +1,5 @@
-from std.memory import memcpy, UnsafePointer, Span, alloc
+from std.memory.alloc import unsafe_alloc
+from std.memory import unsafe_memcpy, Pointer
 from std.pathlib import Path
 from std.utils import StaticTuple
 from std.builtin.builtin_slice import ContiguousSlice
@@ -24,15 +25,10 @@ from std.sys import (
 @always_inline
 def memmove[
     T: AnyType
-](
-    *,
-    dest: UnsafePointer[mut=True, T, _],
-    src: UnsafePointer[mut=False, T, _],
-    count: Int,
-):
+](*, dest: Pointer[mut=True, T, _], src: Pointer[mut=False, T, _], count: Int,):
     """Copy `count * size_of[T]()` bytes from src to dest.
 
-    Unlike `memcpy`, the memory regions are allowed to overlap.
+    Unlike `unsafe_memcpy`, the memory regions are allowed to overlap.
 
     Parameters:
         T: The element type.
@@ -45,12 +41,14 @@ def memmove[
     var n = count * size_of[T]()
     if __is_run_in_comptime_interpreter:
         for i in range(n):
-            (dest.bitcast[Byte]() + i).store((src.bitcast[Byte]() + i).load())
+            dest.unsafe_bitcast[Byte]().unsafe_offset(i).unsafe_store(
+                src.unsafe_bitcast[Byte]().unsafe_offset(i).unsafe_load()
+            )
     else:
         llvm_intrinsic["llvm.memmove", NoneType](
             # <dest>, <src>, <len>, <isvolatile>
-            dest.bitcast[Byte](),
-            src.bitcast[Byte](),
+            dest.unsafe_bitcast[Byte](),
+            src.unsafe_bitcast[Byte](),
             n,
             False,
         )
@@ -60,8 +58,8 @@ def memmove[
 @doc_hidden
 struct LineIteratorError(
     Copyable,
+    Deinitable,
     Equatable,
-    ImplicitlyDestructible,
     Movable,
     TrivialRegisterPassable,
     Writable,
@@ -112,9 +110,7 @@ struct EOFError(TrivialRegisterPassable, Writable):
         writer.write(EOF)
 
 
-struct BufferedReader[R: Reader](
-    ImplicitlyDestructible, Movable, Sized, Writable
-):
+struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
     """
         Buffered reader over a Reader. Fills an internal buffer and exposes
         `view()`, `consume()`, `stream_position()`, etc. Used by `LineIterator` and
@@ -127,7 +123,7 @@ struct BufferedReader[R: Reader](
     o"""
 
     var source: Self.R
-    var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
+    var _ptr: Pointer[Byte, origin=MutUntrackedOrigin]
     var _len: Int  # Buffer capacity
     var _head: Int
     var _end: Int
@@ -140,7 +136,7 @@ struct BufferedReader[R: Reader](
         """Wrap a Reader with a buffer of given capacity. Reads once to fill buffer.
         """
         self.source = reader^
-        self._ptr = alloc[Byte](capacity)
+        self._ptr = unsafe_alloc[Byte](capacity)
         self._len = capacity
         self._head = 0
         self._end = 0
@@ -217,23 +213,24 @@ struct BufferedReader[R: Reader](
         _ = self._resize_internal(new_capacity)
 
     @always_inline
-    def view(ref[_] self) -> Span[Byte, MutExternalOrigin]:
+    def view(ref[_] self) -> Span[Byte, MutUntrackedOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
-        return Span[Byte, MutExternalOrigin](
-            ptr=self._ptr + self._head, length=self._end - self._head
+        return Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self._ptr.unsafe_offset(self._head),
+            length=self._end - self._head,
         )
 
     def write_to[w: Writer](self, mut writer: w):
         writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
 
     @always_inline
-    def peek(ref self, amt: Int) -> Span[Byte, MutExternalOrigin]:
+    def peek(ref self, amt: Int) -> Span[Byte, MutUntrackedOrigin]:
         """
         Peek at the next `amt` bytes in the buffer without consuming them.
         """
         var peek_amt = min(amt, self.available())
-        return Span[Byte, MutExternalOrigin](
-            ptr=self._ptr + self._head, length=peek_amt
+        return Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self._ptr.unsafe_offset(self._head), length=peek_amt
         )
 
     @always_inline
@@ -252,7 +249,11 @@ struct BufferedReader[R: Reader](
 
         self._stream_position += from_pos
         var remaining = self._end - from_pos
-        memmove(dest=self._ptr, src=self._ptr + from_pos, count=remaining)
+        memmove(
+            dest=self._ptr,
+            src=self._ptr.unsafe_offset(from_pos),
+            count=remaining,
+        )
         if self._head < from_pos:
             self._head = 0
         else:
@@ -270,8 +271,8 @@ struct BufferedReader[R: Reader](
         if space == 0:
             return 0
 
-        var buf_span = Span[Byte, MutExternalOrigin](
-            ptr=self._ptr + self._end, length=space
+        var buf_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self._ptr.unsafe_offset(self._end), length=space
         )
         var amt = self.source.read_to_buffer(buf_span, space, 0)
         self._end += Int(amt)
@@ -291,9 +292,9 @@ struct BufferedReader[R: Reader](
 
     @always_inline
     def _resize_internal(mut self, new_len: Int) -> Bool:
-        var new_ptr = alloc[Byte](new_len)
-        memcpy(dest=new_ptr, src=self._ptr, count=self._len)
-        self._ptr.free()
+        var new_ptr = unsafe_alloc[Byte](new_len)
+        unsafe_memcpy(dest=new_ptr, src=self._ptr, count=self._len)
+        self._ptr.unsafe_free()
         self._ptr = new_ptr
         self._len = new_len
         return True
@@ -307,12 +308,12 @@ struct BufferedReader[R: Reader](
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
         Indices are not validated; out-of-bounds access is undefined behavior.
         """
-        return self._ptr[self._head + index]
+        return self._ptr[unsafe_offset=self._head + index]
 
     @always_inline
     def __getitem__(
         ref self, sl: ContiguousSlice
-    ) -> Span[Byte, MutExternalOrigin]:
+    ) -> Span[Byte, MutUntrackedOrigin]:
         """
         Slice unconsumed bytes. Indices are relative to current position:
         buf[0] = first unconsumed byte, buf[:] = all unconsumed, buf[0:n] = first n unconsumed.
@@ -322,14 +323,12 @@ struct BufferedReader[R: Reader](
         var end_offset = sl.end.or_else(avail)
         var start = self._head + start_offset
         var end = self._head + end_offset
-        return Span[Byte, MutExternalOrigin](
-            ptr=self._ptr + start, length=end - start
+        return Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self._ptr.unsafe_offset(start), length=end - start
         )
 
 
-struct BufferedWriter[W: WriterBackend](
-    ImplicitlyDestructible, Movable, Writer
-):
+struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
     """Buffered writer for efficient byte writing.
 
     Works with any `WriterBackend` (`FileWriter`, `MemoryWriter`, `GZWriter`).
@@ -337,7 +336,7 @@ struct BufferedWriter[W: WriterBackend](
     """
 
     var writer: Self.W
-    var _ptr: UnsafePointer[Byte, origin=MutExternalOrigin]
+    var _ptr: Pointer[Byte, origin=MutUntrackedOrigin]
     var _len: Int  # Buffer capacity
     var _pos: Int  # Current write position in buffer
     var _bytes_written: Int  # Total bytes written
@@ -361,7 +360,7 @@ struct BufferedWriter[W: WriterBackend](
                 " Bytes",
             )
         self.writer = writer^
-        self._ptr = alloc[Byte](capacity)
+        self._ptr = unsafe_alloc[Byte](capacity)
         self._len = capacity
         self._pos = 0
         self._bytes_written = 0
@@ -436,8 +435,8 @@ struct BufferedWriter[W: WriterBackend](
     def _flush_buffer(mut self) raises:
         """Internal method to flush buffer to writer backend."""
         if self._pos > 0:
-            var span = Span[Byte, MutExternalOrigin](
-                ptr=self._ptr, length=self._pos
+            var span = Span[Byte, MutUntrackedOrigin](
+                unsafe_ptr=self._ptr, length=self._pos
             )
             var written = self.writer.write_from_buffer(span, self._pos, 0)
             self._bytes_written += Int(written)
@@ -463,22 +462,22 @@ struct BufferedWriter[W: WriterBackend](
                 self._flush_buffer()
                 space = self.available_space()
             var to_write = min(remaining, space)
-            memcpy(
-                dest=self._ptr + self._pos,
-                src=data.unsafe_ptr() + offset,
+            unsafe_memcpy(
+                dest=self._ptr.unsafe_offset(self._pos),
+                src=data.unsafe_ptr().unsafe_offset(offset),
                 count=to_write,
             )
             self._pos += to_write
             offset += to_write
             remaining -= to_write
 
-    def __del__(deinit self):
+    def __deinit__(deinit self):
         """Destructor: flush buffer."""
         try:
             self._flush_buffer()
         except:
             pass
-        self._ptr.free()
+        self._ptr.unsafe_free()
 
 
 @doc_hidden
@@ -506,7 +505,7 @@ def buffered_writer_for_gzip(
 
 
 @always_inline
-def _trim_trailing_cr(view: Span[Byte, MutExternalOrigin], end: Int) -> Int:
+def _trim_trailing_cr(view: Span[Byte, MutUntrackedOrigin], end: Int) -> Int:
     """
     Return the exclusive end index for line content, trimming a single trailing \\r.
     Use when the line may end with \\r (e.g. before \\n or at EOF).
@@ -522,7 +521,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     Owns the buffer; parsers hold `LineIterator` and use `next_line`.
 
     Supports the Mojo Iterator protocol: `for line in line_iterator` works.
-    Each `line` is a `Span[Byte, MutExternalOrigin]` invalidated by the
+    Each `line` is a `Span[Byte, MutUntrackedOrigin]` invalidated by the
     next iteration or any buffer mutation (same contract as `next_line()`).
     """
 
@@ -595,7 +594,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
     @always_inline
-    def next_line(mut self) raises -> Span[Byte, MutExternalOrigin]:
+    def next_line(mut self) raises -> Span[Byte, MutUntrackedOrigin]:
         """
         Next line as span excluding newline (and trimming trailing \\r). None at EOF.
         Invalidated by next `next_line()` or any buffer mutation.
@@ -638,7 +637,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     @always_inline
     def next_complete_line(
         mut self,
-    ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
+    ) raises LineIteratorError -> Span[Byte, MutUntrackedOrigin]:
         """
         Return the next line only if a complete line (ending with newline) is in
         the current buffer. Does not compact. When the buffer is empty, refills
@@ -660,7 +659,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
                     raise LineIteratorError.EOF
                 raise LineIteratorError.EMPTY_BUFFER
 
-        view = self.buffer.view()
+        var view = self.buffer.view()
         var newline_at = memchr(haystack=view, chr=new_line)
 
         if newline_at == -1:
@@ -675,7 +674,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         self._current_line_number += 1
         return span
 
-    def peek(self, amt: Int) raises -> Span[Byte, MutExternalOrigin]:
+    def peek(self, amt: Int) raises -> Span[Byte, MutUntrackedOrigin]:
         """
         Peek at the next `amt` bytes in the buffer without consuming them.
         """
@@ -683,7 +682,9 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
     # Does not support buffer growth yet.
     @always_inline
-    def read_exact(mut self, size: Int) raises -> Span[Byte, MutExternalOrigin]:
+    def read_exact(
+        mut self, size: Int
+    ) raises -> Span[Byte, MutUntrackedOrigin]:
         """
         Read exactly `size` bytes. Refills and compacts the buffer as needed.
         Raises EOFError if the stream ends before `size` bytes are available.
@@ -705,7 +706,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
     @always_inline
     def consume_line_scalar(
         mut self,
-    ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
+    ) raises LineIteratorError -> Span[Byte, MutUntrackedOrigin]:
         """
         Consume the next line (plus line) using scalar memchr to find newline.
         Validates line starts with '+'. Does not refill; raises INCOMPLETE_LINE if
@@ -763,8 +764,8 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
     @always_inline
     def _handle_eof_line(
-        mut self, view: Span[Byte, MutExternalOrigin]
-    ) raises LineIteratorError -> Span[Byte, MutExternalOrigin]:
+        mut self, view: Span[Byte, MutUntrackedOrigin]
+    ) raises LineIteratorError -> Span[Byte, MutUntrackedOrigin]:
         """
         Handle EOF case: return remaining data with trailing \\r trimmed, or None if no data.
         Assumes buffer.is_eof() is True when called.
@@ -789,9 +790,9 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
 
 struct _LineIteratorIter[R: Reader, origin: Origin](Iterator):
-    """Iterator over lines; yields Span[Byte, MutExternalOrigin] per line."""
+    """Iterator over lines; yields Span[Byte, MutUntrackedOrigin] per line."""
 
-    comptime Element = Span[Byte, MutExternalOrigin]
+    comptime Element = Span[Byte, MutUntrackedOrigin]
 
     var _src: Pointer[LineIterator[Self.R], Self.origin]
 
@@ -805,7 +806,7 @@ struct _LineIteratorIter[R: Reader, origin: Origin](Iterator):
         return self._src[].has_more()
 
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[LineIterator[Self.R], MutExternalOrigin]](
+        var mut_ptr = rebind[Pointer[LineIterator[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:

@@ -166,7 +166,7 @@ def test_biopython_bed12() raises:
 
 def test_track_line_skipped() raises:
     """UCSC 'track name=...' header lines are skipped; data line is yielded."""
-    var data = "track name=myTrack description=\"test\"\nchr1\t0\t100\n"
+    var data = 'track name=myTrack description="test"\nchr1\t0\t100\n'
     var reader = MemoryReader(data)
     var parser = BedParser[MemoryReader](reader^)
     assert_true(parser.has_more())
@@ -189,7 +189,10 @@ def test_browser_line_skipped() raises:
 
 def test_track_and_browser_before_data() raises:
     """Multiple UCSC header lines before data are all skipped."""
-    var data = "track name=t1\nbrowser position chr1:1-1000\nbrowser hide all\nchr1\t10\t20\nchr2\t30\t40\n"
+    var data = (
+        "track name=t1\nbrowser position chr1:1-1000\nbrowser hide"
+        " all\nchr1\t10\t20\nchr2\t30\t40\n"
+    )
     var reader = MemoryReader(data)
     var parser = BedParser[MemoryReader](reader^)
     var count = 0
@@ -204,8 +207,11 @@ def test_track_and_browser_before_data() raises:
 
 
 def test_extra_fields_stored_in_bed6_plus() raises:
-    """Extra columns beyond BED12 are stored verbatim in OtherFields (no type coercion)."""
-    var data = "chr1\t0\t1000\texon\t0\t+\t100\t900\t0\t2\t400,400,\t0,600,\t1.5e-10\n"
+    """Extra columns beyond BED12 are stored verbatim in OtherFields (no type coercion).
+    """
+    var data = (
+        "chr1\t0\t1000\texon\t0\t+\t100\t900\t0\t2\t400,400,\t0,600,\t1.5e-10\n"
+    )
     var reader = MemoryReader(data)
     var parser = BedParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -230,7 +236,8 @@ def test_extra_fields_beyond_bed12() raises:
 
 
 def test_bed10_accepted_as_bed9_plus_extra() raises:
-    """BED10 (previously rejected) is now accepted; column 10 goes to OtherFields."""
+    """BED10 (previously rejected) is now accepted; column 10 goes to OtherFields.
+    """
     var data = "chr1\t0\t100\tname\t0\t+\t0\t0\t0\textra_col\n"
     var reader = MemoryReader(data)
     var parser = BedParser[MemoryReader](reader^)
@@ -270,7 +277,8 @@ def test_strand_absent_is_none_for_bed3() raises:
 
 
 def test_strand_dot_is_unknown_for_bed6() raises:
-    """BED6 with '.' in strand field yields Optional(Strand.Unknown), not None."""
+    """BED6 with '.' in strand field yields Optional(Strand.Unknown), not None.
+    """
     var data = "chr1\t0\t100\tname\t0\t.\n"
     var reader = MemoryReader(data)
     var parser = BedParser[MemoryReader](reader^)
@@ -314,7 +322,9 @@ def test_score_out_of_range_rejected() raises:
     try:
         _ = parser.next_record()
     except e:
-        assert_true(String(e).find("score") != -1 or String(e).find("1000") != -1)
+        assert_true(
+            String(e).find("score") != -1 or String(e).find("1000") != -1
+        )
         saw_error = True
     assert_true(saw_error)
 
@@ -362,7 +372,8 @@ def test_overlapping_blocks_rejected() raises:
         _ = parser.next_record()
     except e:
         assert_true(
-            String(e).find("non-overlapping") != -1 or String(e).find("sorted") != -1
+            String(e).find("non-overlapping") != -1
+            or String(e).find("sorted") != -1
         )
         saw_error = True
     assert_true(saw_error)

@@ -48,4 +48,3 @@ def main() raises:
         total_base_pairs += batch.seq_len()
 
     print(total_reads, total_base_pairs)
-

@@ -19,9 +19,7 @@ def test_delimited_reader_basic_tsv_with_header() raises:
     var delimited = DelimitedReader[MemoryReader](reader^, has_header=True)
 
     var header_opt = delimited.header()
-    assert_true(
-        header_opt, "Header should be present when has_header=True"
-    )
+    assert_true(header_opt, "Header should be present when has_header=True")
     var header = header_opt.value().copy()
     assert_equal(len(header), 2, "Header should have 2 columns")
     assert_equal(header[0].to_string(), "col1", "First header column")

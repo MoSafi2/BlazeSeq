@@ -18,7 +18,7 @@ from std.python import PythonObject, Python
 from std.python.bindings import PythonModuleBuilder
 from std.pathlib import Path
 from std.os import abort
-from std.memory import UnsafePointer, alloc
+from std.memory import Pointer
 from std.collections.string import StringSlice
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.fastq.record import FastqRecord, FastqView
@@ -35,15 +35,16 @@ comptime PyFastqGZParser = FastqParser[RapidgzipReader, ParserConfig()]
 
 # Holder for the parser so we can register it with add_type (FastqParser does not implement Writable).
 struct BlazeSeqParserHolder(Movable, Writable):
-    var _parser_ptr: UnsafePointer[PyFastqParser, MutAnyOrigin]
+    var _parser_ptr: Pointer[PyFastqParser, MutUntrackedOrigin]
 
     def __init__(out self, var parser: PyFastqParser):
-        var storage = alloc[PyFastqParser](1)
-        storage[0] = parser^
+        var storage = unsafe_alloc[PyFastqParser](1)
+        storage[unsafe_offset=0] = parser^
         self._parser_ptr = storage
 
-    def __del__(deinit self):
-        self._parser_ptr.destroy_pointee()
+    def __deinit__(deinit self):
+        self._parser_ptr.unsafe_deinit_pointee()
+        self._parser_ptr.unsafe_free()
 
     def __repr__(self) -> String:
         return "BlazeSeqParser(...)"
@@ -55,15 +56,16 @@ struct BlazeSeqParserHolder(Movable, Writable):
 # Opaque holder: parser stored behind pointer because FastqParser[RapidgzipReader]
 # does not implement Writable (RapidgzipFile from rapidgzip package doesn't).
 struct BlazeSeqGZParserHolder(Movable, Writable):
-    var _parser_ptr: UnsafePointer[PyFastqGZParser, MutAnyOrigin]
+    var _parser_ptr: Pointer[PyFastqGZParser, MutUntrackedOrigin]
 
     def __init__(out self, var parser: PyFastqGZParser):
-        var storage = alloc[PyFastqGZParser](1)
-        storage[0] = parser^
+        var storage = unsafe_alloc[PyFastqGZParser](1)
+        storage[unsafe_offset=0] = parser^
         self._parser_ptr = storage
 
-    def __del__(deinit self):
-        self._parser_ptr.destroy_pointee()
+    def __deinit__(deinit self):
+        self._parser_ptr.unsafe_deinit_pointee()
+        self._parser_ptr.unsafe_free()
 
     def __repr__(self) -> String:
         return "BlazeSeqParser(...)"
@@ -297,7 +299,9 @@ struct FastqBatchMethods:
     def batch_py_iter(py_self: PythonObject) raises -> PythonObject:
         """Return an iterator over records in the batch. Iterator is invalid after batch is discarded.
         """
-        var batch_ptr = py_self.downcast_value_ptr[FastqBatch]()
+        var batch_ptr = py_self.downcast_value_ptr[FastqBatch]().unsafe_origin_cast[
+            MutUntrackedOrigin
+        ]()
         var count = batch_ptr[].num_records()
         var iter_val = FastqBatchIterator(batch_ptr, 0, count)
         return PythonObject(alloc=iter_val^)
@@ -305,13 +309,13 @@ struct FastqBatchMethods:
 
 # Iterator over FastqBatch records. Holds a pointer to the batch; batch must outlive the iterator.
 struct FastqBatchIterator(Movable, Writable):
-    var batch_ptr: UnsafePointer[FastqBatch, MutAnyOrigin]
+    var batch_ptr: Pointer[FastqBatch, MutUntrackedOrigin]
     var index: Int
     var count: Int
 
     def __init__(
         out self,
-        batch_ptr: UnsafePointer[FastqBatch, MutAnyOrigin],
+        batch_ptr: Pointer[FastqBatch, MutUntrackedOrigin],
         index: Int,
         count: Int,
     ):
@@ -346,7 +350,7 @@ struct FastqBatchIterator(Movable, Writable):
 
 
 @export
-def PyInit_blazeseq_parser() -> PythonObject:
+def PyInit_blazeseq_parser() abi("C") -> PythonObject:
     try:
         var mb = PythonModuleBuilder("blazeseq_parser")
         # Module-level: parser only (parallelism passed at init, used for all reads)
@@ -509,3 +513,4 @@ def PyInit_blazeseq_parser() -> PythonObject:
     except e:
         print(String("error creating blazeseq_parser module: ") + String(e))
         abort()
+from std.memory.alloc import unsafe_alloc

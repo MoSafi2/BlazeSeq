@@ -4,13 +4,13 @@ Provides a unified abstraction for writing bytes to files, memory buffers,
 or compressed files. Similar to the Reader trait but for writing operations.
 """
 
-from std.memory import Span, UnsafePointer
+from std.memory import Pointer
 from std.pathlib import Path
 from std.collections.string import String
 from blazeseq.io.readers import ZLib, c_void_ptr, c_uint
 
 
-trait WriterBackend(ImplicitlyDestructible, Movable):
+trait WriterBackend(Deinitable, Movable):
     """Trait for writing bytes to various backends.
 
     Similar to `Reader` trait but for writing operations.
@@ -19,7 +19,10 @@ trait WriterBackend(ImplicitlyDestructible, Movable):
     """
 
     def write_from_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+        mut self,
+        mut buf: Span[Byte, MutUntrackedOrigin],
+        amt: Int,
+        pos: Int = 0,
     ) raises -> UInt64:
         """Write bytes from a buffer to the underlying storage.
 
@@ -36,7 +39,7 @@ trait WriterBackend(ImplicitlyDestructible, Movable):
         """
         ...
 
-    def __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit move: Self):
         """Move constructor for Movable trait compliance."""
         ...
 
@@ -71,13 +74,17 @@ struct FileWriter(Movable, WriterBackend):
 
     @always_inline
     def write_from_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+        mut self,
+        mut buf: Span[Byte, MutUntrackedOrigin],
+        amt: Int,
+        pos: Int = 0,
     ) raises -> UInt64:
         """Write bytes from buffer to file."""
         if pos > len(buf):
             raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        var s = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos),
+            length=len(buf) - pos,
         )
         if amt > len(s):
             raise Error(
@@ -87,17 +94,17 @@ struct FileWriter(Movable, WriterBackend):
         if amt < 0:
             raise Error("The amount to be written should be positive")
 
-        var write_span = Span[Byte, MutExternalOrigin](
-            ptr=s.unsafe_ptr(), length=amt
+        var write_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=s.unsafe_ptr(), length=amt
         )
         var bytes_list = List[Byte](capacity=amt)
         bytes_list.extend(write_span)
         self.handle.write_bytes(bytes_list)
         return UInt64(amt)
 
-    def __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit move: Self):
         """Move constructor."""
-        self.handle = take.handle^
+        self.handle = move.handle^
 
 
 struct MemoryWriter(Movable, WriterBackend):
@@ -115,13 +122,17 @@ struct MemoryWriter(Movable, WriterBackend):
 
     @always_inline
     def write_from_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+        mut self,
+        mut buf: Span[Byte, MutUntrackedOrigin],
+        amt: Int,
+        pos: Int = 0,
     ) raises -> UInt64:
         """Write bytes from buffer to memory."""
         if pos > len(buf):
             raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        var s = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos),
+            length=len(buf) - pos,
         )
         if amt > len(s):
             raise Error(
@@ -131,8 +142,8 @@ struct MemoryWriter(Movable, WriterBackend):
         if amt < 0:
             raise Error("The amount to be written should be positive")
 
-        var write_span = Span[Byte, MutExternalOrigin](
-            ptr=s.unsafe_ptr(), length=amt
+        var write_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=s.unsafe_ptr(), length=amt
         )
         self.data.extend(write_span)
         return UInt64(amt)
@@ -144,16 +155,16 @@ struct MemoryWriter(Movable, WriterBackend):
     def get_data_ref(self) -> Span[Byte, origin_of(self.data)]:
         """Get owned reference to the written data."""
         return Span[Byte, origin_of(self.data)](
-            ptr=self.data.unsafe_ptr(), length=len(self.data)
+            unsafe_ptr=self.data.unsafe_ptr(), length=len(self.data)
         )
 
     def clear(mut self):
         """Clear the buffer."""
         self.data.clear()
 
-    def __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit move: Self):
         """Move constructor."""
-        self.data = take.data^
+        self.data = move.data^
 
 
 struct GZWriter(Movable, WriterBackend):
@@ -184,13 +195,17 @@ struct GZWriter(Movable, WriterBackend):
 
     @always_inline
     def write_from_buffer(
-        mut self, mut buf: Span[Byte, MutExternalOrigin], amt: Int, pos: Int = 0
+        mut self,
+        mut buf: Span[Byte, MutUntrackedOrigin],
+        amt: Int,
+        pos: Int = 0,
     ) raises -> UInt64:
         """Write bytes from buffer to compressed file."""
         if pos > len(buf):
             raise Error("Position is outside the buffer")
-        var s = Span[Byte, MutExternalOrigin](
-            ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+        var s = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos),
+            length=len(buf) - pos,
         )
         if amt > len(s):
             raise Error(
@@ -200,8 +215,8 @@ struct GZWriter(Movable, WriterBackend):
         if amt < 0:
             raise Error("The amount to be written should be positive")
 
-        var write_span = Span[Byte, MutExternalOrigin](
-            ptr=s.unsafe_ptr(), length=amt
+        var write_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=s.unsafe_ptr(), length=amt
         )
         var bytes_written = self.lib.gzwrite(
             self.handle.value(), write_span.unsafe_ptr(), c_uint(amt)
@@ -212,15 +227,15 @@ struct GZWriter(Movable, WriterBackend):
 
         return UInt64(bytes_written)
 
-    def __del__(deinit self):
+    def __deinit__(deinit self):
         """Close the file when the object is destroyed."""
         if self.handle:
             _ = self.lib.gzclose(self.handle.value())
 
     # Move constructor using unified init naming in Mojo 26.2.
-    def __init__(out self, *, deinit take: Self):
+    def __init__(out self, *, deinit move: Self):
         """Move constructor."""
-        self.handle = take.handle
-        self.lib = take.lib^
-        self.filename = take.filename^
-        self.mode = take.mode^
+        self.handle = move.handle
+        self.lib = move.lib^
+        self.filename = move.filename^
+        self.mode = move.mode^

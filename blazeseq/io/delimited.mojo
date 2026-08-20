@@ -1,6 +1,5 @@
 from std.collections import List
 from std.collections.string import String
-from std.memory import Span
 from std.iter import Iterator
 from std.collections import InlineArray
 
@@ -19,7 +18,7 @@ from blazeseq.errors import ParseContext, raise_parse_error
 
 trait LinePolicy(
     Copyable,
-    ImplicitlyDestructible,
+    Deinitable,
     Movable,
     TrivialRegisterPassable,
 ):
@@ -144,7 +143,7 @@ def _fill_offsets[
 
 
 # ---------------------------------------------------------------------------
-# DelimitedView — zero-alloc, NOT thread-safe, NOT to be stored
+# DelimitedView — zero-unsafe_alloc, NOT thread-safe, NOT to be stored
 # ---------------------------------------------------------------------------
 
 
@@ -236,7 +235,7 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
 
     @always_inline
     def __init__(out self, var view: DelimitedView[_, Self.MAX]):
-        """Materialize from a view — one `BString` alloc, offsets copied by value.
+        """Materialize from a view — one `BString` unsafe_alloc, offsets copied by value.
         """
         # TODO: use Move instead of a copy, Lifetime Issue here
         self._line = BString(view._line)
@@ -292,9 +291,9 @@ struct DelimitedReader[
 
     Call `.to_record()` on the view when you need the record to outlive the
     current iteration step; `next_record()` / `for record in dr.records()` do
-    this automatically (one `BString` alloc per row).
+    this automatically (one `BString` unsafe_alloc per row).
 
-    `for view in dr` (i.e. `__iter__`) defaults to the zero-alloc view path.
+    `for view in dr` (i.e. `__iter__`) defaults to the zero-unsafe_alloc view path.
 
     Example — filter without allocating on every row:
         ```mojo
@@ -308,7 +307,7 @@ struct DelimitedReader[
         while dr.has_more():
             var view = dr.next_view()
             if String(view.get_span(2)) == "homo_sapiens":
-                results.append(view^.to_record())  # alloc only on match
+                results.append(view^.to_record())  # unsafe_alloc only on match
         ```
     """
 
@@ -355,13 +354,13 @@ struct DelimitedReader[
         return self._header.copy()
 
     # ------------------------------------------------------------------
-    # Hot path: zero-alloc view
+    # Hot path: zero-unsafe_alloc view
     # ------------------------------------------------------------------
 
     def next_view(
         mut self,
-    ) raises -> DelimitedView[MutExternalOrigin, Self.MAX]:
-        """Return the next row as a zero-alloc `DelimitedView`.
+    ) raises -> DelimitedView[MutUntrackedOrigin, Self.MAX]:
+        """Return the next row as a zero-unsafe_alloc `DelimitedView`.
 
         The view borrows from the reader's internal line buffer and is
         invalidated on the next call to any advancing method. Call
@@ -373,7 +372,7 @@ struct DelimitedReader[
             raise EOFError()
 
         var line = self._next_data_line()
-        var view = DelimitedView[MutExternalOrigin, Self.MAX](
+        var view = DelimitedView[MutUntrackedOrigin, Self.MAX](
             line, self._delimiter
         )
         self._check_field_count(view.num_fields())
@@ -381,7 +380,7 @@ struct DelimitedReader[
         return view^
 
     # ------------------------------------------------------------------
-    # Convenience: owned record (one BString alloc per row)
+    # Convenience: owned record (one BString unsafe_alloc per row)
     # ------------------------------------------------------------------
 
     def next_record(mut self) raises -> DelimitedRecord[Self.MAX]:
@@ -399,7 +398,7 @@ struct DelimitedReader[
     def views(
         ref self,
     ) -> _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
-        """Iterator yielding zero-alloc `DelimitedView`s."""
+        """Iterator yielding zero-unsafe_alloc `DelimitedView`s."""
         return _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)](
             Pointer(to=self)
         )
@@ -415,7 +414,7 @@ struct DelimitedReader[
     def __iter__(
         ref self,
     ) -> _DelimitedViewIter[Self.R, Self.P, Self.MAX, origin_of(self)]:
-        """Default iteration yields zero-alloc views."""
+        """Default iteration yields zero-unsafe_alloc views."""
         return self.views()
 
     # ------------------------------------------------------------------
@@ -424,7 +423,7 @@ struct DelimitedReader[
 
     def _next_data_line(
         mut self,
-    ) raises -> Span[UInt8, MutExternalOrigin]:
+    ) raises -> Span[UInt8, MutUntrackedOrigin]:
         """Return the next line to treat as a data row.
 
         Dispatches on policy.classify(): YIELD -> return; SKIP -> continue;
@@ -447,11 +446,11 @@ struct DelimitedReader[
                 raise EOFError()
 
     def _parse_header_from(
-        mut self, line: Span[UInt8, MutExternalOrigin]
+        mut self, line: Span[UInt8, MutUntrackedOrigin]
     ) raises:
         """Parse a line as column names and store as header. Sets _expected_num_fields.
         """
-        var view = DelimitedView[MutExternalOrigin, Self.MAX](
+        var view = DelimitedView[MutUntrackedOrigin, Self.MAX](
             line, self._delimiter
         )
         self._expected_num_fields = view.num_fields()
@@ -469,7 +468,7 @@ struct DelimitedReader[
 
 
 # ---------------------------------------------------------------------------
-# Iterator — views (zero-alloc)
+# Iterator — views (zero-unsafe_alloc)
 # ---------------------------------------------------------------------------
 
 
@@ -481,7 +480,7 @@ struct _DelimitedViewIter[
 ](Iterator):
     """Yields `DelimitedView` — no heap allocation per row."""
 
-    comptime Element = DelimitedView[MutExternalOrigin, Self.MAX]
+    comptime Element = DelimitedView[MutUntrackedOrigin, Self.MAX]
 
     var _src: Pointer[DelimitedReader[Self.R, Self.P, Self.MAX], Self.origin]
 
@@ -502,7 +501,7 @@ struct _DelimitedViewIter[
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[
-                DelimitedReader[Self.R, Self.P, Self.MAX], MutExternalOrigin
+                DelimitedReader[Self.R, Self.P, Self.MAX], MutUntrackedOrigin
             ]
         ](self._src)
         try:
@@ -517,7 +516,7 @@ struct _DelimitedViewIter[
 
 
 # ---------------------------------------------------------------------------
-# Iterator — owned records (one BString alloc per row)
+# Iterator — owned records (one BString unsafe_alloc per row)
 # ---------------------------------------------------------------------------
 
 
@@ -550,7 +549,7 @@ struct _DelimitedRecordIter[
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[
-                DelimitedReader[Self.R, Self.P, Self.MAX], MutExternalOrigin
+                DelimitedReader[Self.R, Self.P, Self.MAX], MutUntrackedOrigin
             ]
         ](self._src)
         try:

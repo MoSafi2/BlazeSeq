@@ -3,7 +3,7 @@
 This module bridges main.mojo and kernels.mojo. It handles:
   - Synthetic batch generation: build in-memory FASTQ, parse into FastqBatches.
   - Reference setup: copy the reference string to a host buffer, then to device
-    and pass as UnsafePointer to the NW kernel.
+    and pass as Pointer to the NW kernel.
   - GPU run: compile the NW kernel, then for each batch upload sequences to
     device, allocate score and DP scratch buffers, launch one block per record,
     and copy scores back (timing includes all of this).
@@ -15,10 +15,11 @@ Kernels (nw_kernel, needleman_wunsch_cpu) and shared constants live in kernels.m
 
 from blazeseq.fastq.parser import FastqParser
 from blazeseq.fastq.record_batch import FastqBatch
+from blazeseq_gpu import upload_batch_to_device
 from blazeseq.utils import generate_synthetic_fastq_buffer
 from blazeseq.io.readers import MemoryReader, Reader
-from std.gpu.host import DeviceContext
-from std.gpu.host.device_context import DeviceBuffer, HostBuffer
+from max.gpu.host import DeviceContext
+from max.gpu.host import DeviceBuffer, HostBuffer
 from std.pathlib import Path
 from std.time import perf_counter_ns
 
@@ -73,7 +74,7 @@ def setup_reference(
     Copies ref_str into a host buffer of length MAX_REF_LEN (zero-padded),
     then copies to device. ref_len is the actual reference length used by the kernel.
     """
-    var ref_len = len(ref_str)
+    var ref_len = ref_str.byte_length()
     var ref_host = ctx.enqueue_create_host_buffer[DType.uint8](MAX_REF_LEN)
     ctx.synchronize()
     var ref_bytes = ref_str.as_bytes()
@@ -99,14 +100,14 @@ def run_gpu_nw(
     allocates scores buffer and row_scratch, launches kernel, copies scores
     back to host and appends them to the returned list (for CPU/GPU validation).
     """
-    var nw_compiled = ctx.compile_function[nw_kernel, nw_kernel]()
+    var nw_compiled = ctx.compile_function[nw_kernel]()
     var start_ns = perf_counter_ns()
     var all_scores = List[Int32]()
     for batch in batches:
         var num_records = batch.num_records()
         if num_records == 0:
             continue
-        var device_batch = batch.to_device(ctx)
+        var device_batch = upload_batch_to_device(batch, ctx)
         var scores_buffer = ctx.enqueue_create_buffer[DType.int32](num_records)
         var scratch_size = num_records * ROW_STRIDE
         var row_scratch = ctx.enqueue_create_buffer[DType.int32](scratch_size)
@@ -114,10 +115,10 @@ def run_gpu_nw(
         ctx.enqueue_function(
             nw_compiled,
             ref_buffer,
-            ref_len,
+            Int32(ref_len),
             device_batch.sequence_buffer,
             device_batch.ends,
-            num_records,
+            Int32(num_records),
             scores_buffer,
             row_scratch,
             grid_dim=num_records,

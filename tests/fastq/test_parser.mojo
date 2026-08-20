@@ -285,7 +285,9 @@ def test_generate_synthetic_fastq_writer_matches_buffer() raises:
         len(expected),
         "Streamed and in-memory outputs should have same byte length",
     )
-    assert_equal(streamed, expected, "Streamed bytes should match generated buffer")
+    assert_equal(
+        streamed, expected, "Streamed bytes should match generated buffer"
+    )
 
 
 comptime ref_parser_large_config = ParserConfig(buffer_capacity=256)

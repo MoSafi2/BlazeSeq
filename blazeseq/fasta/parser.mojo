@@ -11,7 +11,6 @@ from blazeseq.errors import (
     raise_validation_error,
 )
 from blazeseq.byte_string import BString
-from std.memory import Span
 from std.collections import List
 from std.collections.string import StringSlice, String
 
@@ -40,7 +39,9 @@ struct Validator(Copyable):
         pass
 
     @always_inline
-    def _validate(self, id_bytes: BString, seq_bytes: BString) -> FastxErrorCode:
+    def _validate(
+        self, id_bytes: BString, seq_bytes: BString
+    ) -> FastxErrorCode:
         var code = _check_ascii(id_bytes.as_span())
         if code != FastxErrorCode.OK:
             return code
@@ -57,7 +58,9 @@ struct Validator(Copyable):
             raise_validation_error(ctx, code.message(), "", "")
 
 
-struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](Iterable, Movable):
+struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](
+    Iterable, Movable
+):
     """Streaming FASTA parser over a `Reader`.
 
     Multi-line FASTA sequences are normalised so that all line breaks within
@@ -230,7 +233,7 @@ struct _FastaParserRecordIter[R: Reader, cfg: ParserConfig, origin: Origin](
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[FastaParser[Self.R], MutExternalOrigin]](
+        var mut_ptr = rebind[Pointer[FastaParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:

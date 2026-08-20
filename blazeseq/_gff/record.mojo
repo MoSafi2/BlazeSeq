@@ -7,8 +7,6 @@ Attributes format: key=value;key=v1,v2 (URL-encoded, multi-value).
 
 from std.collections import List
 from std.collections.string import String, StringSlice
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 from blazeseq.features import Position, Interval
@@ -25,7 +23,8 @@ from blazeseq.gff.attributes import (
 
 
 struct Gff3Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
-    """Strand of a GFF3 feature: Plus (+), Minus (-), Unstranded (.), or Unknown (?)."""
+    """Strand of a GFF3 feature: Plus (+), Minus (-), Unstranded (.), or Unknown (?).
+    """
 
     var value: Int8
 
@@ -33,10 +32,10 @@ struct Gff3Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     def __init__(out self, value: Int8):
         self.value = value
 
-    comptime Plus        = Self(0)
-    comptime Minus       = Self(1)
-    comptime Unstranded  = Self(2)  # "." — no strand concept
-    comptime Unknown     = Self(3)  # "?" — strand unknown (GFF3)
+    comptime Plus = Self(0)
+    comptime Minus = Self(1)
+    comptime Unstranded = Self(2)  # "." — no strand concept
+    comptime Unknown = Self(3)  # "?" — strand unknown (GFF3)
 
     @always_inline
     def __eq__(self, other: Self) -> Bool:
@@ -78,7 +77,7 @@ struct SequenceRegion(Copyable, Movable):
 
 
 # ---------------------------------------------------------------------------
-# Gff3View — zero-alloc, NOT to be stored
+# Gff3View — zero-unsafe_alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
 
@@ -151,7 +150,8 @@ struct Gff3View[O: Origin](Movable):
         )
 
     def to_record(self) raises -> Gff3Record:
-        """Materialize an owned Gff3Record by parsing attributes from column 9."""
+        """Materialize an owned Gff3Record by parsing attributes from column 9.
+        """
         var attrs = parse_gff3_attributes(self._attributes)
         return Gff3Record(
             Seqid=percent_decode_to_bstring(self._seqid),
@@ -214,7 +214,8 @@ struct Gff3Record(Copyable, Movable, Writable):
         return self.Attributes.get(key)
 
     def get_all_attributes(ref self, key: String) -> List[BString]:
-        """Return all values for key (for multi-value GFF3 attributes like Parent)."""
+        """Return all values for key (for multi-value GFF3 attributes like Parent).
+        """
         return self.Attributes.get_all(key)
 
     def write_to[w: Writer](ref self, mut writer: w):
@@ -286,7 +287,8 @@ struct TargetAttribute(Copyable, Movable):
 
 @always_inline
 def _parse_uint64_span(span: Span[UInt8, _]) raises -> UInt64:
-    """Parse a span of ASCII decimal digits as UInt64. Raises on empty or invalid."""
+    """Parse a span of ASCII decimal digits as UInt64. Raises on empty or invalid.
+    """
     if len(span) == 0:
         raise Error("Target: empty integer field")
     var result: UInt64 = 0
@@ -318,7 +320,8 @@ def parse_target_attribute(value: BString) raises -> TargetAttribute:
         i += 1
     if i == id_start:
         raise Error(
-            "GFF3 Target: expected 'target_id start end [strand]', got fewer fields"
+            "GFF3 Target: expected 'target_id start end [strand]', got fewer"
+            " fields"
         )
     var target_id = BString(span[id_start:i])
 
@@ -332,7 +335,8 @@ def parse_target_attribute(value: BString) raises -> TargetAttribute:
         i += 1
     if i == start_begin:
         raise Error(
-            "GFF3 Target: expected 'target_id start end [strand]', got fewer fields"
+            "GFF3 Target: expected 'target_id start end [strand]', got fewer"
+            " fields"
         )
     var start = _parse_uint64_span(span[start_begin:i])
 
@@ -346,7 +350,8 @@ def parse_target_attribute(value: BString) raises -> TargetAttribute:
         i += 1
     if i == end_begin:
         raise Error(
-            "GFF3 Target: expected 'target_id start end [strand]', got fewer fields"
+            "GFF3 Target: expected 'target_id start end [strand]', got fewer"
+            " fields"
         )
     var end = _parse_uint64_span(span[end_begin:i])
 
@@ -365,4 +370,6 @@ def parse_target_attribute(value: BString) raises -> TargetAttribute:
 
     if start > end:
         raise Error("GFF3 Target: start must be <= end")
-    return TargetAttribute(target_id=target_id^, start=start, end=end, strand=strand)
+    return TargetAttribute(
+        target_id=target_id^, start=start, end=end, strand=strand
+    )

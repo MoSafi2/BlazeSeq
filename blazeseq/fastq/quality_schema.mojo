@@ -6,8 +6,10 @@
 
 
 @fieldwise_init
-struct QualitySchema(Copyable, ImplicitlyCopyable, Movable, Writable, TrivialRegisterPassable):
-    var SCHEMA: StringSlice[StaticConstantOrigin]
+struct QualitySchema(
+    Copyable, ImplicitlyCopyable, Movable, TrivialRegisterPassable, Writable
+):
+    var SCHEMA: StringSlice[ImmStaticOrigin]
     var LOWER: UInt8
     var UPPER: UInt8
     var OFFSET: UInt8

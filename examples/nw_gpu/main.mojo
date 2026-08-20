@@ -20,7 +20,7 @@ Requires a compatible GPU.
 
 from std.sys import has_accelerator, exit
 from blazeseq.fastq.record_batch import FastqBatch
-from std.gpu.host import DeviceContext
+from max.gpu.host import DeviceContext
 
 from examples.nw_gpu.execution import (
     load_batches_synthetic,
@@ -73,15 +73,22 @@ def main() raises:
     var match_result_bool: Bool = match_result[0]
     var mismatch_idx = match_result[1]
     if match_result_bool:
-        print(t"Validation: GPU and CPU results match ({len(gpu_scores)} scores).")
+        print(
+            t"Validation: GPU and CPU results match ({len(gpu_scores)} scores)."
+        )
     else:
         if mismatch_idx == -1:
             print(
-                t"Validation FAILED: length mismatch (GPU: {len(gpu_scores)}, CPU: {len(cpu_scores)})"
+                t"Validation FAILED: length mismatch (GPU: {len(gpu_scores)},"
+                t" CPU: {len(cpu_scores)})"
             )
         else:
-            print(t"Validation FAILED: first mismatch at record index {mismatch_idx}")
             print(
-                t"  GPU score: {gpu_scores[mismatch_idx]}, CPU score: {cpu_scores[mismatch_idx]}"
+                t"Validation FAILED: first mismatch at record index"
+                t" {mismatch_idx}"
+            )
+            print(
+                t"  GPU score: {gpu_scores[mismatch_idx]}, CPU score:"
+                t" {cpu_scores[mismatch_idx]}"
             )
         exit(1)

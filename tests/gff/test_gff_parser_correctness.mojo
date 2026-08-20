@@ -1,8 +1,16 @@
 """Correctness tests for GtfParser and Gff3Parser."""
 
 from blazeseq import (
-    GtfParser, GtfRecord, GtfView, GtfStrand, GtfAttributes,
-    Gff3Parser, Gff3Record, Gff3View, Gff3Strand, Gff3Attributes,
+    GtfParser,
+    GtfRecord,
+    GtfView,
+    GtfStrand,
+    GtfAttributes,
+    Gff3Parser,
+    Gff3Record,
+    Gff3View,
+    Gff3Strand,
+    Gff3Attributes,
 )
 from blazeseq.io import MemoryReader
 from std.collections.string import String
@@ -16,7 +24,10 @@ from std.testing import assert_equal, assert_true, assert_raises, TestSuite
 
 def test_gtf_parse_one_record() raises:
     """Parse one GTF line and check core fields and attributes."""
-    var data = "1\tEnsembl\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972\"; gene_name \"DDX11L1\";\n"
+    var data = (
+        '1\tEnsembl\tgene\t11869\t14409\t.\t+\t.\tgene_id "ENSG00000223972";'
+        ' gene_name "DDX11L1";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     assert_true(parser.has_more())
@@ -41,7 +52,7 @@ def test_gtf_parse_one_record() raises:
 
 def test_gtf_skip_comment_lines() raises:
     """GTF parser skips lines starting with #."""
-    var data = "# comment\n1\tx\tgene\t1\t100\t.\t-\t.\tgene_id \"g1\";\n"
+    var data = '# comment\n1\tx\tgene\t1\t100\t.\t-\t.\tgene_id "g1";\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -54,7 +65,10 @@ def test_gtf_skip_comment_lines() raises:
 
 def test_gtf_view_to_record() raises:
     """Zero-copy view can be converted to owned record."""
-    var data = "chr1\tsrc\t exon\t100\t200\t0.95\t+\t0\tgene_id \"g1\"; transcript_id \"t1\";\n"
+    var data = (
+        'chr1\tsrc\t exon\t100\t200\t0.95\t+\t0\tgene_id "g1"; transcript_id'
+        ' "t1";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var view = parser.next_view()
@@ -73,7 +87,10 @@ def test_gtf_view_to_record() raises:
 
 def test_gtf_mandatory_gene_transcript_id() raises:
     """GtfRecord exposes gene_id and transcript_id as direct fields."""
-    var data = "chr1\t.\tCDS\t1\t2\t.\t.\t0\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
+    var data = (
+        'chr1\t.\tCDS\t1\t2\t.\t.\t0\tgene_id "ENSG001"; transcript_id'
+        ' "ENST001";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -88,7 +105,10 @@ def test_gtf_mandatory_gene_transcript_id() raises:
 
 def test_gff3_parse_one_record() raises:
     """Parse one GFF3 line with key=value attributes."""
-    var data = "##gff-version 3\nchr1\tsource\tgene\t1000\t2000\t.\t+\t.\tID=gene1;Name=MyGene;\n"
+    var data = (
+        "##gff-version"
+        " 3\nchr1\tsource\tgene\t1000\t2000\t.\t+\t.\tID=gene1;Name=MyGene;\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     assert_true(parser.has_more())
@@ -109,7 +129,10 @@ def test_gff3_parse_one_record() raises:
 
 def test_gff3_multi_value_attribute() raises:
     """GFF3 Parent=id1,id2 parses as multiple values."""
-    var data = "##gff-version 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Parent=tr1,tr2;\n"
+    var data = (
+        "##gff-version"
+        " 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Parent=tr1,tr2;\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -120,8 +143,12 @@ def test_gff3_multi_value_attribute() raises:
 
 
 def test_gff3_stops_at_fasta() raises:
-    """GFF3 parser stops at ##FASTA; only one feature is returned, next read raises."""
-    var data = "##gff-version 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n##FASTA\n>seq1\nACGT\n"
+    """GFF3 parser stops at ##FASTA; only one feature is returned, next read raises.
+    """
+    var data = (
+        "##gff-version"
+        " 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n##FASTA\n>seq1\nACGT\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -137,7 +164,10 @@ def test_gff3_stops_at_fasta() raises:
 
 def test_gff3_typed_attribute_accessors() raises:
     """Gff3Attributes typed accessors for GFF3 reserved attributes."""
-    var data = "##gff-version 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Name=MyExon;Parent=tr1,tr2;Note=test\n"
+    var data = (
+        "##gff-version"
+        " 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Name=MyExon;Parent=tr1,tr2;Note=test\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -158,7 +188,10 @@ def test_gff3_typed_attribute_accessors() raises:
 
 def test_parse_gtf_attributes() raises:
     """GTF attribute string parses to key-value pairs via full line."""
-    var data = "chr1\t.\tgene\t1\t2\t.\t.\t.\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t2\t.\t.\t.\tgene_id "ENSG001"; transcript_id'
+        ' "ENST001";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -173,7 +206,10 @@ def test_parse_gtf_attributes() raises:
 
 def test_parse_gff3_attributes() raises:
     """GFF3 key=value and multi-value parse via full line."""
-    var data = "##gff-version 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Name=Exon1;Parent=tr1,tr2\n"
+    var data = (
+        "##gff-version"
+        " 3\nchr1\t.\texon\t1\t50\t.\t.\t.\tID=ex1;Name=Exon1;Parent=tr1,tr2\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -188,7 +224,9 @@ def test_parse_gff3_attributes() raises:
 
 def test_percent_decode() raises:
     """RFC 3986 percent-encoding in GFF3 attributes decodes correctly."""
-    var data = "##gff-version 3\nchr1\t.\tgene\t1\t10\t.\t.\t.\tName=foo%20bar%3B\n"
+    var data = (
+        "##gff-version 3\nchr1\t.\tgene\t1\t10\t.\t.\t.\tName=foo%20bar%3B\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -220,23 +258,27 @@ def test_gff_interval() raises:
 
 
 def test_gff3_iter_propagates_parse_error() raises:
-    """A for-loop over records with a bad field count raises, not silently stops."""
-    var data = "##gff-version 3\nchr1\tsource\tgene\t1\t100\t.\t+\t.\n"  # 8 fields, not 9
+    """A for-loop over records with a bad field count raises, not silently stops.
+    """
+    var data = (  # 8 fields, not 9
+        "##gff-version 3\nchr1\tsource\tgene\t1\t100\t.\t+\t.\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
+    var records = parser.records()
     with assert_raises(contains="field"):
-        for _ in parser:
-            pass
+        _ = records.__next__()
 
 
 def test_gtf_iter_propagates_parse_error() raises:
-    """A for-loop over GTF records with a bad field count raises, not silently stops."""
+    """A for-loop over GTF records with a bad field count raises, not silently stops.
+    """
     var data = "chr1\tsource\tgene\t1\t100\t.\t+\n"  # 7 fields, not 9
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
+    var records = parser.records()
     with assert_raises(contains="field"):
-        for _ in parser:
-            pass
+        _ = records.__next__()
 
 
 def test_gff3_iter_stops_cleanly_at_eof() raises:
@@ -294,7 +336,7 @@ def test_gff3_accepts_start_one() raises:
 
 def test_gtf_rejects_start_zero() raises:
     """GTF parser rejects start=0 with a >= 1 error."""
-    var data = "chr1\t.\tgene\t0\t100\t.\t+\t.\tgene_id \"g1\";\n"
+    var data = 'chr1\t.\tgene\t0\t100\t.\t+\t.\tgene_id "g1";\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var saw_error = False
@@ -308,7 +350,7 @@ def test_gtf_rejects_start_zero() raises:
 
 def test_gtf_rejects_end_zero() raises:
     """GTF parser rejects end=0 with a >= 1 error."""
-    var data = "chr1\t.\tgene\t1\t0\t.\t+\t.\tgene_id \"g1\";\n"
+    var data = 'chr1\t.\tgene\t1\t0\t.\t+\t.\tgene_id "g1";\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var saw_error = False
@@ -327,7 +369,7 @@ def test_gtf_rejects_end_zero() raises:
 
 def test_gtf_unquoted_attribute_value() raises:
     """Unquoted integer value like 'exon_number 3' is parsed correctly."""
-    var data = "chr1\t.\texon\t1\t100\t.\t+\t.\tgene_id \"g1\"; exon_number 3;\n"
+    var data = 'chr1\t.\texon\t1\t100\t.\t+\t.\tgene_id "g1"; exon_number 3;\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -347,7 +389,10 @@ def test_gtf_unquoted_gene_id() raises:
 
 def test_gtf_mixed_quoted_and_unquoted() raises:
     """Mix of quoted and unquoted attributes in the same column all resolve."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"ENSG001\"; exon_number 5; transcript_id \"ENST001\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "ENSG001"; exon_number 5;'
+        ' transcript_id "ENST001";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -363,7 +408,9 @@ def test_gtf_mixed_quoted_and_unquoted() raises:
 
 def test_gtf_duplicate_key_get_all() raises:
     """Get_all_attributes returns all values for a duplicate key."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"g1\"; tag \"v1\"; tag \"v2\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "g1"; tag "v1"; tag "v2";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -375,7 +422,9 @@ def test_gtf_duplicate_key_get_all() raises:
 
 def test_gtf_get_returns_first_value() raises:
     """Get_attribute still returns the first value for a duplicate key."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"g1\"; tag \"v1\"; tag \"v2\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "g1"; tag "v1"; tag "v2";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -384,7 +433,10 @@ def test_gtf_get_returns_first_value() raises:
 
 def test_gtf_get_all_mandatory_ids() raises:
     """Get_all_attributes for gene_id returns a single-element list."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "ENSG001"; transcript_id'
+        ' "ENST001";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -400,16 +452,21 @@ def test_gtf_get_all_mandatory_ids() raises:
 
 def test_gtf_backslash_quote_in_value() raises:
     """Escaped quote inside a quoted value is decoded."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"g1\"; note \"it\\\"s a test\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "g1"; note "it\\"s a test";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
-    assert_equal(rec.get_attribute("note").value().to_string(), "it\"s a test")
+    assert_equal(rec.get_attribute("note").value().to_string(), 'it"s a test')
 
 
 def test_gtf_no_backslash_unaffected() raises:
     """A plain value with no backslashes is stored unchanged."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"ENSG001\"; transcript_id \"ENST001\";\n"
+    var data = (
+        'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "ENSG001"; transcript_id'
+        ' "ENST001";\n'
+    )
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -493,7 +550,9 @@ def test_gff3_dot_attributes_column() raises:
 
 def test_gff3_seqid_percent_decoded() raises:
     """Percent-encoded seqid is decoded in the owned record."""
-    var data = "##gff-version 3\nchr1%2Fpatch\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n"
+    var data = (
+        "##gff-version 3\nchr1%2Fpatch\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -511,7 +570,10 @@ def test_gff3_seqid_no_percent_unchanged() raises:
 
 def test_gff3_sequence_region_seqid_decoded() raises:
     """Percent-encoded seqid in ##sequence-region is decoded."""
-    var data = "##gff-version 3\n##sequence-region chr1%2Fpatch 1 1000\nchr1%2Fpatch\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n"
+    var data = (
+        "##gff-version 3\n##sequence-region chr1%2Fpatch 1"
+        " 1000\nchr1%2Fpatch\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     _ = parser.next_record()
@@ -527,7 +589,7 @@ def test_gff3_sequence_region_seqid_decoded() raises:
 
 def test_gtf_missing_gene_id_lenient() raises:
     """Default (lenient) parser silently accepts a missing gene_id."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\ttranscript_id \"ENST001\";\n"
+    var data = 'chr1\t.\tgene\t1\t100\t.\t+\t.\ttranscript_id "ENST001";\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^)
     var rec = parser.next_record()
@@ -536,7 +598,7 @@ def test_gtf_missing_gene_id_lenient() raises:
 
 def test_gtf_missing_gene_id_strict() raises:
     """Strict parser raises when gene_id is absent."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\ttranscript_id \"ENST001\";\n"
+    var data = 'chr1\t.\tgene\t1\t100\t.\t+\t.\ttranscript_id "ENST001";\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^, strict_mandatory_attrs=True)
     var saw_error = False
@@ -551,7 +613,7 @@ def test_gtf_missing_gene_id_strict() raises:
 
 def test_gtf_missing_transcript_id_strict() raises:
     """Strict parser raises when transcript_id is absent."""
-    var data = "chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id \"ENSG001\";\n"
+    var data = 'chr1\t.\tgene\t1\t100\t.\t+\t.\tgene_id "ENSG001";\n'
     var reader = MemoryReader(data)
     var parser = GtfParser[MemoryReader](reader^, strict_mandatory_attrs=True)
     var saw_error = False
@@ -571,7 +633,10 @@ def test_gtf_missing_transcript_id_strict() raises:
 
 def test_gff3_triple_hash_is_skipped() raises:
     """A ### line between two valid records does not stop iteration."""
-    var data = "##gff-version 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n###\nchr1\t.\tgene\t200\t300\t.\t.\t.\tID=g2;\n"
+    var data = (
+        "##gff-version"
+        " 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n###\nchr1\t.\tgene\t200\t300\t.\t.\t.\tID=g2;\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var count = 0
@@ -582,7 +647,10 @@ def test_gff3_triple_hash_is_skipped() raises:
 
 def test_gff3_triple_hash_between_records() raises:
     """Exactly two records are returned when ### appears between them."""
-    var data = "##gff-version 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n###\nchr1\t.\tgene\t200\t300\t.\t.\t.\tID=g2;\n"
+    var data = (
+        "##gff-version"
+        " 3\nchr1\t.\tgene\t1\t100\t.\t.\t.\tID=g1;\n###\nchr1\t.\tgene\t200\t300\t.\t.\t.\tID=g2;\n"
+    )
     var reader = MemoryReader(data)
     var parser = Gff3Parser[MemoryReader](reader^)
     var r1 = parser.next_record()

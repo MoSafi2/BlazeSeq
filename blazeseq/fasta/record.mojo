@@ -2,7 +2,6 @@ from std.hashlib.hasher import default_hasher, Hasher
 from blazeseq.byte_string import BString
 from blazeseq.fasta.definition import Definition
 from std.collections.string import StringSlice, String
-from std.memory import Span
 from blazeseq.io.writers import Writer
 from blazeseq.utils import _strip_spaces
 
@@ -59,7 +58,7 @@ struct FastaRecord(
     def sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[
+            unsafe_ptr=self._sequence.ptr.unsafe_mut_cast[
                 origin_of(self).mut
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
@@ -71,7 +70,7 @@ struct FastaRecord(
         """Return the read identifier (id without leading '>') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[
+            unsafe_ptr=self._id.ptr.unsafe_mut_cast[
                 origin_of(self).mut
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
@@ -85,7 +84,7 @@ struct FastaRecord(
         var id = parts[0].strip()
         var id_ascii = BString(id)
         if len(parts) > 1:
-            description = BString()
+            var description = BString()
             for part in parts[1:]:
                 description.extend(part.as_bytes())
             description = BString(_strip_spaces(description.as_span()))

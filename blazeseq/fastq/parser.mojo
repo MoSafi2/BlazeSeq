@@ -158,7 +158,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
     @always_inline
-    def next_view(mut self) raises -> FastqView[origin=MutExternalOrigin]:
+    def next_view(mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
         var ref_rec = self._find_and_consume_ref_record()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
@@ -172,9 +172,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     def next_view_memchr_seq(
-        mut self
-    ) raises -> FastqView[origin=MutExternalOrigin]:
-        """Benchmark-only variant that scans record boundaries via sequential memchr."""
+        mut self,
+    ) raises -> FastqView[origin=MutUntrackedOrigin]:
+        """Benchmark-only variant that scans record boundaries via sequential memchr.
+        """
         var ref_rec = self._find_and_consume_ref_record_memchr_seq()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
@@ -188,9 +189,10 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     def next_view_fused_old(
-        mut self
-    ) raises -> FastqView[origin=MutExternalOrigin]:
-        """Benchmark-only variant that uses the original fused SIMD scan loop."""
+        mut self,
+    ) raises -> FastqView[origin=MutUntrackedOrigin]:
+        """Benchmark-only variant that uses the original fused SIMD scan loop.
+        """
         var ref_rec = self._find_and_consume_ref_record_fused_old()
         var code = self.validator._validate(ref_rec)
         if code != FastxErrorCode.OK:
@@ -229,7 +231,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     def next_record_memchr_seq(mut self) raises -> FastqRecord:
-        """Benchmark-only variant that scans record boundaries via sequential memchr."""
+        """Benchmark-only variant that scans record boundaries via sequential memchr.
+        """
         if not self.has_more():
             raise EOFError()
         var ref_rec = self._find_and_consume_ref_record_memchr_seq()
@@ -255,7 +258,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     @always_inline
     def next_record_fused_old(mut self) raises -> FastqRecord:
-        """Benchmark-only variant that uses the original fused SIMD scan loop."""
+        """Benchmark-only variant that uses the original fused SIMD scan loop.
+        """
         if not self.has_more():
             raise EOFError()
         var ref_rec = self._find_and_consume_ref_record_fused_old()
@@ -353,7 +357,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     def _find_and_consume_ref_record(
         mut self,
-    ) raises -> FastqView[origin=MutExternalOrigin]:
+    ) raises -> FastqView[origin=MutUntrackedOrigin]:
         if self.buffer.available() == 0:
             _ = self.buffer.compact_and_fill()
         if not self.has_more():
@@ -363,8 +367,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var offsets = RecordOffsets()
         var phase = SearchPhase.HEADER
 
-        var scan_view = Span[Byte, MutExternalOrigin](
-            ptr=self.buffer._ptr + base,
+        var scan_view = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self.buffer._ptr.unsafe_offset(base),
             length=self.buffer._end - base,
         )
         var complete: Bool
@@ -375,10 +379,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if parse_code != FastxErrorCode.OK:
             var ctx = self._parse_context()
             raise_parse_error(
-                ParseContext(ctx.record_number + 1, ctx.line_number + 1, ctx.file_position),
+                ParseContext(
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
+                ),
                 parse_code.message(),
                 _record_snippet(scan_view, offsets),
             )
+        var refill_code: FastxErrorCode
         if not complete:
             complete, offsets, phase, refill_code = self._next_ref_complete(
                 base, offsets, phase
@@ -395,20 +404,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         var buffer_view = self.buffer.view().unsafe_ptr()
 
-        var id_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.header_start + 1,
+        var id_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.header_start + 1),
             length=(offsets.seq_start - offsets.header_start - 2),
         )
-        var seq_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.seq_start,
+        var seq_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.seq_start),
             length=(offsets.sep_start - offsets.seq_start - 1),
         )
-        var qual_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.qual_start,
+        var qual_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.qual_start),
             length=(offsets.record_end - offsets.qual_start),
         )
 
-        var ref_rec = FastqView[origin=MutExternalOrigin](
+        var ref_rec = FastqView[origin=MutUntrackedOrigin](
             _strip_spaces(id_span),
             seq_span,
             qual_span,
@@ -423,7 +432,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     def _find_and_consume_ref_record_memchr_seq(
         mut self,
-    ) raises -> FastqView[origin=MutExternalOrigin]:
+    ) raises -> FastqView[origin=MutUntrackedOrigin]:
         if self.buffer.available() == 0:
             _ = self.buffer.compact_and_fill()
         if not self.has_more():
@@ -433,8 +442,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var offsets = RecordOffsets()
         var phase = SearchPhase.HEADER
 
-        var scan_view = Span[Byte, MutExternalOrigin](
-            ptr=self.buffer._ptr + base,
+        var scan_view = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self.buffer._ptr.unsafe_offset(base),
             length=self.buffer._end - base,
         )
         var complete: Bool
@@ -445,10 +454,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if parse_code != FastxErrorCode.OK:
             var ctx = self._parse_context()
             raise_parse_error(
-                ParseContext(ctx.record_number + 1, ctx.line_number + 1, ctx.file_position),
+                ParseContext(
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
+                ),
                 parse_code.message(),
                 _record_snippet(scan_view, offsets),
             )
+        var refill_code: FastxErrorCode
         if not complete:
             complete, offsets, phase, refill_code = (
                 self._next_ref_complete_memchr_seq(base, offsets, phase)
@@ -465,20 +479,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         var buffer_view = self.buffer.view().unsafe_ptr()
 
-        var id_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.header_start + 1,
+        var id_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.header_start + 1),
             length=(offsets.seq_start - offsets.header_start - 2),
         )
-        var seq_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.seq_start,
+        var seq_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.seq_start),
             length=(offsets.sep_start - offsets.seq_start - 1),
         )
-        var qual_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.qual_start,
+        var qual_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.qual_start),
             length=(offsets.record_end - offsets.qual_start),
         )
 
-        var ref_rec = FastqView[origin=MutExternalOrigin](
+        var ref_rec = FastqView[origin=MutUntrackedOrigin](
             _strip_spaces(id_span),
             seq_span,
             qual_span,
@@ -493,7 +507,7 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
     def _find_and_consume_ref_record_fused_old(
         mut self,
-    ) raises -> FastqView[origin=MutExternalOrigin]:
+    ) raises -> FastqView[origin=MutUntrackedOrigin]:
         if self.buffer.available() == 0:
             _ = self.buffer.compact_and_fill()
         if not self.has_more():
@@ -503,8 +517,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         var offsets = RecordOffsets()
         var phase = SearchPhase.HEADER
 
-        var scan_view = Span[Byte, MutExternalOrigin](
-            ptr=self.buffer._ptr + base,
+        var scan_view = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self.buffer._ptr.unsafe_offset(base),
             length=self.buffer._end - base,
         )
         var complete: Bool
@@ -515,10 +529,15 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if parse_code != FastxErrorCode.OK:
             var ctx = self._parse_context()
             raise_parse_error(
-                ParseContext(ctx.record_number + 1, ctx.line_number + 1, ctx.file_position),
+                ParseContext(
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
+                ),
                 parse_code.message(),
                 _record_snippet(scan_view, offsets),
             )
+        var refill_code: FastxErrorCode
         if not complete:
             complete, offsets, phase, refill_code = (
                 self._next_ref_complete_fused_old(base, offsets, phase)
@@ -535,20 +554,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
 
         var buffer_view = self.buffer.view().unsafe_ptr()
 
-        var id_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.header_start + 1,
+        var id_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.header_start + 1),
             length=(offsets.seq_start - offsets.header_start - 2),
         )
-        var seq_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.seq_start,
+        var seq_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.seq_start),
             length=(offsets.sep_start - offsets.seq_start - 1),
         )
-        var qual_span = Span[Byte, MutExternalOrigin](
-            ptr=buffer_view + offsets.qual_start,
+        var qual_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.qual_start),
             length=(offsets.record_end - offsets.qual_start),
         )
 
-        var ref_rec = FastqView[origin=MutExternalOrigin](
+        var ref_rec = FastqView[origin=MutUntrackedOrigin](
             _strip_spaces(id_span),
             seq_span,
             qual_span,
@@ -595,7 +614,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
-
                 comptime if not self.config.buffer_growth_enabled:
                     return (
                         False,
@@ -622,8 +640,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if filled == 0 and self.buffer.available() == 0:
                 return (False, offsets, current_phase, FastxErrorCode.EOF)
 
-            var scan_view = Span[Byte, MutExternalOrigin](
-                ptr=self.buffer._ptr + new_base,
+            var scan_view = Span[Byte, MutUntrackedOrigin](
+                unsafe_ptr=self.buffer._ptr.unsafe_offset(new_base),
                 length=self.buffer._end - new_base,
             )
             var complete: Bool
@@ -668,7 +686,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
-
                 comptime if not self.config.buffer_growth_enabled:
                     return (
                         False,
@@ -695,8 +712,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if filled == 0 and self.buffer.available() == 0:
                 return (False, offsets, current_phase, FastxErrorCode.EOF)
 
-            var scan_view = Span[Byte, MutExternalOrigin](
-                ptr=self.buffer._ptr + new_base,
+            var scan_view = Span[Byte, MutUntrackedOrigin](
+                unsafe_ptr=self.buffer._ptr.unsafe_offset(new_base),
                 length=self.buffer._end - new_base,
             )
             var complete: Bool
@@ -741,7 +758,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                     )
 
             if new_base == 0:
-
                 comptime if not self.config.buffer_growth_enabled:
                     return (
                         False,
@@ -768,8 +784,8 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             if filled == 0 and self.buffer.available() == 0:
                 return (False, offsets, current_phase, FastxErrorCode.EOF)
 
-            var scan_view = Span[Byte, MutExternalOrigin](
-                ptr=self.buffer._ptr + new_base,
+            var scan_view = Span[Byte, MutUntrackedOrigin](
+                unsafe_ptr=self.buffer._ptr.unsafe_offset(new_base),
                 length=self.buffer._end - new_base,
             )
             var complete: Bool
@@ -789,10 +805,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 snippet += "\n"
         if snippet.byte_length() < 200 and len(record._sequence) > 0:
             var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
-            var seq_len = min(seq_str.byte_length(), 200 - snippet.byte_length())
+            var seq_len = min(
+                seq_str.byte_length(), 200 - snippet.byte_length()
+            )
             snippet += String(seq_str[byte=0:seq_len])
         if snippet.byte_length() > 200:
-            snippet = snippet[byte=0:197] + "..."
+            var truncated = String(snippet[byte=0:197])
+            snippet = truncated + "..."
         return snippet
 
     def _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
@@ -804,17 +823,20 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
                 snippet += "\n"
         if snippet.byte_length() < 200:
             var seq_str = record.sequence()
-            var seq_len = min(seq_str.byte_length(), 200 - snippet.byte_length())
+            var seq_len = min(
+                seq_str.byte_length(), 200 - snippet.byte_length()
+            )
             snippet += String(seq_str[byte=0:seq_len])
         if snippet.byte_length() > 200:
-            snippet = snippet[byte=0:197] + "..."
+            var truncated = String(snippet[byte=0:197])
+            snippet = truncated + "..."
         return snippet
 
 
 struct _FastqParserViewIter[R: Reader, config: ParserConfig, origin: Origin](
     Iterator
 ):
-    comptime Element = FastqView[origin=MutExternalOrigin]
+    comptime Element = FastqView[origin=MutUntrackedOrigin]
 
     var _src: Pointer[FastqParser[Self.R, Self.config], Self.origin]
 
@@ -834,7 +856,7 @@ struct _FastqParserViewIter[R: Reader, config: ParserConfig, origin: Origin](
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
-            Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
+            Pointer[FastqParser[Self.R, Self.config], MutUntrackedOrigin]
         ](self._src)
         try:
             return mut_ptr[].next_view()
@@ -868,7 +890,7 @@ struct _FastqParserRecordIter[R: Reader, config: ParserConfig, origin: Origin](
 
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
-            Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
+            Pointer[FastqParser[Self.R, Self.config], MutUntrackedOrigin]
         ](self._src)
         try:
             return mut_ptr[].next_record()
@@ -907,7 +929,7 @@ struct _FastqParserBatchIter[R: Reader, config: ParserConfig, origin: Origin](
 
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
-            Pointer[FastqParser[Self.R, Self.config], MutExternalOrigin]
+            Pointer[FastqParser[Self.R, Self.config], MutUntrackedOrigin]
         ](self._src)
         try:
             var batch = mut_ptr[].next_batch(self._max_records)

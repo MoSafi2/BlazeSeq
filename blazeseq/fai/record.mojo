@@ -1,15 +1,14 @@
 from std.collections.string import String, StringSlice
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 
 
 # ---------------------------------------------------------------------------
-# FaiView — zero-alloc, NOT to be stored
+# FaiView — zero-unsafe_alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
-#TODO: Add TrivialRegisterPassable when Optional has conditional conformance
+
+# TODO: Add TrivialRegisterPassable when Optional has conditional conformance
 struct FaiView[O: Origin](Movable, Sized):
     """Zero-copy view over one FAI index row in the parser's buffer.
 

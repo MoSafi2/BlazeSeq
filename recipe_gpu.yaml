@@ -1,0 +1,33 @@
+context:
+  version: "0.3.0"
+
+package:
+  name: "blazeseq-gpu"
+  version: ${{ version }}
+
+source:
+  path: .
+
+build:
+  number: 0
+  script:
+    - mkdir -p $PREFIX/lib/mojo
+    - mojo precompile --Werror -I $PREFIX/lib/mojo blazeseq_gpu -o $PREFIX/lib/mojo/blazeseq_gpu.mojoc
+
+requirements:
+  build:
+    - mojo >=1.0.0,<2
+    - max >=26.5,<27
+  host:
+    - blazeseq ==${{ version }}
+    - mojo >=1.0.0,<2
+    - max >=26.5,<27
+  run:
+    - blazeseq ==${{ version }}
+    - mojo >=1.0.0,<2
+    - max >=26.5,<27
+
+tests:
+  - script:
+      - test -f $PREFIX/lib/mojo/blazeseq_gpu.mojoc
+      - mojo --version

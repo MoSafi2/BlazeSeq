@@ -14,13 +14,18 @@ build:
   # OR if using rattler-build directly, keep it simple:
   script:
     - mkdir -p $PREFIX/lib/mojo
-    - mojo package blazeseq -o $PREFIX/lib/mojo/blazeseq.mojopkg
+    - mojo precompile --Werror blazeseq -o $PREFIX/lib/mojo/blazeseq.mojoc
 
 requirements:
   build:
     - ${{ compiler('cxx') }} # Needed if any shim logic is triggered
-    - mojo ==1.0.0b1
+    - mojo >=1.0.0,<2
   host:
-    - mojo ==1.0.0b1
+    - mojo >=1.0.0,<2
   run:
-    - mojo ==1.0.0b1
+    - mojo >=1.0.0,<2
+
+tests:
+  - script:
+      - test -f $PREFIX/lib/mojo/blazeseq.mojoc
+      - mojo --version

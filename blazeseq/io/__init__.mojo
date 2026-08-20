@@ -5,7 +5,13 @@ from blazeseq.io.readers import (
     GZFile,
     RapidgzipReader,
 )
-from blazeseq.io.writers import Writer, WriterBackend, FileWriter, MemoryWriter, GZWriter
+from blazeseq.io.writers import (
+    Writer,
+    WriterBackend,
+    FileWriter,
+    MemoryWriter,
+    GZWriter,
+)
 from blazeseq.io.buffered import (
     EOFError,
     LineIteratorError,
@@ -14,4 +20,3 @@ from blazeseq.io.buffered import (
     LineIterator,
 )
 from blazeseq.io.delimited import DelimitedRecord, DelimitedReader
-

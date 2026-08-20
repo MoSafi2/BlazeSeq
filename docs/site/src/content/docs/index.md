@@ -92,13 +92,16 @@ internally while the external `rapidgzip` dependency is disabled.
 
 ```mojo
 from blazeseq import FastqParser, RapidgzipReader
+from blazeseq_gpu import upload_batch_to_device
+from max.gpu.host import DeviceContext
 from std.pathlib import Path
 
 def main() raises:
     var reader = RapidgzipReader(Path("reads.fastq.gz"), parallelism=4)
     var parser = FastqParser[RapidgzipReader](reader^, "illumina_1.8")
+    var ctx = DeviceContext()
     for batch in parser.batches(1024):
-        var device_batch = batch.to_device()
+        var device_batch = upload_batch_to_device(batch, ctx)
         _ = device_batch
 ```
 

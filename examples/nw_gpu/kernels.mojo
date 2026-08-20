@@ -9,9 +9,9 @@
 """
 
 from std.gpu import block_idx
-from std.memory import UnsafePointer
+from std.memory import Pointer
 
-# Max reference and query length for the NW kernel (avoids dynamic alloc on device).
+# Max reference and query length for the NW kernel (avoids dynamic unsafe_alloc on device).
 comptime MAX_REF_LEN: Int = 256
 comptime MAX_QUERY_LEN: Int = 256
 # Two rows of (MAX_REF_LEN+1) Int32 per record for DP; each block uses one "slot."
@@ -19,13 +19,13 @@ comptime ROW_STRIDE: Int = 2 * (MAX_REF_LEN + 1)
 
 
 def nw_kernel(
-    ref_ptr: UnsafePointer[UInt8, MutAnyOrigin],
-    ref_len: Int,
-    seq_ptr: UnsafePointer[UInt8, MutAnyOrigin],
-    seq_ends: UnsafePointer[Int64, MutAnyOrigin],
-    num_records: Int,
-    scores: UnsafePointer[Int32, MutAnyOrigin],
-    row_scratch: UnsafePointer[Int32, MutAnyOrigin],
+    ref_ptr: Pointer[UInt8, MutAnyOrigin],
+    ref_len: Int32,
+    seq_ptr: Pointer[UInt8, MutAnyOrigin],
+    seq_ends: Pointer[Int64, MutAnyOrigin],
+    num_records: Int32,
+    scores: Pointer[Int32, MutAnyOrigin],
+    row_scratch: Pointer[Int32, MutAnyOrigin],
 ) -> None:
     """Needleman-Wunsch global alignment: one block per record.
 
@@ -35,64 +35,68 @@ def nw_kernel(
     Scoring: match +1, mismatch -1, gap -1.
     """
     var rec_idx = Int(block_idx.x)
-    if rec_idx >= num_records:
+    var ref_len_int = Int(ref_len)
+    if rec_idx >= Int(num_records):
         return
 
     # Query bounds for this record (concatenated sequences, seq_ends are boundaries).
     var q_start: Int = 0
     if rec_idx > 0:
-        q_start = Int(seq_ends[rec_idx - 1])
-    var q_end = Int(seq_ends[rec_idx])
+        q_start = Int(seq_ends[unsafe_offset=rec_idx - 1])
+    var q_end = Int(seq_ends[unsafe_offset=rec_idx])
     var query_len = q_end - q_start
-    if query_len > MAX_QUERY_LEN or ref_len > MAX_REF_LEN:
-        scores[rec_idx] = 0
+    if query_len > MAX_QUERY_LEN or ref_len_int > MAX_REF_LEN:
+        scores[unsafe_offset=rec_idx] = 0
         return
 
     # This block's slice of row_scratch: two rows of (MAX_REF_LEN+1) Int32.
-    var scratch_base = row_scratch + rec_idx * ROW_STRIDE
+    var scratch_base = row_scratch.unsafe_offset(rec_idx * ROW_STRIDE)
     var dp_prev = scratch_base
-    var dp_curr = scratch_base + (MAX_REF_LEN + 1)
+    var dp_curr = scratch_base.unsafe_offset(MAX_REF_LEN + 1)
 
     var match_score: Int32 = 1
     var mismatch_score: Int32 = -1
     var gap_score: Int32 = -1
 
     # Initialize first row: gap penalties along reference.
-    for i in range(ref_len + 1):
-        dp_prev.store(i, gap_score * Int32(i))
+    for i in range(ref_len_int + 1):
+        dp_prev.unsafe_store(i, gap_score * Int32(i))
 
     # Fill DP by column (query position j); only two rows kept.
     for j in range(1, query_len + 1):
-        dp_curr.store(0, gap_score * Int32(j))
-        for i in range(1, ref_len + 1):
+        dp_curr.unsafe_store(0, gap_score * Int32(j))
+        for i in range(1, ref_len_int + 1):
             var im1 = i - 1
-            var diag = (dp_prev.load(im1))[0]
-            var ref_byte = (ref_ptr + im1)[]
-            var q_byte = (seq_ptr + q_start + j - 1)[]
+            var diag = (dp_prev.unsafe_load(im1))[0]
+            var ref_byte = ref_ptr[unsafe_offset=im1]
+            var q_byte = seq_ptr[unsafe_offset=q_start + j - 1]
             if ref_byte == q_byte:
                 diag += match_score
             else:
                 diag += mismatch_score
-            var del_score = dp_prev.load(i)[0] + gap_score
-            var ins_score = dp_curr.load(im1)[0] + gap_score
+            var del_score = dp_prev.unsafe_load(i)[0] + gap_score
+            var ins_score = dp_curr.unsafe_load(im1)[0] + gap_score
             var best = diag
             if del_score > best:
                 best = del_score
             if ins_score > best:
                 best = ins_score
-            dp_curr.store(i, best)
+            dp_curr.unsafe_store(i, best)
         # Swap rows for next j.
         var tmp = dp_prev
         dp_prev = dp_curr
         dp_curr = tmp
 
-    scores[rec_idx] = dp_prev.load(ref_len)[0]
+    scores[unsafe_offset=rec_idx] = dp_prev.unsafe_load(ref_len_int)[0]
 
 
-def needleman_wunsch_cpu(reference: String, query_bytes: Span[Byte, _]) -> Int32:
-    """Host-side NW taking a raw byte span for the query (avoids String null-terminator issues)."""
-    var r_len = len(reference)
-    var q_len = len(query_bytes)        # ← exact byte count, no null terminator
+def needleman_wunsch_cpu(
+    reference: String, query_bytes: Span[Byte, _]
+) -> Int32:
+    """Host-side NW taking a raw byte span for the query (avoids String null-terminator issues).
+    """
+    var r_len = reference.byte_length()
+    var q_len = len(query_bytes)  # ← exact byte count, no null terminator
     if r_len == 0 or q_len == 0:
         return 0
     var match_score: Int32 = 1

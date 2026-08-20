@@ -16,7 +16,11 @@ from std.time import perf_counter_ns
 from blazeseq.CONSTS import KB, GB
 from blazeseq.io.readers import MemoryReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
-from blazeseq.utils import generate_synthetic_fastq_buffer, compute_num_reads_for_size
+from blazeseq.utils import (
+    generate_synthetic_fastq_buffer,
+    compute_num_reads_for_size,
+)
+
 
 def main() raises:
     var args = argv()

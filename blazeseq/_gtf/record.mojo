@@ -7,8 +7,6 @@ Coordinates are 1-based inclusive. Mandatory attributes: gene_id, transcript_id.
 
 from std.collections import List
 from std.collections.string import String, StringSlice
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 from blazeseq.features import Position, Interval
@@ -33,9 +31,11 @@ struct GtfStrand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     def __init__(out self, value: Int8):
         self.value = value
 
-    comptime Plus       = Self(0)
-    comptime Minus      = Self(1)
-    comptime Unstranded = Self(2)  # "." — used in practice for unstranded features
+    comptime Plus = Self(0)
+    comptime Minus = Self(1)
+    comptime Unstranded = Self(
+        2
+    )  # "." — used in practice for unstranded features
 
     @always_inline
     def __eq__(self, other: Self) -> Bool:
@@ -51,7 +51,7 @@ struct GtfStrand(Copyable, Equatable, TrivialRegisterPassable, Writable):
 
 
 # ---------------------------------------------------------------------------
-# GtfView — zero-alloc, NOT to be stored
+# GtfView — zero-unsafe_alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
 
@@ -125,7 +125,8 @@ struct GtfView[O: Origin](Movable):
         )
 
     def to_record(self) raises -> GtfRecord:
-        """Materialize an owned GtfRecord by parsing attributes from column 9."""
+        """Materialize an owned GtfRecord by parsing attributes from column 9.
+        """
         return GtfRecord(
             Seqid=BString(self._seqid),
             Source=BString(self._source),
@@ -187,7 +188,8 @@ struct GtfRecord(Copyable, Movable, Writable):
         return self.Attributes.get(key)
 
     def get_all_attributes(ref self, key: String) -> List[BString]:
-        """Return all values for key in encounter order (supports duplicate keys)."""
+        """Return all values for key in encounter order (supports duplicate keys).
+        """
         return self.Attributes.get_all(key)
 
     def write_to[w: Writer](ref self, mut writer: w):

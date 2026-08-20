@@ -20,6 +20,7 @@ from blazeseq.CONSTS import EOF
 from blazeseq.io.readers import FileReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 
+
 def main() raises:
     var args = argv()
     if len(args) < 2:
@@ -33,7 +34,7 @@ def main() raises:
     comptime config = ParserConfig(
         check_ascii=False,
         check_quality=False,
-        buffer_capacity= 1024 * 64,
+        buffer_capacity=1024 * 64,
         buffer_growth_enabled=False,
     )
 
@@ -68,9 +69,9 @@ def main() raises:
                 raise
     else:
         print(
-            "Invalid scan_mode. Expected 'optimized', 'fused-old', 'fused', or 'memchr-seq'."
+            "Invalid scan_mode. Expected 'optimized', 'fused-old', 'fused', or"
+            " 'memchr-seq'."
         )
         return
-
 
     print(total_reads, total_base_pairs)

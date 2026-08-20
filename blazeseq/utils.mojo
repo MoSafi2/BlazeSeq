@@ -31,7 +31,12 @@ from blazeseq.io.buffered import (
 )
 from blazeseq.io.readers import Reader
 from blazeseq.io.writers import WriterBackend
-from blazeseq.errors import ParseError, FastxErrorCode, ParseContext, format_parse_error
+from blazeseq.errors import (
+    ParseError,
+    FastxErrorCode,
+    ParseContext,
+    format_parse_error,
+)
 
 
 @doc_hidden
@@ -128,7 +133,6 @@ struct SearchPhase(
         writer.write(self.value)
 
 
-
 # # From extramojo pacakge, skipping version problems
 @always_inline()
 @doc_hidden
@@ -160,9 +164,9 @@ def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     var aligned_end = math.align_down(haystack_len, simd_width)
 
     # Now do aligned reads all through
-    i = 0
+    var i = 0
     while i < aligned_end:
-        var v = ptr.load[width=simd_width](i)
+        var v = ptr.unsafe_load[width=simd_width](i)
         var mask = v.eq(chr)
         var packed = pack_bits(mask)
         if packed:
@@ -173,7 +177,7 @@ def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     var tail_start = aligned_end  # relative to ptr base (haystack[start:])
     var tail_len = len(haystack) - (start + tail_start)
 
-    var tail_ptr = ptr + tail_start
+    var tail_ptr = ptr.unsafe_offset(tail_start)
     var tail_off = tail_start
 
     comptime for i in range(len(CASCADE)):
@@ -181,12 +185,12 @@ def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
         comptime if w >= 1:  # compile-time: elides dead branches
             if tail_len >= w:  # runtime check
                 # Load `w` bytes and check for the first match, if any.
-                var v = tail_ptr.load[width=w]()
+                var v = tail_ptr.unsafe_load[width=w]()
                 var mask = v.eq(SIMD[DType.uint8, w](chr))
                 var packed = pack_bits(mask)
                 if packed:
                     return Int(count_trailing_zeros(packed)) + tail_off + start
-                tail_ptr = tail_ptr + w
+                tail_ptr = tail_ptr.unsafe_offset(w)
                 tail_off = tail_off + w
                 tail_len -= w
 
@@ -251,12 +255,12 @@ def _check_ascii[
     comptime bit_mask: UInt8 = 0x80  # Non-negative bit for ASCII
 
     for i in range(0, aligned_end, simd_width):
-        var vec = buffer.unsafe_ptr().load[width=simd_width](i)
+        var vec = buffer.unsafe_ptr().unsafe_load[width=simd_width](i)
         if (vec & bit_mask).reduce_or():
             return FastxErrorCode.ASCII_INVALID
 
     for i in range(aligned_end, len(buffer)):
-        if buffer.unsafe_ptr()[i] & bit_mask != 0:
+        if buffer.unsafe_ptr()[unsafe_offset=i] & bit_mask != 0:
             return FastxErrorCode.ASCII_INVALID
     return FastxErrorCode.OK
 
@@ -300,8 +304,8 @@ def _check_end_qual(
     Mirrors Rust check_end() QUAL branch: end = self.get_buf().len()
     """
     var rest_start = base + offsets.qual_start
-    var rest = Span[Byte, MutExternalOrigin](
-        ptr=buf._ptr + rest_start,
+    var rest = Span[Byte, MutUntrackedOrigin](
+        unsafe_ptr=buf._ptr.unsafe_offset(rest_start),
         length=buf._end - rest_start,
     )
 
@@ -519,10 +523,10 @@ def _scan_record_optimized[
     var grouped = math.align_down(avail, GROUP_W)
 
     while i < grouped and found < 4:
-        var v0 = ptr.load[width=W](i)
-        var v1 = ptr.load[width=W](i + W)
-        var v2 = ptr.load[width=W](i + 2 * W)
-        var v3 = ptr.load[width=W](i + 3 * W)
+        var v0 = ptr.unsafe_load[width=W](i)
+        var v1 = ptr.unsafe_load[width=W](i + W)
+        var v2 = ptr.unsafe_load[width=W](i + 2 * W)
+        var v3 = ptr.unsafe_load[width=W](i + 3 * W)
 
         var e0 = v0.eq(nl_splat)
         var e1 = v1.eq(nl_splat)
@@ -541,11 +545,15 @@ def _scan_record_optimized[
             if found == 4:
                 break
 
-            found = _drain_newline_cmp[W](offsets, found, start_rel, i + 2 * W, e2)
+            found = _drain_newline_cmp[W](
+                offsets, found, start_rel, i + 2 * W, e2
+            )
             if found == 4:
                 break
 
-            found = _drain_newline_cmp[W](offsets, found, start_rel, i + 3 * W, e3)
+            found = _drain_newline_cmp[W](
+                offsets, found, start_rel, i + 3 * W, e3
+            )
 
         i += GROUP_W
 
@@ -557,7 +565,7 @@ def _scan_record_optimized[
     var aligned = math.align_down(avail, W)
 
     while i < aligned and found < 4:
-        var v = ptr.load[width=W](i)
+        var v = ptr.unsafe_load[width=W](i)
         var cmp = v.eq(nl_splat)
         var mask = pack_bits(cmp)
 
@@ -576,7 +584,7 @@ def _scan_record_optimized[
 
     # ── Scalar tail ─────────────────────────────────────────────────────────
     while i < avail and found < 4:
-        if ptr[i] == new_line:
+        if ptr[unsafe_offset=i] == new_line:
             var abs_pos = start_rel + i + 1
             found += 1
             _store_newline_offset(offsets, found, abs_pos)
@@ -615,7 +623,7 @@ def _scan_record_fused_old[
     var aligned = math.align_down(avail, W)
 
     while i < aligned and found < 4:
-        var v = ptr.load[width=W](i)
+        var v = ptr.unsafe_load[width=W](i)
         var cmp = v.eq(nl_splat)
         var mask = pack_bits(cmp)
 
@@ -633,7 +641,7 @@ def _scan_record_fused_old[
         return (True, offsets, SearchPhase.HEADER, code)
 
     while i < avail and found < 4:
-        if ptr[i] == new_line:
+        if ptr[unsafe_offset=i] == new_line:
             var abs_pos = start_rel + i + 1
             found += 1
             _store_newline_offset(offsets, found, abs_pos)
@@ -705,8 +713,8 @@ def _find_newline_from(
     var avail = buf._end - abs_start
     if avail <= 0:
         return -1
-    var view = Span[Byte, MutExternalOrigin](
-        ptr=buf._ptr + abs_start,
+    var view = Span[Byte, MutUntrackedOrigin](
+        unsafe_ptr=buf._ptr.unsafe_offset(abs_start),
         length=avail,
     )
     var pos = memchr(haystack=view, chr=new_line)

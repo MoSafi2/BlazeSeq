@@ -14,7 +14,7 @@ def _repeat(pattern: String, n: Int) -> String:
 def test_fasta_write_wraps_long_lines_default_width() raises:
     # 130 bases => 60 + 60 + 10 (each terminated by '\n')
     var seq = _repeat("ACGT", 32) + "AC"
-    assert_equal(len(seq), 130)
+    assert_equal(seq.byte_length(), 130)
 
     var rec = FastaRecord("id1", seq)
     var out = String()
@@ -35,7 +35,7 @@ def test_fasta_write_wraps_long_lines_default_width() raises:
 def test_fasta_write_exact_multiple_of_width() raises:
     # exactly 120 bases => 60 + 60 (with trailing '\n')
     var seq = _repeat("ACGT", 30)
-    assert_equal(len(seq), 120)
+    assert_equal(seq.byte_length(), 120)
 
     var rec = FastaRecord("id2", seq)
     var out = String()
@@ -59,7 +59,7 @@ def test_fasta_write_custom_small_width() raises:
 def test_fasta_write_line_width_lte_zero_no_wrap() raises:
     # Treat non-positive widths as "no wrap" (single sequence line).
     var seq = _repeat("ACGT", 25)
-    assert_equal(len(seq), 100)
+    assert_equal(seq.byte_length(), 100)
 
     var rec = FastaRecord("id4", seq)
     var out0 = String()
@@ -73,4 +73,3 @@ def test_fasta_write_line_width_lte_zero_no_wrap() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
-

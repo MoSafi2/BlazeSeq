@@ -6,14 +6,18 @@ All notable changes to BlazeSeq are documented here.
 
 ### Added
 
+- **Optional GPU package**: Added the MAX-backed `blazeseq_gpu` package and `gpu` Pixi environment. Device/staged batches and upload/download helpers moved out of the MAX-free core.
 - **Public BED/GTF/GFF exports**: Added stable `blazeseq.bed`, `blazeseq.gff`, and `blazeseq.gtf` package shims plus top-level re-exports so examples, docs, and tests can import the published parser and record types consistently.
 - **Scanner benchmark modes**: Added explicit FASTQ scanner benchmark variants for the optimized grouped SIMD loop, the original fused SIMD loop, and sequential `memchr` scanning.
 
 ### Changed
 
-- **Mojo 1.0 beta upgrade**: Moved the project to `Mojo 1.0.0b1`, updated Pixi/recipe version pins, and switched package resolution from the `max-nightly` channel to `max`.
+- **Mojo 1.0 final upgrade**: Migrated source, tests, examples, benchmarks, and Python bindings to Mojo 1.0.0 APIs while keeping manifest compatibility at `>=1.0.0,<2`.
+- **Precompiled packaging**: Replaced `.mojopkg`/`mojo package` with `.mojoc`/`mojo precompile`. Python's new `mojoc_path()` is preferred; `mojopkg_path()` remains a compatibility alias returning the same directory.
+- **GPU API migration**: `FastqBatch.to_device()` and `.stage()` were removed. Import `upload_batch_to_device()` and related types from `blazeseq_gpu`.
 - **Rapidgzip compatibility fallback**: Temporarily disabled the external `rapidgzip` dependency while preserving the `RapidgzipReader` API by delegating gzip reads through `GZFile`.
-- **Docs and packaging**: Updated README, docs, and Python package notes to reflect the Mojo 1.0 beta target and the current gzip-reader behavior.
+- **Docs and packaging**: Updated README, docs, Python wheel data, and recipes for Mojo 1.0 final and optional MAX installation.
+- **Mojo 1.0 performance**: Recorded the complete migration benchmark matrix in `docs/mojo_1_0_performance.md`. Regressions over 5% include file batching/record/view modes, most validation combinations, in-memory batching, and the non-parallel gzip compatibility path.
 
 ### Fixed
 

@@ -13,7 +13,6 @@ from blazeseq.errors import (
 )
 from blazeseq.CONSTS import simd_width
 from std.collections.string import StringSlice, String
-from std.memory import Span
 from blazeseq.io.writers import Writer
 
 
@@ -60,7 +59,8 @@ struct Validator(Copyable):
         if id_str.byte_length() > 0:
             snippet += String(id_str)
             if snippet.byte_length() > 100:
-                snippet = snippet[byte=0:97] + "..."
+                var truncated = String(snippet[byte=0:97])
+                snippet = truncated + "..."
         return snippet
 
     def id_snippet(self, record: FastqView) -> String:
@@ -70,7 +70,8 @@ struct Validator(Copyable):
         if id_str.byte_length() > 0:
             snippet += String(id_str)
             if snippet.byte_length() > 100:
-                snippet = snippet[byte=0:97] + "..."
+                var truncated = String(snippet[byte=0:97])
+                snippet = truncated + "..."
         return snippet
 
     @always_inline
@@ -88,7 +89,7 @@ struct Validator(Copyable):
 
         var i = 0
         while i + simd_width <= n:
-            var chunk = ptr.load[width=simd_width](i)
+            var chunk = ptr.unsafe_load[width=simd_width](i)
             var mask = (chunk - lower_v).ge(
                 span_v
             )  # Unsigned unsaturated substraction wraps on underflow.
@@ -97,7 +98,7 @@ struct Validator(Copyable):
             i += simd_width
 
         while i < n:
-            if (ptr[i] - lower) > span:
+            if (ptr[unsafe_offset=i] - lower) > span:
                 return FastxErrorCode.QUALITY_OUT_OF_RANGE
             i += 1
 
@@ -133,7 +134,7 @@ struct Validator(Copyable):
 
         var i = 0
         while i + simd_width <= n:
-            var chunk = ptr.load[width=simd_width](i)
+            var chunk = ptr.unsafe_load[width=simd_width](i)
             # unsigned subtraction wraps on underflow — out-of-range bytes produce value > span
             var mask = (chunk - lower_v).ge(span_v)
             if mask.reduce_or():
@@ -141,7 +142,7 @@ struct Validator(Copyable):
             i += simd_width
 
         while i < n:
-            if (ptr[i] - lower) > span:
+            if (ptr[unsafe_offset=i] - lower) > span:
                 return FastxErrorCode.QUALITY_OUT_OF_RANGE
             i += 1
 
@@ -280,9 +281,9 @@ struct FastqRecord(
     @always_inline
     def __init__(
         out self,
-        id: Span[Byte, MutExternalOrigin],
-        sequence: Span[Byte, MutExternalOrigin],
-        quality: Span[Byte, MutExternalOrigin],
+        id: Span[Byte, MutUntrackedOrigin],
+        sequence: Span[Byte, MutUntrackedOrigin],
+        quality: Span[Byte, MutUntrackedOrigin],
         phred_offset: Int8 = 33,
     ) raises:
         self._id = BString(id)
@@ -318,7 +319,7 @@ struct FastqRecord(
     def sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._sequence.ptr.unsafe_mut_cast[
+            unsafe_ptr=self._sequence.ptr.unsafe_mut_cast[
                 origin_of(self).mut
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
@@ -329,7 +330,7 @@ struct FastqRecord(
     def quality(ref[_] self) -> StringSlice[origin=origin_of(self)]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
         var span = Span[Byte, origin_of(self)](
-            ptr=self._quality.ptr.unsafe_mut_cast[
+            unsafe_ptr=self._quality.ptr.unsafe_mut_cast[
                 origin_of(self).mut
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._quality),
@@ -340,7 +341,7 @@ struct FastqRecord(
     def phred_scores(self) -> List[UInt8]:
         """Return Phred quality scores using the record's phred_offset (e.g. 33).
         """
-        output = List[UInt8](length=len(self._quality), fill=0)
+        var output = List[UInt8](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - UInt8(self._phred_offset)
         return output^
@@ -349,7 +350,7 @@ struct FastqRecord(
     def phred_scores(self, offset: UInt8) -> List[UInt8]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
-        output = List[UInt8](length=len(self._quality), fill=0)
+        var output = List[UInt8](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - offset
         return output^
@@ -359,7 +360,7 @@ struct FastqRecord(
         """Return the read identifier (id without leading '@') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
-            ptr=self._id.ptr.unsafe_mut_cast[
+            unsafe_ptr=self._id.ptr.unsafe_mut_cast[
                 origin_of(self).mut
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
@@ -374,7 +375,7 @@ struct FastqRecord(
         var id = parts[0].strip()
         var id_ascii = BString(id)
         if len(parts) > 1:
-            description = BString()
+            var description = BString()
             for part in parts[1:]:
                 description.extend(part.as_bytes())
             description = BString(_strip_spaces(description.as_span()))
@@ -429,7 +430,7 @@ struct FastqRecord(
 
 @align(64)
 struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
-    ImplicitlyDestructible, Movable, Sized, TrivialRegisterPassable, Writable
+    Deinitable, Movable, Sized, TrivialRegisterPassable, Writable
 ):
     """Zero-copy reference to a FASTQ record inside the parser's buffer.
 
@@ -496,7 +497,7 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
         var id = parts[0].strip()
         var id_ascii = BString(id)
         if len(parts) > 1:
-            description = BString()
+            var description = BString()
             for part in parts[1:]:
                 description.extend(part.as_bytes())
             description = BString(_strip_spaces(description.as_span()))
@@ -516,7 +517,7 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
     @always_inline
     def phred_scores(self) -> List[Byte]:
         """Return Phred quality scores using the record's phred_offset."""
-        output = List[Byte](length=len(self._quality), fill=0)
+        var output = List[Byte](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - UInt8(self._phred_offset)
         return output^
@@ -525,7 +526,7 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
     def phred_scores(self, offset: UInt8) -> List[Byte]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
-        output = List[Byte](length=len(self._quality), fill=0)
+        var output = List[Byte](length=len(self._quality), fill=0)
         for i in range(len(self._quality)):
             output[i] = self._quality[i] - offset
         return output^

@@ -8,7 +8,7 @@ from blazeseq.bed.record import BedRecord, BedView
 from blazeseq.io.writers import Writer
 
 
-struct BedWriter[W: Writer & Movable](Movable):
+struct BedWriter[W: Writer & Movable & Deinitable](Movable):
     """Streaming BED writer.
 
     Wraps a Writer and provides record-level write methods that emit
@@ -31,6 +31,7 @@ struct BedWriter[W: Writer & Movable](Movable):
         rec.write_to(self._writer)
 
     def write_view(mut self, view: BedView[_]) raises:
-        """Materialise view into an owned record and write it as a tab-delimited line."""
+        """Materialise view into an owned record and write it as a tab-delimited line.
+        """
         var rec = view.to_record()
         rec.write_to(self._writer)

@@ -11,7 +11,7 @@ from blazeseq.io.buffered import (
 )
 from blazeseq.io.readers import FileReader, GZFile
 from blazeseq.CONSTS import DEFAULT_CAPACITY
-from std.memory import Span, alloc, memcpy
+from std.memory import unsafe_memcpy
 from std.collections.string import String
 
 
@@ -20,17 +20,17 @@ def test_file_writer_basic() raises:
     var test_path = Path("tests/test_data") / Path("test_file_writer.txt")
     var writer = FileWriter(test_path)
 
-    # Create a buffer with MutExternalOrigin
+    # Create a buffer with MutUntrackedOrigin
     var data = List[Byte]()
     data.append(Byte(ord("H")))
     data.append(Byte(ord("i")))
-    var buf = alloc[Byte](2)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=2)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=2)
+    var buf = unsafe_alloc[Byte](2)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=2)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=2)
 
     var written = writer.write_from_buffer(span, 2, 0)
     assert_equal(written, 2, "Should write 2 bytes")
-    buf.free()
+    buf.unsafe_free()
 
     # Verify file contents
     var reader = FileReader(test_path)
@@ -52,14 +52,14 @@ def test_file_writer_partial_write() raises:
     var data = List[Byte]()
     for i in range(10):
         data.append(Byte(i))
-    var buf = alloc[Byte](10)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=10)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=10)
+    var buf = unsafe_alloc[Byte](10)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=10)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=10)
 
     # Write only first 5 bytes
     var written = writer.write_from_buffer(span, 5, 0)
     assert_equal(written, 5, "Should write 5 bytes")
-    buf.free()
+    buf.unsafe_free()
 
     # Verify file contents
     var reader = FileReader(test_path)
@@ -82,14 +82,14 @@ def test_file_writer_with_offset() raises:
     data.append(Byte(ord("X")))
     data.append(Byte(ord("Y")))
     data.append(Byte(ord("Z")))
-    var buf = alloc[Byte](3)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=3)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=3)
+    var buf = unsafe_alloc[Byte](3)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=3)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=3)
 
     # Write from position 1 (skip first byte)
     var written = writer.write_from_buffer(span, 2, 1)
     assert_equal(written, 2, "Should write 2 bytes")
-    buf.free()
+    buf.unsafe_free()
 
     # Verify file contents
     var reader = FileReader(test_path)
@@ -110,13 +110,13 @@ def test_memory_writer_basic() raises:
     data.append(Byte(ord("e")))
     data.append(Byte(ord("s")))
     data.append(Byte(ord("t")))
-    var buf = alloc[Byte](4)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)
+    var buf = unsafe_alloc[Byte](4)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=4)
 
     var written = writer.write_from_buffer(span, 4, 0)
     assert_equal(written, 4, "Should write 4 bytes")
-    buf.free()
+    buf.unsafe_free()
 
     var result = writer.get_data()
     assert_equal(len(result), 4, "Should have 4 bytes")
@@ -136,22 +136,22 @@ def test_memory_writer_multiple_writes() raises:
     var data1 = List[Byte]()
     data1.append(Byte(ord("H")))
     data1.append(Byte(ord("e")))
-    var buf1 = alloc[Byte](2)
-    memcpy(dest=buf1, src=data1.unsafe_ptr(), count=2)
-    var span1 = Span[Byte, MutExternalOrigin](ptr=buf1, length=2)
+    var buf1 = unsafe_alloc[Byte](2)
+    unsafe_memcpy(dest=buf1, src=data1.unsafe_ptr(), count=2)
+    var span1 = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf1, length=2)
     _ = writer.write_from_buffer(span1, 2, 0)
-    buf1.free()
+    buf1.unsafe_free()
 
     # Second write
     var data2 = List[Byte]()
     data2.append(Byte(ord("l")))
     data2.append(Byte(ord("l")))
     data2.append(Byte(ord("o")))
-    var buf2 = alloc[Byte](3)
-    memcpy(dest=buf2, src=data2.unsafe_ptr(), count=3)
-    var span2 = Span[Byte, MutExternalOrigin](ptr=buf2, length=3)
+    var buf2 = unsafe_alloc[Byte](3)
+    unsafe_memcpy(dest=buf2, src=data2.unsafe_ptr(), count=3)
+    var span2 = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf2, length=3)
     _ = writer.write_from_buffer(span2, 3, 0)
-    buf2.free()
+    buf2.unsafe_free()
 
     var result = writer.get_data()
     assert_equal(len(result), 5, "Should have 5 bytes")
@@ -173,11 +173,11 @@ def test_memory_writer_clear() raises:
     data.append(Byte(ord("e")))
     data.append(Byte(ord("s")))
     data.append(Byte(ord("t")))
-    var buf = alloc[Byte](4)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)
+    var buf = unsafe_alloc[Byte](4)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=4)
     _ = writer.write_from_buffer(span, 4, 0)
-    buf.free()
+    buf.unsafe_free()
 
     assert_equal(len(writer.get_data()), 4, "Should have 4 bytes before clear")
 
@@ -196,12 +196,12 @@ def test_gz_writer_basic() raises:
     var data = List[Byte]()
     for i in range(100):
         data.append(Byte(i % 256))
-    var buf = alloc[Byte](100)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=100)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=100)
+    var buf = unsafe_alloc[Byte](100)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=100)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=100)
     var written = writer.write_from_buffer(span, 100, 0)
     assert_equal(written, 100, "Should write 100 bytes")
-    buf.free()
+    buf.unsafe_free()
     # Writer will be closed by destructor when it goes out of scope
 
     # Re-read the file (writer is closed by destructor)
@@ -327,9 +327,9 @@ def test_writer_error_handling() raises:
     data.append(Byte(ord("e")))
     data.append(Byte(ord("s")))
     data.append(Byte(ord("t")))
-    var buf = alloc[Byte](4)
-    memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=4)
+    var buf = unsafe_alloc[Byte](4)
+    unsafe_memcpy(dest=buf, src=data.unsafe_ptr(), count=4)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=4)
 
     # Test negative amount
     try:
@@ -352,7 +352,7 @@ def test_writer_error_handling() raises:
     except:
         pass  # Expected
 
-    buf.free()
+    buf.unsafe_free()
     print("✓ test_writer_error_handling passed")
 
 
@@ -384,3 +384,4 @@ def main() raises:
         print("All writer tests passed! ✓")
     finally:
         cleanup_writer_test_files()
+from std.memory.alloc import unsafe_alloc

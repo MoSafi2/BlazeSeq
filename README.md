@@ -5,7 +5,7 @@
 [![Run Mojo tests](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/run-tests.yml)
 [![Build and deploy docs](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml/badge.svg)](https://github.com/MoSafi2/BlazeSeq/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://mosafi2.github.io/BlazeSeq/)
-[![Mojo](https://img.shields.io/badge/Mojo-1.0.0b1-fire)](https://docs.modular.com)
+[![Mojo](https://img.shields.io/badge/Mojo-1.0.0-fire)](https://mojolang.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 A high-throughput **FASTQ** parser written in [Mojo](https://docs.modular.com/mojo/). BlazeSeq targets several GB/s throughput from disk using zero-copy parsing, with owned records and GPU-friendly batching for read pipelines. It also supports streaming **FASTA** and samtools-style **`.fai`** index files (five- or six-column rows from `faidx`, index metadata only). Gzip parsing remains available through `GZFile` and a temporary `RapidgzipReader` compatibility wrapper while the external `rapidgzip` dependency is disabled. Configurable validation is available — all through a single unified API.
@@ -34,7 +34,7 @@ Use BlazeSeq as a Mojo dependency in your project. Install [pixi](https://prefix
 blazeseq = { git = "https://github.com/MoSafi2/BlazeSeq", branch = "main" }
 ```
 
-Then run `pixi install` and use the full Mojo API (e.g. `FastqParser`, `FastaParser`, `FaiParser`, `views()`, `batches()`, GPU batching).
+Then run `pixi install` for the MAX-free CPU API. GPU transfers are optional: use the repository's `gpu` environment (or depend on `blazeseq-gpu`) and import `blazeseq_gpu`.
 
 ## Python bindings (experimental)
 
@@ -47,7 +47,7 @@ Python bindings are available via a wheel-only package on PyPI. They are **exper
 pixi run mojo run examples/example_parser.mojo /path/to/file.fastq
 
 # GPU needleman-wunsch global alignment (requires GPU)
-pixi run mojo run examples/nw_gpu/main.mojo
+pixi run -e gpu mojo run -I . examples/nw_gpu/main.mojo
 ```
 
 ### Count reads and base pairs
@@ -83,13 +83,14 @@ def main() raises:
 
 ```mojo
 from blazeseq import FastqBatch
-from gpu.host import DeviceContext
+from blazeseq_gpu import upload_batch_to_device
+from max.gpu.host import DeviceContext
 
 var ctx = DeviceContext()
 var parser = FastqParser(FileReader(Path("data.fastq")), schema="generic", batch_size=4096)
 for batch in parser.batches():
     # batch is a FastqBatch (Structure-of-Arrays)
-    var device_batch = batch.to_device(ctx)   # GPU upload
+    var device_batch = upload_batch_to_device(batch, ctx)
     # Your GPU kernel, check examples
 ```
 

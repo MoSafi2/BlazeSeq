@@ -9,8 +9,6 @@ views() / records() iterators as with BED/FAI.
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.iter import Iterator
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
 from blazeseq.features import Position, Interval
@@ -153,11 +151,15 @@ def _parse_sequence_region(
     if i == 0:
         raise_parse_error(ctx, "GFF3: ##sequence-region missing seqid")
     var seqid = percent_decode_to_bstring(rest[0:i])
+    if i >= len(rest):
+        raise_parse_error(ctx, Gff3ErrorCode.SEQ_REGION.message())
     i += 1  # skip space
     # start
     var j = i
     while j < len(rest) and rest[j] != UInt8(ord(" ")):
         j += 1
+    if j >= len(rest):
+        raise_parse_error(ctx, Gff3ErrorCode.SEQ_REGION.message())
     var start: UInt64 = 0
     var sc = _parse_uint64_from_span(rest[i:j], start)
     if sc != Gff3ErrorCode.OK:
@@ -291,9 +293,9 @@ def _parse_phase_span(
 
 
 def _parse_gff3_row(
-    view: DelimitedView[MutExternalOrigin, 16],
+    view: DelimitedView[MutUntrackedOrigin, 16],
     ctx: ParseContext,
-) raises -> Gff3View[MutExternalOrigin]:
+) raises -> Gff3View[MutUntrackedOrigin]:
     """Parse one 9-field row into Gff3View. Enforces CDS requires phase."""
     if view.num_fields() != GFF_NUM_FIELDS:
         raise_parse_error(ctx, Gff3ErrorCode.FIELD_COUNT.message())
@@ -333,7 +335,7 @@ def _parse_gff3_row(
     ):
         raise_parse_error(ctx, "GFF3: CDS feature requires phase (0, 1, or 2)")
     var attrs_span = view.get_span(8)
-    return Gff3View[MutExternalOrigin](
+    return Gff3View[MutUntrackedOrigin](
         _seqid=seqid,
         _source=source,
         _type=ftype,
@@ -351,16 +353,12 @@ def _parse_gff3_row(
 # ---------------------------------------------------------------------------
 
 
-struct Gff3Parser[R: Reader](Iterable, Movable):
+struct Gff3Parser[R: Reader](Movable):
     """Streaming GFF3 parser. Yields Gff3View / Gff3Record. Stops at ##FASTA.
 
     Collects ##sequence-region directives into an owned heap list accessible
     via sequence_regions(). Validates ##gff-version is 3.x when present.
     """
-
-    comptime IteratorType[origin: Origin] = _Gff3ParserRecordIter[
-        Self.R, origin
-    ]
 
     var _rows: DelimitedReader[Self.R, Gff3LinePolicy, 16]
     var _seq_regions: List[SequenceRegion]
@@ -390,12 +388,12 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
-    def next_view(mut self) raises -> Gff3View[MutExternalOrigin]:
+    def next_view(mut self) raises -> Gff3View[MutUntrackedOrigin]:
         while True:
             var line = self._rows.lines.next_line()  # raises EOFError at EOF
             var action = self._rows.policy.classify(line)
             if action == LineAction.YIELD:
-                var view = DelimitedView[MutExternalOrigin, 16](line, GFF_TAB)
+                var view = DelimitedView[MutUntrackedOrigin, 16](line, GFF_TAB)
                 var ctx = self._parse_context()
                 self._rows._record_number += 1
                 return _parse_gff3_row(view, ctx)
@@ -422,7 +420,7 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
     def records(ref self) -> _Gff3ParserRecordIter[Self.R, origin_of(self)]:
         return _Gff3ParserRecordIter[Self.R, origin_of(self)](Pointer(to=self))
 
-    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    def __iter__(ref self) -> _Gff3ParserRecordIter[Self.R, origin_of(self)]:
         return self.records()
 
 
@@ -431,8 +429,8 @@ struct Gff3Parser[R: Reader](Iterable, Movable):
 # ---------------------------------------------------------------------------
 
 
-struct _Gff3ParserViewIter[R: Reader, origin: Origin](Iterator):
-    comptime Element = Gff3View[MutExternalOrigin]
+struct _Gff3ParserViewIter[R: Reader, origin: Origin]:
+    comptime Element = Gff3View[MutUntrackedOrigin]
 
     var _src: Pointer[Gff3Parser[Self.R], Self.origin]
 
@@ -447,8 +445,8 @@ struct _Gff3ParserViewIter[R: Reader, origin: Origin](Iterator):
         return self._src[].has_more()
 
     @always_inline
-    def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutExternalOrigin]](
+    def __next__(mut self) raises -> Self.Element:
+        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:
@@ -458,11 +456,10 @@ struct _Gff3ParserViewIter[R: Reader, origin: Origin](Iterator):
             if msg == EOF or msg.startswith(EOF):
                 raise StopIteration()
             else:
-                print(msg)
-                raise StopIteration()  # propagate parse errors to the caller
+                raise e
 
 
-struct _Gff3ParserRecordIter[R: Reader, origin: Origin](Iterator):
+struct _Gff3ParserRecordIter[R: Reader, origin: Origin]:
     comptime Element = Gff3Record
 
     var _src: Pointer[Gff3Parser[Self.R], Self.origin]
@@ -478,8 +475,8 @@ struct _Gff3ParserRecordIter[R: Reader, origin: Origin](Iterator):
         return self._src[].has_more()
 
     @always_inline
-    def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutExternalOrigin]](
+    def __next__(mut self) raises -> Self.Element:
+        var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:
@@ -489,5 +486,4 @@ struct _Gff3ParserRecordIter[R: Reader, origin: Origin](Iterator):
             if msg == EOF or msg.startswith(EOF):
                 raise StopIteration()
             else:
-                print(msg)
-                raise StopIteration()  # propagate parse errors to the caller
+                raise e

@@ -21,8 +21,6 @@ when you need an owned record.
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.iter import Iterator
-from std.memory import Span
-
 from blazeseq.CONSTS import EOF
 from blazeseq.fai.record import FaiRecord, FaiView
 from blazeseq.io.buffered import EOFError
@@ -37,7 +35,8 @@ from blazeseq.errors import ParseContext, raise_parse_error
 
 
 struct FaiErrorCode(Copyable, Equatable, TrivialRegisterPassable):
-    """Trivial error code returned by low-level FAI field parsers; caller raises."""
+    """Trivial error code returned by low-level FAI field parsers; caller raises.
+    """
 
     var value: Int8
 
@@ -53,20 +52,25 @@ struct FaiErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
-    comptime OK          = Self(0)
-    comptime INT_EMPTY   = Self(1)
+    comptime OK = Self(0)
+    comptime INT_EMPTY = Self(1)
     comptime INT_INVALID = Self(2)
     comptime FIELD_COUNT = Self(3)
 
     def message(self) -> String:
-        if self == Self.INT_EMPTY:   return "FAI: integer field is empty"
-        if self == Self.INT_INVALID: return "FAI: invalid byte in integer field"
-        if self == Self.FIELD_COUNT: return "FAI: row must have 5 or 6 TAB-delimited columns"
+        if self == Self.INT_EMPTY:
+            return "FAI: integer field is empty"
+        if self == Self.INT_INVALID:
+            return "FAI: invalid byte in integer field"
+        if self == Self.FIELD_COUNT:
+            return "FAI: row must have 5 or 6 TAB-delimited columns"
         return "FAI: parse error"
 
 
 @always_inline
-def _parse_int64_from_span(span: Span[UInt8, _], mut result: Int64) -> FaiErrorCode:
+def _parse_int64_from_span(
+    span: Span[UInt8, _], mut result: Int64
+) -> FaiErrorCode:
     """Parse a decimal Int64 from a byte span. Returns OK or an error code."""
     result = 0
     if len(span) == 0:
@@ -83,10 +87,10 @@ struct FaiParser[R: Reader](Iterable, Movable):
     """Streaming parser for .fai index files over a `Reader`.
 
     API:
-        - `next_view()` → `FaiView` (zero-alloc; invalidated on next advance)
+        - `next_view()` → `FaiView` (zero-unsafe_alloc; invalidated on next advance)
         - `next_record()` → `FaiRecord` (materialized; raises EOFError when exhausted)
         - `for rec in parser` / `records()` → `FaiRecord` (standard iteration)
-        - `for view in parser.views()` → `FaiView` (zero-alloc iteration)
+        - `for view in parser.views()` → `FaiView` (zero-unsafe_alloc iteration)
         - `collect()` → `List[FaiRecord]` (helper that reads the whole index)
     """
 
@@ -116,8 +120,8 @@ struct FaiParser[R: Reader](Iterable, Movable):
     # Record API                                                         #
     # ------------------------------------------------------------------ #
 
-    def next_view(mut self) raises -> FaiView[MutExternalOrigin]:
-        """Return the next FAI index row as a zero-alloc `FaiView`.
+    def next_view(mut self) raises -> FaiView[MutUntrackedOrigin]:
+        """Return the next FAI index row as a zero-unsafe_alloc `FaiView`.
 
         The view borrows from the reader's buffer and is invalidated on the
         next call to any advancing method. Call `.to_record()` when you need
@@ -161,7 +165,7 @@ struct FaiParser[R: Reader](Iterable, Movable):
                 raise_parse_error(ctx, qc.message())
             qual_offset = qo
 
-        return FaiView[MutExternalOrigin](
+        return FaiView[MutUntrackedOrigin](
             _name=view.get_span(0),
             _length=length,
             _offset=offset,
@@ -196,7 +200,7 @@ struct FaiParser[R: Reader](Iterable, Movable):
         return out^
 
     def views(ref self) -> _FaiParserViewIter[Self.R, origin_of(self)]:
-        """Iterator yielding zero-alloc `FaiView`s."""
+        """Iterator yielding zero-unsafe_alloc `FaiView`s."""
         return _FaiParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
 
     def records(ref self) -> _FaiParserRecordIter[Self.R, origin_of(self)]:
@@ -208,9 +212,9 @@ struct FaiParser[R: Reader](Iterable, Movable):
 
 
 struct _FaiParserViewIter[R: Reader, origin: Origin](Iterator):
-    """Iterator yielding zero-alloc `FaiView`s."""
+    """Iterator yielding zero-unsafe_alloc `FaiView`s."""
 
-    comptime Element = FaiView[MutExternalOrigin]
+    comptime Element = FaiView[MutUntrackedOrigin]
 
     var _src: Pointer[FaiParser[Self.R], Self.origin]
 
@@ -226,7 +230,7 @@ struct _FaiParserViewIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutExternalOrigin]](
+        var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:
@@ -262,7 +266,7 @@ struct _FaiParserRecordIter[R: Reader, origin: Origin](Iterator):
 
     @always_inline
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutExternalOrigin]](
+        var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:

@@ -1,19 +1,6 @@
 # """Tests for  FastqBatch, and quality prefix-sum kernel."""
 
-from blazeseq import (
-    FastqRecord,
-    FastqBatch,
-    upload_batch_to_device,
-)
-from blazeseq.fastq.record_batch import (
-    DeviceFastqBatch,
-    StagedFastqBatch,
-    stage_batch_to_host,
-    move_staged_to_device,
-)
-from std.gpu.host import DeviceContext
-from std.sys import has_accelerator
-from std.sys.defines import is_defined
+from blazeseq import FastqRecord, FastqBatch
 from std.testing import (
     assert_equal,
     assert_true,
@@ -79,7 +66,8 @@ def test_fastq_batch_from_records_and_to_records() raises:
             records[i]._sequence.as_string_slice(),
         )
         assert_equal(
-            back[i]._quality.as_string_slice(), records[i]._quality.as_string_slice()
+            back[i]._quality.as_string_slice(),
+            records[i]._quality.as_string_slice(),
         )
         assert_equal(back[i]._phred_offset, records[i]._phred_offset)
 

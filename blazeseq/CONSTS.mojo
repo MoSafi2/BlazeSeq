@@ -9,11 +9,11 @@ comptime GB = 1024 * MB
 
 # FASTQ/FASTA line markers (ASCII codes)
 comptime USE_SIMD = True
-comptime read_header: UInt8 = 64   # ord("@")
+comptime read_header: UInt8 = 64  # ord("@")
 comptime quality_header: UInt8 = 43  # ord("+")
-comptime new_line: UInt8 = 10       # ord("\n")
+comptime new_line: UInt8 = 10  # ord("\n")
 comptime carriage_return: UInt8 = 13  # ord("\r")
-comptime fasta_header: UInt8 = 62   # ord(">")
+comptime fasta_header: UInt8 = 62  # ord(">")
 
 # Sentinel error message for end-of-stream; used by parser/buffered iterators to stop iteration.
 comptime EOF = "EOF"

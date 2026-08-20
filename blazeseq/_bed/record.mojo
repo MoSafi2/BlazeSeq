@@ -9,8 +9,6 @@ OtherFields / _other_fields_spans as opaque byte sequences.
 
 from std.collections import List
 from std.collections.string import String, StringSlice
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 from blazeseq.features import Position, Interval
@@ -35,8 +33,8 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     def __init__(out self, value: Int8):
         self.value = value
 
-    comptime Plus    = Self(0)
-    comptime Minus   = Self(1)
+    comptime Plus = Self(0)
+    comptime Minus = Self(1)
     comptime Unknown = Self(2)  # explicit '.' — strand not applicable
 
     @always_inline
@@ -98,7 +96,7 @@ def interval_try_from_start_end(
 
 
 # ---------------------------------------------------------------------------
-# BedView — zero-alloc, NOT to be stored
+# BedView — zero-unsafe_alloc, NOT to be stored
 # ---------------------------------------------------------------------------
 
 
@@ -174,7 +172,8 @@ struct BedView[O: Origin](Movable):
         return Position(self.chrom_start + 1, True)
 
     def end_position(self) -> Optional[Position]:
-        """1-based end position (chromEnd). None for zero-length BED records (chromEnd == 0)."""
+        """1-based end position (chromEnd). None for zero-length BED records (chromEnd == 0).
+        """
         if self.chrom_end == 0:
             return None
         return Optional(Position(self.chrom_end, True))
@@ -186,11 +185,13 @@ struct BedView[O: Origin](Movable):
         """
         if self.chrom_end == 0:
             return None
-        return Optional(Interval(
-            Position(self.chrom_start + 1, True),
-            Position(self.chrom_end, True),
-            True,
-        ))
+        return Optional(
+            Interval(
+                Position(self.chrom_start + 1, True),
+                Position(self.chrom_end, True),
+                True,
+            )
+        )
 
     def thick_interval(self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
@@ -231,20 +232,35 @@ struct BedView[O: Origin](Movable):
         """
         var block_sizes: Optional[List[UInt64]] = None
         var block_starts: Optional[List[UInt64]] = None
-        if self._block_sizes_span and self._block_starts_span and self.block_count:
+        if (
+            self._block_sizes_span
+            and self._block_starts_span
+            and self.block_count
+        ):
             var bc = self.block_count.value()
-            var sizes = _parse_comma_sep_int64_list(self._block_sizes_span.value())
-            var starts = _parse_comma_sep_int64_list(self._block_starts_span.value())
+            var sizes = _parse_comma_sep_int64_list(
+                self._block_sizes_span.value()
+            )
+            var starts = _parse_comma_sep_int64_list(
+                self._block_starts_span.value()
+            )
             if len(sizes) != bc or len(starts) != bc:
                 raise Error("BED: blockSizes/blockStarts length != blockCount")
             if starts[0] != 0:
-                raise Error("BED: blockStarts[0] must be 0 (first block at chromStart)")
-            if self.chrom_start + starts[bc - 1] + sizes[bc - 1] != self.chrom_end:
+                raise Error(
+                    "BED: blockStarts[0] must be 0 (first block at chromStart)"
+                )
+            if (
+                self.chrom_start + starts[bc - 1] + sizes[bc - 1]
+                != self.chrom_end
+            ):
                 raise Error("BED: last block must end at chromEnd")
             # Validate blocks are sorted and non-overlapping
             for i in range(bc - 1):
                 if starts[i] + sizes[i] > starts[i + 1]:
-                    raise Error("BED: blocks must be non-overlapping and sorted")
+                    raise Error(
+                        "BED: blocks must be non-overlapping and sorted"
+                    )
             block_sizes = sizes^
             block_starts = starts^
         var name_opt: Optional[BString] = None
@@ -340,7 +356,8 @@ struct BedRecord(Copyable, Movable, Writable):
         return Position(self.ChromStart + 1, True)
 
     def end_position(self) -> Optional[Position]:
-        """1-based end position (ChromEnd). None for zero-length BED records (ChromEnd == 0)."""
+        """1-based end position (ChromEnd). None for zero-length BED records (ChromEnd == 0).
+        """
         if self.ChromEnd == 0:
             return None
         return Optional(Position(self.ChromEnd, True))
@@ -352,11 +369,13 @@ struct BedRecord(Copyable, Movable, Writable):
         """
         if self.ChromEnd == 0:
             return None
-        return Optional(Interval(
-            Position(self.ChromStart + 1, True),
-            Position(self.ChromEnd, True),
-            True,
-        ))
+        return Optional(
+            Interval(
+                Position(self.ChromStart + 1, True),
+                Position(self.ChromEnd, True),
+                True,
+            )
+        )
 
     def thick_interval(ref self) -> Optional[Interval]:
         """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
@@ -416,7 +435,13 @@ struct BedRecord(Copyable, Movable, Writable):
         writer.write_string("\n")
 
     def _write_core_fields[w: Writer](ref self, mut writer: w):
-        var s = self.Chrom.to_string() + "\t" + String(self.ChromStart) + "\t" + String(self.ChromEnd)
+        var s = (
+            self.Chrom.to_string()
+            + "\t"
+            + String(self.ChromStart)
+            + "\t"
+            + String(self.ChromEnd)
+        )
         writer.write_string(StringSlice(s))
 
     def _write_name_field[w: Writer](ref self, mut writer: w):
@@ -462,7 +487,9 @@ struct BedRecord(Copyable, Movable, Writable):
             return
         if self.ItemRgb:
             var rgb = self.ItemRgb.value().copy()
-            var s = "\t" + String(rgb.r) + "," + String(rgb.g) + "," + String(rgb.b)
+            var s = (
+                "\t" + String(rgb.r) + "," + String(rgb.g) + "," + String(rgb.b)
+            )
             writer.write_string(StringSlice(s))
         else:
             writer.write_string("\t0")
@@ -472,7 +499,14 @@ struct BedRecord(Copyable, Movable, Writable):
             return
         var sizes = self.BlockSizes.value().copy()
         var starts = self.BlockStarts.value().copy()
-        var s = "\t" + String(len(sizes)) + "\t" + _comma_sep_u64_list(sizes) + "\t" + _comma_sep_u64_list(starts)
+        var s = (
+            "\t"
+            + String(len(sizes))
+            + "\t"
+            + _comma_sep_u64_list(sizes)
+            + "\t"
+            + _comma_sep_u64_list(starts)
+        )
         writer.write_string(StringSlice(s))
 
     def _write_other_fields[w: Writer](ref self, mut writer: w):

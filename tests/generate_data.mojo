@@ -2,7 +2,7 @@ from blazeseq.fastq.record import FastqRecord
 from blazeseq.fastq.quality_schema import QualitySchema, generic_schema
 import random
 from collections.string import chr, String
-from time import perf_counter_ns
+from std.time import perf_counter_ns
 
 comptime QUAL_LOWER: Int64 = 33
 comptime QUAL_UPPER: Int64 = 126

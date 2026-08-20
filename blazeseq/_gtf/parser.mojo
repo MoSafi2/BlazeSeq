@@ -8,8 +8,6 @@ Use next_view() / next_record() and views() / records() iterators.
 from std.collections import List
 from std.collections.string import String, StringSlice
 from std.iter import Iterator
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
 from blazeseq.features import Position, Interval
@@ -172,9 +170,9 @@ def _parse_phase_span(
 
 
 def _parse_gtf_row(
-    view: DelimitedView[MutExternalOrigin, 16],
+    view: DelimitedView[MutUntrackedOrigin, 16],
     ctx: ParseContext,
-) raises -> GtfView[MutExternalOrigin]:
+) raises -> GtfView[MutUntrackedOrigin]:
     """Parse one 9-field GTF row into GtfView."""
     if view.num_fields() != GTF_NUM_FIELDS:
         raise_parse_error(ctx, GtfErrorCode.FIELD_COUNT.message())
@@ -205,7 +203,7 @@ def _parse_gtf_row(
     if pc != GtfErrorCode.OK:
         raise_parse_error(ctx, pc.message())
     var attrs_span = view.get_span(8)
-    return GtfView[MutExternalOrigin](
+    return GtfView[MutUntrackedOrigin](
         _seqid=seqid,
         _source=source,
         _type=ftype,
@@ -223,14 +221,12 @@ def _parse_gtf_row(
 # ---------------------------------------------------------------------------
 
 
-struct GtfParser[R: Reader](Iterable, Movable):
+struct GtfParser[R: Reader](Movable):
     """Streaming GTF2.2 parser. Yields GtfView / GtfRecord.
 
     Pass `strict_mandatory_attrs=True` to raise an error when gene_id or
     transcript_id is absent from a feature line, as required by GTF2.2.
     """
-
-    comptime IteratorType[origin: Origin] = _GtfParserRecordIter[Self.R, origin]
 
     var _rows: DelimitedReader[Self.R, GtfLinePolicy, 16]
     var _strict_mandatory_attrs: Bool
@@ -254,7 +250,7 @@ struct GtfParser[R: Reader](Iterable, Movable):
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
-    def next_view(mut self) raises -> GtfView[MutExternalOrigin]:
+    def next_view(mut self) raises -> GtfView[MutUntrackedOrigin]:
         if not self.has_more():
             raise EOFError()
         var view = self._rows.next_view()
@@ -275,7 +271,7 @@ struct GtfParser[R: Reader](Iterable, Movable):
     def records(ref self) -> _GtfParserRecordIter[Self.R, origin_of(self)]:
         return _GtfParserRecordIter[Self.R, origin_of(self)](Pointer(to=self))
 
-    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    def __iter__(ref self) -> _GtfParserRecordIter[Self.R, origin_of(self)]:
         return self.records()
 
 
@@ -284,8 +280,8 @@ struct GtfParser[R: Reader](Iterable, Movable):
 # ---------------------------------------------------------------------------
 
 
-struct _GtfParserViewIter[R: Reader, origin: Origin](Iterator):
-    comptime Element = GtfView[MutExternalOrigin]
+struct _GtfParserViewIter[R: Reader, origin: Origin]:
+    comptime Element = GtfView[MutUntrackedOrigin]
 
     var _src: Pointer[GtfParser[Self.R], Self.origin]
 
@@ -300,8 +296,8 @@ struct _GtfParserViewIter[R: Reader, origin: Origin](Iterator):
         return self._src[].has_more()
 
     @always_inline
-    def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutExternalOrigin]](
+    def __next__(mut self) raises -> Self.Element:
+        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:
@@ -311,11 +307,10 @@ struct _GtfParserViewIter[R: Reader, origin: Origin](Iterator):
             if msg == EOF or msg.startswith(EOF):
                 raise StopIteration()
             else:
-                print(msg)
-                raise StopIteration()  # propagate parse errors to the caller
+                raise e
 
 
-struct _GtfParserRecordIter[R: Reader, origin: Origin](Iterator):
+struct _GtfParserRecordIter[R: Reader, origin: Origin]:
     comptime Element = GtfRecord
 
     var _src: Pointer[GtfParser[Self.R], Self.origin]
@@ -331,8 +326,8 @@ struct _GtfParserRecordIter[R: Reader, origin: Origin](Iterator):
         return self._src[].has_more()
 
     @always_inline
-    def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutExternalOrigin]](
+    def __next__(mut self) raises -> Self.Element:
+        var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutUntrackedOrigin]](
             self._src
         )
         try:
@@ -342,5 +337,4 @@ struct _GtfParserRecordIter[R: Reader, origin: Origin](Iterator):
             if msg == EOF or msg.startswith(EOF):
                 raise StopIteration()
             else:
-                print(msg)
-                raise StopIteration()  # propagate parse errors to the caller
+                raise e

@@ -105,8 +105,13 @@ def create_parser(
     ...
 
 
+def mojoc_path() -> str:
+    """Return the directory containing the pre-built blazeseq.mojoc."""
+    ...
+
+
 def mojopkg_path() -> str:
-    """Return the path to the directory containing the pre-built blazeseq.mojopkg for use with mojo build -I."""
+    """Compatibility alias for mojoc_path()."""
     ...
 
 

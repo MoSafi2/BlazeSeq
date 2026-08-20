@@ -3,7 +3,7 @@
 from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 from std.pathlib import Path
 from std.os import remove
-from std.memory import alloc, Span, memcpy
+from std.memory import unsafe_memcpy
 from blazeseq.io.readers import RapidgzipReader
 from blazeseq.io.writers import GZWriter
 from blazeseq.io.buffered import LineIterator, buffered_writer_for_gzip
@@ -19,11 +19,13 @@ from blazeseq.fastq.record import FastqRecord
 def create_gz_file(path: String, content: List[Byte]) raises:
     """Create a gzip file with the given content."""
     var writer = GZWriter(path)
-    var buf = alloc[Byte](len(content))
-    memcpy(dest=buf, src=content.unsafe_ptr(), count=len(content))
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=len(content))
+    var buf = unsafe_alloc[Byte](len(content))
+    unsafe_memcpy(dest=buf, src=content.unsafe_ptr(), count=len(content))
+    var span = Span[Byte, MutUntrackedOrigin](
+        unsafe_ptr=buf, length=len(content)
+    )
     _ = writer.write_from_buffer(span, len(content), 0)
-    buf.free()
+    buf.unsafe_free()
 
 
 def create_fastq_gz_file(path: String, content: String) raises:
@@ -50,15 +52,15 @@ def test_rapidgzip_reader_init() raises:
     create_gz_file("tests/test_data/test_rapidgzip_init.gz", content)
 
     var reader = RapidgzipReader("tests/test_data/test_rapidgzip_init.gz")
-    var buf = alloc[Byte](5)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
+    var buf = unsafe_alloc[Byte](5)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=5)
     var bytes_read = reader.read_to_buffer(span, 5, pos=0)
 
     assert_equal(bytes_read, 5, "Should read 5 bytes")
     assert_equal(span[0], 72, "First byte should be 'H'")
     assert_equal(span[4], 111, "Fifth byte should be 'o'")
 
-    buf.free()
+    buf.unsafe_free()
     print("✓ test_rapidgzip_reader_init passed")
 
 
@@ -71,15 +73,15 @@ def test_rapidgzip_reader_init_path() raises:
 
     var path = Path("tests/test_data") / Path("test_rapidgzip_init_path.gz")
     var reader = RapidgzipReader(path)
-    var buf = alloc[Byte](2)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=2)
+    var buf = unsafe_alloc[Byte](2)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=2)
     var bytes_read = reader.read_to_buffer(span, 2, pos=0)
 
     assert_equal(bytes_read, 2, "Should read 2 bytes")
     assert_equal(span[0], 65, "First byte should be 'A'")
     assert_equal(span[1], 66, "Second byte should be 'B'")
 
-    buf.free()
+    buf.unsafe_free()
     print("✓ test_rapidgzip_reader_init_path passed")
 
 
@@ -91,15 +93,15 @@ def test_rapidgzip_reader_read_to_buffer() raises:
     create_gz_file("tests/test_data/test_rapidgzip_read.gz", content)
 
     var reader = RapidgzipReader("tests/test_data/test_rapidgzip_read.gz")
-    var buf = alloc[Byte](20)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=20)
+    var buf = unsafe_alloc[Byte](20)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=20)
     var bytes_read = reader.read_to_buffer(span, 20, pos=0)
 
     assert_equal(bytes_read, 20, "Should read 20 bytes")
     for i in range(20):
         assert_equal(span[i], Byte(i), "Byte should match")
 
-    buf.free()
+    buf.unsafe_free()
     print("✓ test_rapidgzip_reader_read_to_buffer passed")
 
 
@@ -111,8 +113,8 @@ def test_rapidgzip_reader_read_to_buffer_partial() raises:
     create_gz_file("tests/test_data/test_rapidgzip_partial.gz", content)
 
     var reader = RapidgzipReader("tests/test_data/test_rapidgzip_partial.gz")
-    var buf = alloc[Byte](5)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=5)
+    var buf = unsafe_alloc[Byte](5)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=5)
 
     var bytes_read1 = reader.read_to_buffer(span, 5, pos=0)
     assert_equal(bytes_read1, 5, "First read should return 5 bytes")
@@ -125,7 +127,7 @@ def test_rapidgzip_reader_read_to_buffer_partial() raises:
     var bytes_read3 = reader.read_to_buffer(span, 5, pos=0)
     assert_equal(bytes_read3, 0, "Third read should return 0 (EOF)")
 
-    buf.free()
+    buf.unsafe_free()
     print("✓ test_rapidgzip_reader_read_to_buffer_partial passed")
 
 
@@ -136,8 +138,8 @@ def test_rapidgzip_reader_eof() raises:
     create_gz_file("tests/test_data/test_rapidgzip_eof.gz", content)
 
     var reader = RapidgzipReader("tests/test_data/test_rapidgzip_eof.gz")
-    var buf = alloc[Byte](10)
-    var span = Span[Byte, MutExternalOrigin](ptr=buf, length=10)
+    var buf = unsafe_alloc[Byte](10)
+    var span = Span[Byte, MutUntrackedOrigin](unsafe_ptr=buf, length=10)
 
     var bytes_read1 = reader.read_to_buffer(span, 10, pos=0)
     assert_equal(bytes_read1, 1, "Should read 1 byte")
@@ -145,7 +147,7 @@ def test_rapidgzip_reader_eof() raises:
     var bytes_read2 = reader.read_to_buffer(span, 10, pos=0)
     assert_equal(bytes_read2, 0, "Should return 0 at EOF")
 
-    buf.free()
+    buf.unsafe_free()
     print("✓ test_rapidgzip_reader_eof passed")
 
 
@@ -169,19 +171,35 @@ def test_rapidgzip_reader_with_buffered_reader() raises:
 def test_rapidgzip_reader_fastq_parser() raises:
     """Test FastqParser with RapidgzipReader on .fastq.gz file."""
     var fastq_content = "@r1\nACGT\n+\n!!!!\n@r2\nTGCA\n+\n####\n"
-    create_fastq_gz_file("tests/test_data/test_rapidgzip_fastq.fastq.gz", fastq_content)
+    create_fastq_gz_file(
+        "tests/test_data/test_rapidgzip_fastq.fastq.gz", fastq_content
+    )
 
-    var reader = RapidgzipReader("tests/test_data/test_rapidgzip_fastq.fastq.gz")
+    var reader = RapidgzipReader(
+        "tests/test_data/test_rapidgzip_fastq.fastq.gz"
+    )
     var parser = FastqParser[RapidgzipReader](reader^, "generic")
     var records = List[FastqRecord]()
     for record in parser.records():
         records.append(record.copy())
 
     assert_equal(len(records), 2, "Should parse 2 records")
-    assert_equal(records[0]._id.to_string(), "r1", "First record id should match")
-    assert_equal(records[0]._sequence.to_string(), "ACGT", "First record sequence should match")
-    assert_equal(records[1]._id.to_string(), "r2", "Second record id should match")
-    assert_equal(records[1]._sequence.to_string(), "TGCA", "Second record sequence should match")
+    assert_equal(
+        records[0]._id.to_string(), "r1", "First record id should match"
+    )
+    assert_equal(
+        records[0]._sequence.to_string(),
+        "ACGT",
+        "First record sequence should match",
+    )
+    assert_equal(
+        records[1]._id.to_string(), "r2", "Second record id should match"
+    )
+    assert_equal(
+        records[1]._sequence.to_string(),
+        "TGCA",
+        "Second record sequence should match",
+    )
 
     print("✓ test_rapidgzip_reader_fastq_parser passed")
 
@@ -228,3 +246,4 @@ def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
     cleanup_rapidgzip_test_files()
     print("\n✓ All RapidgzipReader tests passed!")
+from std.memory.alloc import unsafe_alloc

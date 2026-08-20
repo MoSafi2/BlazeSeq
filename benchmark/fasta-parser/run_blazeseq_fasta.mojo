@@ -8,10 +8,11 @@ Usage:
     pixi run mojo run -I . benchmark/fasta-parser/run_blazeseq_fasta.mojo <path.fasta>
 """
 
-from sys import argv
-from pathlib import Path
+from std.sys import argv
+from std.pathlib import Path
 from blazeseq.io.readers import FileReader
 from blazeseq.fasta.parser import FastaParser
+
 
 def main() raises:
     var args = argv()

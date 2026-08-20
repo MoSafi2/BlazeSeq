@@ -73,7 +73,9 @@ def run_mode_ascii(path: String, mode: String) raises -> Tuple[Int, Int]:
     return (total_reads, total_base_pairs)
 
 
-def run_mode_ascii_quality(path: String, mode: String) raises -> Tuple[Int, Int]:
+def run_mode_ascii_quality(
+    path: String, mode: String
+) raises -> Tuple[Int, Int]:
     comptime config = ParserConfig(
         check_ascii=True,
         check_quality=True,
@@ -106,7 +108,8 @@ def main() raises:
     var args = argv()
     if len(args) < 4:
         print(
-            "Usage: run_throughput_validation_blazeseq.mojo <path.fastq> <mode> <validation>"
+            "Usage: run_throughput_validation_blazeseq.mojo <path.fastq> <mode>"
+            " <validation>"
         )
         print("  mode: batches | records | views")
         print("  validation: none | ascii | ascii_quality")
@@ -125,7 +128,11 @@ def main() raises:
     elif validation == "ascii_quality":
         total_reads, total_base_pairs = run_mode_ascii_quality(file_path, mode)
     else:
-        print("Unknown validation: ", validation, ". Use none | ascii | ascii_quality")
+        print(
+            "Unknown validation: ",
+            validation,
+            ". Use none | ascii | ascii_quality",
+        )
         return
 
     print(total_reads, total_base_pairs)

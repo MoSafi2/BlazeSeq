@@ -33,8 +33,12 @@ comptime SYNTHETIC_MAX_LEN = 150
 comptime SYNTHETIC_MIN_PHRED = 0
 comptime SYNTHETIC_MAX_PHRED = 40
 
-comptime SYNTHETIC_PLAIN_PATH = "tests/test_data/fastq_integration_synthetic.fastq"
-comptime SYNTHETIC_GZ_PATH = "tests/test_data/fastq_integration_synthetic.fastq.gz"
+comptime SYNTHETIC_PLAIN_PATH = (
+    "tests/test_data/fastq_integration_synthetic.fastq"
+)
+comptime SYNTHETIC_GZ_PATH = (
+    "tests/test_data/fastq_integration_synthetic.fastq.gz"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +46,9 @@ comptime SYNTHETIC_GZ_PATH = "tests/test_data/fastq_integration_synthetic.fastq.
 # ---------------------------------------------------------------------------
 
 
-def assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "") raises:
+def assert_fastq_records_equal(
+    a: FastqRecord, b: FastqRecord, msg: String = ""
+) raises:
     """Assert two FastqRecords are equal on all fields (not just sequence)."""
     assert_equal(
         a._id.to_string(),
@@ -71,9 +77,9 @@ def assert_fastq_records_equal(a: FastqRecord, b: FastqRecord, msg: String = "")
 # ---------------------------------------------------------------------------
 
 
-def write_fastq_records[W: WriterBackend](
-    mut writer: BufferedWriter[W], records: List[FastqRecord]
-) raises:
+def write_fastq_records[
+    W: WriterBackend
+](mut writer: BufferedWriter[W], records: List[FastqRecord]) raises:
     """Write FASTQ records to a BufferedWriter (4 lines per record)."""
     for i in range(len(records)):
         var s = String(records[i])
@@ -146,10 +152,14 @@ def test_plain_roundtrip() raises:
     var writer = buffered_writer_for_file(out_path)
     write_fastq_records(writer, original)
 
-    var reread = parse_plain_fastq("tests/test_data/fastq_integration_plain.fastq")
+    var reread = parse_plain_fastq(
+        "tests/test_data/fastq_integration_plain.fastq"
+    )
     assert_equal(len(original), len(reread), "Record count mismatch")
     for i in range(len(original)):
-        assert_fastq_records_equal(original[i], reread[i], "record " + String(i))
+        assert_fastq_records_equal(
+            original[i], reread[i], "record " + String(i)
+        )
     print("✓ test_plain_roundtrip passed")
 
 
@@ -167,7 +177,9 @@ def test_plain_to_gzip_roundtrip() raises:
     var reread = parse_gzip_fastq(gz_path)
     assert_equal(len(original), len(reread), "Record count mismatch")
     for i in range(len(original)):
-        assert_fastq_records_equal(original[i], reread[i], "record " + String(i))
+        assert_fastq_records_equal(
+            original[i], reread[i], "record " + String(i)
+        )
     print("✓ test_plain_to_gzip_roundtrip passed")
 
 
@@ -227,14 +239,26 @@ def test_synthetic_plain_roundtrip() raises:
     if not exists(Path(SYNTHETIC_PLAIN_PATH)):
         generate_synthetic_fastq_fixtures()
     var original = parse_plain_fastq(SYNTHETIC_PLAIN_PATH)
-    var out_path = Path("tests/test_data/fastq_integration_synthetic_plain_out.fastq")
+    var out_path = Path(
+        "tests/test_data/fastq_integration_synthetic_plain_out.fastq"
+    )
     var writer = buffered_writer_for_file(out_path)
     write_fastq_records(writer, original)
-    var reread = parse_plain_fastq("tests/test_data/fastq_integration_synthetic_plain_out.fastq")
-    assert_equal(len(original), len(reread), "Record count mismatch (synthetic plain)")
+    var reread = parse_plain_fastq(
+        "tests/test_data/fastq_integration_synthetic_plain_out.fastq"
+    )
+    assert_equal(
+        len(original), len(reread), "Record count mismatch (synthetic plain)"
+    )
     for i in range(len(original)):
-        assert_fastq_records_equal(original[i], reread[i], "synthetic plain record " + String(i))
-    print("✓ test_synthetic_plain_roundtrip passed (" + String(len(original)) + " records)")
+        assert_fastq_records_equal(
+            original[i], reread[i], "synthetic plain record " + String(i)
+        )
+    print(
+        "✓ test_synthetic_plain_roundtrip passed ("
+        + String(len(original))
+        + " records)"
+    )
 
 
 def test_synthetic_plain_to_gzip_roundtrip() raises:
@@ -242,40 +266,74 @@ def test_synthetic_plain_to_gzip_roundtrip() raises:
     if not exists(Path(SYNTHETIC_PLAIN_PATH)):
         generate_synthetic_fastq_fixtures()
     var original = parse_plain_fastq(SYNTHETIC_PLAIN_PATH)
-    var gz_path = "tests/test_data/fastq_integration_synthetic_plain2gz_out.fastq.gz"
+    var gz_path = (
+        "tests/test_data/fastq_integration_synthetic_plain2gz_out.fastq.gz"
+    )
     var writer = buffered_writer_for_gzip(gz_path)
     write_fastq_records(writer, original)
     var reread = parse_gzip_fastq(gz_path)
-    assert_equal(len(original), len(reread), "Record count mismatch (synthetic plain→gzip)")
+    assert_equal(
+        len(original),
+        len(reread),
+        "Record count mismatch (synthetic plain→gzip)",
+    )
     for i in range(len(original)):
-        assert_fastq_records_equal(original[i], reread[i], "synthetic plain→gzip record " + String(i))
-    print("✓ test_synthetic_plain_to_gzip_roundtrip passed (" + String(len(original)) + " records)")
+        assert_fastq_records_equal(
+            original[i], reread[i], "synthetic plain→gzip record " + String(i)
+        )
+    print(
+        "✓ test_synthetic_plain_to_gzip_roundtrip passed ("
+        + String(len(original))
+        + " records)"
+    )
 
 
 def test_synthetic_gzip_roundtrip() raises:
     """Round-trip: large synthetic gzip → write plain → read plain → compare."""
     var original = parse_gzip_fastq(SYNTHETIC_GZ_PATH)
-    var plain_path = "tests/test_data/fastq_integration_synthetic_gz2plain_out.fastq"
+    var plain_path = (
+        "tests/test_data/fastq_integration_synthetic_gz2plain_out.fastq"
+    )
     var writer = buffered_writer_for_file(Path(plain_path))
     write_fastq_records(writer, original)
     var reread = parse_plain_fastq(plain_path)
-    assert_equal(len(original), len(reread), "Record count mismatch (synthetic gzip)")
+    assert_equal(
+        len(original), len(reread), "Record count mismatch (synthetic gzip)"
+    )
     for i in range(len(original)):
-        assert_fastq_records_equal(original[i], reread[i], "synthetic gzip record " + String(i))
-    print("✓ test_synthetic_gzip_roundtrip passed (" + String(len(original)) + " records)")
+        assert_fastq_records_equal(
+            original[i], reread[i], "synthetic gzip record " + String(i)
+        )
+    print(
+        "✓ test_synthetic_gzip_roundtrip passed ("
+        + String(len(original))
+        + " records)"
+    )
 
 
 def test_synthetic_gzip_to_gzip_roundtrip() raises:
     """Round-trip: large synthetic gzip → write gzip → read gzip → compare."""
     var original = parse_gzip_fastq(SYNTHETIC_GZ_PATH)
-    var gz_out_path = "tests/test_data/fastq_integration_synthetic_gz2gz_out.fastq.gz"
+    var gz_out_path = (
+        "tests/test_data/fastq_integration_synthetic_gz2gz_out.fastq.gz"
+    )
     var writer = buffered_writer_for_gzip(gz_out_path)
     write_fastq_records(writer, original)
     var reread = parse_gzip_fastq(gz_out_path)
-    assert_equal(len(original), len(reread), "Record count mismatch (synthetic gzip→gzip)")
+    assert_equal(
+        len(original),
+        len(reread),
+        "Record count mismatch (synthetic gzip→gzip)",
+    )
     for i in range(len(original)):
-        assert_fastq_records_equal(original[i], reread[i], "synthetic gzip→gzip record " + String(i))
-    print("✓ test_synthetic_gzip_to_gzip_roundtrip passed (" + String(len(original)) + " records)")
+        assert_fastq_records_equal(
+            original[i], reread[i], "synthetic gzip→gzip record " + String(i)
+        )
+    print(
+        "✓ test_synthetic_gzip_to_gzip_roundtrip passed ("
+        + String(len(original))
+        + " records)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -295,9 +353,15 @@ def cleanup_fastq_integration_files() raises:
     paths.append("tests/test_data/fastq_integration_input.fastq.gz")
     paths.append("tests/test_data/fastq_integration_gz2gz.fastq.gz")
     paths.append("tests/test_data/fastq_integration_synthetic_plain_out.fastq")
-    paths.append("tests/test_data/fastq_integration_synthetic_plain2gz_out.fastq.gz")
-    paths.append("tests/test_data/fastq_integration_synthetic_gz2plain_out.fastq")
-    paths.append("tests/test_data/fastq_integration_synthetic_gz2gz_out.fastq.gz")
+    paths.append(
+        "tests/test_data/fastq_integration_synthetic_plain2gz_out.fastq.gz"
+    )
+    paths.append(
+        "tests/test_data/fastq_integration_synthetic_gz2plain_out.fastq"
+    )
+    paths.append(
+        "tests/test_data/fastq_integration_synthetic_gz2gz_out.fastq.gz"
+    )
     for s in paths:
         try:
             remove(Path(s))

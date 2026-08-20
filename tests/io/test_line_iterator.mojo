@@ -7,7 +7,6 @@ from blazeseq.CONSTS import (
 )
 from blazeseq.io.buffered import LineIterator
 from blazeseq.io.readers import MemoryReader
-from std.memory import Span
 from std.collections.string import StringSlice
 from std.testing import TestSuite
 
@@ -23,7 +22,7 @@ def create_memory_reader(content: String) -> MemoryReader:
     return MemoryReader(content_bytes)
 
 
-def span_to_string(span: Span[Byte, MutExternalOrigin]) -> String:
+def span_to_string(span: Span[Byte, MutUntrackedOrigin]) -> String:
     """Convert a span to a string for comparison."""
     return String(StringSlice(unsafe_from_utf8=span))
 
@@ -57,19 +56,13 @@ def test_next_line_multiple_lines() raises:
     var line_iter = LineIterator(reader^)
 
     var line1 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line1), "Line 1", "First line should match"
-    )
+    assert_equal(span_to_string(line1), "Line 1", "First line should match")
 
     var line2 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line2), "Line 2", "Second line should match"
-    )
+    assert_equal(span_to_string(line2), "Line 2", "Second line should match")
 
     var line3 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line3), "Line 3", "Third line should match"
-    )
+    assert_equal(span_to_string(line3), "Line 3", "Third line should match")
 
     with assert_raises(contains="EOF"):
         _ = line_iter.next_line()
@@ -118,14 +111,10 @@ def test_next_line_carriage_return() raises:
     var line_iter = LineIterator(reader^)
 
     var line1 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line1), "Line 1", "Line should not include \\r"
-    )
+    assert_equal(span_to_string(line1), "Line 1", "Line should not include \\r")
 
     var line2 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line2), "Line 2", "Line should not include \\r"
-    )
+    assert_equal(span_to_string(line2), "Line 2", "Line should not include \\r")
 
     with assert_raises(contains="EOF"):
         _ = line_iter.next_line()
@@ -140,9 +129,7 @@ def test_next_line_mixed_line_endings() raises:
     var line_iter = LineIterator(reader^)
 
     var line1 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line1), "Unix line", "Unix line should match"
-    )
+    assert_equal(span_to_string(line1), "Unix line", "Unix line should match")
 
     var line2 = line_iter.next_line()
     assert_equal(
@@ -216,9 +203,7 @@ def test_next_line_empty_line_at_start() raises:
     assert_equal(len(line1), 0, "First line should be empty")
 
     var line2 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line2), "Line 2", "Second line should match"
-    )
+    assert_equal(span_to_string(line2), "Line 2", "Second line should match")
 
     _ = line_iter
     print("✓ test_next_line_empty_line_at_start passed")
@@ -231,14 +216,10 @@ def test_next_line_empty_line_at_end() raises:
     var line_iter = LineIterator(reader^)
 
     var line1 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line1), "Line 1", "First line should match"
-    )
+    assert_equal(span_to_string(line1), "Line 1", "First line should match")
 
     var line2 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line2), "Line 2", "Second line should match"
-    )
+    assert_equal(span_to_string(line2), "Line 2", "Second line should match")
 
     var line3 = line_iter.next_line()
     assert_equal(len(line3), 0, "Last line should be empty")
@@ -256,25 +237,19 @@ def test_next_line_empty_line_middle() raises:
     var line_iter = LineIterator(reader^)
 
     var line1 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line1), "Line 1", "First line should match"
-    )
+    assert_equal(span_to_string(line1), "Line 1", "First line should match")
 
     var line2 = line_iter.next_line()
     assert_equal(len(line2), 0, "Second line should be empty")
 
     var line3 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line3), "Line 3", "Third line should match"
-    )
+    assert_equal(span_to_string(line3), "Line 3", "Third line should match")
 
     var line4 = line_iter.next_line()
     assert_equal(len(line4), 0, "Fourth line should be empty")
 
     var line5 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line5), "Line 5", "Fifth line should match"
-    )
+    assert_equal(span_to_string(line5), "Line 5", "Fifth line should match")
 
     print("✓ test_next_line_empty_line_middle passed")
 
@@ -291,14 +266,10 @@ def test_next_line_no_trailing_newline() raises:
     var line_iter = LineIterator(reader^)
 
     var line1 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line1), "Line 1", "First line should match"
-    )
+    assert_equal(span_to_string(line1), "Line 1", "First line should match")
 
     var line2 = line_iter.next_line()
-    assert_equal(
-        span_to_string(line2), "Line 2", "Last line should match"
-    )
+    assert_equal(span_to_string(line2), "Line 2", "Last line should match")
 
     with assert_raises(contains="EOF"):
         _ = line_iter.next_line()
@@ -409,10 +380,14 @@ def test_next_line_newline_at_buffer_end() raises:
 
     var result1 = line_iter.next_line()
     assert_equal(len(result1), 63, "First line should have 63 chars")
-    assert_equal(span_to_string(result1), line1, "First line content should match")
+    assert_equal(
+        span_to_string(result1), line1, "First line content should match"
+    )
 
     var result2 = line_iter.next_line()
-    assert_equal(span_to_string(result2), "second", "Second line should be 'second'")
+    assert_equal(
+        span_to_string(result2), "second", "Second line should be 'second'"
+    )
 
     with assert_raises(contains="EOF"):
         _ = line_iter.next_line()
@@ -478,7 +453,8 @@ def test_next_line_empty_lines_only_small_buffer() raises:
 
 
 def test_next_line_crosses_boundary_then_no_trailing_newline() raises:
-    """Line that crosses boundary followed by final line without trailing newline."""
+    """Line that crosses boundary followed by final line without trailing newline.
+    """
     var line1 = String("")
     for _ in range(50):
         line1 += "A"
@@ -494,7 +470,9 @@ def test_next_line_crosses_boundary_then_no_trailing_newline() raises:
     assert_equal(len(result1), 50, "First line should have 50 chars")
     var result2 = line_iter.next_line()
     assert_equal(len(result2), 30, "Second line should have 30 chars")
-    assert_equal(span_to_string(result2), line2, "Second line content should match")
+    assert_equal(
+        span_to_string(result2), line2, "Second line content should match"
+    )
 
     with assert_raises(contains="EOF"):
         _ = line_iter.next_line()
@@ -543,7 +521,8 @@ def test_next_line_exceeds_capacity() raises:
 
 
 def test_next_line_exceeds_max_capacity() raises:
-    """Line longer than buffer capacity raises (with growth disabled, raises at initial capacity 64)."""
+    """Line longer than buffer capacity raises (with growth disabled, raises at initial capacity 64).
+    """
     var long_line = String("")
     for _ in range(200):
         long_line += "A"
@@ -555,9 +534,7 @@ def test_next_line_exceeds_max_capacity() raises:
     )
 
     # With buffer growth disabled we raise at initial capacity; message says 64 bytes.
-    with assert_raises(
-        contains="Line exceeds buffer capacity of 64 bytes"
-    ):
+    with assert_raises(contains="Line exceeds buffer capacity of 64 bytes"):
         _ = line_iter.next_line()
 
     print("✓ test_next_line_exceeds_max_capacity passed")
@@ -754,12 +731,16 @@ def test_next_line_position_after_boundary_cross() raises:
     _ = line_iter.next_line()
     var pos1 = line_iter.stream_position()
     assert_true(pos1 > pos0, "Position should advance after first line")
-    assert_equal(pos1, 51, "Position after first line should be 51 (50 chars + newline)")
+    assert_equal(
+        pos1, 51, "Position after first line should be 51 (50 chars + newline)"
+    )
 
     _ = line_iter.next_line()
     var pos2 = line_iter.stream_position()
     assert_true(pos2 > pos1, "Position should advance after second line")
-    assert_equal(pos2, 82, "Position after second line should be 82 (51 + 30 + newline)")
+    assert_equal(
+        pos2, 82, "Position after second line should be 82 (51 + 30 + newline)"
+    )
 
     print("✓ test_next_line_position_after_boundary_cross passed")
 
@@ -770,7 +751,8 @@ def test_next_line_position_after_boundary_cross() raises:
 
 
 def test_next_complete_line_returns_line_when_newline_in_buffer() raises:
-    """Next_complete_line returns the line and consumes when newline is in buffer."""
+    """Next_complete_line returns the line and consumes when newline is in buffer.
+    """
     var content = "Hello\n"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^, capacity=64)
@@ -783,11 +765,14 @@ def test_next_complete_line_returns_line_when_newline_in_buffer() raises:
     with assert_raises(contains="EOF"):
         _ = line_iter.next_complete_line()
 
-    print("✓ test_next_complete_line_returns_line_when_newline_in_buffer passed")
+    print(
+        "✓ test_next_complete_line_returns_line_when_newline_in_buffer passed"
+    )
 
 
 def test_next_complete_line_raises_incomplete_when_no_newline() raises:
-    """Next_complete_line raises INCOMPLETE_LINE when no newline in buffer, does not consume."""
+    """Next_complete_line raises INCOMPLETE_LINE when no newline in buffer, does not consume.
+    """
     var content = "incomplete"
     var reader = create_memory_reader(content)
     var line_iter = LineIterator(reader^)
@@ -797,7 +782,9 @@ def test_next_complete_line_raises_incomplete_when_no_newline() raises:
 
     var line = line_iter.next_line()
     assert_equal(
-        span_to_string(line), "incomplete", "next_line should still return full content after fallback"
+        span_to_string(line),
+        "incomplete",
+        "next_line should still return full content after fallback",
     )
 
     with assert_raises(contains="EOF"):
@@ -815,7 +802,9 @@ def test_next_complete_line_raises_eof_when_empty_buffer_at_eof() raises:
     with assert_raises(contains="EOF"):
         _ = line_iter.next_complete_line()
 
-    print("✓ test_next_complete_line_raises_eof_when_empty_buffer_at_eof passed")
+    print(
+        "✓ test_next_complete_line_raises_eof_when_empty_buffer_at_eof passed"
+    )
 
 
 # ============================================================================

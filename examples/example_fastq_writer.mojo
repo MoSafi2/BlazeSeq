@@ -133,16 +133,18 @@ def example_read_then_write_plain_and_gzip(input_path: String) raises:
     var base = path_str
     if is_gz:
         var path_bytes = path_str.as_bytes()
-        base = String(
+        var stripped_gz = String(
             StringSlice(
                 unsafe_from_utf8=path_bytes[: path_str.byte_length() - 3]
             )
         )  # remove ".gz"
+        base = stripped_gz
     if base.endswith(".fastq"):
         var base_bytes = base.as_bytes()
-        base = String(
+        var stripped_fastq = String(
             StringSlice(unsafe_from_utf8=base_bytes[: base.byte_length() - 6])
         )  # remove ".fastq"
+        base = stripped_fastq
     var plain_out = base + "_out.fastq"
     var gz_out = base + "_out.fastq.gz"
 

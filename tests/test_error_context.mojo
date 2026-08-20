@@ -60,7 +60,7 @@ def test_parse_error_with_context() raises:
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
-    
+
     # Using direct method should raise ParseError with context
     with assert_raises(contains="Record number"):
         _ = parser.next_record()
@@ -72,7 +72,7 @@ def test_validation_error_with_context() raises:
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
-    
+
     # Using direct method should raise ParseError (which wraps ValidationError)
     with assert_raises(contains="Record number"):
         _ = parser.next_record()
@@ -84,12 +84,12 @@ def test_error_context_in_iterator() raises:
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
-    
+
     # Using iterator should print error and stop iteration
     var count = 0
     for _ in parser.records():
         count += 1
-    
+
     # Should have processed 0 records due to error
     assert_equal(count, 0)
 
@@ -123,15 +123,15 @@ def test_record_number_tracking() raises:
     data.append(Byte(ord("#")))
     data.append(Byte(ord("$")))
     data.append(Byte(ord("\n")))
-    
+
     var reader = MemoryReader(data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
-    
+
     # First record should succeed
     var record1 = parser.next_record()
     assert_equal(len(record1), 2)
-    
+
     # Second record should fail with record_number = 2
     with assert_raises(contains="Record number: 2"):
         _ = parser.next_record()
@@ -143,7 +143,7 @@ def test_line_number_tracking() raises:
     var reader = MemoryReader(invalid_data^)
     comptime config = ParserConfig(check_ascii=True, check_quality=True)
     var parser = FastqParser[MemoryReader, config](reader^)
-    
+
     # Error should include line number
     with assert_raises(contains="Line number"):
         _ = parser.next_record()

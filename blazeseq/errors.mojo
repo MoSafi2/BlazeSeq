@@ -131,7 +131,10 @@ def format_validation_error_from_code(
     var field_name = field
     if field_name.byte_length() == 0 and code == FastxErrorCode.ASCII_INVALID:
         field_name = "ascii"
-    elif field_name.byte_length() == 0 and code == FastxErrorCode.QUALITY_OUT_OF_RANGE:
+    elif (
+        field_name.byte_length() == 0
+        and code == FastxErrorCode.QUALITY_OUT_OF_RANGE
+    ):
         field_name = "quality"
     var val_err = ValidationError(
         _message_for_code(code),
@@ -173,7 +176,6 @@ struct ParseError(Writable):
         self.line_number = line_number
         self.file_position = file_position
         self.record_snippet = record_snippet
-
 
     def write_to[w: Writer](self, mut writer: w):
         """Write error to writer without building an intermediate String."""
@@ -282,7 +284,8 @@ def format_parse_error(
     record_snippet: String = "",
     record_offset: Int = 0,
 ) -> String:
-    """Build ParseError from message and parser context; return formatted string for raising Error."""
+    """Build ParseError from message and parser context; return formatted string for raising Error.
+    """
     var parse_err = ParseError(
         message,
         record_number=ctx.record_number + record_offset,
@@ -324,13 +327,17 @@ def raise_parse_error(
 
     All parsers should call this instead of constructing error strings inline.
     """
-    raise Error(String(ParseError(
-        message,
-        record_number=ctx.record_number,
-        line_number=ctx.line_number,
-        file_position=ctx.file_position,
-        record_snippet=snippet,
-    )))
+    raise Error(
+        String(
+            ParseError(
+                message,
+                record_number=ctx.record_number,
+                line_number=ctx.line_number,
+                file_position=ctx.file_position,
+                record_snippet=snippet,
+            )
+        )
+    )
 
 
 def raise_validation_error(
@@ -343,9 +350,13 @@ def raise_validation_error(
 
     All parsers should call this instead of constructing error strings inline.
     """
-    raise Error(String(ValidationError(
-        message,
-        record_number=ctx.record_number,
-        field=field,
-        record_snippet=snippet,
-    )))
+    raise Error(
+        String(
+            ValidationError(
+                message,
+                record_number=ctx.record_number,
+                field=field,
+                record_snippet=snippet,
+            )
+        )
+    )

@@ -38,4 +38,4 @@ where = ["."]
 include = ["blazeseq*"]
 
 [tool.setuptools.package-data]
-blazeseq = ["_extension/*.so", "py.typed", "*.pyi", "mojopkg/*.mojopkg", "mojopkg/README.md"]
+blazeseq = ["_extension/*.so", "py.typed", "*.pyi", "mojoc/*.mojoc", "mojoc/README.md"]

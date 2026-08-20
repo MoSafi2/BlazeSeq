@@ -1,4 +1,10 @@
-from std.testing import assert_equal, assert_raises, assert_true, assert_false, TestSuite
+from std.testing import (
+    assert_equal,
+    assert_raises,
+    assert_true,
+    assert_false,
+    TestSuite,
+)
 from std.pathlib import Path
 from std.os import remove
 from blazeseq.CONSTS import DEFAULT_CAPACITY
@@ -6,9 +12,10 @@ from blazeseq.io.buffered import BufferedReader, BufferedWriter, LineIterator
 from blazeseq.io.readers import FileReader, MemoryReader
 from blazeseq.io.writers import FileWriter
 
+
 def create_test_file(path: Path, content: String) raises -> Path:
     """Helper function to create test files."""
-    new_path = Path("tests/test_data") / path
+    var new_path = Path("tests/test_data") / path
     with open(new_path, "w") as f:
         f.write(content)
 
@@ -86,7 +93,7 @@ def test_buffered_reader_available_and_len() raises:
     var initial_available = buf_reader.available()
     assert_true(initial_available > 0, "Should have available bytes initially")
     assert_equal(
-        initial_available, len(test_content), "Should match content length"
+        initial_available, test_content.byte_length(), "Should match content length"
     )
     # Verify __len__ equals available()
     assert_equal(
@@ -111,7 +118,7 @@ def test_buffered_reader_available_and_len() raises:
     )
     assert_equal(
         len(buf_reader),
-        len(test_content) - 5,
+        test_content.byte_length() - 5,
         "Length should decrease after consume",
     )
 
@@ -520,7 +527,7 @@ def test_buffered_reader_write_to() raises:
     buf_reader.write_to(output)
 
     # Verify content was written
-    assert_true(len(output) > 0, "Output should contain data")
+    assert_true(output.byte_length() > 0, "Output should contain data")
     assert_equal(
         String(output), test_content, "Written content should match original"
     )
@@ -590,7 +597,7 @@ def test_buffered_reader_ascii_validation() raises:
 def test_buffered_reader_ascii_validation_invalid() raises:
     """BufferedReader should not enforce ASCII on raw bytes."""
     var test_file = Path("test_ascii_invalid.txt")
-    new_path = Path("tests/test_data") / test_file
+    var new_path = Path("tests/test_data") / test_file
 
     # Write non-ASCII bytes directly
     var non_ascii_bytes = List[Byte]()
@@ -640,7 +647,9 @@ def test_buffered_reader_large_multiple_refills() raises:
         var stream_pos_before = line_iter.stream_position()
 
         if line_iter.buffer.available() > 0:
-            var bytes = line_iter.read_exact(min(50, line_iter.buffer.available()))
+            var bytes = line_iter.read_exact(
+                min(50, line_iter.buffer.available())
+            )
             total_read += len(bytes)
 
             # Verify stream position advances correctly
@@ -662,10 +671,10 @@ def test_buffered_reader_large_multiple_refills() raises:
                 break
 
     assert_true(total_read > 0, "Should read content from large buffer")
-    assert_equal(total_read, len(test_content), "Should read all content")
+    assert_equal(total_read, test_content.byte_length(), "Should read all content")
     assert_equal(
         last_stream_pos,
-        len(test_content),
+        test_content.byte_length(),
         "Stream position should match total bytes read",
     )
     assert_true(refill_count > 0, "Should have triggered multiple refills")
@@ -810,7 +819,7 @@ def test_buffered_reader_stream_position_across_refills() raises:
         "Final stream position should match total bytes consumed",
     )
     assert_equal(
-        total_consumed, len(test_content), "Should have consumed all content"
+        total_consumed, test_content.byte_length(), "Should have consumed all content"
     )
 
     print("✓ test_buffered_reader_stream_position_across_refills passed")
@@ -834,9 +843,9 @@ def test_buffered_reader_custom_capacity_edge_cases() raises:
 
     # Test capacity equal to content length
     var reader3 = create_memory_reader(test_content)
-    var buf_reader3 = BufferedReader(reader3^, capacity=len(test_content))
+    var buf_reader3 = BufferedReader(reader3^, capacity=test_content.byte_length())
     assert_equal(
-        buf_reader3.capacity(), len(test_content), "Should use exact capacity"
+        buf_reader3.capacity(), test_content.byte_length(), "Should use exact capacity"
     )
 
     print("✓ test_buffered_reader_custom_capacity_edge_cases passed")
@@ -858,12 +867,12 @@ def test_file_reader_alignment_basic() raises:
     test_file = create_test_file(test_file, content)
     var file_reader = FileReader(test_file)
     var file_line_iter = LineIterator(file_reader^)
-    var file_bytes = file_line_iter.read_exact(len(content))
+    var file_bytes = file_line_iter.read_exact(content.byte_length())
 
     # Test with MemoryReader
     var mem_reader = create_memory_reader(content)
     var mem_line_iter = LineIterator(mem_reader^)
-    var mem_bytes = mem_line_iter.read_exact(len(content))
+    var mem_bytes = mem_line_iter.read_exact(content.byte_length())
 
     # Compare results
     assert_equal(
@@ -900,19 +909,26 @@ def test_file_reader_alignment_large() raises:
     var file_total = 0
     var mem_total = 0
 
-    var expected_total = len(content)
+    var expected_total = content.byte_length()
     while file_total < expected_total:
         if file_line_iter.buffer.available() > 0:
             var to_read = min(
-                50, file_line_iter.buffer.available(), expected_total - file_total
+                50,
+                file_line_iter.buffer.available(),
+                expected_total - file_total,
             )
             var chunk = file_line_iter.read_exact(to_read)
             file_total += len(chunk)
-        elif file_line_iter.buffer.is_eof() and file_line_iter.buffer.available() == 0:
+        elif (
+            file_line_iter.buffer.is_eof()
+            and file_line_iter.buffer.available() == 0
+        ):
             break
         else:
             # Buffer full - compact from current position to make room then refill
-            file_line_iter.buffer._compact_from(file_line_iter.buffer.buffer_position())
+            file_line_iter.buffer._compact_from(
+                file_line_iter.buffer.buffer_position()
+            )
             if not file_line_iter.buffer._fill_buffer():
                 break
             if file_line_iter.buffer.available() == 0:
@@ -925,18 +941,23 @@ def test_file_reader_alignment_large() raises:
             )
             var chunk = mem_line_iter.read_exact(to_read)
             mem_total += len(chunk)
-        elif mem_line_iter.buffer.is_eof() and mem_line_iter.buffer.available() == 0:
+        elif (
+            mem_line_iter.buffer.is_eof()
+            and mem_line_iter.buffer.available() == 0
+        ):
             break
         else:
             # Buffer full - compact from current position to make room then refill
-            mem_line_iter.buffer._compact_from(mem_line_iter.buffer.buffer_position())
+            mem_line_iter.buffer._compact_from(
+                mem_line_iter.buffer.buffer_position()
+            )
             if not mem_line_iter.buffer._fill_buffer():
                 break
             if mem_line_iter.buffer.available() == 0:
                 break
 
     assert_equal(file_total, mem_total, "Should read same total bytes")
-    assert_equal(file_total, len(content), "Should read all content")
+    assert_equal(file_total, content.byte_length(), "Should read all content")
 
     _ = file_line_iter
     _ = mem_line_iter
@@ -977,7 +998,7 @@ def test_memory_reader_init_list() raises:
     )
     assert_equal(
         buf_reader.available(),
-        len(content),
+        content.byte_length(),
         "Available should match content length",
     )
 
@@ -999,7 +1020,7 @@ def test_memory_reader_init_span() raises:
     )
     assert_equal(
         buf_reader.available(),
-        len(content),
+        content.byte_length(),
         "Available should match content length",
     )
 
@@ -1173,7 +1194,9 @@ def test_buffered_writer_write_span() raises:
     data_bytes.append(Byte(ord("s")))
     data_bytes.append(Byte(ord("t")))
 
-    var span = Span[Byte](ptr=data_bytes.unsafe_ptr(), length=len(data_bytes))
+    var span = Span[Byte](
+        unsafe_ptr=data_bytes.unsafe_ptr(), length=len(data_bytes)
+    )
     writer.write_bytes(span)
     writer.flush()
 

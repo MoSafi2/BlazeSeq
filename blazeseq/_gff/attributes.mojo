@@ -2,8 +2,6 @@
 
 from std.collections import List
 from std.collections.string import String, StringSlice
-from std.memory import Span
-
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 

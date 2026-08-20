@@ -289,17 +289,22 @@ def parser(
 create_parser = parser  # backward compatibility
 
 
-def mojopkg_path() -> str:
-    """Return the path to the directory containing the pre-built blazeseq.mojopkg.
+def mojoc_path() -> str:
+    """Return the directory containing the precompiled ``blazeseq.mojoc``.
 
     Use this from Mojo projects to import the package installed via pip:
-    mojo build -I $(python -c 'import blazeseq; print(blazeseq.mojopkg_path())') your_app.mojo
+    mojo build -I $(python -c 'import blazeseq; print(blazeseq.mojoc_path())') your_app.mojo
 
     The bundled Mojo package no longer requires the external rapidgzip package.
     `RapidgzipReader` remains available as a compatibility wrapper and
     currently falls back to the built-in gzip reader.
     """
-    return str(Path(__file__).resolve().parent / "mojopkg")
+    return str(Path(__file__).resolve().parent / "mojoc")
+
+
+def mojopkg_path() -> str:
+    """Compatibility alias for :func:`mojoc_path`."""
+    return mojoc_path()
 
 
 # Re-export extension types (runtime); for type checkers, use the Protocol types above
@@ -311,6 +316,7 @@ FastqGZParser = _mod.FastqGZParser
 __all__ = [
     "parser",
     "create_parser",
+    "mojoc_path",
     "mojopkg_path",
     "FastqRecord",
     "FastqBatch",

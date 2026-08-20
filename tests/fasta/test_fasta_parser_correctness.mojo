@@ -102,9 +102,7 @@ def test_biopython_pro_aster() raises:
     """Biopython aster.pro: single protein record."""
     var records = _parse_fasta_file(test_dir + "aster.pro")
     assert_true(len(records) >= 1, "aster.pro should have at least 1 record")
-    assert_true(
-        String(records[0].id()).byte_length() > 0, "first id non-empty"
-    )
+    assert_true(String(records[0].id()).byte_length() > 0, "first id non-empty")
     assert_true(
         String(records[0].sequence()).byte_length() > 0,
         "first sequence non-empty",

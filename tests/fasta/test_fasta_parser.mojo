@@ -16,7 +16,7 @@ from blazeseq.fasta.parser import ParserConfig
 from blazeseq.CONSTS import EOF
 from std.pathlib import Path
 from std.testing import assert_equal, assert_true, assert_raises, TestSuite
-from std.memory import memcpy, Span
+from std.memory import unsafe_memcpy
 from blazeseq.io.readers import Reader
 
 
@@ -50,14 +50,14 @@ struct ChunkedMemoryReader(Movable, Reader):
         self.position = 0
         self.chunk_size = chunk_size
 
-    def __init__(out self, *, deinit take: Self):
-        self.data = take.data^
-        self.position = take.position
-        self.chunk_size = take.chunk_size
+    def __init__(out self, *, deinit move: Self):
+        self.data = move.data^
+        self.position = move.position
+        self.chunk_size = move.chunk_size
 
     def read_to_buffer(
         mut self,
-        mut buf: Span[Byte, MutExternalOrigin],
+        mut buf: Span[Byte, MutUntrackedOrigin],
         amt: Int,
         pos: Int,
     ) raises -> UInt64:
@@ -70,12 +70,12 @@ struct ChunkedMemoryReader(Movable, Reader):
         var available = len(self.data) - self.position
         var bytes_to_read = min(min(amt, available), self.chunk_size)
         if bytes_to_read > 0:
-            var dest = Span[Byte, MutExternalOrigin](
-                ptr=buf.unsafe_ptr() + pos, length=len(buf) - pos
+            var dest = Span[Byte, MutUntrackedOrigin](
+                unsafe_ptr=buf.unsafe_ptr().unsafe_offset(pos), length=len(buf) - pos
             )
-            memcpy(
+            unsafe_memcpy(
                 dest=dest.unsafe_ptr(),
-                src=self.data.unsafe_ptr() + self.position,
+                src=self.data.unsafe_ptr().unsafe_offset(self.position),
                 count=bytes_to_read,
             )
             self.position += bytes_to_read
@@ -924,11 +924,16 @@ def test_record_accessors_consistent() raises:
 # Round-trip: read -> write -> read fidelity
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 struct _RoundtripResult:
     var original: List[FastaRecord]
     var roundtrip: List[FastaRecord]
 
-    def __init__(out self, var original: List[FastaRecord], var roundtrip: List[FastaRecord]):
+    def __init__(
+        out self,
+        var original: List[FastaRecord],
+        var roundtrip: List[FastaRecord],
+    ):
         self.original = original^
         self.roundtrip = roundtrip^
 
@@ -959,8 +964,13 @@ def test_roundtrip_single_record() raises:
     var result = _roundtrip_records(">id1\nACGT\n")
     assert_equal(len(result.original), 1, "single record input")
     assert_equal(len(result.roundtrip), 1, "single record after round-trip")
-    assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
-    assert_equal(String(result.original[0].sequence()), String(result.roundtrip[0].sequence()))
+    assert_equal(
+        String(result.original[0].id()), String(result.roundtrip[0].id())
+    )
+    assert_equal(
+        String(result.original[0].sequence()),
+        String(result.roundtrip[0].sequence()),
+    )
 
 
 def test_roundtrip_multiple_records() raises:
@@ -1003,7 +1013,9 @@ def test_roundtrip_multiline_sequence() raises:
     assert_equal(len(result.roundtrip), 1)
     assert_equal(String(result.original[0].sequence()), "ACGTTAGG")
     assert_equal(String(result.roundtrip[0].sequence()), "ACGTTAGG")
-    assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
+    assert_equal(
+        String(result.original[0].id()), String(result.roundtrip[0].id())
+    )
 
 
 def test_roundtrip_long_sequence_wrapping() raises:
@@ -1020,7 +1032,9 @@ def test_roundtrip_long_sequence_wrapping() raises:
         String(result.original[0].sequence()),
         String(result.roundtrip[0].sequence()),
     )
-    assert_equal(String(result.original[0].id()), String(result.roundtrip[0].id()))
+    assert_equal(
+        String(result.original[0].id()), String(result.roundtrip[0].id())
+    )
 
 
 def main() raises:
