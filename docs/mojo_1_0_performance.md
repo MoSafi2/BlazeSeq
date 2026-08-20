@@ -21,23 +21,23 @@ optimizations were made in response to these results.
 
 | Workload | Mojo 1.0 mean | Historical mean | Delta | Notes |
 |---|---:|---:|---:|---|
-| Plain FASTQ, optimized | 0.468 s | ~0.590 s | -20.7% | 3 GB, 3 warmups, 15 runs; plot baseline |
-| FASTQ batches | 0.659 s | 0.843 s | -21.9% | 3 GB, 3 warmups, 15 runs; JSON baseline |
-| Gzip FASTQ, requested 4 threads | 11.620 s | ~2.38 s per 1 GB | +62.7% normalized | Current `RapidgzipReader` delegates to `GZFile`; thread count is accepted but ignored |
-| Gzip FASTQ, 1 thread | 11.763 s | ~6.45 s per 1 GB | -39.2% normalized | 3 GB current versus 1 GB plot baseline |
-| File batches | 0.825 s | ~0.740 s | **+11.5%** | 3 GB, 3 warmups, 15 runs |
+| Plain FASTQ, optimized | 0.496 s | ~0.590 s | -16.0% | 3 GB, 3 warmups, 15 runs; plot baseline |
+| FASTQ batches | 0.673 s | 0.843 s | -20.1% | 3 GB, 3 warmups, 15 runs; JSON baseline |
+| Gzip FASTQ, requested 4 threads | 11.665 s | ~2.38 s per 1 GB | +63.4% normalized | Current `RapidgzipReader` delegates to `GZFile`; thread count is accepted but ignored |
+| Gzip FASTQ, 1 thread | 11.726 s | ~6.45 s per 1 GB | -39.4% normalized | 3 GB current versus 1 GB plot baseline |
+| File batches | 0.837 s | ~0.740 s | **+13.0%** | 3 GB, 3 warmups, 15 runs |
 | File records | 1.478 s | ~1.390 s | **+6.3%** | 3 GB, 3 warmups, 15 runs |
-| File views / historical ref records | 0.612 s | ~0.580 s | **+5.4%** | Public mode name changed |
-| Memory batches | 0.761 s | 0.703 s | **+8.2%** | 3 GB, 5 runs; JSON baseline |
-| Memory records | 1.353 s | 1.889 s | -28.4% | 3 GB, 5 runs; JSON baseline |
-| Memory views / historical ref records | 0.554 s | 0.533 s | +3.8% | 3 GB, 5 runs |
-| FASTA | 0.366 s | ~0.510 s | -28.2% | 1 GB, 3 warmups, 15 runs; plot baseline |
+| File views / historical ref records | 0.616 s | ~0.580 s | **+6.3%** | Public mode name changed |
+| Memory batches | 0.778 s | 0.703 s | **+10.6%** | 3 GB, 5 runs; JSON baseline |
+| Memory records | 1.376 s | 1.889 s | -27.2% | 3 GB, 5 runs; JSON baseline |
+| Memory views / historical ref records | 0.551 s | 0.533 s | +3.4% | 3 GB, 5 runs |
+| FASTA | 0.362 s | ~0.510 s | -29.1% | 1 GB, 3 warmups, 15 runs; plot baseline |
 
-Current relative parser ratios were 1.23x versus needletail, 1.20x versus
-`seq_io`, and 1.66x versus kseq for plain FASTQ. In the batch comparison,
+Current relative parser ratios were 1.21x versus needletail, 1.14x versus
+`seq_io`, and 1.60x versus kseq for plain FASTQ. In the batch comparison,
 BlazeSeq was 0.93x as fast as paraseq and 0.97x as fast as the `seq_io`
-record-set runner. For FASTA, BlazeSeq was 1.87x slower than needletail and
-1.23x faster than noodles.
+record-set runner. For FASTA, BlazeSeq was 1.82x slower than needletail and
+1.26x faster than noodles.
 
 ## Validation matrix
 
@@ -46,15 +46,15 @@ The historical values are approximate readings from the checked-in plot.
 
 | Mode | None | ASCII | ASCII + quality |
 |---|---:|---:|---:|
-| Batches, current | 0.827 s | 0.865 s | 0.932 s |
+| Batches, current | 0.855 s | 0.897 s | 0.962 s |
 | Batches, historical | ~0.733 s | ~0.826 s | ~0.853 s |
-| Delta | **+12.8%** | +4.8% | **+9.3%** |
-| Records, current | 1.507 s | 1.691 s | 1.722 s |
+| Delta | **+16.6%** | **+8.6%** | **+12.8%** |
+| Records, current | 1.557 s | 1.699 s | 1.738 s |
 | Records, historical | ~1.360 s | ~1.530 s | ~1.560 s |
-| Delta | **+10.8%** | **+10.5%** | **+10.4%** |
-| Views, current | 0.650 s | 0.745 s | 0.769 s |
+| Delta | **+14.5%** | **+11.0%** | **+11.4%** |
+| Views, current | 0.658 s | 0.753 s | 0.793 s |
 | Historical ref records | ~0.595 s | ~0.675 s | ~0.699 s |
-| Delta | **+9.2%** | **+10.4%** | **+10.0%** |
+| Delta | **+10.7%** | **+11.7%** | **+13.5%** |
 
 ## Interpretation and limitations
 

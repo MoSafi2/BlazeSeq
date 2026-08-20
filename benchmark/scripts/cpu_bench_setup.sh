@@ -33,7 +33,7 @@ cpu_bench_setup() {
     _CPU_BENCH_SMT_CONTROL_SYSFS="/sys/devices/system/cpu/smt/control"
     if [ -f "$_CPU_BENCH_SMT_CONTROL_SYSFS" ] && _cpu_bench_is_truthy "${DISABLE_HYPERTHREADING:-}"; then
         _CPU_BENCH_SMT_CONTROL_SAVED="$(cat "$_CPU_BENCH_SMT_CONTROL_SYSFS" 2>/dev/null)" || true
-        if echo off | sudo tee "$_CPU_BENCH_SMT_CONTROL_SYSFS" >/dev/null 2>&1; then
+        if echo off | sudo -n tee "$_CPU_BENCH_SMT_CONTROL_SYSFS" >/dev/null 2>&1; then
             echo "CPU SMT disabled"
         else
             echo "Warning: could not disable SMT/hyperthreading (write 'off' to $_CPU_BENCH_SMT_CONTROL_SYSFS)" >&2
@@ -43,10 +43,10 @@ cpu_bench_setup() {
     # Performance governor
     if command -v cpupower >/dev/null 2>&1; then
         _CPU_BENCH_GOV_SAVED=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null) || true
-        if sudo cpupower frequency-set -g performance >/dev/null 2>&1; then
+        if sudo -n cpupower frequency-set -g performance >/dev/null 2>&1; then
             echo "CPU governor set to performance"
         else
-            echo "Warning: could not set performance governor (sudo cpupower frequency-set -g performance)"
+            echo "Warning: could not set performance governor (sudo -n cpupower frequency-set -g performance)"
         fi
     else
         echo "Warning: cpupower not found; install linux-tools-common (or linux-tools-$(uname -r)) for performance governor"
@@ -56,7 +56,7 @@ cpu_bench_setup() {
     _CPU_BENCH_TURBO_SYSFS="/sys/devices/system/cpu/intel_pstate/no_turbo"
     if [ -f "$_CPU_BENCH_TURBO_SYSFS" ]; then
         _CPU_BENCH_TURBO_SAVED=$(cat "$_CPU_BENCH_TURBO_SYSFS" 2>/dev/null) || true
-        if echo 1 | sudo tee "$_CPU_BENCH_TURBO_SYSFS" >/dev/null 2>&1; then
+        if echo 1 | sudo -n tee "$_CPU_BENCH_TURBO_SYSFS" >/dev/null 2>&1; then
             echo "CPU turbo disabled (intel_pstate)"
         else
             echo "Warning: could not disable turbo"
@@ -75,16 +75,16 @@ cpu_bench_teardown() {
     [ "$(uname -s)" != "Linux" ] && return 0
 
     if [ -n "$_CPU_BENCH_GOV_SAVED" ] && command -v cpupower >/dev/null 2>&1; then
-        sudo cpupower frequency-set -g "$_CPU_BENCH_GOV_SAVED" >/dev/null 2>&1 && echo "CPU governor restored to $_CPU_BENCH_GOV_SAVED" || true
+        sudo -n cpupower frequency-set -g "$_CPU_BENCH_GOV_SAVED" >/dev/null 2>&1 && echo "CPU governor restored to $_CPU_BENCH_GOV_SAVED" || true
     fi
 
     if [ -n "$_CPU_BENCH_TURBO_SYSFS" ] && [ -f "$_CPU_BENCH_TURBO_SYSFS" ] && [ -n "${_CPU_BENCH_TURBO_SAVED}" ]; then
-        echo "$_CPU_BENCH_TURBO_SAVED" | sudo tee "$_CPU_BENCH_TURBO_SYSFS" >/dev/null 2>&1 && echo "CPU turbo restored" || true
+        echo "$_CPU_BENCH_TURBO_SAVED" | sudo -n tee "$_CPU_BENCH_TURBO_SYSFS" >/dev/null 2>&1 && echo "CPU turbo restored" || true
     fi
 
     # Restore SMT/hyperthreading (best-effort) if we successfully captured prior state.
     if [ -n "$_CPU_BENCH_SMT_CONTROL_SYSFS" ] && [ -f "$_CPU_BENCH_SMT_CONTROL_SYSFS" ] && [ -n "$_CPU_BENCH_SMT_CONTROL_SAVED" ]; then
-        echo "$_CPU_BENCH_SMT_CONTROL_SAVED" | sudo tee "$_CPU_BENCH_SMT_CONTROL_SYSFS" >/dev/null 2>&1 \
+        echo "$_CPU_BENCH_SMT_CONTROL_SAVED" | sudo -n tee "$_CPU_BENCH_SMT_CONTROL_SYSFS" >/dev/null 2>&1 \
             && echo "CPU SMT restored to $_CPU_BENCH_SMT_CONTROL_SAVED" \
             || true
     fi

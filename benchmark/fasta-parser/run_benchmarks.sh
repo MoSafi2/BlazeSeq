@@ -2,7 +2,7 @@
 # FASTA parser benchmark: BlazeSeq vs needletail vs noodles.
 # Generates synthetic FASTA on a tmpfs/ramfs mount (default 1GB; set FASTA_SIZE_GB), runs each parser with hyperfine.
 # Run from repository root: ./benchmark/fasta-parser/run_benchmarks.sh [--ramfs|--tmpfs]
-# Requires: pixi, hyperfine, cargo, rustc. On Linux: sudo for ramfs/tmpfs mount/umount.
+# Requires: pixi, hyperfine, cargo, rustc. On Linux: sudo -n for ramfs/tmpfs mount/umount.
 
 set -e
 
@@ -66,8 +66,8 @@ MOUNTED=0
 
 cleanup_mount() {
     if [ "$MOUNTED" = 1 ]; then
-        if ! sudo umount "$BENCH_DIR" 2>/dev/null; then
-            echo "Warning: Failed to unmount $BENCH_DIR. Please run: sudo umount $BENCH_DIR && rmdir $BENCH_DIR"
+        if ! sudo -n umount "$BENCH_DIR" 2>/dev/null; then
+            echo "Warning: Failed to unmount $BENCH_DIR. Please run: sudo -n umount $BENCH_DIR && rmdir $BENCH_DIR"
         else
             rmdir "$BENCH_DIR" 2>/dev/null || true
         fi
@@ -80,15 +80,15 @@ trap 'cleanup_mount; cpu_bench_teardown' EXIT
 case "$(uname -s)" in
     Linux)
         if [ "$BENCH_FS" = "tmpfs" ]; then
-            _mount_cmd="sudo mount -t tmpfs -o size=$((FASTA_SIZE_GB + 1))G tmpfs $BENCH_DIR"
+            _mount_cmd="sudo -n mount -t tmpfs -o size=$((FASTA_SIZE_GB + 1))G tmpfs $BENCH_DIR"
         else
-            _mount_cmd="sudo mount -t ramfs ramfs $BENCH_DIR"
+            _mount_cmd="sudo -n mount -t ramfs ramfs $BENCH_DIR"
         fi
         if $_mount_cmd 2>/dev/null; then
             MOUNTED=1
-            sudo chown "$(id -u):$(id -g)" "$BENCH_DIR"
+            sudo -n chown "$(id -u):$(id -g)" "$BENCH_DIR"
         else
-            echo "Failed to mount $BENCH_FS on $BENCH_DIR. Ensure sudo is available."
+            echo "Failed to mount $BENCH_FS on $BENCH_DIR. Ensure sudo -n is available."
             echo "Fallback: using /dev/shm (no mount)."
             rmdir "$BENCH_DIR" 2>/dev/null || true
             BENCH_DIR="/dev/shm/blazeseq_fasta_bench_$$"
