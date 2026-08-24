@@ -1,1 +1,518 @@
-from blazeseq._bed.record import BedRecord, BedView, Strand, ItemRgb
+"""BED (Browser Extensible Data) record types.
+
+BED uses 0-based, half-open coordinates [chromStart, chromEnd).
+Standard BED fields: chrom, chromStart, chromEnd (required), then optional
+name, score, strand, thickStart, thickEnd, itemRgb, blockCount, blockSizes, blockStarts.
+Extra columns beyond field 12 (or beyond field 9 for BED10/11) are stored in
+OtherFields / _other_fields_spans as opaque byte sequences.
+"""
+
+from std.collections import List
+from std.collections.string import String, StringSlice
+from blazeseq.byte_string import BString
+from blazeseq.io.writers import Writer
+from blazeseq.features import Position, Interval
+
+
+# ---------------------------------------------------------------------------
+# Strand
+# ---------------------------------------------------------------------------
+
+
+struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
+    """Strand of a BED feature: Plus (+), Minus (-), or Unknown (.).
+
+    When the strand field is absent (BED5 or fewer columns), the enclosing
+    Optional[Strand] is None — distinguishable from an explicit '.' which
+    yields Optional(Strand.Unknown).
+    """
+
+    var value: Int8
+
+    @always_inline
+    def __init__(out self, value: Int8):
+        self.value = value
+
+    comptime Plus = Self(0)
+    comptime Minus = Self(1)
+    comptime Unknown = Self(2)  # explicit '.' — strand not applicable
+
+    @always_inline
+    def __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    def write_to[w: Writer](self, mut writer: w):
+        if self.value == 0:
+            writer.write("+")
+        elif self.value == 1:
+            writer.write("-")
+        else:
+            writer.write(".")
+
+
+# ---------------------------------------------------------------------------
+# ItemRgb — display color (0 or r,g,b each 0-255)
+# ---------------------------------------------------------------------------
+
+
+struct ItemRgb(Copyable, Movable, TrivialRegisterPassable, Writable):
+    """BED itemRgb: either black (0) or (r,g,b) each 0-255."""
+
+    var r: UInt8
+    var g: UInt8
+    var b: UInt8
+
+    @always_inline
+    def __init__(out self, r: UInt8, g: UInt8, b: UInt8):
+        self.r = r
+        self.g = g
+        self.b = b
+
+    @always_inline
+    def is_black(self) -> Bool:
+        """True if 0,0,0 (or the single 0 value)."""
+        return self.r == 0 and self.g == 0 and self.b == 0
+
+    def write_to[w: Writer](self, mut writer: w):
+        writer.write(t"{self.r},{self.g},{self.b}")
+
+
+def position_try_from(value: UInt64) -> Optional[Position]:
+    """Create a Position if value >= 1 (1-based), else None (aligned with noodles_core).
+    """
+    if value < 1:
+        return None
+    return Optional(Position(value, True))
+
+
+def interval_try_from_start_end(
+    start: UInt64, end: UInt64
+) -> Optional[Interval]:
+    """Build an Interval from 1-based start and end (closed [start, end]) if valid.
+    """
+    if start < 1 or end < 1 or start > end:
+        return None
+    return Optional(Interval(Position(start, True), Position(end, True), True))
+
+
+# ---------------------------------------------------------------------------
+# BedView — zero-unsafe_alloc, NOT to be stored
+# ---------------------------------------------------------------------------
+
+
+struct BedView[O: Origin](Movable):
+    """Zero-copy view over one BED data line in the parser's buffer.
+
+    Lifetime: Valid only until the next parser read. Do not store;
+    call `.to_record()` when the record must outlive the current iteration.
+
+    Coordinates are 0-based, half-open [chrom_start, chrom_end).
+
+    strand: None means the field is absent (BED5 or fewer).
+            Optional(Strand.Unknown) means the field was '.'.
+    score:  UInt16 in [0, 1000] per BED spec.
+    _other_fields_spans: Extra columns beyond the standard 12 (or beyond 9
+                         for BED10/11), stored as raw byte spans.
+    """
+
+    var _chrom: Span[UInt8, Self.O]
+    var chrom_start: UInt64
+    var chrom_end: UInt64
+    var _name: Optional[Span[UInt8, Self.O]]
+    var score: Optional[UInt16]
+    var strand: Optional[Strand]
+    var thick_start: Optional[UInt64]
+    var thick_end: Optional[UInt64]
+    var _item_rgb: Optional[ItemRgb]
+    var block_count: Optional[Int]
+    var _block_sizes_span: Optional[Span[UInt8, Self.O]]
+    var _block_starts_span: Optional[Span[UInt8, Self.O]]
+    var _other_fields_spans: Optional[List[Span[UInt8, Self.O]]]
+    var num_fields: Int
+
+    def __init__(
+        out self,
+        _chrom: Span[UInt8, Self.O],
+        chrom_start: UInt64,
+        chrom_end: UInt64,
+        _name: Optional[Span[UInt8, Self.O]],
+        score: Optional[UInt16],
+        strand: Optional[Strand],
+        thick_start: Optional[UInt64],
+        thick_end: Optional[UInt64],
+        _item_rgb: Optional[ItemRgb],
+        block_count: Optional[Int],
+        _block_sizes_span: Optional[Span[UInt8, Self.O]],
+        _block_starts_span: Optional[Span[UInt8, Self.O]],
+        var _other_fields_spans: Optional[List[Span[UInt8, Self.O]]],
+        num_fields: Int,
+    ):
+        self._chrom = _chrom
+        self.chrom_start = chrom_start
+        self.chrom_end = chrom_end
+        self._name = _name
+        self.score = score
+        self.strand = strand
+        self.thick_start = thick_start
+        self.thick_end = thick_end
+        self._item_rgb = _item_rgb
+        self.block_count = block_count
+        self._block_sizes_span = _block_sizes_span
+        self._block_starts_span = _block_starts_span
+        self._other_fields_spans = _other_fields_spans^
+        self.num_fields = num_fields
+
+    @always_inline
+    def chrom(self) -> StringSlice[origin=Self.O]:
+        return StringSlice[origin=Self.O](unsafe_from_utf8=self._chrom)
+
+    def start_position(self) -> Position:
+        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
+        """
+        return Position(self.chrom_start + 1, True)
+
+    def end_position(self) -> Optional[Position]:
+        """1-based end position (chromEnd). None for zero-length BED records (chromEnd == 0).
+        """
+        if self.chrom_end == 0:
+            return None
+        return Optional(Position(self.chrom_end, True))
+
+    def interval(self) -> Optional[Interval]:
+        """Feature extent as 1-based closed [chromStart+1, chromEnd].
+        Returns None for zero-length BED records (chromEnd == 0).
+        BED 0-based half-open [s, e) → 1-based closed [s+1, e].
+        """
+        if self.chrom_end == 0:
+            return None
+        return Optional(
+            Interval(
+                Position(self.chrom_start + 1, True),
+                Position(self.chrom_end, True),
+                True,
+            )
+        )
+
+    def thick_interval(self) -> Optional[Interval]:
+        """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
+        """
+        if not self.thick_start or not self.thick_end:
+            return None
+        var opt = interval_try_from_start_end(
+            self.thick_start.value() + 1, self.thick_end.value()
+        )
+        if not opt:
+            return None
+        return Optional(opt.value())
+
+    @always_inline
+    def name(self) -> Optional[StringSlice[origin=Self.O]]:
+        if not self._name:
+            return None
+        return StringSlice[origin=Self.O](unsafe_from_utf8=self._name.value())
+
+    @always_inline
+    def item_rgb(self) -> Optional[ItemRgb]:
+        if not self._item_rgb:
+            return None
+        return Optional(self._item_rgb.value().copy())
+
+    def other_fields(ref self) -> Optional[List[StringSlice[origin=Self.O]]]:
+        """Return extra columns beyond the standard BED fields, if any."""
+        if not self._other_fields_spans:
+            return None
+        var out = List[StringSlice[origin=Self.O]]()
+        var spans = self._other_fields_spans.value().copy()
+        for i in range(len(spans)):
+            out.append(StringSlice[origin=Self.O](unsafe_from_utf8=spans[i]))
+        return Optional(out^)
+
+    def to_record(self) raises -> BedRecord:
+        """Materialize an owned BedRecord. Call when the record must outlive the view.
+        """
+        var block_sizes: Optional[List[UInt64]] = None
+        var block_starts: Optional[List[UInt64]] = None
+        if (
+            self._block_sizes_span
+            and self._block_starts_span
+            and self.block_count
+        ):
+            var bc = self.block_count.value()
+            var sizes = _parse_comma_sep_int64_list(
+                self._block_sizes_span.value()
+            )
+            var starts = _parse_comma_sep_int64_list(
+                self._block_starts_span.value()
+            )
+            if len(sizes) != bc or len(starts) != bc:
+                raise Error("BED: blockSizes/blockStarts length != blockCount")
+            if starts[0] != 0:
+                raise Error(
+                    "BED: blockStarts[0] must be 0 (first block at chromStart)"
+                )
+            if (
+                self.chrom_start + starts[bc - 1] + sizes[bc - 1]
+                != self.chrom_end
+            ):
+                raise Error("BED: last block must end at chromEnd")
+            # Validate blocks are sorted and non-overlapping
+            for i in range(bc - 1):
+                if starts[i] + sizes[i] > starts[i + 1]:
+                    raise Error(
+                        "BED: blocks must be non-overlapping and sorted"
+                    )
+            block_sizes = sizes^
+            block_starts = starts^
+        var name_opt: Optional[BString] = None
+        if self._name:
+            name_opt = BString(self._name.value())
+        # Copy extra fields from spans to owned BStrings
+        var other_fields_opt: Optional[List[BString]] = None
+        if self._other_fields_spans:
+            var spans = self._other_fields_spans.value().copy()
+            var fields = List[BString]()
+            for i in range(len(spans)):
+                fields.append(BString(spans[i]))
+            other_fields_opt = fields^
+        return BedRecord(
+            Chrom=BString(self._chrom),
+            ChromStart=self.chrom_start,
+            ChromEnd=self.chrom_end,
+            Name=name_opt^ if name_opt else None,
+            Score=self.score,
+            Strand=self.strand,
+            ThickStart=self.thick_start,
+            ThickEnd=self.thick_end,
+            ItemRgb=self._item_rgb,
+            BlockSizes=block_sizes^ if block_sizes else None,
+            BlockStarts=block_starts^ if block_starts else None,
+            OtherFields=other_fields_opt^ if other_fields_opt else None,
+            NumFields=self.num_fields,
+        )
+
+
+def _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
+    """Parse comma-separated list of integers (e.g. blockSizes, blockStarts)."""
+    var out = List[UInt64]()
+    var start: Int = 0
+    var n = len(span)
+    while start < n:
+        var end = start
+        while end < n and span[end] != UInt8(ord(",")):
+            end += 1
+        var part = span[start:end]
+        if len(part) > 0:
+            var s = StringSlice(unsafe_from_utf8=part)
+            out.append(UInt64(atol(s)))
+        start = end + 1
+    return out^
+
+
+def _comma_sep_u64_list(values: List[UInt64]) -> String:
+    """Format list of UInt64 as comma-separated string."""
+    var out = String()
+    for i in range(len(values)):
+        if i > 0:
+            out += ","
+        out += String(values[i])
+    return out^
+
+
+# ---------------------------------------------------------------------------
+# BedRecord — owned, storeable
+# ---------------------------------------------------------------------------
+
+
+@fieldwise_init
+struct BedRecord(Copyable, Movable, Writable):
+    """Single BED feature (owned). Coordinates are 0-based, half-open.
+
+    score: UInt16 in [0, 1000] per BED spec.
+    OtherFields: extra columns beyond the standard BED12 fields (or beyond
+                 field 9 for BED10/11), stored as owned strings.
+    """
+
+    var Chrom: BString
+    var ChromStart: UInt64
+    var ChromEnd: UInt64
+    var Name: Optional[BString]
+    var Score: Optional[UInt16]
+    var Strand: Optional[Strand]
+    var ThickStart: Optional[UInt64]
+    var ThickEnd: Optional[UInt64]
+    var ItemRgb: Optional[ItemRgb]
+    var BlockSizes: Optional[List[UInt64]]
+    var BlockStarts: Optional[List[UInt64]]
+    var OtherFields: Optional[List[BString]]
+    var NumFields: Int
+
+    @always_inline
+    def chrom(ref[_] self) -> String:
+        return self.Chrom.to_string()
+
+    def start_position(self) -> Position:
+        """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
+        """
+        return Position(self.ChromStart + 1, True)
+
+    def end_position(self) -> Optional[Position]:
+        """1-based end position (ChromEnd). None for zero-length BED records (ChromEnd == 0).
+        """
+        if self.ChromEnd == 0:
+            return None
+        return Optional(Position(self.ChromEnd, True))
+
+    def interval(self) -> Optional[Interval]:
+        """Feature extent as 1-based closed [ChromStart+1, ChromEnd].
+        Returns None for zero-length BED records (ChromEnd == 0).
+        BED 0-based half-open [s, e) → 1-based closed [s+1, e].
+        """
+        if self.ChromEnd == 0:
+            return None
+        return Optional(
+            Interval(
+                Position(self.ChromStart + 1, True),
+                Position(self.ChromEnd, True),
+                True,
+            )
+        )
+
+    def thick_interval(ref self) -> Optional[Interval]:
+        """Thick (coding) extent if fields 7–8 present; else None (1-based closed).
+        """
+        if not self.ThickStart or not self.ThickEnd:
+            return None
+        var opt = interval_try_from_start_end(
+            self.ThickStart.value() + 1, self.ThickEnd.value()
+        )
+        if not opt:
+            return None
+        return Optional(opt.value())
+
+    @always_inline
+    def name(ref[_] self) -> Optional[String]:
+        if not self.Name:
+            return None
+        return self.Name.value().to_string()
+
+    @always_inline
+    def item_rgb(ref self) -> Optional[ItemRgb]:
+        if not self.ItemRgb:
+            return None
+        return Optional(self.ItemRgb.value().copy())
+
+    def block_sizes(ref self) -> Optional[List[UInt64]]:
+        if self.BlockSizes:
+            return Optional(self.BlockSizes.value().copy())
+        return None
+
+    def block_starts(ref self) -> Optional[List[UInt64]]:
+        if self.BlockStarts:
+            return Optional(self.BlockStarts.value().copy())
+        return None
+
+    def other_fields(ref self) -> Optional[List[String]]:
+        """Return extra columns beyond the standard BED fields, if any."""
+        if not self.OtherFields:
+            return None
+        var out = List[String]()
+        var fields = self.OtherFields.value().copy()
+        for i in range(len(fields)):
+            out.append(fields[i].to_string())
+        return Optional(out^)
+
+    def write_to[w: Writer](ref self, mut writer: w):
+        """Write this record as one TAB-delimited line (same column count as parsed).
+        """
+        self._write_core_fields(writer)
+        self._write_name_field(writer)
+        self._write_score_field(writer)
+        self._write_strand_field(writer)
+        self._write_thick_fields(writer)
+        self._write_item_rgb_field(writer)
+        self._write_block_fields(writer)
+        self._write_other_fields(writer)
+        writer.write_string("\n")
+
+    def _write_core_fields[w: Writer](ref self, mut writer: w):
+        var s = (
+            self.Chrom.to_string()
+            + "\t"
+            + String(self.ChromStart)
+            + "\t"
+            + String(self.ChromEnd)
+        )
+        writer.write_string(StringSlice(s))
+
+    def _write_name_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 4:
+            return
+        var name_str = self.Name.value().to_string() if self.Name else "."
+        var s = "\t" + name_str
+        writer.write_string(StringSlice(s))
+
+    def _write_score_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 5:
+            return
+        var score_str = String(self.Score.value()) if self.Score else "0"
+        var s = "\t" + score_str
+        writer.write_string(StringSlice(s))
+
+    def _write_strand_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 6:
+            return
+        if self.Strand and self.Strand.value() == Strand.Plus:
+            writer.write_string("\t+")
+        elif self.Strand and self.Strand.value() == Strand.Minus:
+            writer.write_string("\t-")
+        else:
+            writer.write_string("\t.")
+
+    def _write_thick_fields[w: Writer](ref self, mut writer: w):
+        if self.NumFields >= 7:
+            var thick_start_str = String(
+                self.ThickStart.value()
+            ) if self.ThickStart else String(self.ChromStart)
+            var s = "\t" + thick_start_str
+            writer.write_string(StringSlice(s))
+        if self.NumFields >= 8:
+            var thick_end_str = String(
+                self.ThickEnd.value()
+            ) if self.ThickEnd else String(self.ChromEnd)
+            var s = "\t" + thick_end_str
+            writer.write_string(StringSlice(s))
+
+    def _write_item_rgb_field[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 9:
+            return
+        if self.ItemRgb:
+            var rgb = self.ItemRgb.value().copy()
+            var s = (
+                "\t" + String(rgb.r) + "," + String(rgb.g) + "," + String(rgb.b)
+            )
+            writer.write_string(StringSlice(s))
+        else:
+            writer.write_string("\t0")
+
+    def _write_block_fields[w: Writer](ref self, mut writer: w):
+        if self.NumFields < 12 or not self.BlockSizes or not self.BlockStarts:
+            return
+        var sizes = self.BlockSizes.value().copy()
+        var starts = self.BlockStarts.value().copy()
+        var s = (
+            "\t"
+            + String(len(sizes))
+            + "\t"
+            + _comma_sep_u64_list(sizes)
+            + "\t"
+            + _comma_sep_u64_list(starts)
+        )
+        writer.write_string(StringSlice(s))
+
+    def _write_other_fields[w: Writer](ref self, mut writer: w):
+        if not self.OtherFields:
+            return
+        var fields = self.OtherFields.value().copy()
+        for i in range(len(fields)):
+            var s = "\t" + fields[i].to_string()
+            writer.write_string(StringSlice(s))

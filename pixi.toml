@@ -1,6 +1,6 @@
 [workspace]
 name = "blazeseq"
-version = "0.3.0"
+version = "0.4.0"
 description = "Primitives for FASTQ parsing and GPU-accelerated sequencing utilities in Mojo."
 authors = []
 channels = ["https://conda.modular.com/max", "conda-forge"]
@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 
 [package]
 name = "blazeseq"
-version = "0.3.0"
+version = "0.4.0"
 
 [package.build]
 backend = { name = "pixi-build-mojo", version = "0.*", channels = [
@@ -97,7 +97,7 @@ test-python-wheel-build = { cmd = "bash -c 'set -euo pipefail; mojo build --Werr
 test-python-wheel-install = { cmd = "bash -c 'set -euo pipefail; wheel=$(python -c \"from pathlib import Path; ws=sorted(Path(\\\"python/dist\\\").glob(\\\"*.whl\\\"), key=lambda p: p.stat().st_mtime); print(ws[-1])\"); uv venv .venv --clear; . .venv/bin/activate; uv pip install pytest \"$wheel\"; pytest -q tests/test_python_bindings.py'" }
 test-workflow-local = { cmd = "act --workflows .github/workflows/build-wheels.yml --job build-wheel" }
 rbuild = "rattler-build build --recipe recipe.yaml --output-dir .pixi/build --channel https://conda.modular.com/max --channel conda-forge"
-rtest = { cmd = "bash -c 'set -euo pipefail; package=$(find .pixi/build/linux-64 -name \"blazeseq-0.3.0-*.conda\" -print | sort | tail -1); rattler-build test --package-file \"$package\" --channel https://conda.modular.com/max --channel conda-forge'", depends-on = [
+rtest = { cmd = "bash -c 'set -euo pipefail; package=$(find .pixi/build/linux-64 -name \"blazeseq-0.4.0-*.conda\" -print | sort | tail -1); rattler-build test --package-file \"$package\" --channel https://conda.modular.com/max --channel conda-forge'", depends-on = [
     "rbuild",
 ] }
 

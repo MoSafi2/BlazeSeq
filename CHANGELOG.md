@@ -4,6 +4,8 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
+## [0.4] - 2026-08-24
+
 ### Added
 
 - **Optional GPU package**: Added the MAX-backed `blazeseq_gpu` package and `gpu` Pixi environment. Device/staged batches and upload/download helpers moved out of the MAX-free core.
@@ -12,6 +14,7 @@ All notable changes to BlazeSeq are documented here.
 
 ### Changed
 
+- **BED/GTF/GFF parsers made public**: The BED, GFF, and GTF parser implementations now live directly in the public `blazeseq.bed`, `blazeseq.gff`, and `blazeseq.gtf` packages. The internal `_bed`, `_gff`, and `_gtf` packages and their re-export shim modules were removed; all public import paths (`blazeseq.bed.parser.BedParser`, `blazeseq.gff.Gff3Parser`, etc.) are unchanged.
 - **Mojo 1.0 final upgrade**: Migrated source, tests, examples, benchmarks, and Python bindings to Mojo 1.0.0 APIs while keeping manifest compatibility at `>=1.0.0,<2`.
 - **Precompiled packaging**: Replaced `.mojopkg`/`mojo package` with `.mojoc`/`mojo precompile`. Python's new `mojoc_path()` is preferred; `mojopkg_path()` remains a compatibility alias returning the same directory.
 - **GPU API migration**: `FastqBatch.to_device()` and `.stage()` were removed. Import `upload_batch_to_device()` and related types from `blazeseq_gpu`.

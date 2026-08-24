@@ -1,1 +1,509 @@
-from blazeseq._bed.parser import BedParser
+"""Parser for BED (Browser Extensible Data) files.
+
+BED is TAB-delimited with 3 required fields (chrom, chromStart, chromEnd)
+and 9 optional fields. Comment lines (start with #), blank lines, UCSC
+`track ...` lines, and `browser ...` lines are all skipped automatically.
+Valid column counts: 3 or more (BED10/BED11 are treated as BED9 + extra fields).
+
+Use `next_view()` / `views()` for zero-allocation parsing; the view is
+invalidated on the next advance. Call `.to_record()` on a view or use
+`next_record()` / `records()` for owned records.
+"""
+
+from std.collections import List
+from std.collections.string import String, StringSlice
+from std.iter import Iterator
+from blazeseq.CONSTS import EOF
+from blazeseq.bed.record import (
+    BedRecord,
+    BedView,
+    ItemRgb,
+    Strand,
+)
+from blazeseq.io.buffered import EOFError
+from blazeseq.io.delimited import (
+    DelimitedReader,
+    DelimitedView,
+    LineAction,
+    LinePolicy,
+)
+from blazeseq.io.readers import Reader
+from blazeseq.errors import ParseContext, raise_parse_error
+
+comptime BED_TAB: Byte = 9  # ord('\t')
+
+
+# ---------------------------------------------------------------------------
+# BedErrorCode: format-local trivial enum for hot-path field parsing
+# ---------------------------------------------------------------------------
+
+
+struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
+    """Trivial error code returned by low-level BED field parsers; caller raises.
+    """
+
+    var value: Int8
+
+    @always_inline
+    def __init__(out self, value: Int8):
+        self.value = value
+
+    @always_inline
+    def __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    @always_inline
+    def __ne__(self, other: Self) -> Bool:
+        return self.value != other.value
+
+    comptime OK = Self(0)
+    comptime INT_EMPTY = Self(1)
+    comptime INT_INVALID = Self(2)
+    comptime STRAND_INVALID = Self(3)
+    comptime SCORE_RANGE = Self(4)
+    comptime RGB_FORMAT = Self(5)
+    comptime RGB_RANGE = Self(6)
+    comptime FIELD_COUNT = Self(7)
+    comptime BLOCK_INVALID = Self(8)
+
+    def message(self) -> String:
+        if self == Self.INT_EMPTY:
+            return "BED: integer field is empty"
+        if self == Self.INT_INVALID:
+            return "BED: invalid byte in integer field"
+        if self == Self.STRAND_INVALID:
+            return "BED: strand must be +, -, or ."
+        if self == Self.SCORE_RANGE:
+            return "BED: score must be in [0, 1000]"
+        if self == Self.RGB_FORMAT:
+            return "BED: itemRgb must be 0 or r,g,b"
+        if self == Self.RGB_RANGE:
+            return "BED: itemRgb components must be 0-255"
+        if self == Self.FIELD_COUNT:
+            return "BED: row must have at least 3 fields"
+        if self == Self.BLOCK_INVALID:
+            return "BED: blockCount must be > 0"
+        return "BED: parse error"
+
+
+# ---------------------------------------------------------------------------
+# Low-level field parsers — return BedErrorCode, never raise
+# ---------------------------------------------------------------------------
+
+
+@always_inline
+def _parse_uint64_from_span(
+    span: Span[UInt8, _], mut result: UInt64
+) -> BedErrorCode:
+    """Parse a decimal UInt64 from a byte span. Returns OK or an error code."""
+    result = 0
+    if len(span) == 0:
+        return BedErrorCode.INT_EMPTY
+    for i in range(len(span)):
+        var digit = span[i] - 48  # wraps on underflow for non-digit bytes
+        if digit > 9:
+            return BedErrorCode.INT_INVALID
+        result = result * 10 + digit.cast[DType.uint64]()
+    return BedErrorCode.OK
+
+
+@always_inline
+def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
+    """Parse a single-byte strand field. Returns OK or STRAND_INVALID.
+
+    '+' → Strand.Plus, '-' → Strand.Minus, '.' → Strand.Unknown.
+    When the field is absent (BED5 or fewer), the caller stores None rather
+    than calling this function, keeping None (absent) distinct from
+    Optional(Strand.Unknown) ('.').
+    """
+    result = Strand.Unknown
+    if len(span) != 1:
+        return BedErrorCode.STRAND_INVALID
+    var c = span[0]
+    if c == UInt8(ord("+")):
+        result = Strand.Plus
+        return BedErrorCode.OK
+    if c == UInt8(ord("-")):
+        result = Strand.Minus
+        return BedErrorCode.OK
+    if c == UInt8(ord(".")):
+        return BedErrorCode.OK  # Strand.Unknown already set
+    return BedErrorCode.STRAND_INVALID
+
+
+@always_inline
+def _parse_score(span: Span[UInt8, _], mut result: UInt16) -> BedErrorCode:
+    """Parse a BED score [0, 1000]. Returns OK, INT_EMPTY, INT_INVALID, or SCORE_RANGE.
+    """
+    result = 0
+    var v: UInt64 = 0
+    var code = _parse_uint64_from_span(span, v)
+    if code != BedErrorCode.OK:
+        return code
+    if v > 1000:
+        return BedErrorCode.SCORE_RANGE
+    result = UInt16(v)
+    return BedErrorCode.OK
+
+
+def _parse_item_rgb(
+    span: Span[UInt8, _],
+    ctx: ParseContext,
+) raises -> ItemRgb:
+    """Parse an itemRgb field: '0' or 'r,g,b' (each 0-255).
+
+    Single-pass byte parser — avoids building an intermediate List[String].
+    """
+    var n = len(span)
+    # Trim trailing whitespace
+    var end = n
+    while end > 0 and (
+        span[end - 1] == UInt8(ord(" "))
+        or span[end - 1] == UInt8(9)
+        or span[end - 1] == UInt8(10)
+        or span[end - 1] == UInt8(13)
+    ):
+        end -= 1
+    # Skip leading whitespace
+    var start = 0
+    while start < end and span[start] == UInt8(ord(" ")):
+        start += 1
+
+    # Fast path: single '0'
+    if end - start == 1 and span[start] == UInt8(ord("0")):
+        return ItemRgb(0, 0, 0)
+
+    # Parse three comma-separated decimal components
+    var components: Int = 0
+    var values = InlineArray[Int, 3](fill=0)
+    var cur: Int = 0
+    var has_digit = False
+    var i = start
+    while i <= end:
+        var is_sep = i == end or span[i] == UInt8(ord(","))
+        if is_sep:
+            if not has_digit:
+                raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+            if components >= 3:
+                raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+            if cur < 0 or cur > 255:
+                raise_parse_error(ctx, BedErrorCode.RGB_RANGE.message())
+            values[components] = cur
+            components += 1
+            cur = 0
+            has_digit = False
+        else:
+            var digit = Int(span[i]) - 48
+            if digit < 0 or digit > 9:
+                raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+            cur = cur * 10 + digit
+            has_digit = True
+        i += 1
+
+    if components != 3:
+        raise_parse_error(ctx, BedErrorCode.RGB_FORMAT.message())
+    return ItemRgb(UInt8(values[0]), UInt8(values[1]), UInt8(values[2]))
+
+
+# ---------------------------------------------------------------------------
+# BedLinePolicy — skip blank lines, comments, track/browser headers
+# ---------------------------------------------------------------------------
+
+
+@fieldwise_init
+struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
+    """Line policy for BED files.
+
+    Skips:
+    - Blank lines
+    - Lines starting with '#'
+    - UCSC 'track ...' header lines
+    - UCSC 'browser ...' directive lines
+
+    All other lines are yielded to the parser.
+    """
+
+    @always_inline
+    def classify(self, line: Span[UInt8, _]) -> LineAction:
+        var n = len(line)
+        if n == 0:
+            return LineAction.SKIP
+        var first = line[0]
+        if first == UInt8(ord("#")):
+            return LineAction.SKIP
+        # UCSC track / browser lines: first token must be exactly "track" or "browser"
+        # followed by whitespace, end-of-line, or end-of-span.
+        if first == UInt8(ord("t")) and n >= 5:
+            # "track"
+            if (
+                line[1] == UInt8(ord("r"))
+                and line[2] == UInt8(ord("a"))
+                and line[3] == UInt8(ord("c"))
+                and line[4] == UInt8(ord("k"))
+            ):
+                if (
+                    n == 5
+                    or line[5] == UInt8(32)
+                    or line[5] == UInt8(9)
+                    or line[5] == UInt8(10)
+                    or line[5] == UInt8(13)
+                ):
+                    return LineAction.SKIP
+        if first == UInt8(ord("b")) and n >= 7:
+            # "browser"
+            if (
+                line[1] == UInt8(ord("r"))
+                and line[2] == UInt8(ord("o"))
+                and line[3] == UInt8(ord("w"))
+                and line[4] == UInt8(ord("s"))
+                and line[5] == UInt8(ord("e"))
+                and line[6] == UInt8(ord("r"))
+            ):
+                if (
+                    n == 7
+                    or line[7] == UInt8(32)
+                    or line[7] == UInt8(9)
+                    or line[7] == UInt8(10)
+                    or line[7] == UInt8(13)
+                ):
+                    return LineAction.SKIP
+        return LineAction.YIELD
+
+
+struct BedParser[R: Reader](Iterable, Movable):
+    """Streaming BED parser over a Reader.
+
+    Skips comment lines (#), blank lines, and UCSC track/browser header lines.
+    Accepts any column count >= 3. Columns 10+ (or 10-11 for BED10/11) are
+    collected into other_fields as raw byte spans.
+
+    API:
+        - next_view() -> BedView (zero-unsafe_alloc; invalidated on next advance)
+        - next_record() -> BedRecord (materialized; raises EOFError when exhausted)
+        - for rec in parser / records() -> BedRecord
+        - for view in parser.views() -> BedView
+    """
+
+    comptime IteratorType[origin: Origin] = _BedParserRecordIter[Self.R, origin]
+
+    var _rows: DelimitedReader[Self.R, BedLinePolicy, 32]
+
+    def __init__(out self, var reader: Self.R) raises:
+        self._rows = DelimitedReader[Self.R, BedLinePolicy, 32](
+            reader^, delimiter=BED_TAB, has_header=False
+        )
+
+    @always_inline
+    def has_more(self) -> Bool:
+        return self._rows.has_more()
+
+    @always_inline
+    def _parse_context(ref self) -> ParseContext:
+        return self._rows._parse_context()
+
+    def _parse_bed_row(
+        ref self,
+        view: DelimitedView[MutUntrackedOrigin, 32],
+    ) raises -> BedView[MutUntrackedOrigin]:
+        """Parse all BED fields from a DelimitedView and return a BedView directly.
+
+        Validates field count (>= 3) and parses required and optional fields in
+        one pass. Columns 10-11 when n < 12, and columns beyond 12, go to
+        other_fields as raw byte spans.
+        """
+        var ctx = self._parse_context()
+        var n = view.num_fields()
+        if n < 3:
+            raise_parse_error(ctx, BedErrorCode.FIELD_COUNT.message())
+
+        # Required fields
+        var chrom_span = view.get_span(0)
+        var chrom_start: UInt64 = 0
+        var cs_code = _parse_uint64_from_span(view.get_span(1), chrom_start)
+        if cs_code != BedErrorCode.OK:
+            raise_parse_error(ctx, cs_code.message())
+        var chrom_end: UInt64 = 0
+        var ce_code = _parse_uint64_from_span(view.get_span(2), chrom_end)
+        if ce_code != BedErrorCode.OK:
+            raise_parse_error(ctx, ce_code.message())
+        if chrom_start > chrom_end:
+            raise_parse_error(ctx, "BED: chromStart must be <= chromEnd")
+
+        # Optional fields
+        var name_opt: Optional[Span[UInt8, MutUntrackedOrigin]] = None
+        var score_opt: Optional[UInt16] = None
+        var strand_opt: Optional[Strand] = None
+        var thick_start_opt: Optional[UInt64] = None
+        var thick_end_opt: Optional[UInt64] = None
+        var item_rgb_opt: Optional[ItemRgb] = None
+        var block_count_opt: Optional[Int] = None
+        var block_sizes_span_opt: Optional[
+            Span[UInt8, MutUntrackedOrigin]
+        ] = None
+        var block_starts_span_opt: Optional[
+            Span[UInt8, MutUntrackedOrigin]
+        ] = None
+        var other_fields_opt: Optional[
+            List[Span[UInt8, MutUntrackedOrigin]]
+        ] = None
+
+        if n >= 4:
+            name_opt = view.get_span(3)
+        if n >= 5:
+            var score: UInt16 = 0
+            var sc_code = _parse_score(view.get_span(4), score)
+            if sc_code != BedErrorCode.OK:
+                raise_parse_error(ctx, sc_code.message())
+            score_opt = score
+        if n >= 6:
+            var strand: Strand = Strand.Unknown
+            var st_code = _parse_strand(view.get_span(5), strand)
+            if st_code != BedErrorCode.OK:
+                raise_parse_error(ctx, st_code.message())
+            strand_opt = strand
+        if n >= 7:
+            var thick_start: UInt64 = 0
+            var ts_code = _parse_uint64_from_span(view.get_span(6), thick_start)
+            if ts_code != BedErrorCode.OK:
+                raise_parse_error(ctx, ts_code.message())
+            thick_start_opt = thick_start
+        if n >= 8:
+            var thick_end: UInt64 = 0
+            var te_code = _parse_uint64_from_span(view.get_span(7), thick_end)
+            if te_code != BedErrorCode.OK:
+                raise_parse_error(ctx, te_code.message())
+            thick_end_opt = thick_end
+        if n >= 9:
+            item_rgb_opt = _parse_item_rgb(view.get_span(8), ctx)
+
+        # Block fields: only present when n >= 12.
+        # For n == 10 or n == 11, columns 9+(0-indexed) go to other_fields.
+        if n >= 12:
+            var bc_raw: UInt64 = 0
+            var bc_code = _parse_uint64_from_span(view.get_span(9), bc_raw)
+            if bc_code != BedErrorCode.OK:
+                raise_parse_error(ctx, bc_code.message())
+            var bc = Int(bc_raw)
+            if bc < 1:
+                raise_parse_error(ctx, BedErrorCode.BLOCK_INVALID.message())
+            block_count_opt = bc
+            block_sizes_span_opt = view.get_span(10)
+            block_starts_span_opt = view.get_span(11)
+            if n > 12:
+                var extras = List[Span[UInt8, MutUntrackedOrigin]]()
+                for i in range(12, n):
+                    extras.append(view.get_span(i))
+                other_fields_opt = extras^
+        elif n > 9:
+            # BED10 or BED11: columns 10..n go to other_fields
+            var extras = List[Span[UInt8, MutUntrackedOrigin]]()
+            for i in range(9, n):
+                extras.append(view.get_span(i))
+            other_fields_opt = extras^
+
+        return BedView[MutUntrackedOrigin](
+            _chrom=chrom_span,
+            chrom_start=chrom_start,
+            chrom_end=chrom_end,
+            _name=name_opt,
+            score=score_opt,
+            strand=strand_opt,
+            thick_start=thick_start_opt,
+            thick_end=thick_end_opt,
+            _item_rgb=item_rgb_opt,
+            block_count=block_count_opt,
+            _block_sizes_span=block_sizes_span_opt,
+            _block_starts_span=block_starts_span_opt,
+            _other_fields_spans=other_fields_opt^,
+            num_fields=n,
+        )
+
+    def next_view(mut self) raises -> BedView[MutUntrackedOrigin]:
+        """Return the next BED record as a zero-unsafe_alloc view.
+
+        Raises:
+            EOFError: When no more records.
+            Error: On fewer than 3 fields, non-integer coordinates,
+                   chromStart > chromEnd, or invalid score/strand/itemRgb/blocks.
+        """
+        if not self.has_more():
+            raise EOFError()
+        var view = self._rows.next_view()
+        return self._parse_bed_row(view)
+
+    def next_record(mut self) raises -> BedRecord:
+        """Return the next BED record as an owned BedRecord."""
+        return self.next_view().to_record()
+
+    def views(ref self) -> _BedParserViewIter[Self.R, origin_of(self)]:
+        """Iterator yielding zero-unsafe_alloc BedViews."""
+        return _BedParserViewIter[Self.R, origin_of(self)](Pointer(to=self))
+
+    def records(ref self) -> _BedParserRecordIter[Self.R, origin_of(self)]:
+        """Iterator yielding owned BedRecords."""
+        return _BedParserRecordIter[Self.R, origin_of(self)](Pointer(to=self))
+
+    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+        return self.records()
+
+
+struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
+    comptime Element = BedView[MutUntrackedOrigin]
+
+    var _src: Pointer[BedParser[Self.R], Self.origin]
+
+    def __init__(out self, src: Pointer[BedParser[Self.R], Self.origin]):
+        self._src = src
+
+    def __iter__(ref self) -> Self:
+        return Self(self._src)
+
+    @always_inline
+    def __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    @always_inline
+    def __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[Pointer[BedParser[Self.R], MutUntrackedOrigin]](
+            self._src
+        )
+        try:
+            return mut_ptr[].next_view()
+        except e:
+            var msg = String(e)
+            if msg == EOF or msg.startswith(EOF):
+                raise StopIteration()
+            else:
+                print(msg)
+                raise StopIteration()
+
+
+struct _BedParserRecordIter[R: Reader, origin: Origin](Iterator):
+    comptime Element = BedRecord
+
+    var _src: Pointer[BedParser[Self.R], Self.origin]
+
+    def __init__(out self, src: Pointer[BedParser[Self.R], Self.origin]):
+        self._src = src
+
+    def __iter__(ref self) -> Self:
+        return Self(self._src)
+
+    @always_inline
+    def __has_next__(self) -> Bool:
+        return self._src[].has_more()
+
+    @always_inline
+    def __next__(mut self) raises StopIteration -> Self.Element:
+        var mut_ptr = rebind[Pointer[BedParser[Self.R], MutUntrackedOrigin]](
+            self._src
+        )
+        try:
+            return mut_ptr[].next_record()
+        except e:
+            var msg = String(e)
+            if msg == EOF or msg.startswith(EOF):
+                raise StopIteration()
+            else:
+                print(msg)
+                raise StopIteration()
