@@ -259,22 +259,6 @@ def _record_snippet[
     return String(StringSlice(unsafe_from_utf8=sp))
 
 
-def _validate_fastq_structure[
-    o: Origin
-](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
-    """Validate @ on id line, + on separator line, and seq/qual length match. Returns OK or structure error code.
-    """
-    if view[offsets.header_start] != Byte(read_header):
-        return FastxErrorCode.ID_NO_AT
-    if view[offsets.sep_start] != Byte(quality_header):
-        return FastxErrorCode.SEP_NO_PLUS
-    var seq_len = offsets.sep_start - offsets.seq_start - 1
-    var qual_len = offsets.record_end - offsets.qual_start
-    if seq_len != qual_len:
-        return FastxErrorCode.SEQ_QUAL_LEN_MISMATCH
-    return FastxErrorCode.OK
-
-
 @always_inline
 def _validate_fastq_structure_fast[
     o: Origin
@@ -684,30 +668,3 @@ def _scan_record_memchr_seq[
 
     var code = _validate_fastq_structure_fast(view, offsets)
     return (True, offsets, SearchPhase.HEADER, code)
-
-
-@always_inline
-def _find_newline_from(
-    buf: BufferedReader,
-    base: Int,  # absolute _ptr offset of view()[0] (buf._head at scan start)
-    _from: Int,  # relative offset from base to start searching
-) -> Int:
-    """
-    Search for '\\n' in buffer starting at absolute offset (base + from).
-    Returns relative offset of the byte AFTER the '\\n' (i.e. start of next
-    line), or -1 if no '\\n' found before buf._end.
-
-    Mirrors Rust's find_line() which returns `search_start + pos + 1`.
-    """
-    var abs_start = base + _from
-    var avail = buf._end - abs_start
-    if avail <= 0:
-        return -1
-    var view = Span[Byte, MutUntrackedOrigin](
-        unsafe_ptr=buf._ptr.unsafe_offset(abs_start),
-        length=avail,
-    )
-    var pos = memchr(haystack=view, chr=new_line)
-    if pos < 0:
-        return -1
-    return _from + pos + 1  # relative to base; +1 skips past the '\n'
