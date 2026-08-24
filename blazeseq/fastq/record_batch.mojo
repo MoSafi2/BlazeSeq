@@ -1,8 +1,10 @@
 from blazeseq.fastq.record import FastqRecord, FastqView
 from blazeseq.byte_string import BString
-from blazeseq.CONSTS import DEFAULT_BATCH_SIZE
 from std.memory import Pointer
 from std.collections.string import String
+
+# Default max records per batch for parser.batches() / next_batch() and FastqBatch preallocation.
+comptime DEFAULT_BATCH_SIZE = 4096
 
 
 struct FastqBatch(Copyable, Deinitable, Sized, Writable):

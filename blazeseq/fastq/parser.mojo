@@ -3,7 +3,7 @@ from blazeseq.CONSTS import *
 from blazeseq.fastq.quality_schema import QualitySchema, generic_schema
 from blazeseq.io.buffered import EOFError, BufferedReader
 from blazeseq.io.readers import Reader
-from blazeseq.fastq.record_batch import FastqBatch
+from blazeseq.fastq.record_batch import FastqBatch, DEFAULT_BATCH_SIZE
 from blazeseq.errors import (
     ParseError,
     ValidationError,
