@@ -144,7 +144,7 @@ struct FastqParser[
             Self.config.buffer_max_capacity,
         ](reader^)
         self.quality_schema = _resolve_effective_schema(
-            Self.config.quality_schema, ""
+            Self.config.quality_schema, quality_schema
         )
         self.validator = Validator(
             Self.config.check_ascii,
@@ -166,14 +166,14 @@ struct FastqParser[
             Self.config.buffer_max_capacity,
         ](reader^)
         self.quality_schema = _resolve_effective_schema(
-            Self.config.quality_schema, ""
+            Self.config.quality_schema, schema
         )
         self.validator = Validator(
             Self.config.check_ascii,
             Self.config.check_quality,
             self.quality_schema.copy(),
         )
-        self._batch_size = DEFAULT_BATCH_SIZE
+        self._batch_size = batch_size
 
     @always_inline
     def _parse_context(ref self) -> ParseContext:

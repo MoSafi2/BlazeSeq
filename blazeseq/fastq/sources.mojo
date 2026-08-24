@@ -134,11 +134,12 @@ struct BufferedSource[
             if not complete:
                 raise Error()
 
+        var record_base = self.reader._ptr.unsafe_offset(base)
         var to_consume = offsets.record_end + 1
         _ = self.reader.consume(min(to_consume, self.reader._end - base))
 
         return FoundRecord(
-            base=self.reader.view().unsafe_ptr(),
+            base=record_base,
             offsets=offsets,
         )
 

@@ -14,6 +14,7 @@
 #   BENCH_WARMUP_RUNS     (default: 3)
 #   BENCH_HYPERFINE_RUNS   (default: 15)
 #   BENCH_BATCH_SIZE     (default: 4096; used for batch_vs_paraseq)
+#   BENCH_PARSER_BACKEND (buffered | mmap; plain parser workload only)
 #   DISABLE_HYPERTHREADING (best-effort; disables SMT when available, requires sudo)
 #
 # Python integration / stdout contract:
@@ -55,6 +56,15 @@ BENCH_FS="${BENCH_FS:-tmpfs}"
 
 BENCH_INPUT_PATH="${BENCH_INPUT_PATH:-}"
 BENCH_GZIP_THREADS="${BENCH_GZIP_THREADS:-4}"
+BENCH_PARSER_BACKEND="${BENCH_PARSER_BACKEND:-buffered}"
+
+case "${BENCH_PARSER_BACKEND}" in
+    buffered|mmap) ;;
+    *)
+        echo "Invalid BENCH_PARSER_BACKEND='${BENCH_PARSER_BACKEND}' (expected 'buffered' or 'mmap')" >&2
+        exit 2
+        ;;
+esac
 
 BATCH_SIZE="${BENCH_BATCH_SIZE:-4096}"
 
@@ -315,8 +325,14 @@ case "${BENCH_WORKER_MODE}" in
         # --- Optional: verify all parsers agree on record/base count (non-fatal) ---
         echo "Verifying parser outputs..."
         ref=""
-        for cmd_label in "BlazeSeq_memchr_seq" "BlazeSeq_masks" "needletail" "seq_io" "kseq"; do
+        if [ "${BENCH_PARSER_BACKEND}" = "mmap" ]; then
+            blazeseq_labels="BlazeSeq_mmap"
+        else
+            blazeseq_labels="BlazeSeq_memchr_seq BlazeSeq_masks"
+        fi
+        for cmd_label in $blazeseq_labels "needletail" "seq_io" "kseq"; do
             case "$cmd_label" in
+                BlazeSeq_mmap)      out=$("$BLAZESEQ_BIN" "$BENCH_FILE" mmap 2>/dev/null) || out="" ;;
                 BlazeSeq_memchr_seq) out=$("$BLAZESEQ_BIN" "$BENCH_FILE" memchr-seq 2>/dev/null) || out="" ;;
                 BlazeSeq_masks)      out=$("$BLAZESEQ_BIN" "$BENCH_FILE" masks 2>/dev/null) || out="" ;;
                 needletail)   out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
@@ -340,15 +356,26 @@ case "${BENCH_WORKER_MODE}" in
 
         # --- Hyperfine ---
         echo "Running hyperfine (warmup=${WARMUP_RUNS}, runs=${HYPERFINE_RUNS}) ..."
-        hyperfine_cmd \
-            --warmup "${WARMUP_RUNS}" \
-            --runs "${HYPERFINE_RUNS}" \
-            --export-json "$hyperfine_json_path" \
-            -n BlazeSeq_memchr_seq  "$BLAZESEQ_BIN $BENCH_FILE memchr-seq" \
-            -n BlazeSeq_masks       "$BLAZESEQ_BIN $BENCH_FILE masks" \
-            -n needletail  "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
-            -n seq_io      "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
-            -n kseq        "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE"
+        if [ "${BENCH_PARSER_BACKEND}" = "mmap" ]; then
+            hyperfine_cmd \
+                --warmup "${WARMUP_RUNS}" \
+                --runs "${HYPERFINE_RUNS}" \
+                --export-json "$hyperfine_json_path" \
+                -n BlazeSeq_mmap "$BLAZESEQ_BIN $BENCH_FILE mmap" \
+                -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
+                -n seq_io "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
+                -n kseq "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE"
+        else
+            hyperfine_cmd \
+                --warmup "${WARMUP_RUNS}" \
+                --runs "${HYPERFINE_RUNS}" \
+                --export-json "$hyperfine_json_path" \
+                -n BlazeSeq_memchr_seq "$BLAZESEQ_BIN $BENCH_FILE memchr-seq" \
+                -n BlazeSeq_masks "$BLAZESEQ_BIN $BENCH_FILE masks" \
+                -n needletail "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \
+                -n seq_io "$SCRIPT_DIR/seq_io_runner/target/release/seq_io_runner $BENCH_FILE" \
+                -n kseq "$SCRIPT_DIR/kseq_runner/kseq_runner $BENCH_FILE"
+        fi
 
         echo "Worker produced hyperfine JSON at ${hyperfine_json_path}"
         ;;
@@ -588,7 +615,7 @@ if [ -n "$ref" ] && [[ "$ref" == *" "* ]]; then
 fi
 
 if command -v python >/dev/null 2>&1; then
-    OUT_WORKLOAD="${BENCH_WORKLOAD}" OUT_FORMAT="${BENCH_FORMAT}" HYPERFINE_JSON_PATH="${hyperfine_json_path}" REF="${ref:-}" \
+    OUT_WORKLOAD="${BENCH_WORKLOAD}" OUT_FORMAT="${BENCH_FORMAT}" PARSER_BACKEND="${BENCH_PARSER_BACKEND}" HYPERFINE_JSON_PATH="${hyperfine_json_path}" REF="${ref:-}" \
     WARMUP="${WARMUP_RUNS}" RUNS="${HYPERFINE_RUNS}" SIZE_GB="${FASTQ_SIZE_GB}" \
     BENCH_FS="${BENCH_FS}" GZIP_THREADS="${threads_used}" RECORDS="${records_val}" BASE_PAIRS="${base_pairs_val}" \
     INPUT_SOURCE="${input_source}" INPUT_PATH="${INPUT_PATH:-}" \
@@ -596,6 +623,7 @@ if command -v python >/dev/null 2>&1; then
 import json, os
 workload = os.environ["OUT_WORKLOAD"]
 fmt = os.environ["OUT_FORMAT"]
+parser_backend = os.environ["PARSER_BACKEND"]
 hyperfine_json_path = os.environ["HYPERFINE_JSON_PATH"]
 ref = os.environ.get("REF", "")
 warmup_runs = int(os.environ["WARMUP"])
@@ -630,6 +658,7 @@ hyperfine_results = hyperfine_json.get("results") if isinstance(hyperfine_json, 
 summary = {
     "workload": workload,
     "format": fmt,
+    "parser_backend": parser_backend,
     "bench_fs": bench_fs,
     "fastq_size_gb": size_gb,
     "warmup_runs": warmup_runs,
@@ -655,6 +684,6 @@ else
         # Assumes ref has no embedded quotes (runner output is numeric "records base_pairs").
         raw_ref_json="\"${ref}\""
     fi
-    python_missing_stub=\"{\\\"workload\\\":\\\"${BENCH_WORKLOAD}\\\",\\\"format\\\":\\\"${BENCH_FORMAT}\\\",\\\"bench_fs\\\":\\\"${BENCH_FS}\\\",\\\"fastq_size_gb\\\":${FASTQ_SIZE_GB},\\\"warmup_runs\\\":${WARMUP_RUNS},\\\"runs\\\":${HYPERFINE_RUNS},\\\"gzip_threads\\\":${threads_used:-null},\\\"counts\\\":{\\\"records\\\":${records_val},\\\"base_pairs\\\":${base_pairs_val},\\\"raw_ref\\\":${raw_ref_json}},\\\"hyperfine_json\\\":null,\\\"hyperfine_results\\\":null}\"
+    python_missing_stub=\"{\\\"workload\\\":\\\"${BENCH_WORKLOAD}\\\",\\\"format\\\":\\\"${BENCH_FORMAT}\\\",\\\"parser_backend\\\":\\\"${BENCH_PARSER_BACKEND}\\\",\\\"bench_fs\\\":\\\"${BENCH_FS}\\\",\\\"fastq_size_gb\\\":${FASTQ_SIZE_GB},\\\"warmup_runs\\\":${WARMUP_RUNS},\\\"runs\\\":${HYPERFINE_RUNS},\\\"gzip_threads\\\":${threads_used:-null},\\\"counts\\\":{\\\"records\\\":${records_val},\\\"base_pairs\\\":${base_pairs_val},\\\"raw_ref\\\":${raw_ref_json}},\\\"hyperfine_json\\\":null,\\\"hyperfine_results\\\":null}\"
     echo "$python_missing_stub" >&3
 fi

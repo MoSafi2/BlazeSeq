@@ -12,6 +12,7 @@ from typing import Literal
 
 Format = Literal["plain", "gz"]
 Workload = Literal["parser", "batch_vs_paraseq"]
+ParserBackend = Literal["buffered", "mmap"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKER_SCRIPT = REPO_ROOT / "benchmark/fastq-parser/run_benchmarks.sh"
@@ -116,6 +117,7 @@ def validate_result(
     expected_workload: Workload,
     expected_format: Format,
     expected_gzip_threads: int,
+    expected_parser_backend: ParserBackend,
 ) -> None:
     for k in ("workload", "format", "counts", "hyperfine_json"):
         if k not in result:
@@ -130,6 +132,11 @@ def validate_result(
     if result["format"] != expected_format:
         raise RuntimeError(
             f"Worker JSON format mismatch: expected {expected_format}, got {result['format']}"
+        )
+    if result.get("parser_backend") != expected_parser_backend:
+        raise RuntimeError(
+            "Worker JSON parser_backend mismatch: "
+            f"expected {expected_parser_backend}, got {result.get('parser_backend')}"
         )
 
     counts = result["counts"]
@@ -160,11 +167,16 @@ def expected_artifact_stem(
     workload: Workload,
     effective_format: Format,
     gzip_threads: int,
+    parser_backend: ParserBackend,
 ) -> str:
     if workload == "batch_vs_paraseq":
         return "benchmark_results_batch_vs_paraseq"
     if effective_format == "plain":
-        return "benchmark_results"
+        return (
+            "benchmark_results_mmap"
+            if parser_backend == "mmap"
+            else "benchmark_results"
+        )
     # effective_format == "gz"
     return (
         "benchmark_results_gzip_single"
@@ -187,6 +199,7 @@ def run_benchmark_once(
     disable_hyperthreading: bool,
     plot: bool,
     write_artifacts: bool,
+    parser_backend: ParserBackend = "buffered",
 ) -> dict:
     if fs == "local" and input_path is None:
         raise ValueError("fs='local' requires --input to point to an existing FASTQ file.")
@@ -203,6 +216,10 @@ def run_benchmark_once(
         input_path=input_path,
         format_requested=format_requested,
     )
+    if parser_backend == "mmap" and (
+        workload != "parser" or effective_format != "plain"
+    ):
+        raise ValueError("The mmap parser backend requires the plain parser workload.")
 
     if workload == "batch_vs_paraseq":
         worker_mode: Literal["plain", "gzip", "batch-vs-paraseq"] = "batch-vs-paraseq"
@@ -223,6 +240,7 @@ def run_benchmark_once(
             "BENCH_HYPERFINE_RUNS": str(runs),
             "BENCH_GZIP_THREADS": str(gzip_threads),
             "BENCH_BATCH_SIZE": str(batch_size),
+            "BENCH_PARSER_BACKEND": parser_backend,
             "DISABLE_HYPERTHREADING": "1" if disable_hyperthreading else "0",
         }
     )
@@ -238,6 +256,7 @@ def run_benchmark_once(
         expected_workload=workload,
         expected_format=effective_format,
         expected_gzip_threads=gzip_threads,
+        expected_parser_backend=parser_backend,
     )
 
     if plot:
@@ -249,6 +268,7 @@ def run_benchmark_once(
             workload=workload,
             effective_format=effective_format,
             gzip_threads=gzip_threads,
+            parser_backend=parser_backend,
         )
 
         hyperfine_json = result["hyperfine_json"]
@@ -295,6 +315,7 @@ def run_benchmark_once(
             workload=workload,
             effective_format=effective_format,
             gzip_threads=gzip_threads,
+            parser_backend=parser_backend,
         )
         out_path = REPO_ROOT / f"{stem}.json"
         out_path.write_text(json.dumps(result["hyperfine_json"]), encoding="utf-8")
@@ -326,6 +347,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--warmup-runs", type=int, default=3)
     run_p.add_argument("--runs", type=int, default=15)
     run_p.add_argument("--batch-size", type=int, default=4096)
+    run_p.add_argument(
+        "--parser-backend",
+        choices=["buffered", "mmap"],
+        default="buffered",
+        help="BlazeSeq backend used for plain FASTQ parser benchmarks.",
+    )
     run_p.add_argument("--disable-hyperthreading", action="store_true")
     run_p.add_argument(
         "--plot",
@@ -357,6 +384,7 @@ def main() -> int:
             disable_hyperthreading=bool(args.disable_hyperthreading),
             plot=bool(args.plot),
             write_artifacts=bool(args.write_artifacts),
+            parser_backend=args.parser_backend,
         )
         print(json.dumps(result))
         return 0
