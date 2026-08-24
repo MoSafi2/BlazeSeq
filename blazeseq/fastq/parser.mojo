@@ -22,13 +22,8 @@ from blazeseq.utils import _strip_spaces
 from blazeseq.fastq.quality_schema import _parse_schema
 from blazeseq.fastq.scan import (
     _check_end_qual,
-    _scan_record,
-    _scan_record_fused_old,
-    _scan_record_memchr_seq,
     _scan_by_mode,
-    SCAN_MODE_OPTIMIZED,
     SCAN_MODE_MASKS,
-    SCAN_MODE_FUSED_OLD,
     SCAN_MODE_MEMCHR_SEQ,
     _record_snippet,
     RecordOffsets,
@@ -179,16 +174,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         return ref_rec
 
     @always_inline
-    def next_view_fused_old(
-        mut self,
-    ) raises -> FastqView[origin=MutUntrackedOrigin]:
-        """Benchmark-only variant that uses the original fused SIMD scan loop.
-        """
-        var ref_rec = self._find_and_consume_ref_record_fused_old()
-        self._raise_if_invalid_view(ref_rec)
-        return ref_rec
-
-    @always_inline
     def next_record(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
@@ -202,15 +187,6 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if not self.has_more():
             raise EOFError()
         var ref_rec = self._find_and_consume_ref_record_memchr_seq()
-        return self._record_from_view(ref_rec)
-
-    @always_inline
-    def next_record_fused_old(mut self) raises -> FastqRecord:
-        """Benchmark-only variant that uses the original fused SIMD scan loop.
-        """
-        if not self.has_more():
-            raise EOFError()
-        var ref_rec = self._find_and_consume_ref_record_fused_old()
         return self._record_from_view(ref_rec)
 
     @always_inline
@@ -343,19 +319,13 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
     def _find_and_consume_ref_record(
         mut self,
     ) raises -> FastqView[origin=MutUntrackedOrigin]:
-        return self._find_and_consume_ref_record_scan[SCAN_MODE_OPTIMIZED]()
+        return self._find_and_consume_ref_record_scan[SCAN_MODE_MASKS]()
 
     @always_inline
     def _find_and_consume_ref_record_memchr_seq(
         mut self,
     ) raises -> FastqView[origin=MutUntrackedOrigin]:
         return self._find_and_consume_ref_record_scan[SCAN_MODE_MEMCHR_SEQ]()
-
-    @always_inline
-    def _find_and_consume_ref_record_fused_old(
-        mut self,
-    ) raises -> FastqView[origin=MutUntrackedOrigin]:
-        return self._find_and_consume_ref_record_scan[SCAN_MODE_FUSED_OLD]()
 
     @always_inline
     def _find_and_consume_ref_record_scan[

@@ -315,10 +315,8 @@ case "${BENCH_WORKER_MODE}" in
         # --- Optional: verify all parsers agree on record/base count (non-fatal) ---
         echo "Verifying parser outputs..."
         ref=""
-        for cmd_label in "BlazeSeq_optimized" "BlazeSeq_fused_old" "BlazeSeq_memchr_seq" "BlazeSeq_masks" "needletail" "seq_io" "kseq"; do
+        for cmd_label in "BlazeSeq_memchr_seq" "BlazeSeq_masks" "needletail" "seq_io" "kseq"; do
             case "$cmd_label" in
-                BlazeSeq_optimized)  out=$("$BLAZESEQ_BIN" "$BENCH_FILE" optimized 2>/dev/null) || out="" ;;
-                BlazeSeq_fused_old)  out=$("$BLAZESEQ_BIN" "$BENCH_FILE" fused-old 2>/dev/null) || out="" ;;
                 BlazeSeq_memchr_seq) out=$("$BLAZESEQ_BIN" "$BENCH_FILE" memchr-seq 2>/dev/null) || out="" ;;
                 BlazeSeq_masks)      out=$("$BLAZESEQ_BIN" "$BENCH_FILE" masks 2>/dev/null) || out="" ;;
                 needletail)   out=$("$SCRIPT_DIR/needletail_runner/target/release/needletail_runner" "$BENCH_FILE" 2>/dev/null) || out="" ;;
@@ -346,8 +344,6 @@ case "${BENCH_WORKER_MODE}" in
             --warmup "${WARMUP_RUNS}" \
             --runs "${HYPERFINE_RUNS}" \
             --export-json "$hyperfine_json_path" \
-            -n BlazeSeq_optimized   "$BLAZESEQ_BIN $BENCH_FILE optimized" \
-            -n BlazeSeq_fused_old   "$BLAZESEQ_BIN $BENCH_FILE fused-old" \
             -n BlazeSeq_memchr_seq  "$BLAZESEQ_BIN $BENCH_FILE memchr-seq" \
             -n BlazeSeq_masks       "$BLAZESEQ_BIN $BENCH_FILE masks" \
             -n needletail  "$SCRIPT_DIR/needletail_runner/target/release/needletail_runner $BENCH_FILE" \

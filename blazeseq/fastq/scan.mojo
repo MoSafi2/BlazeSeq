@@ -286,200 +286,6 @@ def _validate_fastq_structure_fast[
 # ---------------------------------------------------------------------------
 
 
-@always_inline
-def _drain_newline_cmp[
-    W: Int,
-](
-    mut offsets: RecordOffsets,
-    found_in: Int,
-    start_rel: Int,
-    base_i: Int,
-    cmp: SIMD[DType.bool, W],
-) -> Int:
-    var found = found_in
-    var mask = pack_bits(cmp)
-
-    while mask != 0 and found < 4:
-        var bit = Int(count_trailing_zeros(mask))
-        var abs_pos = start_rel + base_i + bit + 1
-        found += 1
-        _store_newline_offset(offsets, found, abs_pos)
-        mask &= mask - 1
-
-    return found
-
-
-@always_inline
-def _scan_record_optimized[
-    o: Origin,
-](
-    view: Span[Byte, o],
-    mut offsets: RecordOffsets,
-    phase: SearchPhase,
-) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
-    comptime W = simd_width
-    comptime GROUP_W = 4 * W
-    comptime nl_splat = SIMD[DType.uint8, W](new_line)
-
-    var start_rel = _phase_start_offset(offsets, phase)
-    var scan_span = view[start_rel:]
-    var ptr = scan_span.unsafe_ptr()
-    var avail = len(scan_span)
-
-    if avail <= 0:
-        return (False, offsets, phase, FastxErrorCode.OK)
-
-    var found = _phase_to_count(phase)
-    var i = 0
-
-    # ── 4x SIMD grouped scan ────────────────────────────────────────────────
-    #
-    # This is the memchr-style shape:
-    #
-    #   load v0/v1/v2/v3
-    #   compare all four against the same separator
-    #   OR the bool vectors
-    #   pack_bits once as a cheap group-level hit test
-    #   only then pack individual vectors to locate exact offsets
-    #
-    # No-hit group: 4 loads + 4 compares + ORs + 1 pack_bits.
-    # Old loop:     4 loads + 4 compares + 4 pack_bits.
-    var grouped = math.align_down(avail, GROUP_W)
-
-    while i < grouped and found < 4:
-        var v0 = ptr.unsafe_load[width=W](i)
-        var v1 = ptr.unsafe_load[width=W](i + W)
-        var v2 = ptr.unsafe_load[width=W](i + 2 * W)
-        var v3 = ptr.unsafe_load[width=W](i + 3 * W)
-
-        var e0 = v0.eq(nl_splat)
-        var e1 = v1.eq(nl_splat)
-        var e2 = v2.eq(nl_splat)
-        var e3 = v3.eq(nl_splat)
-
-        var group_cmp = e0 | e1 | e2 | e3
-        var group_mask = pack_bits(group_cmp)
-
-        if group_mask != 0:
-            found = _drain_newline_cmp[W](offsets, found, start_rel, i, e0)
-            if found == 4:
-                break
-
-            found = _drain_newline_cmp[W](offsets, found, start_rel, i + W, e1)
-            if found == 4:
-                break
-
-            found = _drain_newline_cmp[W](
-                offsets, found, start_rel, i + 2 * W, e2
-            )
-            if found == 4:
-                break
-
-            found = _drain_newline_cmp[W](
-                offsets, found, start_rel, i + 3 * W, e3
-            )
-
-        i += GROUP_W
-
-    if found == 4:
-        var code = _validate_fastq_structure_fast(view, offsets)
-        return (True, offsets, SearchPhase.HEADER, code)
-
-    # ── Remaining full SIMD chunks ──────────────────────────────────────────
-    var aligned = math.align_down(avail, W)
-
-    while i < aligned and found < 4:
-        var v = ptr.unsafe_load[width=W](i)
-        var cmp = v.eq(nl_splat)
-        var mask = pack_bits(cmp)
-
-        while mask != 0 and found < 4:
-            var bit = Int(count_trailing_zeros(mask))
-            var abs_pos = start_rel + i + bit + 1
-            found += 1
-            _store_newline_offset(offsets, found, abs_pos)
-            mask &= mask - 1
-
-        i += W
-
-    if found == 4:
-        var code = _validate_fastq_structure_fast(view, offsets)
-        return (True, offsets, SearchPhase.HEADER, code)
-
-    # ── Scalar tail ─────────────────────────────────────────────────────────
-    while i < avail and found < 4:
-        if ptr[unsafe_offset=i] == new_line:
-            var abs_pos = start_rel + i + 1
-            found += 1
-            _store_newline_offset(offsets, found, abs_pos)
-
-        i += 1
-
-    if found == 4:
-        var code = _validate_fastq_structure_fast(view, offsets)
-        return (True, offsets, SearchPhase.HEADER, code)
-
-    return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
-
-
-@always_inline
-def _scan_record_fused_old[
-    o: Origin,
-](
-    view: Span[Byte, o],
-    mut offsets: RecordOffsets,
-    phase: SearchPhase,
-) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
-    comptime W = simd_width
-    comptime nl_splat = SIMD[DType.uint8, W](new_line)
-
-    var start_rel = _phase_start_offset(offsets, phase)
-    var scan_span = view[start_rel:]
-    var ptr = scan_span.unsafe_ptr()
-    var avail = len(scan_span)
-
-    if avail <= 0:
-        return (False, offsets, phase, FastxErrorCode.OK)
-
-    var found = _phase_to_count(phase)
-    var i = 0
-
-    var aligned = math.align_down(avail, W)
-
-    while i < aligned and found < 4:
-        var v = ptr.unsafe_load[width=W](i)
-        var cmp = v.eq(nl_splat)
-        var mask = pack_bits(cmp)
-
-        while mask != 0 and found < 4:
-            var bit = Int(count_trailing_zeros(mask))
-            var abs_pos = start_rel + i + bit + 1
-            found += 1
-            _store_newline_offset(offsets, found, abs_pos)
-            mask &= mask - 1
-
-        i += W
-
-    if found == 4:
-        var code = _validate_fastq_structure_fast(view, offsets)
-        return (True, offsets, SearchPhase.HEADER, code)
-
-    while i < avail and found < 4:
-        if ptr[unsafe_offset=i] == new_line:
-            var abs_pos = start_rel + i + 1
-            found += 1
-            _store_newline_offset(offsets, found, abs_pos)
-
-        i += 1
-
-    if found == 4:
-        var code = _validate_fastq_structure_fast(view, offsets)
-        return (True, offsets, SearchPhase.HEADER, code)
-
-    return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
-
-
-@always_inline
 def _drain_newline_mask(
     mut offsets: RecordOffsets,
     found_in: Int,
@@ -508,10 +314,10 @@ def _scan_record_masks[
 ) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
     """Grouped 4x SIMD scan with hoisted bitmask packing.
 
-    Same shape as `_scan_record_optimized`, but all four `pack_bits`
-    (`vpmovmskb`) issue back-to-back before any branch so their latency
-    overlaps in the pipeline, and the hit path drains the precomputed masks
-    instead of re-packing the compare vectors after the branch.
+    All four `pack_bits` (`vpmovmskb`) issue back-to-back before any branch
+    so their latency overlaps in the pipeline, and the hit path drains the
+    precomputed masks instead of re-packing the compare vectors after the
+    branch.
     """
     comptime W = simd_width
     comptime GROUP_W = 4 * W
@@ -603,10 +409,8 @@ def _scan_record_masks[
     return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
 
 
-comptime SCAN_MODE_OPTIMIZED: Int8 = 0
-comptime SCAN_MODE_MASKS: Int8 = 1
-comptime SCAN_MODE_FUSED_OLD: Int8 = 2
-comptime SCAN_MODE_MEMCHR_SEQ: Int8 = 3
+comptime SCAN_MODE_MASKS: Int8 = 0
+comptime SCAN_MODE_MEMCHR_SEQ: Int8 = 1
 
 
 @always_inline
@@ -619,25 +423,10 @@ def _scan_by_mode[
     phase: SearchPhase,
 ) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
     """Comptime dispatch to a `_scan_record_*` variant by scan mode id."""
-    comptime if mode == SCAN_MODE_MASKS:
-        return _scan_record_masks(view, offsets, phase)
-    elif mode == SCAN_MODE_FUSED_OLD:
-        return _scan_record_fused_old(view, offsets, phase)
-    elif mode == SCAN_MODE_MEMCHR_SEQ:
+    comptime if mode == SCAN_MODE_MEMCHR_SEQ:
         return _scan_record_memchr_seq(view, offsets, phase)
     else:
-        return _scan_record_optimized(view, offsets, phase)
-
-
-@always_inline
-def _scan_record[
-    o: Origin,
-](
-    view: Span[Byte, o],
-    mut offsets: RecordOffsets,
-    phase: SearchPhase,
-) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
-    return _scan_record_optimized(view, offsets, phase)
+        return _scan_record_masks(view, offsets, phase)
 
 
 @always_inline
@@ -650,8 +439,8 @@ def _scan_record_memchr_seq[
 ) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
     """Locate FASTQ record newlines using sequential memchr calls.
 
-    Mirrors `_scan_record` semantics but searches for each remaining newline
-    one-by-one with `memchr`.
+    Mirrors `_scan_record_masks` semantics but searches for each remaining
+    newline one-by-one with `memchr`.
     """
     var search_from = _phase_start_offset(offsets, phase)
     var found = _phase_to_count(phase)

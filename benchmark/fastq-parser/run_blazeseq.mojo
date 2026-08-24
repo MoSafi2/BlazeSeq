@@ -8,11 +8,8 @@ Usage:
     pixi run mojo run -I . benchmark/fastq-parser/run_blazeseq.mojo <path.fastq> [scan_mode]
 
 scan_mode:
-    optimized   (default) - grouped 4x SIMD loop (_scan_record_optimized)
-    fused-old             - original fused SIMD loop (_scan_record_fused_old)
-    fused                 - alias for optimized
-    memchr-seq            - sequential memchr scanner (_scan_record_memchr_seq)
-    masks                 - hoisted vpmovmskb packing (_scan_record_masks)
+    masks      (default) - hoisted vpmovmskb packing (_scan_record_masks)
+    memchr-seq           - sequential memchr scanner (_scan_record_memchr_seq)
 """
 
 from std.sys import argv
@@ -29,7 +26,7 @@ def main() raises:
         return
 
     var file_path = args[1]
-    var scan_mode = String("optimized")
+    var scan_mode = String("masks")
     if len(args) >= 3:
         scan_mode = args[2]
     comptime config = ParserConfig(
@@ -42,14 +39,10 @@ def main() raises:
     var parser = FastqParser[FileReader, config](FileReader(Path(file_path)))
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
-    if scan_mode == "optimized" or scan_mode == "fused":
-        for record in parser.views():
-            total_reads += 1
-            total_base_pairs += len(record)
-    elif scan_mode == "fused-old":
+    if scan_mode == "masks":
         while True:
             try:
-                var record = parser.next_view_fused_old()
+                var record = parser.next_view_masks()
                 total_reads += 1
                 total_base_pairs += len(record)
             except Error:
@@ -68,22 +61,8 @@ def main() raises:
                 if err_str == EOF or err_str.startswith(EOF):
                     break
                 raise
-    elif scan_mode == "masks":
-        while True:
-            try:
-                var record = parser.next_view_masks()
-                total_reads += 1
-                total_base_pairs += len(record)
-            except Error:
-                var err_str = String(Error)
-                if err_str == EOF or err_str.startswith(EOF):
-                    break
-                raise
     else:
-        print(
-            "Invalid scan_mode. Expected 'optimized', 'fused-old', 'fused',"
-            " 'memchr-seq', or 'masks'."
-        )
+        print("Invalid scan_mode. Expected 'masks' or 'memchr-seq'.")
         return
 
     print(total_reads, total_base_pairs)
