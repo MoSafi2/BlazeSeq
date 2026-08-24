@@ -620,9 +620,9 @@ def _scan_record_masks[
 
 
 comptime SCAN_MODE_OPTIMIZED: Int8 = 0
-
-
 comptime SCAN_MODE_MASKS: Int8 = 1
+comptime SCAN_MODE_FUSED_OLD: Int8 = 2
+comptime SCAN_MODE_MEMCHR_SEQ: Int8 = 3
 
 
 @always_inline
@@ -637,6 +637,10 @@ def _scan_by_mode[
     """Comptime dispatch to a `_scan_record_*` variant by scan mode id."""
     comptime if mode == SCAN_MODE_MASKS:
         return _scan_record_masks(view, offsets, phase)
+    elif mode == SCAN_MODE_FUSED_OLD:
+        return _scan_record_fused_old(view, offsets, phase)
+    elif mode == SCAN_MODE_MEMCHR_SEQ:
+        return _scan_record_memchr_seq(view, offsets, phase)
     else:
         return _scan_record_optimized(view, offsets, phase)
 
