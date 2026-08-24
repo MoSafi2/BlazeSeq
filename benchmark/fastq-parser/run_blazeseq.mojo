@@ -17,7 +17,7 @@ scan_mode:
 
 from std.sys import argv
 from std.pathlib import Path
-from blazeseq.CONSTS import EOF
+from blazeseq.CONSTS import EOF, KB
 from blazeseq.io.readers import FileReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 
@@ -35,7 +35,7 @@ def main() raises:
     comptime config = ParserConfig(
         check_ascii=False,
         check_quality=False,
-        buffer_capacity=1024 * 64,
+        buffer_capacity=256 * KB,
         buffer_growth_enabled=False,
     )
 
