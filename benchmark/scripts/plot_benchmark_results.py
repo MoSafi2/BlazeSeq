@@ -27,12 +27,12 @@ except ImportError as e:
 
 # Default relative paths from repo root for known benchmark result files
 DEFAULT_JSON_PATHS = [
-    "benchmark_results.json",
-    "benchmark_results_gzip.json",
-    "benchmark_results_gzip_single.json",
+    "benchmark/results/benchmark_results.json",
+    "benchmark/results/benchmark_results_gzip.json",
+    "benchmark/results/benchmark_results_gzip_single.json",
     "benchmark/throughput_benchmark_results.json",
     "benchmark/throughput_memory_benchmark_results.json",
-    "throughput_validation_benchmark_results.json",
+    "benchmark/results/throughput_validation_benchmark_results.json",
 ]
 
 # Distinct colors for each bar (one per benchmark)
@@ -474,7 +474,7 @@ def title_for_basename(basename: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Plot hyperfine benchmark results as column charts.")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd(), help="Repository root (default: cwd)")
-    parser.add_argument("--assets-dir", type=Path, default=None, help="Output directory for plots (default: repo_root/assets)")
+    parser.add_argument("--assets-dir", type=Path, default=None, help="Output directory for plots (default: repo_root/benchmark/results/assets)")
     parser.add_argument("--json", type=Path, action="append", dest="json_paths", help="Path(s) to hyperfine JSON (default: standard files)")
     parser.add_argument("--runs", type=int, default=None, help="Number of hyperfine runs (displayed on plot)")
     parser.add_argument("--size-gb", type=float, default=None, help="Data size in GB (displayed on plot)")
@@ -483,7 +483,7 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = args.repo_root.resolve()
-    assets_dir = (args.assets_dir or repo_root / "assets").resolve()
+    assets_dir = (args.assets_dir or repo_root / "benchmark/results/assets").resolve()
 
     if args.json_paths:
         json_paths = [p.resolve() if not p.is_absolute() else p for p in args.json_paths]

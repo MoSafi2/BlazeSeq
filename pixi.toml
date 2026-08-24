@@ -81,7 +81,7 @@ benchmark-throughput = "bash -c './benchmark/throughput/run_throughput_benchmark
 benchmark-throughput-validation = "bash -c './benchmark/throughput/run_throughput_validation_benchmarks.sh'"
 benchmark-throughput-memory = "bash benchmark/throughput/run_throughput_memory_benchmarks.sh"
 benchmark-fasta = "bash -c './benchmark/fasta-parser/run_benchmarks.sh'"
-benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir assets'"
+benchmark-plot = "bash -c 'python benchmark/scripts/plot_benchmark_results.py --repo-root . --assets-dir benchmark/results/assets'"
 
 [feature.dev.dependencies]
 python = ">=3.14.7,<3.15"

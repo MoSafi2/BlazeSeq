@@ -21,7 +21,7 @@ A high-throughput **FASTQ** parser written in [Mojo](https://docs.modular.com/mo
 - **Gzip reader compatibility** — Gzipped FASTQ (`.fastq.gz`) works through `GZFile`, and `RapidgzipReader` is currently a compatibility wrapper with the same constructor signature while the external dependency is disabled.
 - **FASTA and FAI** — Streaming FASTA parsing and `.fai` index files; see the API reference for `FastaParser` and `FaiParser`.
 
-![Throughput](assets/throughput_gbps.png)
+![Throughput](benchmark/results/assets/throughput_gbps.png)
 
 ## Quick Start
 
