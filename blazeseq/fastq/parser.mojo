@@ -18,8 +18,9 @@ from blazeseq.errors import (
 )
 from std.iter import Iterator
 from blazeseq.byte_string import BString
-from blazeseq.utils import (
-    _parse_schema,
+from blazeseq.utils import _strip_spaces
+from blazeseq.fastq.quality_schema import _parse_schema
+from blazeseq.fastq.scan import (
     _check_end_qual,
     _scan_record,
     _scan_record_fused_old,
@@ -27,7 +28,6 @@ from blazeseq.utils import (
     _scan_by_mode,
     SCAN_MODE_OPTIMIZED,
     SCAN_MODE_MASKS,
-    _strip_spaces,
     _record_snippet,
     RecordOffsets,
     SearchPhase,

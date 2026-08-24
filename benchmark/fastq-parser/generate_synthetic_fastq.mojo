@@ -12,7 +12,7 @@ Usage:
 from std.sys import argv
 from std.pathlib import Path
 from blazeseq.CONSTS import GB
-from blazeseq.utils import (
+from blazeseq.fastq.synthetic import (
     generate_synthetic_fastq_to_writer,
     compute_num_reads_for_size,
 )

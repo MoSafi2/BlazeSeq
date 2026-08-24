@@ -8,7 +8,7 @@ Multi-line FASTQ tests are removed as Blazeseq does not support multi-line FASTQ
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.io.readers import FileReader, MemoryReader
 from blazeseq.io.buffered import buffered_writer_for_memory
-from blazeseq.utils import (
+from blazeseq.fastq.synthetic import (
     generate_synthetic_fastq_buffer,
     generate_synthetic_fastq_to_writer,
 )

@@ -21,7 +21,7 @@ from blazeseq.io.buffered import (
     buffered_writer_for_file,
     buffered_writer_for_gzip,
 )
-from blazeseq.utils import generate_synthetic_fastq_buffer
+from blazeseq.fastq.synthetic import generate_synthetic_fastq_buffer
 
 comptime EXAMPLE_FASTQ = "tests/test_data/fastq_parser/example.fastq"
 comptime SCHEMA = "sanger"

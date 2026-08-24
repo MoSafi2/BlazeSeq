@@ -16,7 +16,7 @@ Kernels (nw_kernel, needleman_wunsch_cpu) and shared constants live in kernels.m
 from blazeseq.fastq.parser import FastqParser
 from blazeseq.fastq.record_batch import FastqBatch
 from blazeseq_gpu import upload_batch_to_device
-from blazeseq.utils import generate_synthetic_fastq_buffer
+from blazeseq.fastq.synthetic import generate_synthetic_fastq_buffer
 from blazeseq.io.readers import MemoryReader, Reader
 from max.gpu.host import DeviceContext
 from max.gpu.host import DeviceBuffer, HostBuffer
