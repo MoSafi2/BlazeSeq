@@ -24,6 +24,9 @@ from blazeseq.utils import (
     _scan_record,
     _scan_record_fused_old,
     _scan_record_memchr_seq,
+    _scan_by_mode,
+    SCAN_MODE_OPTIMIZED,
+    SCAN_MODE_MASKS,
     _strip_spaces,
     _record_snippet,
     RecordOffsets,
@@ -263,6 +266,60 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
         if not self.has_more():
             raise EOFError()
         var ref_rec = self._find_and_consume_ref_record_fused_old()
+        var record: FastqRecord
+        try:
+            record = FastqRecord(
+                ref_rec._id,
+                ref_rec._sequence,
+                ref_rec._quality,
+                Int8(self.quality_schema.OFFSET),
+            )
+        except e:
+            raise Error(format_parse_error(self._parse_context(), String(e)))
+        var code = self.validator._validate(record)
+        if code != FastxErrorCode.OK:
+            raise_validation_error(
+                self._parse_context(),
+                code.message(),
+                "",
+                self._get_record_snippet_from_fastq(record),
+            )
+        return record^
+
+    @always_inline
+    def _raise_if_invalid_view(
+        self, ref_rec: FastqView[origin=MutUntrackedOrigin]
+    ) raises:
+        var code = self.validator._validate(ref_rec)
+        if code != FastxErrorCode.OK:
+            raise_validation_error(
+                self._parse_context(),
+                code.message(),
+                "",
+                self._get_record_snippet(ref_rec),
+            )
+
+    @always_inline
+    def next_view_masks(
+        mut self,
+    ) raises -> FastqView[origin=MutUntrackedOrigin]:
+        """Benchmark-only variant using the hoisted-mask SIMD scanner."""
+        var ref_rec = self._find_and_consume_ref_record_scan[
+            SCAN_MODE_MASKS
+        ]()
+        self._raise_if_invalid_view(ref_rec)
+        return ref_rec
+
+    @always_inline
+    def next_record_masks(mut self) raises -> FastqRecord:
+        if not self.has_more():
+            raise EOFError()
+        return self._record_from_view(self.next_view_masks())
+
+    @always_inline
+    def _record_from_view(
+        mut self, ref_rec: FastqView[origin=MutUntrackedOrigin]
+    ) raises -> FastqRecord:
         var record: FastqRecord
         try:
             record = FastqRecord(
@@ -792,6 +849,162 @@ struct FastqParser[R: Reader, config: ParserConfig = ParserConfig()](Movable):
             var parse_code: FastxErrorCode
             complete, offsets, current_phase, parse_code = (
                 _scan_record_fused_old(scan_view, offsets, current_phase)
+            )
+            if complete:
+                return (True, offsets, current_phase, parse_code)
+
+    @always_inline
+    def _find_and_consume_ref_record_scan[
+        mode: Int8,
+    ](mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
+        """Scan-mode-generic core record finder.
+
+        Identical to `_find_and_consume_ref_record` but dispatches the SIMD
+        scan via comptime `mode` (`SCAN_MODE_*` constants).
+        """
+        if self.buffer.available() == 0:
+            _ = self.buffer.compact_and_fill()
+        if not self.has_more():
+            raise EOFError()
+
+        var base = self.buffer.buffer_position()
+        var offsets = RecordOffsets()
+        var phase = SearchPhase.HEADER
+
+        var scan_view = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=self.buffer._ptr.unsafe_offset(base),
+            length=self.buffer._end - base,
+        )
+        var complete: Bool
+        var parse_code: FastxErrorCode
+        complete, offsets, phase, parse_code = _scan_by_mode[mode](
+            scan_view, offsets, phase
+        )
+        if parse_code != FastxErrorCode.OK:
+            var ctx = self._parse_context()
+            raise_parse_error(
+                ParseContext(
+                    ctx.record_number + 1,
+                    ctx.line_number + 1,
+                    ctx.file_position,
+                ),
+                parse_code.message(),
+                _record_snippet(scan_view, offsets),
+            )
+        var refill_code: FastxErrorCode
+        if not complete:
+            complete, offsets, phase, refill_code = self._next_ref_complete_scan[
+                mode
+            ](base, offsets, phase)
+            base = 0
+            if refill_code == FastxErrorCode.EOF and not complete:
+                raise EOFError()
+            elif refill_code != FastxErrorCode.OK:
+                raise Error(
+                    self._refill_error_message(refill_code, phase, offsets)
+                )
+            if not complete:
+                raise Error()
+
+        var buffer_view = self.buffer.view().unsafe_ptr()
+
+        var id_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.header_start + 1),
+            length=(offsets.seq_start - offsets.header_start - 2),
+        )
+        var seq_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.seq_start),
+            length=(offsets.sep_start - offsets.seq_start - 1),
+        )
+        var qual_span = Span[Byte, MutUntrackedOrigin](
+            unsafe_ptr=buffer_view.unsafe_offset(offsets.qual_start),
+            length=(offsets.record_end - offsets.qual_start),
+        )
+
+        var ref_rec = FastqView[origin=MutUntrackedOrigin](
+            _strip_spaces(id_span),
+            seq_span,
+            qual_span,
+            self.quality_schema.OFFSET,
+        )
+
+        var to_consume = offsets.record_end + 1
+        _ = self.buffer.consume(min(to_consume, self.buffer._end - base))
+        self._current_line_number += 4
+
+        return ref_rec
+
+    @always_inline
+    def _next_ref_complete_scan[
+        mode: Int8,
+    ](
+        mut self,
+        base: Int,
+        mut offsets: RecordOffsets,
+        phase: SearchPhase,
+    ) raises -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
+        """Scan-mode-generic refill loop; mirrors `_next_ref_complete`."""
+        var current_phase = phase
+        var new_base = base
+        while True:
+            var buf_available = self.buffer.available()
+            var buf_capacity = self.buffer.capacity()
+
+            if buf_available < buf_capacity and self.buffer.is_eof():
+                if current_phase == SearchPhase.QUAL:
+                    var got_record: Bool
+                    got_record, offsets = _check_end_qual(
+                        self.buffer, new_base, offsets
+                    )
+                    return (
+                        got_record,
+                        offsets,
+                        SearchPhase(Int8(new_base)),
+                        FastxErrorCode.OK,
+                    )
+                else:
+                    return (
+                        False,
+                        offsets,
+                        current_phase,
+                        FastxErrorCode.UNEXPECTED_EOF,
+                    )
+
+            if new_base == 0:
+                comptime if not self.config.buffer_growth_enabled:
+                    return (
+                        False,
+                        offsets,
+                        current_phase,
+                        FastxErrorCode.BUFFER_EXCEEDED,
+                    )
+                var current_cap = self.buffer.capacity()
+                var max_cap = self._max_capacity
+                if current_cap >= max_cap:
+                    return (
+                        False,
+                        offsets,
+                        current_phase,
+                        FastxErrorCode.BUFFER_AT_MAX,
+                    )
+                var growth = min(current_cap, max_cap - current_cap)
+                self.buffer.resize_buffer(growth, max_cap)
+            else:
+                self.buffer._compact_from(new_base)
+                new_base = 0
+
+            var filled = self.buffer._fill_buffer()
+            if filled == 0 and self.buffer.available() == 0:
+                return (False, offsets, current_phase, FastxErrorCode.EOF)
+
+            var scan_view = Span[Byte, MutUntrackedOrigin](
+                unsafe_ptr=self.buffer._ptr.unsafe_offset(new_base),
+                length=self.buffer._end - new_base,
+            )
+            var complete: Bool
+            var parse_code: FastxErrorCode
+            complete, offsets, current_phase, parse_code = _scan_by_mode[mode](
+                scan_view, offsets, current_phase
             )
             if complete:
                 return (True, offsets, current_phase, parse_code)

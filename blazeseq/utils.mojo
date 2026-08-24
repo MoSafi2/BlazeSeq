@@ -678,6 +678,151 @@ def _scan_record_fused_old[
 
 
 @always_inline
+def _drain_newline_mask(
+    mut offsets: RecordOffsets,
+    found_in: Int,
+    start_rel: Int,
+    base_i: Int,
+    mut mask: UInt64,
+) -> Int:
+    """Drain a precomputed newline bitmask (1 bit per byte chunk) into offsets."""
+    var found = found_in
+    while mask != 0 and found < 4:
+        var bit = Int(count_trailing_zeros(mask))
+        var abs_pos = start_rel + base_i + bit + 1
+        found += 1
+        _store_newline_offset(offsets, found, abs_pos)
+        mask &= mask - 1
+    return found
+
+
+@always_inline
+def _scan_record_masks[
+    o: Origin,
+](
+    view: Span[Byte, o],
+    mut offsets: RecordOffsets,
+    phase: SearchPhase,
+) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
+    """Grouped 4x SIMD scan with hoisted bitmask packing.
+
+    Same shape as `_scan_record_optimized`, but all four `pack_bits`
+    (`vpmovmskb`) issue back-to-back before any branch so their latency
+    overlaps in the pipeline, and the hit path drains the precomputed masks
+    instead of re-packing the compare vectors after the branch.
+    """
+    comptime W = simd_width
+    comptime GROUP_W = 4 * W
+    comptime nl_splat = SIMD[DType.uint8, W](new_line)
+
+    var start_rel = _phase_start_offset(offsets, phase)
+    var scan_span = view[start_rel:]
+    var ptr = scan_span.unsafe_ptr()
+    var avail = len(scan_span)
+
+    if avail <= 0:
+        return (False, offsets, phase, FastxErrorCode.OK)
+
+    var found = _phase_to_count(phase)
+    var i = 0
+
+    # ── 4x SIMD grouped scan, masks packed up front ─────────────────────────
+    var grouped = math.align_down(avail, GROUP_W)
+
+    while i < grouped and found < 4:
+        var v0 = ptr.unsafe_load[width=W](i)
+        var v1 = ptr.unsafe_load[width=W](i + W)
+        var v2 = ptr.unsafe_load[width=W](i + 2 * W)
+        var v3 = ptr.unsafe_load[width=W](i + 3 * W)
+
+        var m0 = UInt64(pack_bits(v0.eq(nl_splat)))
+        var m1 = UInt64(pack_bits(v1.eq(nl_splat)))
+        var m2 = UInt64(pack_bits(v2.eq(nl_splat)))
+        var m3 = UInt64(pack_bits(v3.eq(nl_splat)))
+
+        if (m0 | m1 | m2 | m3) != 0:
+            found = _drain_newline_mask(offsets, found, start_rel, i, m0)
+            if found == 4:
+                break
+
+            found = _drain_newline_mask(offsets, found, start_rel, i + W, m1)
+            if found == 4:
+                break
+
+            found = _drain_newline_mask(
+                offsets, found, start_rel, i + 2 * W, m2
+            )
+            if found == 4:
+                break
+
+            found = _drain_newline_mask(
+                offsets, found, start_rel, i + 3 * W, m3
+            )
+
+        i += GROUP_W
+
+    if found == 4:
+        var code = _validate_fastq_structure_fast(view, offsets)
+        return (True, offsets, SearchPhase.HEADER, code)
+
+    # ── Remaining full SIMD chunks ──────────────────────────────────────────
+    var aligned = math.align_down(avail, W)
+
+    while i < aligned and found < 4:
+        var v = ptr.unsafe_load[width=W](i)
+        var mask = UInt64(pack_bits(v.eq(nl_splat)))
+
+        while mask != 0 and found < 4:
+            var bit = Int(count_trailing_zeros(mask))
+            var abs_pos = start_rel + i + bit + 1
+            found += 1
+            _store_newline_offset(offsets, found, abs_pos)
+            mask &= mask - 1
+
+        i += W
+
+    if found == 4:
+        var code = _validate_fastq_structure_fast(view, offsets)
+        return (True, offsets, SearchPhase.HEADER, code)
+
+    # ── Scalar tail ─────────────────────────────────────────────────────────
+    while i < avail and found < 4:
+        if ptr[unsafe_offset=i] == new_line:
+            var abs_pos = start_rel + i + 1
+            found += 1
+            _store_newline_offset(offsets, found, abs_pos)
+
+        i += 1
+
+    if found == 4:
+        var code = _validate_fastq_structure_fast(view, offsets)
+        return (True, offsets, SearchPhase.HEADER, code)
+
+    return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
+
+
+
+comptime SCAN_MODE_OPTIMIZED: Int8 = 0
+comptime SCAN_MODE_MASKS: Int8 = 1
+
+
+@always_inline
+def _scan_by_mode[
+    mode: Int8,
+    o: Origin,
+](
+    view: Span[Byte, o],
+    mut offsets: RecordOffsets,
+    phase: SearchPhase,
+) -> Tuple[Bool, RecordOffsets, SearchPhase, FastxErrorCode]:
+    """Comptime dispatch to a `_scan_record_*` variant by scan mode id."""
+    comptime if mode == SCAN_MODE_MASKS:
+        return _scan_record_masks(view, offsets, phase)
+    else:
+        return _scan_record_optimized(view, offsets, phase)
+
+
+@always_inline
 def _scan_record[
     o: Origin,
 ](
