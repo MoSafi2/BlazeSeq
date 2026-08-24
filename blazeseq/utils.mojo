@@ -457,6 +457,28 @@ def _validate_fastq_structure[
     return FastxErrorCode.OK
 
 
+@always_inline
+def _validate_fastq_structure_fast[
+    o: Origin
+](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
+    """Validate scanner-complete records without bounds-check overhead.
+
+    The scanner calls this only after finding all four line terminators, so
+    every offset below is within ``view``. Raw pointer access avoids emitting
+    the large bounds-check and diagnostic machinery in the hot path.
+    """
+    var ptr = view.unsafe_ptr()
+    if ptr[unsafe_offset=offsets.header_start] != Byte(read_header):
+        return FastxErrorCode.ID_NO_AT
+    if ptr[unsafe_offset=offsets.sep_start] != Byte(quality_header):
+        return FastxErrorCode.SEP_NO_PLUS
+    var seq_len = offsets.sep_start - offsets.seq_start - 1
+    var qual_len = offsets.record_end - offsets.qual_start
+    if seq_len != qual_len:
+        return FastxErrorCode.SEQ_QUAL_LEN_MISMATCH
+    return FastxErrorCode.OK
+
+
 # ---------------------------------------------------------------------------
 # _scan_record variants: single-pass SIMD scans for all four FASTQ newlines
 # ---------------------------------------------------------------------------
@@ -558,7 +580,7 @@ def _scan_record_optimized[
         i += GROUP_W
 
     if found == 4:
-        var code = _validate_fastq_structure(view, offsets)
+        var code = _validate_fastq_structure_fast(view, offsets)
         return (True, offsets, SearchPhase.HEADER, code)
 
     # ── Remaining full SIMD chunks ──────────────────────────────────────────
@@ -579,7 +601,7 @@ def _scan_record_optimized[
         i += W
 
     if found == 4:
-        var code = _validate_fastq_structure(view, offsets)
+        var code = _validate_fastq_structure_fast(view, offsets)
         return (True, offsets, SearchPhase.HEADER, code)
 
     # ── Scalar tail ─────────────────────────────────────────────────────────
@@ -592,7 +614,7 @@ def _scan_record_optimized[
         i += 1
 
     if found == 4:
-        var code = _validate_fastq_structure(view, offsets)
+        var code = _validate_fastq_structure_fast(view, offsets)
         return (True, offsets, SearchPhase.HEADER, code)
 
     return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
@@ -637,7 +659,7 @@ def _scan_record_fused_old[
         i += W
 
     if found == 4:
-        var code = _validate_fastq_structure(view, offsets)
+        var code = _validate_fastq_structure_fast(view, offsets)
         return (True, offsets, SearchPhase.HEADER, code)
 
     while i < avail and found < 4:
@@ -649,7 +671,7 @@ def _scan_record_fused_old[
         i += 1
 
     if found == 4:
-        var code = _validate_fastq_structure(view, offsets)
+        var code = _validate_fastq_structure_fast(view, offsets)
         return (True, offsets, SearchPhase.HEADER, code)
 
     return (False, offsets, _count_to_phase(found), FastxErrorCode.OK)
@@ -692,7 +714,7 @@ def _scan_record_memchr_seq[
         _store_newline_offset(offsets, found, abs_pos)
         search_from = abs_pos
 
-    var code = _validate_fastq_structure(view, offsets)
+    var code = _validate_fastq_structure_fast(view, offsets)
     return (True, offsets, SearchPhase.HEADER, code)
 
 
