@@ -10,6 +10,7 @@ Usage:
 scan_mode:
     masks      (default) - hoisted vpmovmskb packing (_scan_record_masks)
     memchr-seq           - sequential memchr scanner (_scan_record_memchr_seq)
+    mmap                 - zero-copy memory-mapped parsing (MmapFastqParser)
 """
 
 from std.sys import argv
@@ -17,6 +18,7 @@ from std.pathlib import Path
 from blazeseq.CONSTS import EOF, KB
 from blazeseq.io.readers import FileReader
 from blazeseq.fastq.parser import FastqParser, ParserConfig
+from blazeseq.fastq.parser import MmapFastqParser
 
 
 def main() raises:
@@ -61,8 +63,20 @@ def main() raises:
                 if err_str == EOF or err_str.startswith(EOF):
                     break
                 raise
+    elif scan_mode == "mmap":
+        var mmap_parser = MmapFastqParser(Path(file_path))
+        while True:
+            try:
+                var record = mmap_parser.next_view()
+                total_reads += 1
+                total_base_pairs += len(record)
+            except Error:
+                var err_str = String(Error)
+                if err_str == EOF or err_str.startswith(EOF):
+                    break
+                raise
     else:
-        print("Invalid scan_mode. Expected 'masks' or 'memchr-seq'.")
+        print("Invalid scan_mode. Expected 'masks', 'memchr-seq', or 'mmap'.")
         return
 
     print(total_reads, total_base_pairs)
