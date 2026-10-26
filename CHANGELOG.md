@@ -15,6 +15,10 @@ All notable changes to BlazeSeq are documented here.
 - Build interpreter-specific Python wheels with relocatable runtime paths; isolated wheel tests now import the installed wheel instead of the source tree.
 - Reject empty GPU transfers with a descriptive error; add hardware round-trip and alignment correctness tests.
 
+### Removed
+
+- Remove the experimental memory-mapped FASTQ parser, file-mapping I/O, and associated benchmark mode. Use `FastqParser` with `FileReader` for plain files.
+
 ## [0.4] - 2026-08-24
 
 ### Added

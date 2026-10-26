@@ -184,12 +184,11 @@ def main():
     rust = work / "rust-target/release"
     groups = {
         "fastq": {
-            "title": "Plain FASTQ · buffered and mmap",
+            "title": "Plain FASTQ",
             "input": fastq,
             "commands": {
                 "BlazeSeq masks": [binaries / "plain", fastq, "masks"],
                 "BlazeSeq memchr-seq": [binaries / "plain", fastq, "memchr-seq"],
-                "BlazeSeq mmap": [binaries / "plain", fastq, "mmap"],
                 "needletail": [rust / "needletail_runner", fastq],
                 "seq_io": [rust / "seq_io_runner", fastq],
                 "kseq (C)": [binaries / "kseq", fastq],

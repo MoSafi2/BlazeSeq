@@ -1,30 +1,12 @@
-"""Record-source backends for `FastqParser`.
+"""Buffered record source for `FastqParser`.
 
-A source owns the input bytes and knows how to locate the next complete
-FASTQ record within them. Two backends exist:
-
-- `BufferedSource[R]`: chunked reads through `BufferedReader`, with
-  compaction, optional growth, and mid-record resume scanning.
-- `MmapSource`: zero-copy memory-mapped file; the window is always the rest
-  of the mapping, so no refill logic exists.
-
-Both expose the same static interface (resolved per-instantiation, no
-dynamic dispatch):
-
-- `find_next[mode]() -> FoundRecord` — locate the next record; raises
-  `EOFError` when the input is exhausted, `Error` with formatted message on
-  malformed input.
-- `has_more() -> Bool`
-- `context() -> ParseContext` — position info for error messages.
-
-The parser above this layer (`FastqParser`) builds views, runs optional
-validation, and drives iteration identically for both.
+Owns input bytes and locates complete FASTQ records through chunked reads,
+compaction, optional growth, and mid-record resume scanning. The parser
+builds views over the buffer, validates records, and drives iteration.
 """
 
 from blazeseq.io.buffered import EOFError, BufferedReader
-from blazeseq.io.mapped import MappedFile
 from blazeseq.io.readers import Reader
-from std.pathlib import Path
 from blazeseq.errors import (
     FastxErrorCode,
     ParseContext,
@@ -40,10 +22,6 @@ from blazeseq.fastq.scan import (
 )
 from blazeseq.utils import _strip_spaces
 from blazeseq.fastq.record import FastqView
-
-
-comptime SOURCE_BUFFERED: Int8 = 0
-comptime SOURCE_MMAP: Int8 = 1
 
 
 @fieldwise_init
@@ -254,101 +232,6 @@ struct BufferedSource[
             )
             if complete:
                 return (True, offsets, current_phase, parse_code)
-
-
-struct MmapSource(Movable):
-    """Zero-copy source over a memory-mapped file.
-
-    Owns the mapping so record views remain valid for the parser's lifetime.
-    """
-
-    var map: MappedFile
-    var _pos: Int
-    var _current_line_number: Int
-
-    def __init__(out self, path: Path) raises:
-        self.map = MappedFile(path)
-        self._pos = 0
-        self._current_line_number = 0
-
-    @inline(.always)
-    def context(self) -> ParseContext:
-        return ParseContext(
-            self._current_line_number // 4,
-            self._current_line_number,
-            Int64(self._pos),
-        )
-
-    @inline(.always)
-    def note_consumed(mut self):
-        self._current_line_number += 4
-
-    @inline(.always)
-    def has_more(self) -> Bool:
-        return self._pos < self.map.size()
-
-    @inline(.always)
-    def find_next[
-        mode: Int8,
-    ](mut self) raises -> FoundRecord:
-        if not self.has_more():
-            raise EOFError()
-
-        var n = self.map.size()
-        var base_ptr = self.map.view().unsafe_ptr()
-        var scan_view = Span[Byte, MutUntrackedOrigin](
-            unsafe_ptr=base_ptr.unsafe_offset(self._pos),
-            length=n - self._pos,
-        )
-        var offsets = RecordOffsets()
-        var phase: SearchPhase
-        var code: FastxErrorCode
-        var complete: Bool
-        complete, offsets, phase, code = _scan_by_mode[mode](
-            scan_view, offsets, SearchPhase.HEADER
-        )
-        if code != FastxErrorCode.OK:
-            var ctx = self.context()
-            raise_parse_error(
-                ParseContext(
-                    ctx.record_number + 1,
-                    ctx.line_number + 1,
-                    ctx.file_position,
-                ),
-                code.message(),
-                _record_snippet(scan_view, offsets),
-            )
-        if not complete:
-            # End of mapping mid-record. Tolerate a final quality line
-            # without its trailing newline when it holds non-whitespace
-            # data; blank tail bytes mean clean EOF (mirrors the buffered
-            # parser's `_check_end_qual`).
-            var has_data = False
-            if phase == SearchPhase.QUAL:
-                var q = offsets.qual_start
-                while q < len(scan_view):
-                    var b = scan_view.unsafe_ptr()[unsafe_offset=q]
-                    if (
-                        b != Byte(10)
-                        and b != Byte(13)
-                        and b != Byte(32)
-                        and b != Byte(9)
-                    ):
-                        has_data = True
-                        break
-                    q += 1
-                if has_data:
-                    offsets.record_end = len(scan_view)
-                    complete = True
-            if not complete:
-                raise EOFError()
-
-        self._pos += offsets.record_end + 1
-
-        return FoundRecord(
-            base=base_ptr.unsafe_offset(self._pos - (offsets.record_end + 1)),
-            offsets=offsets,
-        )
 
 
 @inline(.always)
