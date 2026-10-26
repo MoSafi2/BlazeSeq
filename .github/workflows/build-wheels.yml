@@ -20,10 +20,10 @@ jobs:
         include:
           - platform: linux-x86_64
             runner: ubuntu-latest
-            plat-name: manylinux2014_x86_64
+            plat-name: manylinux_2_34_x86_64
           - platform: macos-arm64
             runner: macos-14
-            plat-name: macosx_11_0_arm64
+            plat-name: macosx_13_0_arm64
 
     steps:
       - name: Checkout

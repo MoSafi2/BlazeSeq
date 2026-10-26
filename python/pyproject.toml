@@ -8,8 +8,8 @@ version = "0.4.0"
 description = "High-performance FASTQ parsing with Mojo-backed Python bindings"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "MIT" }
-requires-python = ">=3.10"
-dependencies = ["pymodo>=0.11.12"]
+requires-python = ">=3.10,<3.15"
+dependencies = ["pymodo>=0.11.12", "max==26.7.0"]
 keywords = ["fastq", "bioinformatics", "sequencing", "mojo", "parser", "genomics"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -22,6 +22,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 [project.optional-dependencies]

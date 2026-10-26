@@ -6,7 +6,7 @@ Attributes format: key=value;key=v1,v2 (URL-encoded, multi-value).
 """
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 from blazeseq.features import Position, Interval
@@ -28,7 +28,7 @@ struct Gff3Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
@@ -37,19 +37,20 @@ struct Gff3Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     comptime Unstranded = Self(2)  # "." — no strand concept
     comptime Unknown = Self(3)  # "?" — strand unknown (GFF3)
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
     def write_to[w: Writer](self, mut writer: w):
-        if self.value == 0:
-            writer.write("+")
-        elif self.value == 1:
-            writer.write("-")
-        elif self.value == 2:
-            writer.write(".")
-        else:
-            writer.write("?")
+        match self.value:
+            case 0:
+                writer.write("+")
+            case 1:
+                writer.write("-")
+            case 2:
+                writer.write(".")
+            case _:
+                writer.write("?")
 
 
 # ---------------------------------------------------------------------------
@@ -120,19 +121,19 @@ struct Gff3View[O: Origin](Movable):
         self.phase = phase
         self._attributes = _attributes
 
-    @always_inline
-    def seqid(self) -> StringSlice[origin=Self.O]:
-        return StringSlice[origin=Self.O](unsafe_from_utf8=self._seqid)
+    @inline(.always)
+    def seqid(self) -> StringSpan[origin=Self.O]:
+        return StringSpan[origin=Self.O](unsafe_from_utf8=self._seqid)
 
-    @always_inline
-    def source(self) -> StringSlice[origin=Self.O]:
-        return StringSlice[origin=Self.O](unsafe_from_utf8=self._source)
+    @inline(.always)
+    def source(self) -> StringSpan[origin=Self.O]:
+        return StringSpan[origin=Self.O](unsafe_from_utf8=self._source)
 
-    @always_inline
-    def feature_type(self) -> StringSlice[origin=Self.O]:
-        return StringSlice[origin=Self.O](unsafe_from_utf8=self._type)
+    @inline(.always)
+    def feature_type(self) -> StringSpan[origin=Self.O]:
+        return StringSpan[origin=Self.O](unsafe_from_utf8=self._type)
 
-    @always_inline
+    @inline(.always)
     def attributes_span(self) -> Span[UInt8, Self.O]:
         return self._attributes
 
@@ -185,15 +186,15 @@ struct Gff3Record(Copyable, Movable, Writable):
     var Phase: Optional[UInt8]
     var Attributes: Gff3Attributes
 
-    @always_inline
+    @inline(.always)
     def seqid(ref self) -> String:
         return self.Seqid.to_string()
 
-    @always_inline
+    @inline(.always)
     def source(ref self) -> String:
         return self.Source.to_string()
 
-    @always_inline
+    @inline(.always)
     def feature_type(ref self) -> String:
         return self.Type.to_string()
 
@@ -285,7 +286,7 @@ struct TargetAttribute(Copyable, Movable):
         self.strand = copy.strand
 
 
-@always_inline
+@inline(.always)
 def _parse_uint64_span(span: Span[UInt8, _]) raises -> UInt64:
     """Parse a span of ASCII decimal digits as UInt64. Raises on empty or invalid.
     """
@@ -296,7 +297,7 @@ def _parse_uint64_span(span: Span[UInt8, _]) raises -> UInt64:
         var digit = span[i] - 48
         if digit > 9:
             raise Error("Target: invalid integer digit")
-        result = result * 10 + digit.cast[DType.uint64]()
+        result = result * 10 + digit.cast[.uint64]()
     return result
 
 

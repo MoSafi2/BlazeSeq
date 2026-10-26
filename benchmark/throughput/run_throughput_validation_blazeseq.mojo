@@ -28,20 +28,23 @@ def run_mode_none(path: String, mode: String) raises -> Tuple[Int, Int]:
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
 
-    if mode == "batches":
-        for batch in parser.batches(4096):
-            total_reads += batch.num_records()
-            total_base_pairs += batch.seq_len()
-    elif mode == "records":
-        for record in parser.records():
-            total_reads += 1
-            total_base_pairs += len(record)
-    elif mode == "views":
-        for view in parser.views():
-            total_reads += 1
-            total_base_pairs += len(view)
-    else:
-        raise Error("Unknown mode: " + mode + ". Use batches | records | views")
+    match mode:
+        case "batches":
+            for batch in parser.batches(4096):
+                total_reads += batch.num_records()
+                total_base_pairs += batch.seq_len()
+        case "records":
+            for record in parser.records():
+                total_reads += 1
+                total_base_pairs += len(record)
+        case "views":
+            for view in parser.views():
+                total_reads += 1
+                total_base_pairs += len(view)
+        case _:
+            raise Error(
+                "Unknown mode: " + mode + ". Use batches | records | views"
+            )
     return (total_reads, total_base_pairs)
 
 
@@ -56,20 +59,23 @@ def run_mode_ascii(path: String, mode: String) raises -> Tuple[Int, Int]:
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
 
-    if mode == "batches":
-        for batch in parser.batches(4096):
-            total_reads += batch.num_records()
-            total_base_pairs += batch.seq_len()
-    elif mode == "records":
-        for record in parser.records():
-            total_reads += 1
-            total_base_pairs += len(record)
-    elif mode == "views":
-        for view in parser.views():
-            total_reads += 1
-            total_base_pairs += len(view)
-    else:
-        raise Error("Unknown mode: " + mode + ". Use batches | records | views")
+    match mode:
+        case "batches":
+            for batch in parser.batches(4096):
+                total_reads += batch.num_records()
+                total_base_pairs += batch.seq_len()
+        case "records":
+            for record in parser.records():
+                total_reads += 1
+                total_base_pairs += len(record)
+        case "views":
+            for view in parser.views():
+                total_reads += 1
+                total_base_pairs += len(view)
+        case _:
+            raise Error(
+                "Unknown mode: " + mode + ". Use batches | records | views"
+            )
     return (total_reads, total_base_pairs)
 
 
@@ -87,20 +93,23 @@ def run_mode_ascii_quality(
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
 
-    if mode == "batches":
-        for batch in parser.batches(4096):
-            total_reads += batch.num_records()
-            total_base_pairs += batch.seq_len()
-    elif mode == "records":
-        for record in parser.records():
-            total_reads += 1
-            total_base_pairs += len(record)
-    elif mode == "views":
-        for view in parser.views():
-            total_reads += 1
-            total_base_pairs += len(view)
-    else:
-        raise Error("Unknown mode: " + mode + ". Use batches | records | views")
+    match mode:
+        case "batches":
+            for batch in parser.batches(4096):
+                total_reads += batch.num_records()
+                total_base_pairs += batch.seq_len()
+        case "records":
+            for record in parser.records():
+                total_reads += 1
+                total_base_pairs += len(record)
+        case "views":
+            for view in parser.views():
+                total_reads += 1
+                total_base_pairs += len(view)
+        case _:
+            raise Error(
+                "Unknown mode: " + mode + ". Use batches | records | views"
+            )
     return (total_reads, total_base_pairs)
 
 
@@ -121,18 +130,21 @@ def main() raises:
     var total_reads: Int
     var total_base_pairs: Int
 
-    if validation == "none":
-        total_reads, total_base_pairs = run_mode_none(file_path, mode)
-    elif validation == "ascii":
-        total_reads, total_base_pairs = run_mode_ascii(file_path, mode)
-    elif validation == "ascii_quality":
-        total_reads, total_base_pairs = run_mode_ascii_quality(file_path, mode)
-    else:
-        print(
-            "Unknown validation: ",
-            validation,
-            ". Use none | ascii | ascii_quality",
-        )
-        return
+    match validation:
+        case "none":
+            total_reads, total_base_pairs = run_mode_none(file_path, mode)
+        case "ascii":
+            total_reads, total_base_pairs = run_mode_ascii(file_path, mode)
+        case "ascii_quality":
+            total_reads, total_base_pairs = run_mode_ascii_quality(
+                file_path, mode
+            )
+        case _:
+            print(
+                "Unknown validation: ",
+                validation,
+                ". Use none | ascii | ascii_quality",
+            )
+            return
 
     print(total_reads, total_base_pairs)

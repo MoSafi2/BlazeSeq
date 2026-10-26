@@ -36,7 +36,7 @@ struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
@@ -55,11 +55,11 @@ struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime BUFFER_AT_MAX = Self(9)
     comptime OTHER = Self(10)
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    @always_inline
+    @inline(.always)
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
@@ -71,22 +71,23 @@ struct FastxErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 def _message_for_code(code: FastxErrorCode) -> String:
     """Internal: return default message for a FastxErrorCode. Used when building ParseError/ValidationError.
     """
-    if code == FastxErrorCode.ID_NO_AT:
-        return "Sequence id line does not start with '@'"
-    if code == FastxErrorCode.SEP_NO_PLUS:
-        return "Separator line does not start with '+'"
-    if code == FastxErrorCode.SEQ_QUAL_LEN_MISMATCH:
-        return "Quality and sequence line do not match in length"
-    if code == FastxErrorCode.ASCII_INVALID:
-        return "Non ASCII letters found"
-    if code == FastxErrorCode.QUALITY_OUT_OF_RANGE:
-        return "Corrupt quality score according to provided schema"
-    if code == FastxErrorCode.UNEXPECTED_EOF:
-        return "Unexpected end of file in FASTQ record"
-    if code == FastxErrorCode.BUFFER_EXCEEDED:
-        return "FASTQ record exceeds buffer capacity"
-    if code == FastxErrorCode.BUFFER_AT_MAX:
-        return "FASTQ record exceeds maximum buffer capacity"
+    match code:
+        case == FastxErrorCode.ID_NO_AT:
+            return "Sequence id line does not start with '@'"
+        case == FastxErrorCode.SEP_NO_PLUS:
+            return "Separator line does not start with '+'"
+        case == FastxErrorCode.SEQ_QUAL_LEN_MISMATCH:
+            return "Quality and sequence line do not match in length"
+        case == FastxErrorCode.ASCII_INVALID:
+            return "Non ASCII letters found"
+        case == FastxErrorCode.QUALITY_OUT_OF_RANGE:
+            return "Corrupt quality score according to provided schema"
+        case == FastxErrorCode.UNEXPECTED_EOF:
+            return "Unexpected end of file in FASTQ record"
+        case == FastxErrorCode.BUFFER_EXCEEDED:
+            return "FASTQ record exceeds buffer capacity"
+        case == FastxErrorCode.BUFFER_AT_MAX:
+            return "FASTQ record exceeds maximum buffer capacity"
     return "Parse or validation error"
 
 

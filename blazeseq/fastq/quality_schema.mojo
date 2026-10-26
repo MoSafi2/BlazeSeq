@@ -9,7 +9,7 @@
 struct QualitySchema(
     Copyable, ImplicitlyCopyable, Movable, TrivialRegisterPassable, Writable
 ):
-    var SCHEMA: StringSlice[ImmStaticOrigin]
+    var SCHEMA: StringSpan[ImmStaticOrigin]
     var LOWER: UInt8
     var UPPER: UInt8
     var OFFSET: UInt8
@@ -33,28 +33,29 @@ comptime illumina_1_5_schema = QualitySchema("Illumina v1.5", 66, 126, 64)
 comptime illumina_1_8_schema = QualitySchema("Illumina v1.8", 33, 126, 33)
 
 
-@always_inline
+@inline(.always)
 def _parse_schema(quality_format: String) -> QualitySchema:
     """Parse quality schema string into QualitySchema."""
     var schema: QualitySchema
 
-    if quality_format == "sanger":
-        schema = materialize[sanger_schema]()
-    elif quality_format == "solexa":
-        schema = materialize[solexa_schema]()
-    elif quality_format == "illumina_1.3":
-        schema = materialize[illumina_1_3_schema]()
-    elif quality_format == "illumina_1.5":
-        schema = materialize[illumina_1_5_schema]()
-    elif quality_format == "illumina_1.8":
-        schema = materialize[illumina_1_8_schema]()
-    elif quality_format == "generic":
-        schema = materialize[generic_schema]()
-    else:
-        print(
-            """Unknown quality schema please choose one of 'sanger', 'solexa',"
-            " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
-            Parsing with generic schema."""
-        )
-        return materialize[generic_schema]()
+    match quality_format:
+        case "sanger":
+            schema = materialize[sanger_schema]()
+        case "solexa":
+            schema = materialize[solexa_schema]()
+        case "illumina_1.3":
+            schema = materialize[illumina_1_3_schema]()
+        case "illumina_1.5":
+            schema = materialize[illumina_1_5_schema]()
+        case "illumina_1.8":
+            schema = materialize[illumina_1_8_schema]()
+        case "generic":
+            schema = materialize[generic_schema]()
+        case _:
+            print(
+                """Unknown quality schema please choose one of 'sanger', 'solexa',"
+                " 'illumina_1.3', 'illumina_1.5' 'illumina_1.8', or 'generic'.
+                Parsing with generic schema."""
+            )
+            return materialize[generic_schema]()
     return schema

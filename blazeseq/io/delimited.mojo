@@ -1,7 +1,7 @@
 from std.collections import List
 from std.collections.string import String
 from std.iter import Iterator
-from std.collections import InlineArray
+from std.collections import Array
 
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
@@ -37,7 +37,7 @@ trait LinePolicy(
     def __init__(out self):
         ...
 
-    @always_inline
+    @inline(.always)
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         ...
 
@@ -69,7 +69,7 @@ struct DefaultLinePolicy(
     Skips blank lines (SKIP) and yields all non-empty lines (YIELD).
     """
 
-    @always_inline
+    @inline(.always)
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
@@ -83,27 +83,27 @@ struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
     at the cost of doubling the index arithmetic, which is branch-free.
     """
 
-    var _data: InlineArray[Int, Self.MAX * 2]
+    var _data: Array[Int, Self.MAX * 2]
     var _num_fields: Int
 
-    @always_inline
+    @inline(.always)
     def __init__(out self):
-        self._data = InlineArray[Int, self.MAX * 2](fill=0)
+        self._data = Array[Int, Self.MAX * 2](fill=0)
         self._num_fields = 0
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         return self._num_fields
 
-    @always_inline
+    @inline(.always)
     def start(self, i: Int) -> Int:
         return self._data[i * 2]
 
-    @always_inline
+    @inline(.always)
     def end(self, i: Int) -> Int:
         return self._data[i * 2 + 1]
 
-    @always_inline
+    @inline(.always)
     def _push(mut self, start: Int, end: Int):
         if self._num_fields < Self.MAX:
             self._data[self._num_fields * 2] = start
@@ -116,7 +116,7 @@ struct FieldOffsets[MAX: Int = 64](Copyable, Movable, Sized):
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _fill_offsets[
     O: Origin, MAX: Int
 ](line: Span[Byte, O], delimiter: Byte, mut offsets: FieldOffsets[MAX]):
@@ -168,33 +168,33 @@ struct DelimitedView[
     var _offsets: FieldOffsets[Self.MAX]
     var _delimiter: Byte
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, line: Span[UInt8, Self.O], delimiter: UInt8):
         self._line = line
         self._offsets = FieldOffsets[Self.MAX]()
         _fill_offsets(line, delimiter, self._offsets)
         self._delimiter = delimiter
 
-    @always_inline
+    @inline(.always)
     def num_fields(self) -> Int:
         return len(self._offsets)
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         return len(self._offsets)
 
-    @always_inline
+    @inline(.always)
     def get_span(self, idx: Int) -> Span[UInt8, Self.O]:
         """Zero-copy view of field `idx`. Same lifetime as this view."""
         return self._line[self._offsets.start(idx) : self._offsets.end(idx)]
 
-    @always_inline
+    @inline(.always)
     def get(self, idx: Int) -> Optional[Span[UInt8, Self.O]]:
         if idx < 0 or idx >= len(self._offsets):
             return None
         return self.get_span(idx)
 
-    @always_inline
+    @inline(.always)
     def to_record(deinit self) -> DelimitedRecord[Self.MAX]:
         """Copy the backing bytes and offsets into an owned `DelimitedRecord`.
 
@@ -228,12 +228,12 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
     var _line: BString
     var _offsets: FieldOffsets[Self.MAX]
 
-    @always_inline
+    @inline(.always)
     def __init__(out self):
         self._line = BString()
         self._offsets = FieldOffsets[Self.MAX]()
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, var view: DelimitedView[_, Self.MAX]):
         """Materialize from a view — one `BString` unsafe_alloc, offsets copied by value.
         """
@@ -241,22 +241,22 @@ struct DelimitedRecord[MAX: Int = 64](Copyable, Movable, Sized, Writable):
         self._line = BString(view._line)
         self._offsets = view._offsets.copy()
 
-    @always_inline
+    @inline(.always)
     def num_fields(self) -> Int:
         return len(self._offsets)
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         return len(self._offsets)
 
-    @always_inline
+    @inline(.always)
     def get_span(ref self, idx: Int) -> Span[UInt8, origin_of(self._line)]:
         """Zero-copy view of field `idx`. Lifetime tied to this record."""
         return self._line.as_span()[
             self._offsets.start(idx) : self._offsets.end(idx)
         ]
 
-    @always_inline
+    @inline(.always)
     def __getitem__(ref self, idx: Int) -> BString:
         """Owned copy of field `idx`. Prefer `get_span()` in hot paths."""
         return BString(self.get_span(idx))
@@ -337,11 +337,11 @@ struct DelimitedReader[
             var line = self._next_data_line()
             self._parse_header_from(line)
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self.lines.has_more()
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return ParseContext(
             self._record_number,
@@ -433,17 +433,16 @@ struct DelimitedReader[
         while True:
             var line = self.lines.next_line()  # raises EOFError at EOF
             var action = self.policy.classify(line)
-            if action == LineAction.YIELD:
-                return line
-            elif action == LineAction.SKIP:
-                continue
-            elif action == LineAction.METADATA:
-                continue
-            elif action == LineAction.HEADER:
-                self._parse_header_from(line)
-                continue
-            else:
-                raise EOFError()
+            match action:
+                case == LineAction.YIELD:
+                    return line
+                case == LineAction.SKIP | == LineAction.METADATA:
+                    continue
+                case == LineAction.HEADER:
+                    self._parse_header_from(line)
+                    continue
+                case _:
+                    raise EOFError()
 
     def _parse_header_from(
         mut self, line: Span[UInt8, MutUntrackedOrigin]
@@ -456,7 +455,7 @@ struct DelimitedReader[
         self._expected_num_fields = view.num_fields()
         self._header = view^.to_record()
 
-    @always_inline
+    @inline(.always)
     def _check_field_count(mut self, n: Int) raises:
         if self._expected_num_fields == 0:
             self._expected_num_fields = n
@@ -493,11 +492,11 @@ struct _DelimitedViewIter[
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[
@@ -541,11 +540,11 @@ struct _DelimitedRecordIter[
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[
             Pointer[

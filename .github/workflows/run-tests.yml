@@ -25,5 +25,11 @@ jobs:
     - name: Build docs
       run: pixi run -e docs docs
 
-    - name: Run tests
-      run: find ./tests -path ./tests/gpu -prune -o -name "test_*.mojo" -print | xargs -I % pixi run mojo run -I . -D ASSERT=all -D GITHUB_ACTIONS=1 %
+    - name: Precompile core (CPU runner)
+      run: pixi run build
+
+    - name: Run CPU tests
+      run: pixi run test
+
+    - name: Cross-compile GPU example and tests
+      run: pixi run check-gpu

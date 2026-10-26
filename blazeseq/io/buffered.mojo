@@ -3,7 +3,7 @@ from std.memory import unsafe_memcpy, Pointer
 from std.pathlib import Path
 from std.utils import StaticTuple
 from std.builtin.builtin_slice import ContiguousSlice
-from std.collections.string import StringSlice, String
+from std.collections.string import StringSpan, String
 from blazeseq.io.readers import Reader
 from blazeseq.io.writers import (
     WriterBackend,
@@ -22,7 +22,7 @@ from std.sys import (
 )
 
 
-@always_inline
+@inline(.always)
 def memmove[
     T: AnyType
 ](*, dest: Pointer[mut=True, T, _], src: Pointer[mut=False, T, _], count: Int,):
@@ -144,12 +144,12 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         self._stream_position = 0
         _ = self._fill_buffer()
 
-    @always_inline
+    @inline(.always)
     def available(self) -> Int:
         """Current number of bytes in the buffer (same as `__len__`)."""
         return self._end - self._head
 
-    @always_inline
+    @inline(.always)
     def consume(mut self, size: Int) -> Int:
         """
         Advance read position by `size`. Must not exceed `available()`.
@@ -159,7 +159,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         self._head += cons_size
         return cons_size
 
-    @always_inline
+    @inline(.always)
     def unconsume(mut self, size: Int):
         """
         Unconsume `size` bytes. `_head` tracks position relative to compacted data;
@@ -169,7 +169,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         debug_assert(size <= self._head, "unconsume exceeds head position")
         self._head -= size
 
-    @always_inline
+    @inline(.always)
     def stream_position(self) -> Int:
         """
         Current logical position in the stream that parser is reading.
@@ -177,22 +177,22 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         """
         return self._stream_position + self._head
 
-    @always_inline
+    @inline(.always)
     def buffer_position(self) -> Int:
         """Current read offset in the buffer (for parser `compact_from`)."""
         return self._head
 
-    @always_inline
+    @inline(.always)
     def is_eof(self) -> Bool:
         """True when underlying read returned no more data."""
         return self._is_eof
 
-    @always_inline
+    @inline(.always)
     def capacity(self) -> Int:
         """Return the buffer capacity in bytes."""
         return self._len
 
-    @always_inline
+    @inline(.always)
     def grow_buffer(mut self, additional: Int, max_capacity: Int) raises:
         """
         Grow buffer by `additional` bytes, not exceeding max_capacity.
@@ -203,7 +203,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
 
-    @always_inline
+    @inline(.always)
     def resize_buffer(mut self, additional: Int, max_capacity: Int) raises:
         """
         Resize buffer by `additional` bytes, not exceeding max_capacity.
@@ -212,7 +212,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         var new_capacity = min(self.capacity() + additional, max_capacity)
         _ = self._resize_internal(new_capacity)
 
-    @always_inline
+    @inline(.always)
     def view(ref[_] self) -> Span[Byte, MutUntrackedOrigin]:
         """View of all unconsumed bytes. Valid until next mutating call."""
         return Span[Byte, MutUntrackedOrigin](
@@ -221,9 +221,9 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         )
 
     def write_to[w: Writer](self, mut writer: w):
-        writer.write_string(StringSlice(unsafe_from_utf8=self.view()))
+        writer.write_string(StringSpan(unsafe_from_utf8=self.view()))
 
-    @always_inline
+    @inline(.always)
     def peek(ref self, amt: Int) -> Span[Byte, MutUntrackedOrigin]:
         """
         Peek at the next `amt` bytes in the buffer without consuming them.
@@ -233,7 +233,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
             unsafe_ptr=self._ptr.unsafe_offset(self._head), length=peek_amt
         )
 
-    @always_inline
+    @inline(.always)
     def _compact_from(mut self, from_pos: Int = 0):
         """
         Discard bytes [0, from_pos) and shift remaining data to [0, end - from_pos).
@@ -260,7 +260,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
             self._head -= from_pos
         self._end = remaining
 
-    @always_inline
+    @inline(.always)
     def _fill_buffer(mut self) raises -> UInt64:
         """Returns the number of bytes read into the buffer. Caller must call `compact_from()` when buffer is full to make room.
         """
@@ -290,7 +290,7 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         self._compact_from(self._head)
         return self._fill_buffer()
 
-    @always_inline
+    @inline(.always)
     def _resize_internal(mut self, new_len: Int) -> Bool:
         var new_ptr = unsafe_alloc[Byte](new_len)
         unsafe_memcpy(dest=new_ptr, src=self._ptr, count=self._len)
@@ -299,18 +299,18 @@ struct BufferedReader[R: Reader](Deinitable, Movable, Sized, Writable):
         self._len = new_len
         return True
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         return self._end - self._head
 
-    @always_inline
+    @inline(.always)
     def __getitem__(self, index: Int) -> Byte:
         """Index into unconsumed bytes; index is relative to current position (0 = first unconsumed).
         Indices are not validated; out-of-bounds access is undefined behavior.
         """
         return self._ptr[unsafe_offset=self._head + index]
 
-    @always_inline
+    @inline(.always)
     def __getitem__(
         ref self, sl: ContiguousSlice
     ) -> Span[Byte, MutUntrackedOrigin]:
@@ -365,22 +365,22 @@ struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
         self._pos = 0
         self._bytes_written = 0
 
-    @always_inline
+    @inline(.always)
     def capacity(self) -> Int:
         """Return the buffer capacity."""
         return self._len
 
-    @always_inline
+    @inline(.always)
     def available_space(self) -> Int:
         """Return available space in buffer."""
         return self._len - self._pos
 
-    @always_inline
+    @inline(.always)
     def bytes_written(self) -> Int:
         """Return total bytes written to file."""
         return self._bytes_written
 
-    @always_inline
+    @inline(.always)
     def write_bytes(mut self, data: Span[Byte, _]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
 
@@ -391,7 +391,7 @@ struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
             return
         self._write_bytes_impl(data)
 
-    @always_inline
+    @inline(.always)
     def write_bytes(mut self, data: List[Byte]) raises:
         """Write bytes from a List to the buffer, flushing if needed.
 
@@ -404,9 +404,9 @@ struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
             return
         self._write_bytes_impl(data[:])
 
-    @always_inline
-    def write_string(mut self, string: StringSlice):
-        """Write a StringSlice to this Writer. Required by the builtin `Writer` trait.
+    @inline(.always)
+    def write_string(mut self, string: StringSpan):
+        """Write a StringSpan to this Writer. Required by the builtin `Writer` trait.
         """
         try:
             var bytes_span = string.as_bytes()
@@ -423,7 +423,7 @@ struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
         comptime for i in range(args.__len__()):
             args[i].write_to(self)
 
-    @always_inline
+    @inline(.always)
     def flush(mut self) raises:
         """Flush the buffer to disk.
 
@@ -431,7 +431,7 @@ struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
         """
         self._flush_buffer()
 
-    @always_inline
+    @inline(.always)
     def _flush_buffer(mut self) raises:
         """Internal method to flush buffer to writer backend."""
         if self._pos > 0:
@@ -442,7 +442,7 @@ struct BufferedWriter[W: WriterBackend](Deinitable, Movable, Writer):
             self._bytes_written += Int(written)
             self._pos = 0
 
-    @always_inline
+    @inline(.always)
     def _write_bytes_impl(mut self, data: Span[Byte, _]) raises:
         """Write bytes from a Span to the buffer, flushing if needed.
 
@@ -504,7 +504,7 @@ def buffered_writer_for_gzip(
     return BufferedWriter[GZWriter](GZWriter(filename), capacity)
 
 
-@always_inline
+@inline(.always)
 def _trim_trailing_cr(view: Span[Byte, MutUntrackedOrigin], end: Int) -> Int:
     """
     Return the exclusive end index for line content, trimming a single trailing \\r.
@@ -558,18 +558,18 @@ struct LineIterator[R: Reader](Iterable, Movable):
         self._current_line_number = 0
         self._file_position = 0
 
-    @always_inline
+    @inline(.always)
     def stream_position(self) -> Int:
         """Logical byte position of next line start (for errors and compaction).
         """
         return self.buffer.stream_position()
 
-    @always_inline
+    @inline(.always)
     def buffer_position(self) -> Int:
         """Current read offset in the buffer (for parser `compact_from`)."""
         return self.buffer.buffer_position()
 
-    @always_inline
+    @inline(.always)
     def get_line_number(self) -> Int:
         """Return the current line number (1-indexed).
 
@@ -578,7 +578,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         return self._current_line_number
 
-    @always_inline
+    @inline(.always)
     def get_file_position(self) -> Int64:
         """Return the current byte position in the file.
 
@@ -587,13 +587,13 @@ struct LineIterator[R: Reader](Iterable, Movable):
         """
         return self._file_position
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         """True if there is at least one more line (data in buffer or more can be read).
         """
         return self.buffer.available() > 0 or not self.buffer.is_eof()
 
-    @always_inline
+    @inline(.always)
     def next_line(mut self) raises -> Span[Byte, MutUntrackedOrigin]:
         """
         Next line as span excluding newline (and trimming trailing \\r). None at EOF.
@@ -634,7 +634,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
 
             self.buffer._compact_from(self.buffer.buffer_position())
 
-    @always_inline
+    @inline(.always)
     def next_complete_line(
         mut self,
     ) raises LineIteratorError -> Span[Byte, MutUntrackedOrigin]:
@@ -681,7 +681,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         return self.buffer.peek(amt)
 
     # Does not support buffer growth yet.
-    @always_inline
+    @inline(.always)
     def read_exact(
         mut self, size: Int
     ) raises -> Span[Byte, MutUntrackedOrigin]:
@@ -703,7 +703,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         _ = self.buffer.consume(size)
         return result
 
-    @always_inline
+    @inline(.always)
     def consume_line_scalar(
         mut self,
     ) raises LineIteratorError -> Span[Byte, MutUntrackedOrigin]:
@@ -736,7 +736,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
         self._current_line_number += 1
         return span
 
-    @always_inline
+    @inline(.always)
     def _handle_line_exceeds_capacity(mut self) raises:
         """
         Line does not fit in current buffer. Either raise (no growth or at max)
@@ -762,7 +762,7 @@ struct LineIterator[R: Reader](Iterable, Movable):
             )
         )
 
-    @always_inline
+    @inline(.always)
     def _handle_eof_line(
         mut self, view: Span[Byte, MutUntrackedOrigin]
     ) raises LineIteratorError -> Span[Byte, MutUntrackedOrigin]:

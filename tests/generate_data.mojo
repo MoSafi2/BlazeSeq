@@ -14,8 +14,8 @@ def generate_fastq_record(
     var DNA_BASES = ["A", "T", "G", "C", "N"]
     var HEADER = "@"
 
-    var seq = String(capacity=length)
-    var qual = String(capacity=length)
+    var seq = String(capacity_bytes=length)
+    var qual = String(capacity_bytes=length)
 
     random.seed(Int(perf_counter_ns()) % (2**32))
 

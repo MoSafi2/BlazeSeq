@@ -8,7 +8,7 @@ OtherFields / _other_fields_spans as opaque byte sequences.
 """
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 from blazeseq.features import Position, Interval
@@ -29,7 +29,7 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
@@ -37,17 +37,18 @@ struct Strand(Copyable, Equatable, TrivialRegisterPassable, Writable):
     comptime Minus = Self(1)
     comptime Unknown = Self(2)  # explicit '.' — strand not applicable
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
     def write_to[w: Writer](self, mut writer: w):
-        if self.value == 0:
-            writer.write("+")
-        elif self.value == 1:
-            writer.write("-")
-        else:
-            writer.write(".")
+        match self.value:
+            case 0:
+                writer.write("+")
+            case 1:
+                writer.write("-")
+            case _:
+                writer.write(".")
 
 
 # ---------------------------------------------------------------------------
@@ -62,13 +63,13 @@ struct ItemRgb(Copyable, Movable, TrivialRegisterPassable, Writable):
     var g: UInt8
     var b: UInt8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, r: UInt8, g: UInt8, b: UInt8):
         self.r = r
         self.g = g
         self.b = b
 
-    @always_inline
+    @inline(.always)
     def is_black(self) -> Bool:
         """True if 0,0,0 (or the single 0 value)."""
         return self.r == 0 and self.g == 0 and self.b == 0
@@ -162,9 +163,9 @@ struct BedView[O: Origin](Movable):
         self._other_fields_spans = _other_fields_spans^
         self.num_fields = num_fields
 
-    @always_inline
-    def chrom(self) -> StringSlice[origin=Self.O]:
-        return StringSlice[origin=Self.O](unsafe_from_utf8=self._chrom)
+    @inline(.always)
+    def chrom(self) -> StringSpan[origin=Self.O]:
+        return StringSpan[origin=Self.O](unsafe_from_utf8=self._chrom)
 
     def start_position(self) -> Position:
         """1-based start of the feature (aligned with noodles_core; BED chromStart → start+1).
@@ -205,26 +206,26 @@ struct BedView[O: Origin](Movable):
             return None
         return Optional(opt.value())
 
-    @always_inline
-    def name(self) -> Optional[StringSlice[origin=Self.O]]:
+    @inline(.always)
+    def name(self) -> Optional[StringSpan[origin=Self.O]]:
         if not self._name:
             return None
-        return StringSlice[origin=Self.O](unsafe_from_utf8=self._name.value())
+        return StringSpan[origin=Self.O](unsafe_from_utf8=self._name.value())
 
-    @always_inline
+    @inline(.always)
     def item_rgb(self) -> Optional[ItemRgb]:
         if not self._item_rgb:
             return None
         return Optional(self._item_rgb.value().copy())
 
-    def other_fields(ref self) -> Optional[List[StringSlice[origin=Self.O]]]:
+    def other_fields(ref self) -> Optional[List[StringSpan[origin=Self.O]]]:
         """Return extra columns beyond the standard BED fields, if any."""
         if not self._other_fields_spans:
             return None
-        var out = List[StringSlice[origin=Self.O]]()
+        var out = List[StringSpan[origin=Self.O]]()
         var spans = self._other_fields_spans.value().copy()
         for i in range(len(spans)):
-            out.append(StringSlice[origin=Self.O](unsafe_from_utf8=spans[i]))
+            out.append(StringSpan[origin=Self.O](unsafe_from_utf8=spans[i]))
         return Optional(out^)
 
     def to_record(self) raises -> BedRecord:
@@ -302,7 +303,7 @@ def _parse_comma_sep_int64_list(span: Span[UInt8, _]) raises -> List[UInt64]:
             end += 1
         var part = span[start:end]
         if len(part) > 0:
-            var s = StringSlice(unsafe_from_utf8=part)
+            var s = StringSpan(unsafe_from_utf8=part)
             out.append(UInt64(atol(s)))
         start = end + 1
     return out^
@@ -346,7 +347,7 @@ struct BedRecord(Copyable, Movable, Writable):
     var OtherFields: Optional[List[BString]]
     var NumFields: Int
 
-    @always_inline
+    @inline(.always)
     def chrom(ref[_] self) -> String:
         return self.Chrom.to_string()
 
@@ -389,13 +390,13 @@ struct BedRecord(Copyable, Movable, Writable):
             return None
         return Optional(opt.value())
 
-    @always_inline
+    @inline(.always)
     def name(ref[_] self) -> Optional[String]:
         if not self.Name:
             return None
         return self.Name.value().to_string()
 
-    @always_inline
+    @inline(.always)
     def item_rgb(ref self) -> Optional[ItemRgb]:
         if not self.ItemRgb:
             return None
@@ -442,21 +443,21 @@ struct BedRecord(Copyable, Movable, Writable):
             + "\t"
             + String(self.ChromEnd)
         )
-        writer.write_string(StringSlice(s))
+        writer.write_string(StringSpan(s))
 
     def _write_name_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 4:
             return
         var name_str = self.Name.value().to_string() if self.Name else "."
         var s = "\t" + name_str
-        writer.write_string(StringSlice(s))
+        writer.write_string(StringSpan(s))
 
     def _write_score_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 5:
             return
         var score_str = String(self.Score.value()) if self.Score else "0"
         var s = "\t" + score_str
-        writer.write_string(StringSlice(s))
+        writer.write_string(StringSpan(s))
 
     def _write_strand_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 6:
@@ -474,13 +475,13 @@ struct BedRecord(Copyable, Movable, Writable):
                 self.ThickStart.value()
             ) if self.ThickStart else String(self.ChromStart)
             var s = "\t" + thick_start_str
-            writer.write_string(StringSlice(s))
+            writer.write_string(StringSpan(s))
         if self.NumFields >= 8:
             var thick_end_str = String(
                 self.ThickEnd.value()
             ) if self.ThickEnd else String(self.ChromEnd)
             var s = "\t" + thick_end_str
-            writer.write_string(StringSlice(s))
+            writer.write_string(StringSpan(s))
 
     def _write_item_rgb_field[w: Writer](ref self, mut writer: w):
         if self.NumFields < 9:
@@ -490,7 +491,7 @@ struct BedRecord(Copyable, Movable, Writable):
             var s = (
                 "\t" + String(rgb.r) + "," + String(rgb.g) + "," + String(rgb.b)
             )
-            writer.write_string(StringSlice(s))
+            writer.write_string(StringSpan(s))
         else:
             writer.write_string("\t0")
 
@@ -507,7 +508,7 @@ struct BedRecord(Copyable, Movable, Writable):
             + "\t"
             + _comma_sep_u64_list(starts)
         )
-        writer.write_string(StringSlice(s))
+        writer.write_string(StringSpan(s))
 
     def _write_other_fields[w: Writer](ref self, mut writer: w):
         if not self.OtherFields:
@@ -515,4 +516,4 @@ struct BedRecord(Copyable, Movable, Writable):
         var fields = self.OtherFields.value().copy()
         for i in range(len(fields)):
             var s = "\t" + fields[i].to_string()
-            writer.write_string(StringSlice(s))
+            writer.write_string(StringSpan(s))

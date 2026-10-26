@@ -7,7 +7,7 @@ backslash escapes (\" \\ \n \t \r). Unquoted values are also accepted.
 """
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 
@@ -101,7 +101,7 @@ struct GtfAttributes(Copyable, Movable, Sized, Writable):
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ def _gtf_unescape_value(span: Span[UInt8, _]) -> BString:
 def _write_gtf_escaped[w: Writer](value: BString, mut writer: w):
     """Write a GTF attribute value with backslash escaping applied.
 
-    Buffers unescaped runs and emits them as single StringSlice writes,
+    Buffers unescaped runs and emits them as single StringSpan writes,
     so the only per-character overhead is for bytes that need escaping.
     """
     var span = value.as_span()
@@ -172,7 +172,7 @@ def _write_gtf_escaped[w: Writer](value: BString, mut writer: w):
         )
         if needs_escape:
             if i > run_start:
-                writer.write(StringSlice(unsafe_from_utf8=span[run_start:i]))
+                writer.write(StringSpan(unsafe_from_utf8=span[run_start:i]))
             if b == UInt8(34):
                 writer.write('\\"')
             elif b == UInt8(92):
@@ -185,7 +185,7 @@ def _write_gtf_escaped[w: Writer](value: BString, mut writer: w):
                 writer.write("\\r")
             run_start = i + 1
     if run_start < n:
-        writer.write(StringSlice(unsafe_from_utf8=span[run_start:n]))
+        writer.write(StringSpan(unsafe_from_utf8=span[run_start:n]))
 
 
 # ---------------------------------------------------------------------------
@@ -281,10 +281,10 @@ def parse_gtf_attributes(span: Span[UInt8, _]) raises -> GtfAttributes:
     return attrs^
 
 
-@always_inline
+@inline(.always)
 def _span_eq_literal(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
     """True if span bytes equal the literal (caller must pre-check length)."""
-    var s = StringSlice(lit)
+    var s = StringSpan(lit)
     var b = s.as_bytes()
     for i in range(len(b)):
         if span[i] != b[i]:

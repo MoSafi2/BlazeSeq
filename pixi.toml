@@ -19,7 +19,8 @@ backend = { name = "pixi-build-mojo", version = "0.*", channels = [
 ] }
 
 [package.host-dependencies]
-mojo-compiler = ">=1.0.0,<2"
+mojo-compiler = "==1.2.0"
+max = "==26.7.0"
 
 # [package.target.linux-64.host-dependencies]
 # rapidgzip-mojo = { url = "https://github.com/MoSafi2/rapidgzip_mojo/releases/download/v0.1.1/rapidgzip-mojo-0.1.1-hb0f4dca_0.conda" }
@@ -29,7 +30,8 @@ mojo-compiler = ">=1.0.0,<2"
 
 
 [package.build-dependencies]
-mojo-compiler = ">=1.0.0,<2"
+mojo-compiler = "==1.2.0"
+max = "==26.7.0"
 rattler-build = "*"
 
 # [package.target.linux-64.build-dependencies]
@@ -38,8 +40,13 @@ rattler-build = "*"
 # [package.target.osx-arm64.build-dependencies]
 # rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
 
+[package.run-dependencies]
+mojo = "==1.2.0"
+max = "==26.7.0"
+
 [dependencies]
-mojo = ">=1.0.0,<2"
+mojo = "==1.2.0"
+max = "==26.7.0"
 
 # [target.linux-64.dependencies]
 # rapidgzip-mojo = { git = "https://github.com/MoSafi2/rapidgzip_mojo.git" }
@@ -49,6 +56,8 @@ mojo = ">=1.0.0,<2"
 
 
 [tasks]
+check-gpu = "bash -c 'set -euo pipefail; mojo build --Werror -I . --target-accelerator=nvidia:sm_89 examples/nw_gpu/main.mojo -o /tmp/blazeseq-nw-sm89; for file in tests/gpu/test_*.mojo; do mojo build --Werror -I . --target-accelerator=nvidia:sm_89 \"$file\" -o /tmp/blazeseq-$(basename \"$file\" .mojo)-sm89; done'"
+test-gpu = "bash -c 'set -euo pipefail; for file in tests/gpu/test_*.mojo; do mojo run --Werror -I . -D ASSERT=all \"$file\"; done'"
 build = "mojo precompile --Werror -I . blazeseq -o blazeseq.mojoc"
 test = { cmd = "bash -c 'set -euo pipefail; for file in $(find tests -path tests/gpu -prune -o -name \"test_*.mojo\" -print | sort); do mojo run --Werror -I . -D ASSERT=all \"$file\"; done'" }
 [pypi-dependencies]
@@ -73,6 +82,7 @@ seaborn = ">=0.13.2,<0.14"
 
 
 [feature.benchmark.tasks]
+benchmark-libraries = "python benchmark/scripts/compare_libraries.py"
 benchmark-plain = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format plain --fs ramfs --plot --write-artifacts'"
 benchmark-mmap = "bash -c 'python benchmark/fastq-parser/bench.py run --workload parser --format plain --parser-backend mmap --fs ramfs --plot --write-artifacts'"
 benchmark-fastq-batch-vs-paraseq = "bash -c 'python benchmark/fastq-parser/bench.py run --workload batch_vs_paraseq --format plain --fs ramfs --plot --write-artifacts'"
@@ -92,26 +102,22 @@ act = ">=0.2.89,<0.3"
 rattler-build = ">=0.74,<0.75"
 
 
+[feature.dev.target.linux-64.dependencies]
+patchelf = ">=0.19,<0.20"
+
+[feature.dev.target.linux-aarch64.dependencies]
+patchelf = ">=0.19,<0.20"
+
 [feature.dev.tasks]
-test-python-wheel-build = { cmd = "bash -c 'set -euo pipefail; mojo build --Werror -I . --emit shared-lib -o python/blazeseq/_extension/blazeseq_parser.so python/blazeseq_parser.mojo; mojo precompile --Werror -I . blazeseq -o python/blazeseq/mojoc/blazeseq.mojoc; rm -rf python/build python/blazeseq.egg-info; cd python; uv build --wheel --config-setting plat-name=${1:-manylinux2014_x86_64}'" }
-test-python-wheel-install = { cmd = "bash -c 'set -euo pipefail; wheel=$(python -c \"from pathlib import Path; ws=sorted(Path(\\\"python/dist\\\").glob(\\\"*.whl\\\"), key=lambda p: p.stat().st_mtime); print(ws[-1])\"); uv venv .venv --clear; . .venv/bin/activate; uv pip install pytest \"$wheel\"; pytest -q tests/test_python_bindings.py'" }
+test-python-wheel-build = "python scripts/build_python_wheel.py"
+test-python-wheel-install = "python scripts/check_python_wheel.py"
 test-workflow-local = { cmd = "act --workflows .github/workflows/build-wheels.yml --job build-wheel" }
 rbuild = "rattler-build build --recipe recipe.yaml --output-dir .pixi/build --channel https://conda.modular.com/max --channel conda-forge"
 rtest = { cmd = "bash -c 'set -euo pipefail; package=$(find .pixi/build/linux-64 -name \"blazeseq-0.4.0-*.conda\" -print | sort | tail -1); rattler-build test --package-file \"$package\" --channel https://conda.modular.com/max --channel conda-forge'", depends-on = [
     "rbuild",
 ] }
 
-[feature.gpu.dependencies]
-max = ">=26.5,<27"
-
-[feature.gpu.tasks]
-build-gpu = "mojo precompile --Werror -I . blazeseq_gpu -o blazeseq_gpu.mojoc"
-check-gpu = "mojo build --Werror -I . --target-accelerator=nvidia:sm_89 examples/nw_gpu/main.mojo -o /tmp/blazeseq-nw-sm89"
-test-gpu = "mojo run --Werror -I . -D ASSERT=all tests/gpu/test_record_batch.mojo"
-package-gpu = "rattler-build build --recipe recipe_gpu.yaml --output-dir .pixi/build --channel https://conda.modular.com/max --channel conda-forge"
-
 [environments]
 docs = ["default", "docs"]
 benchmark = ["default", "benchmark"]
 dev = ["default", "dev"]
-gpu = ["default", "gpu", "dev"]

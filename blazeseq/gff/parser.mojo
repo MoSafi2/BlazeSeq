@@ -7,7 +7,7 @@ views() / records() iterators as with BED/FAI.
 """
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from std.iter import Iterator
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
@@ -39,15 +39,15 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    @always_inline
+    @inline(.always)
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
@@ -62,22 +62,23 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime COORD_ZERO = Self(8)
 
     def message(self) -> String:
-        if self == Self.VERSION:
-            return "GFF3: ##gff-version must be 3.x"
-        if self == Self.SEQ_REGION:
-            return "GFF3: malformed ##sequence-region directive"
-        if self == Self.INT_EMPTY:
-            return "GFF3: integer field is empty"
-        if self == Self.INT_INVALID:
-            return "GFF3: invalid byte in integer field"
-        if self == Self.STRAND_INVALID:
-            return "GFF3: strand must be +, -, ., or ?"
-        if self == Self.PHASE_INVALID:
-            return "GFF3: phase must be 0, 1, or 2"
-        if self == Self.FIELD_COUNT:
-            return "GFF3: row must have exactly 9 fields"
-        if self == Self.COORD_ZERO:
-            return "GFF3: start/end coordinate must be >= 1 (1-based)"
+        match self:
+            case == Self.VERSION:
+                return "GFF3: ##gff-version must be 3.x"
+            case == Self.SEQ_REGION:
+                return "GFF3: malformed ##sequence-region directive"
+            case == Self.INT_EMPTY:
+                return "GFF3: integer field is empty"
+            case == Self.INT_INVALID:
+                return "GFF3: invalid byte in integer field"
+            case == Self.STRAND_INVALID:
+                return "GFF3: strand must be +, -, ., or ?"
+            case == Self.PHASE_INVALID:
+                return "GFF3: phase must be 0, 1, or 2"
+            case == Self.FIELD_COUNT:
+                return "GFF3: row must have exactly 9 fields"
+            case == Self.COORD_ZERO:
+                return "GFF3: start/end coordinate must be >= 1 (1-based)"
         return "GFF3: parse error"
 
 
@@ -88,7 +89,7 @@ struct Gff3ErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
 def _starts_with(span: Span[UInt8, _], lit: StringLiteral) -> Bool:
     """True if span begins with the bytes of lit."""
-    var s = StringSlice(lit)
+    var s = StringSpan(lit)
     var n = s.byte_length()
     if len(span) < n:
         return False
@@ -192,7 +193,7 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """GFF3: skip blank and single-# lines; ## lines -> METADATA; ##FASTA -> STOP.
     """
 
-    @always_inline
+    @inline(.always)
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
@@ -224,7 +225,7 @@ struct Gff3LinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _parse_uint64_from_span(
     span: Span[UInt8, _], mut result: UInt64
 ) -> Gff3ErrorCode:
@@ -236,7 +237,7 @@ def _parse_uint64_from_span(
         var digit = span[i] - 48
         if digit > 9:
             return Gff3ErrorCode.INT_INVALID
-        result = result * 10 + digit.cast[DType.uint64]()
+        result = result * 10 + digit.cast[.uint64]()
     return Gff3ErrorCode.OK
 
 
@@ -245,7 +246,7 @@ def _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
         return None
     if len(span) == 1 and span[0] == UInt8(ord(".")):
         return None
-    var s = StringSlice(unsafe_from_utf8=span)
+    var s = StringSpan(unsafe_from_utf8=span)
     return Optional(atof(s))
 
 
@@ -380,11 +381,11 @@ struct Gff3Parser[R: Reader](Movable):
         """Return a reference to the ##sequence-region directives (no copy)."""
         return self._seq_regions
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self._rows.has_more()
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
@@ -440,11 +441,11 @@ struct _Gff3ParserViewIter[R: Reader, origin: Origin]:
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises -> Self.Element:
         var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutUntrackedOrigin]](
             self._src
@@ -470,11 +471,11 @@ struct _Gff3ParserRecordIter[R: Reader, origin: Origin]:
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises -> Self.Element:
         var mut_ptr = rebind[Pointer[Gff3Parser[Self.R], MutUntrackedOrigin]](
             self._src

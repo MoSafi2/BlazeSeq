@@ -4,6 +4,8 @@ Python bindings for [BlazeSeq](https://github.com/MoSafi2/BlazeSeq) — high-per
 
 **Wheels only:** install from PyPI. No source build of the extension.
 
+Requires Python 3.10–3.14 and MAX 26.7.0 (installed automatically). Linux requires glibc 2.34 or newer; Apple Silicon requires macOS 13 or newer. CPU parsing does not require GPU hardware. The Python API remains a CPU parsing API; device batching is exposed by the bundled Mojo library.
+
 ```bash
 # Install (uv recommended)
 uv pip install blazeseq

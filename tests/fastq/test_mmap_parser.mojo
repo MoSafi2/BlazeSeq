@@ -32,9 +32,7 @@ def _write_synthetic_fastq() raises:
 def test_mmap_matches_buffered() raises:
     _write_synthetic_fastq()
 
-    var buffered = FastqParser[FileReader](
-        FileReader(Path(TMP_FASTQ))
-    )
+    var buffered = FastqParser[FileReader](FileReader(Path(TMP_FASTQ)))
     var buffered_reads = 0
     var buffered_bp = 0
     for view in buffered.views():
@@ -101,9 +99,9 @@ def test_mmap_missing_trailing_newline() raises:
     writer.flush()
     var parser = MmapFastqParser(Path(path))
     var rec = parser.next_record()
-    assert_equal(StringSlice(rec.id()), StringSlice("r1"))
-    assert_equal(StringSlice(rec.sequence()), StringSlice("ACGTACGT"))
-    assert_equal(StringSlice(rec.quality()), StringSlice("IIIIIIII"))
+    assert_equal(StringSpan(rec.id()), StringSpan("r1"))
+    assert_equal(StringSpan(rec.sequence()), StringSpan("ACGTACGT"))
+    assert_equal(StringSpan(rec.quality()), StringSpan("IIIIIIII"))
     assert_equal(parser.has_more(), False)
 
 

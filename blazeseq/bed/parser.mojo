@@ -11,7 +11,7 @@ invalidated on the next advance. Call `.to_record()` on a view or use
 """
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from std.iter import Iterator
 from blazeseq.CONSTS import EOF
 from blazeseq.bed.record import (
@@ -44,15 +44,15 @@ struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    @always_inline
+    @inline(.always)
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
@@ -67,22 +67,23 @@ struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime BLOCK_INVALID = Self(8)
 
     def message(self) -> String:
-        if self == Self.INT_EMPTY:
-            return "BED: integer field is empty"
-        if self == Self.INT_INVALID:
-            return "BED: invalid byte in integer field"
-        if self == Self.STRAND_INVALID:
-            return "BED: strand must be +, -, or ."
-        if self == Self.SCORE_RANGE:
-            return "BED: score must be in [0, 1000]"
-        if self == Self.RGB_FORMAT:
-            return "BED: itemRgb must be 0 or r,g,b"
-        if self == Self.RGB_RANGE:
-            return "BED: itemRgb components must be 0-255"
-        if self == Self.FIELD_COUNT:
-            return "BED: row must have at least 3 fields"
-        if self == Self.BLOCK_INVALID:
-            return "BED: blockCount must be > 0"
+        match self:
+            case == Self.INT_EMPTY:
+                return "BED: integer field is empty"
+            case == Self.INT_INVALID:
+                return "BED: invalid byte in integer field"
+            case == Self.STRAND_INVALID:
+                return "BED: strand must be +, -, or ."
+            case == Self.SCORE_RANGE:
+                return "BED: score must be in [0, 1000]"
+            case == Self.RGB_FORMAT:
+                return "BED: itemRgb must be 0 or r,g,b"
+            case == Self.RGB_RANGE:
+                return "BED: itemRgb components must be 0-255"
+            case == Self.FIELD_COUNT:
+                return "BED: row must have at least 3 fields"
+            case == Self.BLOCK_INVALID:
+                return "BED: blockCount must be > 0"
         return "BED: parse error"
 
 
@@ -91,7 +92,7 @@ struct BedErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _parse_uint64_from_span(
     span: Span[UInt8, _], mut result: UInt64
 ) -> BedErrorCode:
@@ -103,11 +104,11 @@ def _parse_uint64_from_span(
         var digit = span[i] - 48  # wraps on underflow for non-digit bytes
         if digit > 9:
             return BedErrorCode.INT_INVALID
-        result = result * 10 + digit.cast[DType.uint64]()
+        result = result * 10 + digit.cast[.uint64]()
     return BedErrorCode.OK
 
 
-@always_inline
+@inline(.always)
 def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
     """Parse a single-byte strand field. Returns OK or STRAND_INVALID.
 
@@ -131,7 +132,7 @@ def _parse_strand(span: Span[UInt8, _], mut result: Strand) -> BedErrorCode:
     return BedErrorCode.STRAND_INVALID
 
 
-@always_inline
+@inline(.always)
 def _parse_score(span: Span[UInt8, _], mut result: UInt16) -> BedErrorCode:
     """Parse a BED score [0, 1000]. Returns OK, INT_EMPTY, INT_INVALID, or SCORE_RANGE.
     """
@@ -175,7 +176,7 @@ def _parse_item_rgb(
 
     # Parse three comma-separated decimal components
     var components: Int = 0
-    var values = InlineArray[Int, 3](fill=0)
+    var values = Array[Int, 3](fill=0)
     var cur: Int = 0
     var has_digit = False
     var i = start
@@ -223,7 +224,7 @@ struct BedLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     All other lines are yielded to the parser.
     """
 
-    @always_inline
+    @inline(.always)
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         var n = len(line)
         if n == 0:
@@ -293,11 +294,11 @@ struct BedParser[R: Reader](Iterable, Movable):
             reader^, delimiter=BED_TAB, has_header=False
         )
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self._rows.has_more()
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
@@ -458,11 +459,11 @@ struct _BedParserViewIter[R: Reader, origin: Origin](Iterator):
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[BedParser[Self.R], MutUntrackedOrigin]](
             self._src
@@ -489,11 +490,11 @@ struct _BedParserRecordIter[R: Reader, origin: Origin](Iterator):
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[BedParser[Self.R], MutUntrackedOrigin]](
             self._src

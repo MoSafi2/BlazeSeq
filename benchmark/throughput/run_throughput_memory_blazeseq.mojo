@@ -61,21 +61,22 @@ def main() raises:
     var total_base_pairs: Int = 0
 
     var start_ns = perf_counter_ns()
-    if mode == "batches":
-        for batch in parser.batches(4096):
-            total_reads += batch.num_records()
-            total_base_pairs += batch.seq_len()
-    elif mode == "records":
-        for record in parser.records():
-            total_reads += 1
-            total_base_pairs += len(record)
-    elif mode == "views":
-        for view in parser.views():
-            total_reads += 1
-            total_base_pairs += len(view)
-    else:
-        print("Unknown mode: ", mode, ". Use batches | records | views")
-        return
+    match mode:
+        case "batches":
+            for batch in parser.batches(4096):
+                total_reads += batch.num_records()
+                total_base_pairs += batch.seq_len()
+        case "records":
+            for record in parser.records():
+                total_reads += 1
+                total_base_pairs += len(record)
+        case "views":
+            for view in parser.views():
+                total_reads += 1
+                total_base_pairs += len(view)
+        case _:
+            print("Unknown mode: ", mode, ". Use batches | records | views")
+            return
     var end_ns = perf_counter_ns()
 
     var elapsed_ns = end_ns - start_ns

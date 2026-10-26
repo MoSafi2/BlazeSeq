@@ -13,13 +13,8 @@ Or with pixi (after building the extension and wheel):
 """
 
 import os
-import sys
 
-# Ensure the Python package is found (python/blazeseq), not the repo-root blazeseq/ Mojo package
 _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_python_dir = os.path.join(_repo_root, "python")
-if _python_dir not in sys.path:
-    sys.path.insert(0, _python_dir)
 
 import blazeseq
 

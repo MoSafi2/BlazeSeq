@@ -20,7 +20,7 @@ from blazeseq.errors import FastxErrorCode
 
 
 # # From extramojo pacakge, skipping version problems
-@always_inline()
+@inline(.always)
 @doc_hidden
 def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
@@ -72,7 +72,7 @@ def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
             if tail_len >= w:  # runtime check
                 # Load `w` bytes and check for the first match, if any.
                 var v = tail_ptr.unsafe_load[width=w]()
-                var mask = v.eq(SIMD[DType.uint8, w](chr))
+                var mask = v.eq(SIMD[.uint8, w](chr))
                 var packed = pack_bits(mask)
                 if packed:
                     return Int(count_trailing_zeros(packed)) + tail_off + start
@@ -84,7 +84,7 @@ def memchr(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
 
 
 @doc_hidden
-@always_inline()
+@inline(.always)
 def build_cascade[W: Int]() -> List[Int]:
     """Generate [W//2, W//4, ..., 1] stopping before duplicates or zeros."""
     var result = List[Int]()
@@ -96,7 +96,7 @@ def build_cascade[W: Int]() -> List[Int]:
 
 
 @doc_hidden
-@always_inline("nodebug")
+@inline(.nodebug)
 def memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     """
     Scalar (non-SIMD) variant of memchr. Find first occurrence of byte in haystack.
@@ -108,7 +108,7 @@ def memchr_scalar(haystack: Span[UInt8, _], chr: UInt8, start: Int = 0) -> Int:
     return -1
 
 
-@always_inline
+@inline(.always)
 def _strip_spaces[
     mut: Bool, //, o: Origin[mut=mut]
 ](in_slice: Span[Byte, o]) -> Span[Byte, o]:
@@ -131,7 +131,7 @@ def _strip_spaces[
     return in_slice[start:end]
 
 
-@always_inline
+@inline(.always)
 def _check_ascii[
     mut: Bool, //, o: Origin[mut=mut]
 ](buffer: Span[Byte, o]) -> FastxErrorCode:
@@ -153,7 +153,7 @@ def _check_ascii[
 
 # Optimized posix_space check using bitmask lookup
 @doc_hidden
-@always_inline
+@inline(.always)
 def is_posix_space(c: UInt8) -> Bool:
     """Return True if `c` is one of the POSIX whitespace characters."""
     # Precomputed bitmask for ASCII 0-63.
@@ -174,7 +174,7 @@ def is_posix_space(c: UInt8) -> Bool:
         return False
 
     # Check if the 'c-th' bit is set in our mask
-    return ((MASK >> c.cast[DType.uint64]()) & 1) != 0
+    return ((MASK >> c.cast[.uint64]()) & 1) != 0
 
 
 def compute_num_fasta_reads_for_size(

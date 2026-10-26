@@ -92,7 +92,7 @@ internally while the external `rapidgzip` dependency is disabled.
 
 ```mojo
 from blazeseq import FastqParser, RapidgzipReader
-from blazeseq_gpu import upload_batch_to_device
+from blazeseq import upload_batch_to_device
 from max.gpu.host import DeviceContext
 from std.pathlib import Path
 

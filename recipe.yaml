@@ -19,13 +19,28 @@ build:
 requirements:
   build:
     - ${{ compiler('cxx') }} # Needed if any shim logic is triggered
-    - mojo >=1.0.0,<2
+    - mojo ==1.2.0
+    - max ==26.7.0
   host:
-    - mojo >=1.0.0,<2
+    - mojo ==1.2.0
+    - max ==26.7.0
   run:
-    - mojo >=1.0.0,<2
+    - mojo ==1.2.0
+    - max ==26.7.0
 
 tests:
   - script:
       - test -f $PREFIX/lib/mojo/blazeseq.mojoc
       - mojo --version
+      - |
+        cat > package_smoke.mojo <<'MOJO'
+        from blazeseq import FastqBatch, FastqParser, MemoryReader, DeviceFastqBatch, StagedFastqBatch
+        from std.testing import assert_equal
+
+        def main() raises:
+            var parser = FastqParser(MemoryReader("@a\nAC\n+\nII\n"))
+            var batch = parser.next_batch()
+            assert_equal(batch.num_records(), 1)
+            assert_equal(batch.get_record(0).sequence(), "AC")
+        MOJO
+        mojo run --Werror -D ASSERT=all package_smoke.mojo

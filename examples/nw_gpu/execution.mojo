@@ -15,7 +15,7 @@ Kernels (nw_kernel, needleman_wunsch_cpu) and shared constants live in kernels.m
 
 from blazeseq.fastq.parser import FastqParser
 from blazeseq.fastq.record_batch import FastqBatch
-from blazeseq_gpu import upload_batch_to_device
+from blazeseq import upload_batch_to_device
 from blazeseq.fastq.synthetic import generate_synthetic_fastq_buffer
 from blazeseq.io.readers import MemoryReader, Reader
 from max.gpu.host import DeviceContext
@@ -68,21 +68,21 @@ def total_record_count(batches: List[FastqBatch]) -> Int:
 
 def setup_reference(
     ctx: DeviceContext, ref_str: String
-) raises -> Tuple[DeviceBuffer[DType.uint8], Int]:
+) raises -> Tuple[DeviceBuffer[.uint8], Int]:
     """Upload reference to device; return (ref_buffer, ref_len) for kernel calls.
 
     Copies ref_str into a host buffer of length MAX_REF_LEN (zero-padded),
     then copies to device. ref_len is the actual reference length used by the kernel.
     """
     var ref_len = ref_str.byte_length()
-    var ref_host = ctx.enqueue_create_host_buffer[DType.uint8](MAX_REF_LEN)
+    var ref_host = ctx.enqueue_create_host_buffer[.uint8](MAX_REF_LEN)
     ctx.synchronize()
     var ref_bytes = ref_str.as_bytes()
     for i in range(ref_len):
         ref_host[i] = ref_bytes[i]
     for i in range(ref_len, MAX_REF_LEN):
         ref_host[i] = 0
-    var ref_buffer = ctx.enqueue_create_buffer[DType.uint8](MAX_REF_LEN)
+    var ref_buffer = ctx.enqueue_create_buffer[.uint8](MAX_REF_LEN)
     ctx.enqueue_copy(src_buf=ref_host, dst_buf=ref_buffer)
     ctx.synchronize()
     return (ref_buffer, ref_len)
@@ -90,7 +90,7 @@ def setup_reference(
 
 def run_gpu_nw(
     batches: List[FastqBatch],
-    ref_buffer: DeviceBuffer[DType.uint8],
+    ref_buffer: DeviceBuffer[.uint8],
     ref_len: Int,
     ctx: DeviceContext,
 ) raises -> Tuple[Float64, List[Int32]]:
@@ -108,9 +108,9 @@ def run_gpu_nw(
         if num_records == 0:
             continue
         var device_batch = upload_batch_to_device(batch, ctx)
-        var scores_buffer = ctx.enqueue_create_buffer[DType.int32](num_records)
+        var scores_buffer = ctx.enqueue_create_buffer[.int32](num_records)
         var scratch_size = num_records * ROW_STRIDE
-        var row_scratch = ctx.enqueue_create_buffer[DType.int32](scratch_size)
+        var row_scratch = ctx.enqueue_create_buffer[.int32](scratch_size)
         ctx.synchronize()
         ctx.enqueue_function(
             nw_compiled,
@@ -124,9 +124,7 @@ def run_gpu_nw(
             grid_dim=num_records,
             block_dim=1,
         )
-        var host_scores = ctx.enqueue_create_host_buffer[DType.int32](
-            num_records
-        )
+        var host_scores = ctx.enqueue_create_host_buffer[.int32](num_records)
         ctx.enqueue_copy(src_buf=scores_buffer, dst_buf=host_scores)
         ctx.synchronize()
         for i in range(num_records):

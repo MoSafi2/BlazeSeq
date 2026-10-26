@@ -35,3 +35,20 @@ test_file_fused.mojo
 test_file_sequential.mojo
 test_file_fused
 test_file_sequential
+
+# Local agent instructions and LLM context
+AGENTS.md
+AGENTS.override.md
+CLAUDE.md
+GEMINI.md
+.codex/
+.agents/
+.claude/
+.github/copilot-instructions.md
+*.prompt.md
+[Ll][Ll][Mm]*
+
+# Local session reports and machine-specific benchmark artifacts
+docs/mojo_*_performance.md
+benchmark/results/mojo_*_comparison/
+benchmark/results/mojo_*_migration.json

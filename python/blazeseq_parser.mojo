@@ -19,7 +19,7 @@ from std.python.bindings import PythonModuleBuilder
 from std.pathlib import Path
 from std.os import abort
 from std.memory import Pointer
-from std.collections.string import StringSlice
+from std.collections.string import StringSpan
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.fastq.record import FastqRecord, FastqView
 from blazeseq.fastq.record_batch import FastqBatch
@@ -299,9 +299,9 @@ struct FastqBatchMethods:
     def batch_py_iter(py_self: PythonObject) raises -> PythonObject:
         """Return an iterator over records in the batch. Iterator is invalid after batch is discarded.
         """
-        var batch_ptr = py_self.downcast_value_ptr[FastqBatch]().unsafe_origin_cast[
-            MutUntrackedOrigin
-        ]()
+        var batch_ptr = py_self.downcast_value_ptr[
+            FastqBatch
+        ]().unsafe_origin_cast[MutUntrackedOrigin]()
         var count = batch_ptr[].num_records()
         var iter_val = FastqBatchIterator(batch_ptr, 0, count)
         return PythonObject(alloc=iter_val^)
@@ -513,4 +513,6 @@ def PyInit_blazeseq_parser() abi("C") -> PythonObject:
     except e:
         print(String("error creating blazeseq_parser module: ") + String(e))
         abort()
+
+
 from std.memory.alloc import unsafe_alloc

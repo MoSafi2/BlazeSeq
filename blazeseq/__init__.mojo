@@ -1,7 +1,7 @@
-"""BlazeSeq: fast, MAX-free FASTX parsing for Mojo.
+"""BlazeSeq: fast FASTX parsing and GPU batching for Mojo.
 
 BlazeSeq provides high-performance FASTQ parsing with configurable validation
-and optional GPU-oriented batch types. It supports multiple parsing modes:
+and GPU-oriented batch types. It supports multiple parsing modes:
 zero-copy views (`FastqView`), owned records (`FastqRecord`), and
 Structure-of-Arrays batches (`FastqBatch`) for GPU upload.
 
@@ -9,7 +9,7 @@ Key features:
 - High-throughput parsing (targets several GB/s from disk).
 - Configurable validation: ASCII and quality-schema checks (can be disabled for speed).
 - Zero-copy parsing via `next_view()` / `views()`.
-- CPU batching with `FastqBatch`; optional device transfers live in `blazeseq_gpu`.
+- CPU and GPU batching with `FastqBatch`, `StagedFastqBatch`, and `DeviceFastqBatch`.
 - Multiple quality schemas: generic, sanger, solexa, illumina_1.3/1.5/1.8.
 - Readers: `FileReader`, `MemoryReader`, `GZFile`, `RapidgzipReader`. Writers: `FileWriter`, `MemoryWriter`, `GZWriter`.
 
@@ -31,7 +31,15 @@ from blazeseq.fastq.record import FastqRecord, FastqView
 from blazeseq.fastq.parser import FastqParser, ParserConfig
 from blazeseq.fasta import FastaRecord, FastaParser
 from blazeseq.fai import FaiRecord, FaiView, FaiParser
-from blazeseq.fastq.record_batch import FastqBatch
+from blazeseq.fastq.record_batch import (
+    FastqBatch,
+    DeviceFastqBatch,
+    StagedFastqBatch,
+    upload_batch_to_device,
+    stage_batch_to_host,
+    move_staged_to_device,
+    download_device_batch_to_staged,
+)
 from blazeseq.bed import (
     BedParser,
     BedRecord,

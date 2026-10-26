@@ -4,6 +4,17 @@ All notable changes to BlazeSeq are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgrade the compiler and runtime to Mojo 1.2.0 and MAX 26.7.0, pinned consistently across Pixi, Mojo packages, and Python wheels.
+- Restore GPU batching to the core library: `FastqBatch.to_device()` and `.stage()`, consuming `StagedFastqBatch.to_device()`, device/staged batch types, and transfer helpers are available from `blazeseq` and `blazeseq.fastq`.
+- Remove the separate `blazeseq_gpu` namespace, `blazeseq-gpu` recipe, and optional GPU environment. Replace `from blazeseq_gpu import ...` with `from blazeseq import ...`.
+- MAX is now required for Python wheels as well as Mojo consumers. CPU parsing still works without GPU hardware. Python support is 3.10–3.14, with Linux glibc 2.34+ and Apple Silicon macOS 13+ platform requirements.
+- Modernize dispatch with pattern matching, inline policies, hashing byte spans, C-string access, and immutable string views while preserving parser formats, quality schemas, and diagnostics.
+- Explicitly inline record-boundary source dispatch to retain parsing throughput under the Mojo 1.2 optimizer.
+- Build interpreter-specific Python wheels with relocatable runtime paths; isolated wheel tests now import the installed wheel instead of the source tree.
+- Reject empty GPU transfers with a descriptive error; add hardware round-trip and alignment correctness tests.
+
 ## [0.4] - 2026-08-24
 
 ### Added

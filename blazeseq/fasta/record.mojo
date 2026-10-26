@@ -1,13 +1,14 @@
-from std.hashlib.hasher import default_hasher, Hasher
+from std.hash.hasher import default_hasher, Hasher
 from blazeseq.byte_string import BString
 from blazeseq.fasta.definition import Definition
-from std.collections.string import StringSlice, String
+from std.collections.string import StringSpan, String
 from blazeseq.io.writers import Writer
 from blazeseq.utils import _strip_spaces
 
 
 struct FastaRecord(
     Copyable,
+    Equatable,
     Hashable,
     Movable,
     Sized,
@@ -26,7 +27,7 @@ struct FastaRecord(
     var _id: BString
     var _sequence: BString
 
-    @always_inline
+    @inline(.always)
     def __init__(
         out self,
         id: String,
@@ -36,7 +37,7 @@ struct FastaRecord(
         self._id = BString(id)
         self._sequence = BString(sequence)
 
-    @always_inline
+    @inline(.always)
     def __init__(
         out self,
         id: Span[Byte, _],
@@ -45,7 +46,7 @@ struct FastaRecord(
         self._id = BString(id)
         self._sequence = BString(sequence)
 
-    @always_inline
+    @inline(.always)
     def __init__(
         out self,
         var id: BString,
@@ -54,8 +55,8 @@ struct FastaRecord(
         self._id = id^
         self._sequence = sequence^
 
-    @always_inline
-    def sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    @inline(.always)
+    def sequence(ref[_] self) -> StringSpan[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
             unsafe_ptr=self._sequence.ptr.unsafe_mut_cast[
@@ -63,10 +64,10 @@ struct FastaRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
-        return StringSlice(unsafe_from_utf8=span)
+        return StringSpan(unsafe_from_utf8=span)
 
-    @always_inline
-    def id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    @inline(.always)
+    def id(ref[_] self) -> StringSpan[origin=origin_of(self)]:
         """Return the read identifier (id without leading '>') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
@@ -75,9 +76,9 @@ struct FastaRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
-        return StringSlice(unsafe_from_utf8=span)
+        return StringSpan(unsafe_from_utf8=span)
 
-    @always_inline
+    @inline(.always)
     def definition(self) -> Definition:
         var id_str = self._id.as_string_slice()
         var parts = id_str.split(" ")
@@ -92,13 +93,13 @@ struct FastaRecord(
 
         return Definition(Id=id_ascii^, Description=None)
 
-    @always_inline
+    @inline(.always)
     def byte_len(self) -> Int:
         """Return total byte length when written (\">\" + id + \"\\n\" + sequence + \"\\n\").
         """
         return 1 + len(self._id) + 1 + len(self._sequence) + 1
 
-    @always_inline
+    @inline(.always)
     def write[w: Writer](self, mut writer: w, line_width: Int = 60):
         """Write the record in standard FASTA format."""
         var width = line_width
@@ -112,25 +113,25 @@ struct FastaRecord(
         while i < seq_len:
             var j = min(i + width, seq_len)
             writer.write(
-                StringSlice(unsafe_from_utf8=self._sequence[i:j]),
+                StringSpan(unsafe_from_utf8=self._sequence[i:j]),
                 "\n",
             )
             i = j
 
-    @always_inline
+    @inline(.always)
     def write_to[w: Writer](self, mut writer: w):
         self.write(writer)
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
         return len(self._sequence)
 
-    @always_inline
+    @inline(.always)
     def __hash__[H: Hasher](self, mut hasher: H):
-        hasher.update(self._sequence.as_string_slice())
+        hasher.update(self._sequence.as_span().as_imm())
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self._sequence == other._sequence
 

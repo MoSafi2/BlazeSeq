@@ -9,7 +9,7 @@ POSIX only (Linux/macOS). C symbols are resolved through a dynamic-libraries
 handle so they cannot collide with stdlib extern declarations.
 """
 
-from std.ffi import OwnedDLHandle
+from std.ffi import OwnedDLHandle, c_char
 from std.memory import Pointer
 from std.pathlib import Path
 from std.sys.info import CompilationTarget
@@ -22,7 +22,7 @@ comptime SEEK_END = 2
 comptime O_RDONLY = 0
 
 comptime c_void_ptr = Pointer[mut=False, UInt8, MutUntrackedOrigin]
-comptime c_char_ptr = Pointer[mut=False, Int8, MutUntrackedOrigin]
+comptime c_char_ptr = Pointer[mut=False, c_char, MutUntrackedOrigin]
 
 
 @doc_hidden
@@ -42,7 +42,7 @@ struct _Libc:
         self.handle = OwnedDLHandle(Self._get_libname())
 
 
-struct MappedFile(Movable, Deinitable):
+struct MappedFile(Deinitable, Movable):
     """Read-only memory map of a file.
 
     Example:
@@ -66,16 +66,16 @@ struct MappedFile(Movable, Deinitable):
         self._ptr = c_void_ptr(unsafe_from_address=1)
         self._length = 0
         var path_str = String(path)
-        var cpath = path_str.as_c_string_slice()
+        var cpath = path_str.as_c_string_span()
         self._fd = self._libc.handle.call["open", Int, c_char_ptr, Int](
-            cpath.unsafe_ptr().unsafe_origin_cast[MutUntrackedOrigin](),
+            cpath.ptr().unsafe_origin_cast[MutUntrackedOrigin](),
             O_RDONLY,
         )
         if self._fd < 0:
             raise Error("MappedFile: cannot open '" + String(path) + "'")
-        self._length = self._libc.handle.call[
-            "lseek", Int, Int, Int, Int
-        ](self._fd, 0, SEEK_END)
+        self._length = self._libc.handle.call["lseek", Int, Int, Int, Int](
+            self._fd, 0, SEEK_END
+        )
         if self._length <= 0:
             if self._length < 0:
                 raise Error("MappedFile: cannot seek '" + String(path) + "'")
@@ -99,12 +99,11 @@ struct MappedFile(Movable, Deinitable):
         )
         if Int(self._ptr) == -1:
             raise Error("MappedFile: mmap failed for '" + String(path) + "'")
-        _ = self._libc.handle.call[
-            "madvise", Int, c_void_ptr, Int, Int
-        ](self._ptr, self._length, MADV_SEQUENTIAL)
+        _ = self._libc.handle.call["madvise", Int, c_void_ptr, Int, Int](
+            self._ptr, self._length, MADV_SEQUENTIAL
+        )
 
-
-    @always_inline
+    @inline(.always)
     def _close_fd(mut self):
         _ = self._libc.handle.call["close", Int, Int](self._fd)
 
@@ -116,16 +115,16 @@ struct MappedFile(Movable, Deinitable):
 
     def __deinit__(deinit self):
         if self._length > 0:
-            _ = self._libc.handle.call[
-                "munmap", Int, c_void_ptr, Int
-            ](self._ptr, self._length)
+            _ = self._libc.handle.call["munmap", Int, c_void_ptr, Int](
+                self._ptr, self._length
+            )
         self._close_fd()
 
-    @always_inline
+    @inline(.always)
     def size(self) -> Int:
         return self._length
 
-    @always_inline
+    @inline(.always)
     def view(self) -> Span[Byte, MutUntrackedOrigin]:
         """Whole-file byte span. Empty file yields a zero-length span."""
         return Span[Byte, MutUntrackedOrigin](

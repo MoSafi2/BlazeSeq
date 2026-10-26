@@ -41,7 +41,7 @@ struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
     var qual_start: Int  # set after SEP phase newline is found
     var record_end: Int  # set after QUAL phase newline is found (or EOF)
 
-    @always_inline
+    @inline(.always)
     def __init__(
         out self,
         header_start: Int = 0,
@@ -69,7 +69,7 @@ struct RecordOffsets(Copyable, Movable, TrivialRegisterPassable, Writable):
         self.qual_start = qual_start
         self.record_end = record_end
 
-    @always_inline
+    @inline(.always)
     def is_complete(self) -> Bool:
         return self.record_end != 0
 
@@ -97,11 +97,11 @@ struct SearchPhase(
     comptime SEP = Self(2)
     comptime QUAL = Self(3)
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    @always_inline
+    @inline(.always)
     def __le__(self, other: Self) -> Bool:
         return self.value <= other.value
 
@@ -109,7 +109,7 @@ struct SearchPhase(
         writer.write(self.value)
 
 
-@always_inline
+@inline(.always)
 def _check_end_qual(
     buf: BufferedReader,
     base: Int,
@@ -148,7 +148,7 @@ def _check_end_qual(
     return (True, offsets)
 
 
-@always_inline
+@inline(.always)
 def _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
     """Return the relative-to-base offset at which to resume scanning.
 
@@ -176,7 +176,7 @@ def _phase_start_offset(offsets: RecordOffsets, phase: SearchPhase) -> Int:
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _phase_to_count(phase: SearchPhase) -> Int:
     """Return how many newlines have already been found given the current phase.
 
@@ -194,7 +194,7 @@ def _phase_to_count(phase: SearchPhase) -> Int:
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _count_to_phase(found: Int) -> SearchPhase:
     """Convert a found-newlines count back to the SearchPhase we are now in.
 
@@ -221,7 +221,7 @@ def _count_to_phase(found: Int) -> SearchPhase:
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _store_newline_offset(
     mut offsets: RecordOffsets,
     found: Int,  # 1-indexed: which newline this is (1..4)
@@ -256,10 +256,10 @@ def _record_snippet[
     if end <= 0:
         return ""
     var sp = view[0:end]
-    return String(StringSlice(unsafe_from_utf8=sp))
+    return String(StringSpan(unsafe_from_utf8=sp))
 
 
-@always_inline
+@inline(.always)
 def _validate_fastq_structure_fast[
     o: Origin
 ](view: Span[Byte, o], offsets: RecordOffsets,) -> FastxErrorCode:
@@ -293,7 +293,8 @@ def _drain_newline_mask(
     base_i: Int,
     mut mask: UInt64,
 ) -> Int:
-    """Drain a precomputed newline bitmask (1 bit per byte chunk) into offsets."""
+    """Drain a precomputed newline bitmask (1 bit per byte chunk) into offsets.
+    """
     var found = found_in
     while mask != 0 and found < 4:
         var bit = Int(count_trailing_zeros(mask))
@@ -304,7 +305,7 @@ def _drain_newline_mask(
     return found
 
 
-@always_inline
+@inline(.always)
 def _scan_record_masks[
     o: Origin,
 ](
@@ -321,7 +322,7 @@ def _scan_record_masks[
     """
     comptime W = simd_width
     comptime GROUP_W = 4 * W
-    comptime nl_splat = SIMD[DType.uint8, W](new_line)
+    comptime nl_splat = SIMD[.uint8, W](new_line)
 
     var start_rel = _phase_start_offset(offsets, phase)
     var scan_span = view[start_rel:]
@@ -413,7 +414,7 @@ comptime SCAN_MODE_MASKS: Int8 = 0
 comptime SCAN_MODE_MEMCHR_SEQ: Int8 = 1
 
 
-@always_inline
+@inline(.always)
 def _scan_by_mode[
     mode: Int8,
     o: Origin,
@@ -429,7 +430,7 @@ def _scan_by_mode[
         return _scan_record_masks(view, offsets, phase)
 
 
-@always_inline
+@inline(.always)
 def _scan_record_memchr_seq[
     o: Origin
 ](

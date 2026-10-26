@@ -19,7 +19,7 @@ when you need an owned record.
 
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from std.iter import Iterator
 from blazeseq.CONSTS import EOF
 from blazeseq.fai.record import FaiRecord, FaiView
@@ -40,15 +40,15 @@ struct FaiErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    @always_inline
+    @inline(.always)
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
@@ -58,16 +58,17 @@ struct FaiErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime FIELD_COUNT = Self(3)
 
     def message(self) -> String:
-        if self == Self.INT_EMPTY:
-            return "FAI: integer field is empty"
-        if self == Self.INT_INVALID:
-            return "FAI: invalid byte in integer field"
-        if self == Self.FIELD_COUNT:
-            return "FAI: row must have 5 or 6 TAB-delimited columns"
+        match self:
+            case == Self.INT_EMPTY:
+                return "FAI: integer field is empty"
+            case == Self.INT_INVALID:
+                return "FAI: invalid byte in integer field"
+            case == Self.FIELD_COUNT:
+                return "FAI: row must have 5 or 6 TAB-delimited columns"
         return "FAI: parse error"
 
 
-@always_inline
+@inline(.always)
 def _parse_int64_from_span(
     span: Span[UInt8, _], mut result: Int64
 ) -> FaiErrorCode:
@@ -79,7 +80,7 @@ def _parse_int64_from_span(
         var digit = span[i] - 48
         if digit > 9:
             return FaiErrorCode.INT_INVALID
-        result = result * 10 + digit.cast[DType.int64]()
+        result = result * 10 + digit.cast[.int64]()
     return FaiErrorCode.OK
 
 
@@ -108,11 +109,11 @@ struct FaiParser[R: Reader](Iterable, Movable):
     # Public accessors                                                   #
     # ------------------------------------------------------------------ #
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self._rows.has_more()
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
@@ -224,11 +225,11 @@ struct _FaiParserViewIter[R: Reader, origin: Origin](Iterator):
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutUntrackedOrigin]](
             self._src
@@ -260,11 +261,11 @@ struct _FaiParserRecordIter[R: Reader, origin: Origin](Iterator):
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[FaiParser[Self.R], MutUntrackedOrigin]](
             self._src

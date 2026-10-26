@@ -9,7 +9,7 @@ it pass through to a normal reader that is quite fast when paired with a
 """
 
 from std.memory import unsafe_memset_zero, Pointer, unsafe_memcpy
-from std.ffi import OwnedDLHandle
+from std.ffi import OwnedDLHandle, c_char
 from std.sys.info import CompilationTarget
 from std.pathlib import Path
 from std.collections.string import String, chr
@@ -30,7 +30,7 @@ comptime Z_VERSION_ERROR = -6
 # These pointers refer to externally managed C memory; we model that
 # explicitly with MutUntrackedOrigin so the types are concrete.
 comptime c_void_ptr = Pointer[mut=False, UInt8, MutUntrackedOrigin]
-comptime c_char_ptr = Pointer[mut=False, Int8, MutUntrackedOrigin]
+comptime c_char_ptr = Pointer[mut=False, c_char, MutUntrackedOrigin]
 comptime c_uint = UInt32
 comptime c_int = Int32
 
@@ -97,12 +97,12 @@ struct FileReader(Movable, Reader):
         """
         self.handle = open(path, "r")
 
-    @always_inline
+    @inline(.always)
     def read_bytes(mut self, amt: Int = -1) raises -> List[Byte]:
         """Read up to amt bytes (or all if amt < 0) as a list of bytes."""
         return self.handle.read_bytes(amt)
 
-    @always_inline
+    @inline(.always)
     def read_to_buffer(
         mut self,
         mut buf: Span[Byte, MutUntrackedOrigin],
@@ -157,7 +157,7 @@ struct MemoryReader(Movable, Reader):
         self.data = List(content.as_bytes())
         self.position = 0
 
-    @always_inline
+    @inline(.always)
     def read_to_buffer(
         mut self,
         mut buf: Span[Byte, MutUntrackedOrigin],
@@ -243,11 +243,11 @@ struct ZLib(Movable):
         return self.lib_handle.call[
             "gzopen", Optional[c_void_ptr], c_char_ptr, c_char_ptr
         ](
-            filename.as_c_string_slice()
-            .unsafe_ptr()
+            filename.as_c_string_span()
+            .ptr()
             .unsafe_origin_cast[MutUntrackedOrigin](),
-            mode.as_c_string_slice()
-            .unsafe_ptr()
+            mode.as_c_string_span()
+            .ptr()
             .unsafe_origin_cast[MutUntrackedOrigin](),
         )
 

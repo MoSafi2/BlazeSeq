@@ -8,7 +8,7 @@ from blazeseq import BedParser, BedWriter, FileReader
 from blazeseq.bed.record import Strand
 from blazeseq.io import MemoryReader
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from std.pathlib import Path
 from std.testing import assert_equal, assert_true, TestSuite
 import std.os
@@ -17,7 +17,7 @@ comptime test_dir = "tests/test_data/bed_parser/"
 
 
 def _parse_int64(s: String) raises -> Int64:
-    return Int64(atol(StringSlice(s).strip()))
+    return Int64(atol(StringSpan(s).strip()))
 
 
 def _sniff_bed_first_line(content: String) raises -> Bool:

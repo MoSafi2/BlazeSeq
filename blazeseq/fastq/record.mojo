@@ -1,4 +1,4 @@
-from std.hashlib.hasher import default_hasher, Hasher
+from std.hash.hasher import default_hasher, Hasher
 from blazeseq.fastq.quality_schema import (
     QualitySchema,
     generic_schema,
@@ -12,7 +12,7 @@ from blazeseq.errors import (
     format_validation_error_from_code,
 )
 from blazeseq.CONSTS import simd_width
-from std.collections.string import StringSlice, String
+from std.collections.string import StringSpan, String
 from blazeseq.io.writers import Writer
 
 
@@ -54,7 +54,7 @@ struct Validator(Copyable):
 
     def id_snippet(self, record: FastqRecord) -> String:
         """Extract id snippet from record for error messages."""
-        var snippet = String(capacity=100)
+        var snippet = String(capacity_bytes=100)
         var id_str = record.id()
         if id_str.byte_length() > 0:
             snippet += String(id_str)
@@ -65,8 +65,8 @@ struct Validator(Copyable):
 
     def id_snippet(self, record: FastqView) -> String:
         """Extract id snippet from FastqView for error messages."""
-        var snippet = String(capacity=100)
-        var id_str = StringSlice(unsafe_from_utf8=record._id)
+        var snippet = String(capacity_bytes=100)
+        var id_str = StringSpan(unsafe_from_utf8=record._id)
         if id_str.byte_length() > 0:
             snippet += String(id_str)
             if snippet.byte_length() > 100:
@@ -74,7 +74,7 @@ struct Validator(Copyable):
                 snippet = truncated + "..."
         return snippet
 
-    @always_inline
+    @inline(.always)
     def _validate_quality_range(self, record: FastqView) -> FastxErrorCode:
         """Validate each quality byte is within schema LOWER..UPPER. Returns OK or QUALITY_OUT_OF_RANGE.
         """
@@ -84,8 +84,8 @@ struct Validator(Copyable):
         var lower = UInt8(self.quality_schema.LOWER)
         var span = UInt8(self.quality_schema.UPPER - self.quality_schema.LOWER)
 
-        var lower_v = SIMD[DType.uint8, simd_width](lower)
-        var span_v = SIMD[DType.uint8, simd_width](span)
+        var lower_v = SIMD[.uint8, simd_width](lower)
+        var span_v = SIMD[.uint8, simd_width](span)
 
         var i = 0
         while i + simd_width <= n:
@@ -104,7 +104,7 @@ struct Validator(Copyable):
 
         return FastxErrorCode.OK
 
-    @always_inline
+    @inline(.always)
     def _validate_ascii(self, record: FastqView) -> FastxErrorCode:
         """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
         """
@@ -116,7 +116,7 @@ struct Validator(Copyable):
             return c
         return _check_ascii(record._quality)
 
-    @always_inline
+    @inline(.always)
     def _validate_quality_range(self, record: FastqRecord) -> FastxErrorCode:
         """Validate quality bytes using SIMD vectorization + unsigned range trick.
         """
@@ -129,8 +129,8 @@ struct Validator(Copyable):
         var lower = UInt8(self.quality_schema.LOWER)
         var span = UInt8(self.quality_schema.UPPER - self.quality_schema.LOWER)
 
-        var lower_v = SIMD[DType.uint8, simd_width](lower)
-        var span_v = SIMD[DType.uint8, simd_width](span)
+        var lower_v = SIMD[.uint8, simd_width](lower)
+        var span_v = SIMD[.uint8, simd_width](span)
 
         var i = 0
         while i + simd_width <= n:
@@ -148,7 +148,7 @@ struct Validator(Copyable):
 
         return FastxErrorCode.OK
 
-    @always_inline
+    @inline(.always)
     def _validate_ascii(self, record: FastqRecord) -> FastxErrorCode:
         """Validate all record lines contain only ASCII bytes. Returns OK or ASCII_INVALID.
         """
@@ -160,7 +160,7 @@ struct Validator(Copyable):
             return c
         return _check_ascii(record._quality.as_span())
 
-    @always_inline
+    @inline(.always)
     def _validate(self, record: FastqView) -> FastxErrorCode:
         """Run configured validations; returns error code. Used by parser hot path.
         """
@@ -172,7 +172,7 @@ struct Validator(Copyable):
             return self._validate_quality_range(record)
         return FastxErrorCode.OK
 
-    @always_inline
+    @inline(.always)
     def _validate(self, record: FastqRecord) -> FastxErrorCode:
         """Run configured validations; returns error code. Used by parser hot path.
         """
@@ -230,6 +230,7 @@ struct Validator(Copyable):
 # Add minimal internal validation, id start and length of quality and sequence.
 struct FastqRecord(
     Copyable,
+    Equatable,
     Hashable,
     Movable,
     Sized,
@@ -263,7 +264,7 @@ struct FastqRecord(
     var _quality: BString
     var _phred_offset: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(
         out self,
         id: String,
@@ -278,7 +279,7 @@ struct FastqRecord(
         self._quality = BString(quality)
         self._phred_offset = Int8(schema.OFFSET)
 
-    @always_inline
+    @inline(.always)
     def __init__(
         out self,
         id: Span[Byte, MutUntrackedOrigin],
@@ -315,8 +316,8 @@ struct FastqRecord(
         self._quality = quality^
         self._phred_offset = phred_offset
 
-    @always_inline
-    def sequence(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    @inline(.always)
+    def sequence(ref[_] self) -> StringSpan[origin=origin_of(self)]:
         """Return the sequence line as a string slice."""
         var span = Span[Byte, origin_of(self)](
             unsafe_ptr=self._sequence.ptr.unsafe_mut_cast[
@@ -324,10 +325,10 @@ struct FastqRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._sequence),
         )
-        return StringSlice[origin=origin_of(self)](unsafe_from_utf8=span)
+        return StringSpan[origin=origin_of(self)](unsafe_from_utf8=span)
 
-    @always_inline
-    def quality(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    @inline(.always)
+    def quality(ref[_] self) -> StringSpan[origin=origin_of(self)]:
         """Return the quality line (raw ASCII bytes) as a string slice."""
         var span = Span[Byte, origin_of(self)](
             unsafe_ptr=self._quality.ptr.unsafe_mut_cast[
@@ -335,9 +336,9 @@ struct FastqRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._quality),
         )
-        return StringSlice[origin=origin_of(self)](unsafe_from_utf8=span)
+        return StringSpan[origin=origin_of(self)](unsafe_from_utf8=span)
 
-    @always_inline
+    @inline(.always)
     def phred_scores(self) -> List[UInt8]:
         """Return Phred quality scores using the record's phred_offset (e.g. 33).
         """
@@ -346,7 +347,7 @@ struct FastqRecord(
             output[i] = self._quality[i] - UInt8(self._phred_offset)
         return output^
 
-    @always_inline
+    @inline(.always)
     def phred_scores(self, offset: UInt8) -> List[UInt8]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
@@ -355,8 +356,8 @@ struct FastqRecord(
             output[i] = self._quality[i] - offset
         return output^
 
-    @always_inline
-    def id(ref[_] self) -> StringSlice[origin=origin_of(self)]:
+    @inline(.always)
+    def id(ref[_] self) -> StringSpan[origin=origin_of(self)]:
         """Return the read identifier (id without leading '@') as a string slice.
         """
         var span = Span[Byte, origin_of(self)](
@@ -365,7 +366,7 @@ struct FastqRecord(
             ]().unsafe_origin_cast[origin_of(self)](),
             length=len(self._id),
         )
-        return StringSlice[origin=origin_of(self)](unsafe_from_utf8=span)
+        return StringSpan[origin=origin_of(self)](unsafe_from_utf8=span)
 
     def definition(ref self) -> Definition:
         """Return Id and optional Description parsed from the id line (first token vs rest).
@@ -382,7 +383,7 @@ struct FastqRecord(
             return Definition(Id=id_ascii^, Description=description^)
         return Definition(Id=id_ascii^, Description=None)
 
-    @always_inline
+    @inline(.always)
     def byte_len(self) -> Int:
         """Return total byte length when written in four-line FASTQ form."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
@@ -401,21 +402,21 @@ struct FastqRecord(
             "\n",
         )
 
-    @always_inline
+    @inline(.always)
     def write_to[w: Writer](self, mut writer: w):
         """Required by Writable trait; delegates to write()."""
         self.write(writer)
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
         return len(self._sequence)
 
-    @always_inline
+    @inline(.always)
     def __hash__[H: Hasher](self, mut hasher: H):
-        hasher.update(self._sequence.as_string_slice())
+        hasher.update(self._sequence.as_span().as_imm())
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self._sequence == other._sequence
 
@@ -471,28 +472,28 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
         self._quality = quality
         self._phred_offset = phred_offset
 
-    @always_inline
-    def sequence(self) -> StringSlice[origin=Self.origin]:
+    @inline(.always)
+    def sequence(self) -> StringSpan[origin=Self.origin]:
         """Return the sequence line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin=Self.origin](unsafe_from_utf8=self._sequence)
+        return StringSpan[origin=Self.origin](unsafe_from_utf8=self._sequence)
 
-    @always_inline
-    def quality(self) -> StringSlice[origin=Self.origin]:
+    @inline(.always)
+    def quality(self) -> StringSpan[origin=Self.origin]:
         """Return the quality line as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin=Self.origin](unsafe_from_utf8=self._quality)
+        return StringSpan[origin=Self.origin](unsafe_from_utf8=self._quality)
 
-    @always_inline
-    def id(self) -> StringSlice[origin=Self.origin]:
+    @inline(.always)
+    def id(self) -> StringSpan[origin=Self.origin]:
         """Return the read identifier (id without leading '@') as a string slice (valid only while ref is valid).
         """
-        return StringSlice[origin=Self.origin](unsafe_from_utf8=self._id)
+        return StringSpan[origin=Self.origin](unsafe_from_utf8=self._id)
 
     def definition(self) -> Definition:
         """Return Id and optional Description parsed from the id line (first token vs rest).
         """
-        var id_str = StringSlice(unsafe_from_utf8=self._id)
+        var id_str = StringSpan(unsafe_from_utf8=self._id)
         var parts = id_str.split(" ")
         var id = parts[0].strip()
         var id_ascii = BString(id)
@@ -504,17 +505,17 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
             return Definition(Id=id_ascii^, Description=description^)
         return Definition(Id=id_ascii^, Description=None)
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         """Return the sequence length (number of bases)."""
         return len(self._sequence)
 
-    @always_inline
+    @inline(.always)
     def byte_len(self) -> Int:
         """Return total byte length when written in four-line FASTQ form."""
         return 1 + len(self._id) + len(self._sequence) + len(self._quality) + 5
 
-    @always_inline
+    @inline(.always)
     def phred_scores(self) -> List[Byte]:
         """Return Phred quality scores using the record's phred_offset."""
         var output = List[Byte](length=len(self._quality), fill=0)
@@ -522,7 +523,7 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
             output[i] = self._quality[i] - UInt8(self._phred_offset)
         return output^
 
-    @always_inline
+    @inline(.always)
     def phred_scores(self, offset: UInt8) -> List[Byte]:
         """Return Phred quality scores using the given offset (e.g. 33 or 64).
         """
@@ -535,15 +536,15 @@ struct FastqView[mut: Bool, //, origin: Origin[mut=mut]](
         """Write the record in standard four-line FASTQ format to writer (emits "@" before id and "+" for the plus line).
         """
         writer.write("@")
-        writer.write_string(StringSlice(unsafe_from_utf8=self._id))
+        writer.write_string(StringSpan(unsafe_from_utf8=self._id))
         writer.write("\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self._sequence))
+        writer.write_string(StringSpan(unsafe_from_utf8=self._sequence))
         writer.write("\n")
         writer.write("+\n")
-        writer.write_string(StringSlice(unsafe_from_utf8=self._quality))
+        writer.write_string(StringSpan(unsafe_from_utf8=self._quality))
         writer.write("\n")
 
-    @always_inline
+    @inline(.always)
     def write_to[w: Writer](self, mut writer: w):
         """Required by Writable trait; delegates to write()."""
         self.write(writer)

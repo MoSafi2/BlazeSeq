@@ -20,7 +20,7 @@ comptime EOF = "EOF"
 
 # SIMD and dtype
 comptime simd_width: Int = simd_width_of[UInt8]()
-comptime U8 = DType.uint8
+comptime U8: DType = .uint8
 
 # Buffer and capacity
 comptime DEFAULT_CAPACITY = 256 * KB

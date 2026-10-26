@@ -6,7 +6,7 @@ Use next_view() / next_record() and views() / records() iterators.
 """
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from std.iter import Iterator
 from blazeseq.byte_string import BString
 from blazeseq.CONSTS import EOF
@@ -37,15 +37,15 @@ struct GtfErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 
     var value: Int8
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: Int8):
         self.value = value
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
-    @always_inline
+    @inline(.always)
     def __ne__(self, other: Self) -> Bool:
         return self.value != other.value
 
@@ -60,24 +60,26 @@ struct GtfErrorCode(Copyable, Equatable, TrivialRegisterPassable):
     comptime MISSING_TRANSCRIPT_ID = Self(8)
 
     def message(self) -> String:
-        if self == Self.INT_EMPTY:
-            return "GTF: integer field is empty"
-        if self == Self.INT_INVALID:
-            return "GTF: invalid byte in integer field"
-        if self == Self.STRAND_INVALID:
-            return "GTF: strand must be +, -, or ."
-        if self == Self.PHASE_INVALID:
-            return "GTF: phase must be 0, 1, or 2"
-        if self == Self.FIELD_COUNT:
-            return "GTF: row must have exactly 9 fields"
-        if self == Self.COORD_ZERO:
-            return "GTF: start/end coordinate must be >= 1 (1-based)"
-        if self == Self.MISSING_GENE_ID:
-            return "GTF: gene_id attribute is missing (required by GTF2.2)"
-        if self == Self.MISSING_TRANSCRIPT_ID:
-            return (
-                "GTF: transcript_id attribute is missing (required by GTF2.2)"
-            )
+        match self:
+            case == Self.INT_EMPTY:
+                return "GTF: integer field is empty"
+            case == Self.INT_INVALID:
+                return "GTF: invalid byte in integer field"
+            case == Self.STRAND_INVALID:
+                return "GTF: strand must be +, -, or ."
+            case == Self.PHASE_INVALID:
+                return "GTF: phase must be 0, 1, or 2"
+            case == Self.FIELD_COUNT:
+                return "GTF: row must have exactly 9 fields"
+            case == Self.COORD_ZERO:
+                return "GTF: start/end coordinate must be >= 1 (1-based)"
+            case == Self.MISSING_GENE_ID:
+                return "GTF: gene_id attribute is missing (required by GTF2.2)"
+            case == Self.MISSING_TRANSCRIPT_ID:
+                return (
+                    "GTF: transcript_id attribute is missing (required by"
+                    " GTF2.2)"
+                )
         return "GTF: parse error"
 
 
@@ -90,7 +92,7 @@ struct GtfErrorCode(Copyable, Equatable, TrivialRegisterPassable):
 struct GtfLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
     """GTF: skip blank lines and lines starting with #."""
 
-    @always_inline
+    @inline(.always)
     def classify(self, line: Span[UInt8, _]) -> LineAction:
         if len(line) == 0:
             return LineAction.SKIP
@@ -104,7 +106,7 @@ struct GtfLinePolicy(Copyable, LinePolicy, Movable, TrivialRegisterPassable):
 # ---------------------------------------------------------------------------
 
 
-@always_inline
+@inline(.always)
 def _parse_uint64_from_span(
     span: Span[UInt8, _], mut result: UInt64
 ) -> GtfErrorCode:
@@ -116,7 +118,7 @@ def _parse_uint64_from_span(
         var digit = span[i] - 48
         if digit > 9:
             return GtfErrorCode.INT_INVALID
-        result = result * 10 + digit.cast[DType.uint64]()
+        result = result * 10 + digit.cast[.uint64]()
     return GtfErrorCode.OK
 
 
@@ -125,7 +127,7 @@ def _parse_score_span(span: Span[UInt8, _]) raises -> Optional[Float64]:
         return None
     if len(span) == 1 and span[0] == UInt8(ord(".")):
         return None
-    var s = StringSlice(unsafe_from_utf8=span)
+    var s = StringSpan(unsafe_from_utf8=span)
     return Optional(atof(s))
 
 
@@ -242,11 +244,11 @@ struct GtfParser[R: Reader](Movable):
         )
         self._strict_mandatory_attrs = strict_mandatory_attrs
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self._rows.has_more()
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return self._rows._parse_context()
 
@@ -291,11 +293,11 @@ struct _GtfParserViewIter[R: Reader, origin: Origin]:
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises -> Self.Element:
         var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutUntrackedOrigin]](
             self._src
@@ -321,11 +323,11 @@ struct _GtfParserRecordIter[R: Reader, origin: Origin]:
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises -> Self.Element:
         var mut_ptr = rebind[Pointer[GtfParser[Self.R], MutUntrackedOrigin]](
             self._src

@@ -1,7 +1,7 @@
 """GFF3 attribute parsing and percent-encoding."""
 
 from std.collections import List
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 
@@ -24,13 +24,13 @@ struct Gff3Attributes(Copyable, Movable, Sized, Writable):
     def __init__(out self):
         self._pairs = List[Tuple[BString, List[BString]]]()
 
-    @always_inline
+    @inline(.always)
     def add(mut self, var key: BString, var value: BString):
         """Append a key-value pair."""
         var t: Tuple[BString, List[BString]] = (key^, [value^])
         self._pairs.append(t^)
 
-    @always_inline
+    @inline(.always)
     def add_multi(mut self, var key: BString, var values: List[BString]):
         """Append a key with multiple values (GFF3 comma-separated)."""
         var vals = List[BString]()
@@ -147,7 +147,7 @@ def percent_decode(span: Span[UInt8, _]) -> String:
                 continue
         bytes.append(span[i])
         i += 1
-    return String(StringSlice(unsafe_from_utf8=Span(bytes)))
+    return String(StringSpan(unsafe_from_utf8=Span(bytes)))
 
 
 def percent_decode_to_bstring(span: Span[UInt8, _]) -> BString:

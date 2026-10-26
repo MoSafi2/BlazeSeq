@@ -71,7 +71,7 @@ struct BufferedSource[
         self._max_capacity = Self.buffer_max_capacity
         self._current_line_number = 0
 
-    @always_inline
+    @inline(.always)
     def context(self) -> ParseContext:
         return ParseContext(
             self._current_line_number // 4,
@@ -79,14 +79,15 @@ struct BufferedSource[
             Int64(self.reader.stream_position()),
         )
 
-    @always_inline
+    @inline(.always)
     def note_consumed(mut self):
         self._current_line_number += 4
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self.reader.available() > 0 or not self.reader.is_eof()
 
+    @inline(.always)
     def find_next[
         mode: Int8,
     ](mut self) raises -> FoundRecord:
@@ -143,7 +144,7 @@ struct BufferedSource[
             offsets=offsets,
         )
 
-    @always_inline
+    @inline(.always)
     def _refill_error_message(
         self,
         refill_code: FastxErrorCode,
@@ -179,7 +180,7 @@ struct BufferedSource[
             + " bytes). Enable buffer growth or increase max_capacity."
         )
 
-    @always_inline
+    @inline(.always)
     def _next_ref_complete[
         mode: Int8,
     ](
@@ -270,7 +271,7 @@ struct MmapSource(Movable):
         self._pos = 0
         self._current_line_number = 0
 
-    @always_inline
+    @inline(.always)
     def context(self) -> ParseContext:
         return ParseContext(
             self._current_line_number // 4,
@@ -278,14 +279,15 @@ struct MmapSource(Movable):
             Int64(self._pos),
         )
 
-    @always_inline
+    @inline(.always)
     def note_consumed(mut self):
         self._current_line_number += 4
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self._pos < self.map.size()
 
+    @inline(.always)
     def find_next[
         mode: Int8,
     ](mut self) raises -> FoundRecord:
@@ -326,7 +328,12 @@ struct MmapSource(Movable):
                 var q = offsets.qual_start
                 while q < len(scan_view):
                     var b = scan_view.unsafe_ptr()[unsafe_offset=q]
-                    if b != Byte(10) and b != Byte(13) and b != Byte(32) and b != Byte(9):
+                    if (
+                        b != Byte(10)
+                        and b != Byte(13)
+                        and b != Byte(32)
+                        and b != Byte(9)
+                    ):
                         has_data = True
                         break
                     q += 1
@@ -344,7 +351,7 @@ struct MmapSource(Movable):
         )
 
 
-@always_inline
+@inline(.always)
 def build_record_view(
     found: FoundRecord, phred_offset: UInt8
 ) -> FastqView[origin=MutUntrackedOrigin]:

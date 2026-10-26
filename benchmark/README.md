@@ -15,6 +15,16 @@ This document describes all benchmarking options for BlazeSeq. Benchmark numbers
 | **Parser comparison** (gzip, 1 thread) | `pixi run -e benchmark benchmark-gzip-single` | Fair single-threaded comparison |
 | **Plot results** | `pixi run -e benchmark benchmark-plot` | Generate PNGs from JSON in `assets/` |
 
+## Full native library comparison
+
+```bash
+pixi run -e benchmark benchmark-libraries
+```
+
+This runs the existing C, Rust, and Mojo runners on the same generated inputs: a 3 GiB FASTQ target (plain, mmap, gzip, and 4096-record batches) and a 1 GiB multiline FASTA target. Each command gets three warmups and fifteen measured runs, pinned to CPU 2. Input sizes and SHA-256 hashes, matching record/base counts, toolchain/library versions, native compiler flags, raw timing samples, and a plot are saved under `benchmark/results/mojo_1_2_comparison/`. CPU governor, turbo, and SMT settings are left unchanged. This entry point currently targets Linux and requires host GCC.
+
+Gzip is single-threaded; BlazeSeq currently delegates to GZFile. BlazeSeq batches copy records into structure-of-arrays buffers, while Rust RecordSets retain views; this measures the existing APIs rather than identical allocation work. Generated inputs live in a fresh `/tmp/blazeseq-libraries-*` directory. Reuse or customize the scratch location and sizes through `benchmark/scripts/compare_libraries.py --help` inside the benchmark environment.
+
 ## Prerequisites
 
 | Tool | Purpose | Install |

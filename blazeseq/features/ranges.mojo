@@ -22,23 +22,23 @@ struct Position(
             raise Error("Position must be >= 1")
         self._value = value
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, value: UInt64, _unsafe: Bool):
         """Internal: use when value is already known to be >= 1 (e.g. from conversion).
         """
         # Keep 1-based invariant: do not store 0
         self._value = value
 
-    @always_inline
+    @inline(.always)
     def get(self) -> UInt64:
         """Return the raw 1-based coordinate."""
         return self._value
 
-    @always_inline
+    @inline(.always)
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
 
-    @always_inline
+    @inline(.always)
     def __lt__(self, other: Self) -> Bool:
         return self._value < other._value
 
@@ -63,27 +63,27 @@ struct Interval(Copyable, Equatable, TrivialRegisterPassable):
         self._start = start
         self._end = end
 
-    @always_inline
+    @inline(.always)
     def __init__(out self, start: Position, end: Position, _unsafe: Bool):
         """Internal: use when start <= end is already guaranteed."""
         self._start = start
         self._end = end
 
-    @always_inline
+    @inline(.always)
     def start(self) -> Position:
         return self._start
 
-    @always_inline
+    @inline(.always)
     def end(self) -> Position:
         return self._end
 
-    @always_inline
+    @inline(.always)
     def length(self) -> UInt64:
         """Number of bases in the interval (end - start + 1 for closed [start, end]).
         """
         return self._end.get() - self._start.get() + 1
 
-    @always_inline
+    @inline(.always)
     def is_empty(self) -> Bool:
         return self._start.get() > self._end.get()
 

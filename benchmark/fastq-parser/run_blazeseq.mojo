@@ -41,42 +41,45 @@ def main() raises:
     var parser = FastqParser[FileReader, config](FileReader(Path(file_path)))
     var total_reads: Int = 0
     var total_base_pairs: Int = 0
-    if scan_mode == "masks":
-        while True:
-            try:
-                var record = parser.next_view_masks()
-                total_reads += 1
-                total_base_pairs += len(record)
-            except Error:
-                var err_str = String(Error)
-                if err_str == EOF or err_str.startswith(EOF):
-                    break
-                raise
-    elif scan_mode == "memchr-seq":
-        while True:
-            try:
-                var record = parser.next_view_memchr_seq()
-                total_reads += 1
-                total_base_pairs += len(record)
-            except Error:
-                var err_str = String(Error)
-                if err_str == EOF or err_str.startswith(EOF):
-                    break
-                raise
-    elif scan_mode == "mmap":
-        var mmap_parser = MmapFastqParser(Path(file_path))
-        while True:
-            try:
-                var record = mmap_parser.next_view()
-                total_reads += 1
-                total_base_pairs += len(record)
-            except Error:
-                var err_str = String(Error)
-                if err_str == EOF or err_str.startswith(EOF):
-                    break
-                raise
-    else:
-        print("Invalid scan_mode. Expected 'masks', 'memchr-seq', or 'mmap'.")
-        return
+    match scan_mode:
+        case "masks":
+            while True:
+                try:
+                    var record = parser.next_view_masks()
+                    total_reads += 1
+                    total_base_pairs += len(record)
+                except Error:
+                    var err_str = String(Error)
+                    if err_str == EOF or err_str.startswith(EOF):
+                        break
+                    raise
+        case "memchr-seq":
+            while True:
+                try:
+                    var record = parser.next_view_memchr_seq()
+                    total_reads += 1
+                    total_base_pairs += len(record)
+                except Error:
+                    var err_str = String(Error)
+                    if err_str == EOF or err_str.startswith(EOF):
+                        break
+                    raise
+        case "mmap":
+            var mmap_parser = MmapFastqParser(Path(file_path))
+            while True:
+                try:
+                    var record = mmap_parser.next_view()
+                    total_reads += 1
+                    total_base_pairs += len(record)
+                except Error:
+                    var err_str = String(Error)
+                    if err_str == EOF or err_str.startswith(EOF):
+                        break
+                    raise
+        case _:
+            print(
+                "Invalid scan_mode. Expected 'masks', 'memchr-seq', or 'mmap'."
+            )
+            return
 
     print(total_reads, total_base_pairs)

@@ -7,7 +7,7 @@ from blazeseq.CONSTS import (
 )
 from blazeseq.io.buffered import LineIterator
 from blazeseq.io.readers import MemoryReader
-from std.collections.string import StringSlice
+from std.collections.string import StringSpan
 from std.testing import TestSuite
 
 
@@ -24,7 +24,7 @@ def create_memory_reader(content: String) -> MemoryReader:
 
 def span_to_string(span: Span[Byte, MutUntrackedOrigin]) -> String:
     """Convert a span to a string for comparison."""
-    return String(StringSlice(unsafe_from_utf8=span))
+    return String(StringSpan(unsafe_from_utf8=span))
 
 
 # ============================================================================

@@ -8,7 +8,7 @@
     scoring (match +1, mismatch -1, gap -1) for correctness and CPU benchmarking.
 """
 
-from std.gpu import block_idx
+from max.gpu import block_idx
 from std.memory import Pointer
 
 # Max reference and query length for the NW kernel (avoids dynamic unsafe_alloc on device).

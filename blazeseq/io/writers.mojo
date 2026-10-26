@@ -72,7 +72,7 @@ struct FileWriter(Movable, WriterBackend):
         """
         self.handle = open(path, "w")
 
-    @always_inline
+    @inline(.always)
     def write_from_buffer(
         mut self,
         mut buf: Span[Byte, MutUntrackedOrigin],
@@ -120,7 +120,7 @@ struct MemoryWriter(Movable, WriterBackend):
         """Initialize MemoryWriter with an empty buffer."""
         self.data = List[Byte]()
 
-    @always_inline
+    @inline(.always)
     def write_from_buffer(
         mut self,
         mut buf: Span[Byte, MutUntrackedOrigin],
@@ -193,7 +193,7 @@ struct GZWriter(Movable, WriterBackend):
             raise Error("Failed to open gzip file for writing: " + filename)
         self.handle = handle
 
-    @always_inline
+    @inline(.always)
     def write_from_buffer(
         mut self,
         mut buf: Span[Byte, MutUntrackedOrigin],

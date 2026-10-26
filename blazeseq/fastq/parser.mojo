@@ -83,18 +83,23 @@ trait FastqParserLike(Movable):
     """Static interface shared by every parser flavor (duck-typed iterators
     below are parameterized on this)."""
 
-    def has_more(self) -> Bool: ...
-    def next_view(mut self) raises -> FastqView[
-        origin=MutUntrackedOrigin
-    ]: ...
-    def next_record(mut self) raises -> FastqRecord: ...
-    def next_batch(mut self, max_records: Int) raises -> FastqBatch: ...
+    def has_more(self) -> Bool:
+        ...
+
+    def next_view(mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
+        ...
+
+    def next_record(mut self) raises -> FastqRecord:
+        ...
+
+    def next_batch(mut self, max_records: Int) raises -> FastqBatch:
+        ...
 
 
 struct FastqParser[
     R: Reader,
     config: ParserConfig = ParserConfig(),
-](Movable, FastqParserLike):
+](FastqParserLike, Movable):
     """Buffered FASTQ parser over any `Reader`.
 
     Chunked reads through a `BufferedReader`; handles records spanning
@@ -175,19 +180,19 @@ struct FastqParser[
         )
         self._batch_size = batch_size
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return self.src.context()
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self.src.has_more()
 
-    @always_inline
+    @inline(.always)
     def next_view(mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
         return self._next_view[SCAN_MODE_MASKS]()
 
-    @always_inline
+    @inline(.always)
     def next_view_memchr_seq(
         mut self,
     ) raises -> FastqView[origin=MutUntrackedOrigin]:
@@ -195,30 +200,28 @@ struct FastqParser[
         """
         return self._next_view[SCAN_MODE_MEMCHR_SEQ]()
 
-    @always_inline
+    @inline(.always)
     def next_view_masks(
         mut self,
     ) raises -> FastqView[origin=MutUntrackedOrigin]:
         """Benchmark-only variant using the hoisted-mask SIMD scanner."""
         return self._next_view[SCAN_MODE_MASKS]()
 
-    @always_inline
+    @inline(.always)
     def next_record(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
         return self._record_from_view(self._next_view[SCAN_MODE_MASKS]())
 
-    @always_inline
+    @inline(.always)
     def next_record_memchr_seq(mut self) raises -> FastqRecord:
         """Benchmark-only variant that scans record boundaries via sequential memchr.
         """
         if not self.has_more():
             raise EOFError()
-        return self._record_from_view(
-            self._next_view[SCAN_MODE_MEMCHR_SEQ]()
-        )
+        return self._record_from_view(self._next_view[SCAN_MODE_MEMCHR_SEQ]())
 
-    @always_inline
+    @inline(.always)
     def next_record_masks(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
@@ -250,7 +253,7 @@ struct FastqParser[
         var limit = max_records.value() if max_records else self._batch_size
         return _FastqBatchIter[Self, origin_of(self)](Pointer(to=self), limit)
 
-    @always_inline
+    @inline(.always)
     def _next_view[
         mode: Int8,
     ](mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
@@ -260,7 +263,7 @@ struct FastqParser[
         self._raise_if_invalid_view(ref_rec)
         return ref_rec
 
-    @always_inline
+    @inline(.always)
     def _raise_if_invalid_view(
         self, ref_rec: FastqView[origin=MutUntrackedOrigin]
     ) raises:
@@ -273,7 +276,7 @@ struct FastqParser[
                 self._get_record_snippet(ref_rec),
             )
 
-    @always_inline
+    @inline(.always)
     def _record_from_view(
         mut self, ref_rec: FastqView[origin=MutUntrackedOrigin]
     ) raises -> FastqRecord:
@@ -298,14 +301,14 @@ struct FastqParser[
         return record^
 
     def _get_record_snippet(self, record: FastqView) -> String:
-        var snippet = String(capacity=200)
-        var id_str = StringSlice(unsafe_from_utf8=record._id)
+        var snippet = String(capacity_bytes=200)
+        var id_str = StringSpan(unsafe_from_utf8=record._id)
         if id_str.byte_length() > 0:
             snippet += String(id_str)
             if snippet.byte_length() < 200:
                 snippet += "\n"
         if snippet.byte_length() < 200 and len(record._sequence) > 0:
-            var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
+            var seq_str = StringSpan(unsafe_from_utf8=record._sequence)
             var seq_len = min(
                 seq_str.byte_length(), 200 - snippet.byte_length()
             )
@@ -316,7 +319,7 @@ struct FastqParser[
         return snippet
 
     def _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
-        var snippet = String(capacity=200)
+        var snippet = String(capacity_bytes=200)
         var id_str = record.id()
         if id_str.byte_length() > 0:
             snippet += String(id_str)
@@ -334,7 +337,7 @@ struct FastqParser[
         return snippet
 
 
-@always_inline
+@inline(.always)
 def _resolve_effective_schema(
     config_schema: Optional[String], explicit_schema: String
 ) -> QualitySchema:
@@ -353,7 +356,7 @@ def _resolve_effective_schema(
     return schema
 
 
-struct MmapFastqParser(Movable, FastqParserLike):
+struct MmapFastqParser(FastqParserLike, Movable):
     """Zero-copy FASTQ parser over a memory-mapped file.
 
     Same API surface as `FastqParser`; parses directly from the page cache
@@ -390,19 +393,19 @@ struct MmapFastqParser(Movable, FastqParserLike):
         )
         self._batch_size = DEFAULT_BATCH_SIZE
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return self.src.context()
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         return self.src.has_more()
 
-    @always_inline
+    @inline(.always)
     def next_view(mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
         return self._next_view[SCAN_MODE_MASKS]()
 
-    @always_inline
+    @inline(.always)
     def next_view_memchr_seq(
         mut self,
     ) raises -> FastqView[origin=MutUntrackedOrigin]:
@@ -410,30 +413,28 @@ struct MmapFastqParser(Movable, FastqParserLike):
         """
         return self._next_view[SCAN_MODE_MEMCHR_SEQ]()
 
-    @always_inline
+    @inline(.always)
     def next_view_masks(
         mut self,
     ) raises -> FastqView[origin=MutUntrackedOrigin]:
         """Benchmark-only variant using the hoisted-mask SIMD scanner."""
         return self._next_view[SCAN_MODE_MASKS]()
 
-    @always_inline
+    @inline(.always)
     def next_record(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
         return self._record_from_view(self._next_view[SCAN_MODE_MASKS]())
 
-    @always_inline
+    @inline(.always)
     def next_record_memchr_seq(mut self) raises -> FastqRecord:
         """Benchmark-only variant that scans record boundaries via sequential memchr.
         """
         if not self.has_more():
             raise EOFError()
-        return self._record_from_view(
-            self._next_view[SCAN_MODE_MEMCHR_SEQ]()
-        )
+        return self._record_from_view(self._next_view[SCAN_MODE_MEMCHR_SEQ]())
 
-    @always_inline
+    @inline(.always)
     def next_record_masks(mut self) raises -> FastqRecord:
         if not self.has_more():
             raise EOFError()
@@ -465,7 +466,7 @@ struct MmapFastqParser(Movable, FastqParserLike):
         var limit = max_records.value() if max_records else self._batch_size
         return _FastqBatchIter[Self, origin_of(self)](Pointer(to=self), limit)
 
-    @always_inline
+    @inline(.always)
     def _next_view[
         mode: Int8,
     ](mut self) raises -> FastqView[origin=MutUntrackedOrigin]:
@@ -475,7 +476,7 @@ struct MmapFastqParser(Movable, FastqParserLike):
         self._raise_if_invalid_view(ref_rec)
         return ref_rec
 
-    @always_inline
+    @inline(.always)
     def _raise_if_invalid_view(
         self, ref_rec: FastqView[origin=MutUntrackedOrigin]
     ) raises:
@@ -488,7 +489,7 @@ struct MmapFastqParser(Movable, FastqParserLike):
                 self._get_record_snippet(ref_rec),
             )
 
-    @always_inline
+    @inline(.always)
     def _record_from_view(
         mut self, ref_rec: FastqView[origin=MutUntrackedOrigin]
     ) raises -> FastqRecord:
@@ -513,14 +514,14 @@ struct MmapFastqParser(Movable, FastqParserLike):
         return record^
 
     def _get_record_snippet(self, record: FastqView) -> String:
-        var snippet = String(capacity=200)
-        var id_str = StringSlice(unsafe_from_utf8=record._id)
+        var snippet = String(capacity_bytes=200)
+        var id_str = StringSpan(unsafe_from_utf8=record._id)
         if id_str.byte_length() > 0:
             snippet += String(id_str)
             if snippet.byte_length() < 200:
                 snippet += "\n"
         if snippet.byte_length() < 200 and len(record._sequence) > 0:
-            var seq_str = StringSlice(unsafe_from_utf8=record._sequence)
+            var seq_str = StringSpan(unsafe_from_utf8=record._sequence)
             var seq_len = min(
                 seq_str.byte_length(), 200 - snippet.byte_length()
             )
@@ -531,7 +532,7 @@ struct MmapFastqParser(Movable, FastqParserLike):
         return snippet
 
     def _get_record_snippet_from_fastq(self, record: FastqRecord) -> String:
-        var snippet = String(capacity=200)
+        var snippet = String(capacity_bytes=200)
         var id_str = record.id()
         if id_str.byte_length() > 0:
             snippet += String(id_str)
@@ -564,15 +565,13 @@ struct _FastqViewIter[P: FastqParserLike, origin: Origin](Iterator):
     def __iter__(ref self) -> Self:
         return Self(self._src)
 
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return True
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[
-            Pointer[Self.P, MutUntrackedOrigin]
-        ](self._src)
+        var mut_ptr = rebind[Pointer[Self.P, MutUntrackedOrigin]](self._src)
         try:
             return mut_ptr[].next_view()
         except Error:
@@ -599,9 +598,7 @@ struct _FastqRecordIter[P: FastqParserLike, origin: Origin](Iterator):
         return self._src[].has_more()
 
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[
-            Pointer[Self.P, MutUntrackedOrigin]
-        ](self._src)
+        var mut_ptr = rebind[Pointer[Self.P, MutUntrackedOrigin]](self._src)
         try:
             return mut_ptr[].next_record()
         except Error:
@@ -621,9 +618,7 @@ struct _FastqBatchIter[P: FastqParserLike, origin: Origin](Iterator):
     var _src: Pointer[Self.P, Self.origin]
     var _max_records: Int
 
-    def __init__(
-        out self, src: Pointer[Self.P, Self.origin], max_records: Int
-    ):
+    def __init__(out self, src: Pointer[Self.P, Self.origin], max_records: Int):
         self._src = src
         self._max_records = max_records
 
@@ -634,9 +629,7 @@ struct _FastqBatchIter[P: FastqParserLike, origin: Origin](Iterator):
         return self._src[].has_more()
 
     def __next__(mut self) raises StopIteration -> Self.Element:
-        var mut_ptr = rebind[
-            Pointer[Self.P, MutUntrackedOrigin]
-        ](self._src)
+        var mut_ptr = rebind[Pointer[Self.P, MutUntrackedOrigin]](self._src)
         try:
             var batch = mut_ptr[].next_batch(self._max_records)
             if len(batch) == 0:

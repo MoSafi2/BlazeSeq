@@ -12,7 +12,7 @@ from blazeseq.errors import (
 )
 from blazeseq.byte_string import BString
 from std.collections import List
-from std.collections.string import StringSlice, String
+from std.collections.string import StringSpan, String
 
 
 # Fix #8: Named constant with explicit value documented for clarity.
@@ -38,7 +38,7 @@ struct Validator(Copyable):
     def __init__(out self):
         pass
 
-    @always_inline
+    @inline(.always)
     def _validate(
         self, id_bytes: BString, seq_bytes: BString
     ) -> FastxErrorCode:
@@ -98,12 +98,12 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](
     # Public accessors                                                     #
     # ------------------------------------------------------------------ #
 
-    @always_inline
+    @inline(.always)
     def has_more(self) -> Bool:
         """Return True if there may be more records to read."""
         return len(self._pending_ids) > 0 or self.lines.has_more()
 
-    @always_inline
+    @inline(.always)
     def _parse_context(ref self) -> ParseContext:
         return ParseContext(
             self._record_number,
@@ -111,7 +111,7 @@ struct FastaParser[R: Reader, config: ParserConfig = ParserConfig()](
             self.lines.get_file_position(),
         )
 
-    @always_inline
+    @inline(.always)
     def get_buffer_position(ref self) -> Int:
         """Return the current buffer position."""
         return self.lines.buffer_position()
@@ -227,11 +227,11 @@ struct _FastaParserRecordIter[R: Reader, cfg: ParserConfig, origin: Origin](
         return Self(self._src)
 
     # Fix #11: Reflect actual parser state.
-    @always_inline
+    @inline(.always)
     def __has_next__(self) -> Bool:
         return self._src[].has_more()
 
-    @always_inline
+    @inline(.always)
     def __next__(mut self) raises StopIteration -> Self.Element:
         var mut_ptr = rebind[Pointer[FastaParser[Self.R], MutUntrackedOrigin]](
             self._src

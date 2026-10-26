@@ -1,4 +1,4 @@
-from std.collections.string import String, StringSlice
+from std.collections.string import String, StringSpan
 from blazeseq.byte_string import BString
 from blazeseq.io.writers import Writer
 
@@ -40,32 +40,32 @@ struct FaiView[O: Origin](Movable, Sized):
         self._line_width = _line_width
         self._qual_offset = _qual_offset
 
-    @always_inline
-    def name(self) -> StringSlice[origin=Self.O]:
+    @inline(.always)
+    def name(self) -> StringSpan[origin=Self.O]:
         """Return the sequence name (valid only while view is valid)."""
-        return StringSlice[origin=Self.O](unsafe_from_utf8=self._name)
+        return StringSpan[origin=Self.O](unsafe_from_utf8=self._name)
 
-    @always_inline
+    @inline(.always)
     def length(self) -> Int64:
         return self._length
 
-    @always_inline
+    @inline(.always)
     def offset(self) -> Int64:
         return self._offset
 
-    @always_inline
+    @inline(.always)
     def line_bases(self) -> Int64:
         return self._line_bases
 
-    @always_inline
+    @inline(.always)
     def line_width(self) -> Int64:
         return self._line_width
 
-    @always_inline
+    @inline(.always)
     def qual_offset(self) -> Optional[Int64]:
         return self._qual_offset
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         """Return the reference length as an Int."""
         return Int(self._length)
@@ -109,31 +109,31 @@ struct FaiRecord(Copyable, Movable, Sized, Writable):
     var LineWidth: Int64
     var QualOffset: Optional[Int64]
 
-    @always_inline
+    @inline(.always)
     def name(ref[_] self) -> String:
         return self.Name.to_string()
 
-    @always_inline
+    @inline(.always)
     def length(self) -> Int64:
         return self.Length
 
-    @always_inline
+    @inline(.always)
     def offset(self) -> Int64:
         return self.Offset
 
-    @always_inline
+    @inline(.always)
     def line_bases(self) -> Int64:
         return self.LineBases
 
-    @always_inline
+    @inline(.always)
     def line_width(self) -> Int64:
         return self.LineWidth
 
-    @always_inline
+    @inline(.always)
     def qual_offset(self) -> Optional[Int64]:
         return self.QualOffset
 
-    @always_inline
+    @inline(.always)
     def __len__(self) -> Int:
         """Return the reference length as an Int."""
         return Int(self.Length)
